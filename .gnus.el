@@ -76,7 +76,7 @@
 	    (define-key gnus-article-mode-map [b] 'gnus-summary-prev-page)
 	    (define-key gnus-article-mode-map [(return)] 'gnus-summary-next-unread-article)))
 
-(add-hook 'gnus-summary-mode-hook 'turn-on-gnus-mailing-list-mode)
+(add-hook 'gnus-summary-mode-hook (lambda () (gnus-mailing-list-mode 1)))
 
 (setq gnus-default-article-saver 'gnus-summary-save-in-mail)
 
