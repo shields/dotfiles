@@ -269,6 +269,7 @@ citation lines."
 	 (w3-fetch-orig url target)))))
 
 (setq gnus-button-url 'gnus-netscape-open-url)
+(setq browse-url-new-window-flag t)
 
 (setq message-dont-reply-to-names "\\(m?shields@\\(msrl\\.com\\|mfnx\\.net\\|above\\.net\\|iad\\.above\\.net\\)\\|michael\\.shields@m?mfn\\.com\\|seb@msrl\.com\\)")
 
