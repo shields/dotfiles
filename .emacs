@@ -384,13 +384,16 @@ when called with a prefix argument."
 
 (custom-set-variables
  '(bbdb-gui nil)
+ '(message-required-mail-headers (quote (From Date (optional . In-Reply-To) Message-ID Lines (optional . User-Agent))))
  '(bbdb-complete-name-allow-cycling t)
  '(gnuserv-program (concat exec-directory "/gnuserv"))
  '(bbdb-time-display-format "%Y-%m-%d"))
 (custom-set-faces
+ '(gnus-group-mail-3-face ((((class color) (background light)) (:foreground "magenta4"))))
  '(gnus-summary-low-unread-face ((t (:foreground "grey18"))))
  '(gnus-summary-low-ticked-face ((((class color) (background light)) (:foreground "firebrick"))))
  '(gnus-header-content-face ((((class color) (background light)) (:foreground "indianred4"))))
+ '(gnus-group-mail-3-empty-face ((((class color) (background light)) nil)))
  '(message-cited-text-face ((((class color) (background light)) (:foreground "indianred4"))))
  '(gnus-signature-face ((((type x)) (:foreground "grey50"))))
  '(gnus-summary-low-ancient-face ((((class color) (background light)) (:foreground "RoyalBlue"))))
