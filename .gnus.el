@@ -1,7 +1,7 @@
 ;;; .gnus.el --- Shields's Gnus initialization file
 
 ;; Author: Michael Shields <shields@msrl.com>
-;; Version: 2002-01-01
+;; Version: 2002-01-02
 
 (setq mail-from-style 'parens)
 (setq mail-yank-prefix "> ")
@@ -271,3 +271,5 @@
 
 (require 'gnus-delay)
 (gnus-delay-initialize)
+
+(gnus-demon-add-scanmail)
