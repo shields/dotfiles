@@ -456,6 +456,7 @@ in the group buffer.")
 (defvar gnus-topic-needs-mumbling nil)
 (defun gnus-topic-mumble ()
   (when gnus-topic-needs-mumbling
+    (setq gnus-topic-needs-mumbling nil)
     (gnus-group-sort-groups-by-mumble t)))
 ;;  (gnus-group-next-unread-group))
 (add-hook 'gnus-group-prepare-hook 'gnus-topic-mumble)
