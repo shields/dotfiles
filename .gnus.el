@@ -199,8 +199,11 @@
       '(gnus-score-find-bnews bbdb/gnus-score))
 
 (setq gnus-optional-headers 'bbdb/gnus-lines-and-from)
+
+;; This is the same as the stock version, except with a bbdb mark-char
+;; added, and with BBDB names replacing standard %n names.
 (setq gnus-summary-line-format
-      "%U%R%z%ub%I%(%[%4L:%-20,20uB%]%) %s\n")
+      "%U%R%z%ub%I%(%[%4L:%-23,23uB%]%) %s\n")
 (setq bbdb/gnus-header-prefer-real-names t)
 ;; Not the same as (setq bbdb/gnus-mark-known-posters nil):
 (setq bbdb/gnus-summary-known-poster-mark " ")
