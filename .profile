@@ -1,5 +1,5 @@
 #
-# ~/.profile 2001-07-16
+# ~/.profile 2001-08-10
 # Michael Shields <shields@msrl.com>
 #
 
@@ -81,6 +81,8 @@ stty erase '^?'
 test "`uname`" = SunOS || stty pass8
 stty cs8
 stty -ixon
+LANG=en_US.UTF-8
+export LANG
 
 # I'm curmudgeonly and don't believe in local time.  NB: Don't set TZ
 # yourself unless you know what you're doing.  And have read RFC 1305
