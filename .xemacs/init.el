@@ -395,7 +395,7 @@ sentinel."
            (concat (substring addr (match-beginning 1) (match-end 1))
                    (substring addr (match-beginning 2) (match-end 2))))
           (t addr))))
-(add-hook 'bbdb-canonicalize-net-hook 'bbdb-normalize-tmda-addresses)
+(setq bbdb-canonicalize-net-hook 'bbdb-normalize-tmda-addresses)
 
 ;;}}}
 ;;{{{ Calc
