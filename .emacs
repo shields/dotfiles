@@ -1,7 +1,7 @@
 ;;; .emacs --- Shields's Emacs initialization file
 
 ;; Author: Michael Shields <shields@msrl.com>
-;; Version: 2001-08-18
+;; Version: 2002-01-02
 
 ;;; Globals
 ;;{{{ Preliminaries
@@ -9,6 +9,20 @@
 ;; Must elegantize this:
 (setq load-path (cons (expand-file-name "~/share/xemacs/site-lisp")
 		      load-path))
+
+;; XXX
+(load "messagexmas")
+
+;; Reload things in my dir that are already loaded.  Essential for
+;; replacing Gnus elements with those built from the development
+;; snapshot version.
+(mapcar '(lambda (x)
+	   (let ((base (concat (expand-file-name "~/share/xemacs/site-lisp")
+			       "/" (car x))))
+	     (if (or (file-readable-p (concat base ".elc"))
+		     (file-readable-p (concat base ".el")))
+		 (load base))))
+	load-history)
 
 (require 'info)
 (setq Info-directory-list (cons "~/info" Info-default-directory-list))
@@ -389,10 +403,15 @@ when called with a prefix argument."
 
 (custom-set-variables
  '(bbdb-gui nil)
+ '(gnus-treat-body-boundary nil)
+ '(gnus-treat-newsgroups-picon nil)
  '(message-required-mail-headers (quote (From Date (optional . In-Reply-To) Message-ID Lines (optional . User-Agent))))
  '(bbdb-complete-name-allow-cycling t)
  '(gnuserv-program (concat exec-directory "/gnuserv"))
- '(bbdb-time-display-format "%Y-%m-%d"))
+ '(bbdb-time-display-format "%Y-%m-%d")
+ '(gnus-treat-mail-picon nil)
+ '(gnus-treat-display-xface nil)
+ '(gnus-treat-from-picon nil))
 (custom-set-faces
  '(info-node ((t (:foreground "darkblue"))))
  '(gnus-group-mail-3-face ((((class color) (background light)) nil)))
