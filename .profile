@@ -1,5 +1,5 @@
 #
-# ~/.profile 2001-01-17
+# ~/.profile 2001-07-11
 # Michael Shields <shields@msrl.com>
 #
 
@@ -128,10 +128,14 @@ export CC
 # "The Master wants you but he can't have you..."
 if [ -d /usr/local/cvsroot ]; then
     CVSROOT=/usr/local/cvsroot
+elif [ -d /var/cvs ]; then
+    CVSROOT=/var/cvs
 elif [ -d /home/cvs ]; then
     CVSROOT=/home/cvs
 elif [ -d /var/mfnx/cvs ]; then
     CVSROOT=/var/mfnx/cvs
+elif [ "$hostname" = mulligatwani ]; then
+    CVSROOT=:ext:challah.msrl.com:/home/cvs
 else
     CVSROOT=:ext:box.mfnx.net:/var/mfnx/cvs
 fi
