@@ -92,6 +92,10 @@ stty -ixon
 LANG=en_US.UTF-8
 export LANG
 
+if [ "$TERM" = linux -a "`expr $tty : '/dev/vc/'`" ]; then
+    unicode_start
+fi
+
 if [ ! -w / ]; then	# It's not good to play with time zones as root.
     if [ -f /usr/lib/zoneinfo/UTC -o /usr/share/zoneinfo/UTC ]; then
 	TZ=UTC
