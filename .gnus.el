@@ -1,7 +1,7 @@
 ;;; .gnus.el --- Shields's Gnus initialization file
 
 ;; Author: Michael Shields <shields@msrl.com>
-;; Version: 2001-10-12
+;; Version: 2001-10-29
 
 ;; XXX http://bugs.debian.org/cgi-bin/bugreport.cgi?bug=82226
 (load "mm-decode")
@@ -63,7 +63,7 @@
 
 (setq gnus-visible-headers nil)
 (setq gnus-ignored-headers
-      "^Xref:\\|NNTP-Posting-\\|^X-Trace:\\|^X-Complaints-To:\\|^Lines:\\|^X-From-Line:\\|^Path:\\|^X-Newsreader:\\|^X-Nntp-Posting-\\|^X-No-Archive:\\|^X-BOFH-Archive:\\|^Mail-Copies-To:\\|^Resent-\\|^X-Mailing-List:\\|^X-Loop:\\|^Precedence:\\|^Approved:\\|^X-Original-Date:\\|^Originator:\\|^From \\|^Return-Path:\\|^Received:\\|^In-Reply-To:\\|^Message-Id:\\|^Sender:\\|^X-Mailer:\\|^MIME-\\|^Content-\\|^X-VM-\\|^X-Sender:\\|^References:\\|^Precedence:[ \t]+bulk\\|^X-Face:\\|^Delivered-To:\\|^Mailing-List:\\|^Status:\\|^X-Listprocessor-Version:\\|^X-Authentication-Warning:[^:]*: majordom set\\|^Lines:\\|^Mail-Copies-To:\\|^X400-\\|^X-Priority:\\|^X-MSMail-Priority:\\|^X-Content-Length:\\|^X-Orcpt:\\|^X-MimeOLE:\\|^Illegal-Object:\\|^X-UIDL:\\|^X-MIME-Autoconverted:\\|^Approved-By:\\|^X-VM-\\|^X-Gnus-Mail-Source:\\|^User-Agent:\\|^X-Mailinglist:\\|^List-\\(Help\\|Unsubscribe\\|Post\\|Subscribe\\):\\|^Importance:\\|^X-Exmh-\\|^X-Accept-Language:\\|^X-eGroups-\\|^List-Archive:\\|^Phone:\\|^Fax:\\|^Errors-To:\\|^X-BeenThere:\\|^X-Mailman-Version:\\|^List-Id:\\|^X-Authentication-Warning: [^:]*: majordomo \\|^X-SpamBouncer:\\|^X-LYRIS-Message-Id:")
+      "^Xref:\\|NNTP-Posting-\\|^X-Trace:\\|^X-Complaints-To:\\|^Lines:\\|^X-From-Line:\\|^Path:\\|^X-Newsreader:\\|^X-Nntp-Posting-\\|^X-No-Archive:\\|^X-BOFH-Archive:\\|^Mail-Copies-To:\\|^Resent-\\|^X-Mailing-List:\\|^X-Loop:\\|^Precedence:\\|^Approved:\\|^X-Original-Date:\\|^Originator:\\|^From \\|^Return-Path:\\|^Received:\\|^In-Reply-To:\\|^Message-Id:\\|^Sender:\\|^X-Mailer:\\|^MIME-\\|^Content-\\|^X-VM-\\|^X-Sender:\\|^References:\\|^Precedence:[ \t]+bulk\\|^X-Face:\\|^Delivered-To:\\|^Mailing-List:\\|^Status:\\|^X-Listprocessor-Version:\\|^X-Authentication-Warning:[^:]*: majordom set\\|^Lines:\\|^Mail-Copies-To:\\|^X400-\\|^X-Priority:\\|^X-MSMail-Priority:\\|^X-Content-Length:\\|^X-Orcpt:\\|^X-MimeOLE:\\|^Illegal-Object:\\|^X-UIDL:\\|^X-MIME-Autoconverted:\\|^Approved-By:\\|^X-VM-\\|^X-Gnus-Mail-Source:\\|^User-Agent:\\|^X-Mailinglist:\\|^List-\\(Help\\|Unsubscribe\\|Post\\|Subscribe\\):\\|^Importance:\\|^X-Exmh-\\|^X-Accept-Language:\\|^X-eGroups-\\|^List-Archive:\\|^Phone:\\|^Fax:\\|^Errors-To:\\|^X-BeenThere:\\|^X-Mailman-Version:\\|^List-Id:\\|^X-Authentication-Warning: [^:]*: majordomo \\|^X-SpamBouncer:\\|^X-LYRIS-Message-Id:\\|^X-SBNote: FROM_DAEMON\\|^X-SBClass: \\(Bulk\\|Ok\\)")
 (setq message-ignored-news-headers
       "^NNTP-Posting-Host:\\|^Xref:\\|^[BGF]cc:\\|^Resent-Fcc:\\|^X-Draft-From:")
 (setq message-ignored-mail-headers
