@@ -389,7 +389,7 @@ in the group buffer.")
       (let ((age (time-to-seconds (time-subtract (current-time) time))))
 	(if (< age (* 3600 gnus-group-notably-old))
 	    ""
-	  (format "  (%dh)" (/ age 3600)))))))
+	  (format "  (%.1f)" (/ age 86400)))))))
 (defun gnus-user-format-function-u (dummy)
   "Return a string indicating how many articles are unread/unseen."
   (let* ((unseen (gnus-number-of-unseen-articles-in-group gnus-tmp-group))
