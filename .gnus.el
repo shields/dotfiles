@@ -20,11 +20,12 @@
 (add-hook 'gnus-startup-hook 'bbdb-insinuate-gnus)
 
 ;;(setq gnus-select-method '(nntp "news.netaxs.com"))
-(setq gnus-select-method '(nntp ""))
+;;(setq gnus-select-method '(nntp ""))
 ;;(setq gnus-secondary-select-methods '((nnml "") (nnslashdot "")))
-(setq gnus-secondary-select-methods '((nnml "")))
-;;(setq gnus-select-method '(nnml ""))
-;;(setq gnus-secondary-select-methods nil)
+;;(setq gnus-secondary-select-methods '((nnml "")))
+(setq gnus-select-method '(nnml ""))
+(setq gnus-secondary-select-methods nil)
+;;(setq gnus-secondary-select-methods '((nnslashdot "")))
 
 (setq nnml-directory "~/Gnuspool/")
 (setq mail-sources
@@ -32,7 +33,7 @@
 		   :suffix "")))
 (setq mail-source-delete-incoming t)
 
-(load "~/.gnus.slashdot.el")  ; contains password
+;;(load "~/.gnus.slashdot.el")  ; contains password
 (setq nnslashdot-threshold 5)
 (setq nnslashdot-group-number 20)
  
@@ -49,7 +50,7 @@
 (setq gnus-check-new-newsgroups 'ask-server)
 (setq gnus-read-active-file 'some)
 
-(setq gnus-total-expirable-newsgroups "^nnml:")
+(setq gnus-total-expirable-newsgroups "^[^:]*$")
 
 (setq gnus-default-adaptive-score-alist
       '((gnus-kill-file-mark)
@@ -81,22 +82,18 @@
 (add-hook 'gnus-select-group-hook 'turn-gnus-bbdb-on-or-off)
 (defun turn-gnus-bbdb-on-or-off ()
   (setq bbdb/news-auto-create-p
-	(not (not (or (string-equal "nnml:MSRL.COM" gnus-newsgroup-name)
-	              (string-equal "nnml:ABOVE.NET" gnus-newsgroup-name)
-		      (string-equal "nnml:big-internet" gnus-newsgroup-name)
-		      (string-equal "nnml:bugtraq" gnus-newsgroup-name)
-		      (string-equal "nnml:cryptography" gnus-newsgroup-name)
-		      (string-equal "nnml:end2end" gnus-newsgroup-name)
-		      (string-equal "nnml:fsb" gnus-newsgroup-name)
-		      (string-equal "nnml:leapsecs" gnus-newsgroup-name)
-		      (string-equal "nnml:nanog" gnus-newsgroup-name)
-		      (string-equal "nnml:risks" gnus-newsgroup-name)
-		      (string-equal "nnml:tz" gnus-newsgroup-name)
-		      (string-match "bofh\\." gnus-newsgroup-name)
-		      (string-match "nnml:above\\." gnus-newsgroup-name)
-		      (string-match "nnml:mfnx\\." gnus-newsgroup-name)
-		      (string-match "nnml:ietf\\." gnus-newsgroup-name)
-		      (string-match "nndoc:comp\\.risks-" gnus-newsgroup-name))))))
+	(not (not (or (string-equal "MSRL.COM" gnus-newsgroup-name)
+		      (string-equal "big-internet" gnus-newsgroup-name)
+		      (string-equal "bugtraq" gnus-newsgroup-name)
+		      (string-equal "cryptography" gnus-newsgroup-name)
+		      (string-equal "end2end" gnus-newsgroup-name)
+		      (string-equal "fsb" gnus-newsgroup-name)
+		      (string-equal "leapsecs" gnus-newsgroup-name)
+		      (string-equal "nanog" gnus-newsgroup-name)
+		      (string-equal "risks" gnus-newsgroup-name)
+		      (string-equal "tz" gnus-newsgroup-name)
+		      (string-match "mfnx\\." gnus-newsgroup-name)
+		      (string-match "ietf\\." gnus-newsgroup-name))))))
 
 (setq gnus-button-url 'gnus-netscape-open-url)
 
@@ -108,10 +105,10 @@
 	 (organization "Mad Science Research Labs"))
 	((message-news-p)
 	 ("Mail-Copies-To" "never"))
-        ("^nnml:Ebay"
+        ("^Ebay"
 	 (address "seb@msrl.com")
 	 ("FCC" (expand-file-name (format-time-string "~/Mail/Ebay/%Y-%m.out"))))
-	("^nnml:\\(above\\|mfnx\\)\\."
+	("^mfnx\\."
 	 (address "michael.shields@mmfn.com")
 	 (organization "Metromedia Fiber Network")
 	 (signature "Shields, MFN.")
@@ -154,11 +151,11 @@
 (setq message-citation-line-function 'insert-trn-style-citation-line-plus)
 (defun insert-trn-style-citation-line-plus ()
     (when (and message-reply-headers
-	       (not (string-equal gnus-newsgroup-name "nnml:ABOVE.NET"))
-	       (not (string-equal gnus-newsgroup-name "nnml:mfnx.aleph"))
-	       (not (string-equal gnus-newsgroup-name "nnml:MSRL.COM")))
+	       (not (string-equal gnus-newsgroup-name "ABOVE.NET"))
+	       (not (string-equal gnus-newsgroup-name "mfnx.aleph"))
+	       (not (string-equal gnus-newsgroup-name "MSRL.COM")))
       (let* ((first-line
-	      (if (string-equal gnus-newsgroup-name "nnml:risks")
+	      (if (string-equal gnus-newsgroup-name "risks")
 		  "In RISKS Digest,"
 		(concat "In article " (mail-header-id message-reply-headers) ",")))
 	     (his-address
@@ -168,7 +165,7 @@
 	     (concat (if (string-equal his-address user-mail-address)
 			 "I"
 		       (mail-header-from message-reply-headers)) " wrote:\n")))
-	(cond ((string-match "^nnml:rennlist\." gnus-newsgroup-name)
+	(cond ((string-match "^rennlist\." gnus-newsgroup-name)
 	       (insert second-line))
 	      ((not (string-equal his-address "tickets@tickets.above.net"))
 	       (insert first-line
@@ -184,7 +181,7 @@
 (setq gnus-save-newsrc-file nil)
 
 (setq gnus-use-cache t)
-(setq gnus-uncacheable-groups "^nnml:")
+(setq gnus-uncacheable-groups "^[^:]*$")
 
 (setq gnus-score-find-score-files-function
       '(gnus-score-find-bnews bbdb/gnus-score))
