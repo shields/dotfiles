@@ -1,12 +1,7 @@
 ;;; .gnus.el --- Shields's Gnus initialization file
 
 ;; Author: Michael Shields <shields@msrl.com>
-;; Version: 2001-12-31
-
-;; XXX http://bugs.debian.org/cgi-bin/bugreport.cgi?bug=82226
-(load "mm-decode")
-(load "messagexmas")
-(load "message")
+;; Version: 2002-01-01
 
 (setq mail-from-style 'parens)
 (setq mail-yank-prefix "> ")
@@ -273,3 +268,6 @@
 ;; Allow for multiple open windows on different groups (although, BBDB
 ;; still displays only in one buffer; oh well).
 (setq gnus-single-article-buffer nil)
+
+(require 'gnus-delay)
+(gnus-delay-initialize)
