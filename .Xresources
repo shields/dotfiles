@@ -17,7 +17,7 @@ Emacs.modeline.attributeFont: fixed
 #if HEIGHT > 1200
 Emacs.geometry: 100x86
 #elif HEIGHT > 800
-Emacs.geometry: 100x67
+Emacs.geometry: 100x70
 #elif HEIGHT > 600
 Emacs.geometry: 90x46
 #else
