@@ -1,5 +1,5 @@
 #
-# ~/.profile 2001-11-08
+# ~/.profile 2001-12-10
 # Michael Shields <shields@msrl.com>
 #
 
@@ -143,10 +143,8 @@ elif [ -d /home/cvs ]; then
     CVSROOT=/home/cvs
 elif [ -d /var/mfnx/cvs ]; then
     CVSROOT=/var/mfnx/cvs
-elif [ "$hostname" = mulligatwani ]; then
-    CVSROOT=:ext:challah.msrl.com:/usr/local/cvsroot
 else
-    CVSROOT=:ext:box.mfnx.net:/var/mfnx/cvs
+    CVSROOT=:ext:challah.msrl.com:/usr/local/cvsroot
 fi
 CVS_RSH=ssh
 export CVSROOT CVS_RSH
