@@ -1,0 +1,125 @@
+#!/usr/bin/perl
+#
+# blog2mail
+# Michael Shields <shields@msrl.com>
+# $Id$
+#
+# This works with Blogger, Blosxom, Radio Userland, and many homespun tools.
+#
+
+use CGI qw(escapeHTML);
+use DB_File;
+use Fcntl;
+use IO::File;
+use LWP::Simple;
+use Mail::Internet;
+use Sys::Hostname;
+use URI;
+use XML::RSS;
+use strict;
+use bytes;  # see below
+
+$#ARGV == 2
+    or die "usage: blog2mail URL FROM MAILDIR\n";
+my $url = $ARGV[0];
+my $from = $ARGV[1];
+my $maildir = $ARGV[2];
+$maildir =~ s,/$,,;
+-d "$maildir/new" && -d "$maildir/tmp"
+    or die "not a maildir: $maildir\n";
+my $message = 0;
+
+my $uri = new URI $url
+    or die "couldn't parse URL: $url\n";
+# FIXME Spurious "<b></b>" here works around a bug in w3m-el that causes
+# all text to be bolded up to the first </b>.  --Shields 2003-03-30
+my $html_header = "<html><head><base href=\"".$uri->scheme()."://"
+                  .$uri->host."\"></head>\n"
+		  ."<body><b>&nbsp;</b><em>&nbsp;</em><br>\n";
+my $html_footer = "</body></html>\n";
+
+tie my %cache, 'DB_File', "$ENV{HOME}/.blog2mail",
+    O_CREAT|O_RDWR, 0600
+    or die "couldn't tie: $!\n";
+
+my $raw_rss = get($url)
+    or die "couldn't get $url\n";
+# This shouldn't be necessary, and is not really correct.  However,
+# people do manage to put characters in their blogs that are not even
+# valid UTF-8, and that chokes the XML::RSS parser.  Assume that
+# anything valid is going to be escaped.  But that's probably wrong
+# for Asian languages.  The \octal syntax is odd, but at least it
+# doesn't lose information, and we can't know what is the right entity.
+# FIXME It would be best to do this only for invalid UTF-8; how?
+$raw_rss =~ s/([^\0-\176])/sprintf "\\%03o", ord $1/eg;
+# more hackaround:
+$raw_rss =~ s/&(?=\s)/&amp;/g;
+
+my $rss = new XML::RSS;
+$rss->parse($raw_rss)
+    or die "couldn't parse RSS for $url\n";
+
+foreach my $item (reverse @{$rss->{items}}) {
+
+    my $item_url = $item->{link} || $item->{guid}
+	or die "couldn't find link for item $item->{title}\n";
+
+    next if $cache{$item_url};
+
+    my $mail = new Mail::Internet;
+    $mail->head->add('X-URL', $item_url);
+    $mail->head->add('From', $from);
+    $mail->head->add('User-Agent', 'blog2mail/0.0');
+    $mail->head->add('MIME-Version', '1.0');
+    $mail->head->add('Content-Type', 'text/html');
+    if (defined $item->{dc} && defined $item->{dc}{date}) {
+	$mail->head->add('Date', iso8601_to_rfc2822($item->{dc}{date}));
+    } elsif (defined $item->{pubDate}) {
+	$mail->head->add('Date', $item->{pubDate});
+    }
+
+    $mail->head->add('Subject', $item->{title});
+
+    my $body;
+    if (defined $item->{'http://purl.org/rss/1.0/modules/content/'}) {
+	$body = $item->{'http://purl.org/rss/1.0/modules/content/'}{encoded};
+    } elsif (defined $item->{content}) {
+	$body = $item->{content}{encoded};
+    } elsif (defined $item->{description}) {
+	$body = $item->{description};
+	# Bad hack for Radio Userland:
+	$body =~ s,\n\n,<br />\n<br />\n,g;
+    } else {
+	$body = "<a href=\"$item->{link}\">"
+		. escapeHTML($item->{link}) . "</a>\n";
+    }
+
+    $mail->body($html_header . $body . $html_footer);
+
+    my $filename = time . ".${$}_$message." . hostname;
+    $message++;
+    my $fh = new IO::File;
+    open($fh, '>', "$maildir/tmp/$filename")
+	or die "couldn't open $maildir/tmp/$filename: $!\n";
+    $mail->print($fh)
+	or die "couldn't write to $maildir/tmp/$filename: $!\n";
+    close $fh;
+    rename "$maildir/tmp/$filename", "$maildir/new/$filename"
+	or die "couldn't rename $maildir/tmp/$filename: $!\n";
+
+    $cache{$item_url} = time;
+}
+
+untie %cache;
+
+exit 0;
+
+
+
+sub iso8601_to_rfc2822 {
+    $_[0] =~ /^(\d\d\d\d)-(\d\d)-(\d\d)T(\d\d:\d\d:\d\d)([-+]\d\d):?(\d\d)$/
+	or die "couldn't parse date: $_[0]\n";
+    sprintf '%d %s %d %s %s:%s', $3,
+	    (qw(Jan Feb Mar Apr May Jun Jul Aug Sep Oct Nov Dec))[$2-1],
+	    $1, $4, $5, $6;
+}
