@@ -88,11 +88,15 @@
 	    (define-key gnus-summary-mode-map [(control j)] 'gnus-summary-goto-article)
 	    (define-key gnus-summary-mode-map [(control k)] 'gnus-summary-kill-thread)
 	    (define-key gnus-summary-mode-map [(meta n)] 'gnus-summary-next-thread)
-	    (define-key gnus-summary-mode-map [(meta p)] 'gnus-summary-prev-thread)))
+	    (define-key gnus-summary-mode-map [(meta p)] 'gnus-summary-prev-thread)
+	    (define-key gnus-summary-mode-map [(F)]
+	      'summary-followup-with-original-super-citation)))
 (add-hook 'gnus-article-mode-hook
 	  (lambda ()
 	    (define-key gnus-article-mode-map [b] 'gnus-summary-prev-page)
-	    (define-key gnus-article-mode-map [(return)] 'gnus-summary-next-unread-article)))
+	    (define-key gnus-article-mode-map [(return)] 'gnus-summary-next-unread-article)
+	    (define-key gnus-article-mode-map [(F)]
+	      'summary-followup-with-original-super-citation)))
 
 (load "gnus-ml")
 (add-hook 'gnus-summary-mode-hook (lambda () (gnus-mailing-list-mode 1)))
@@ -191,29 +195,34 @@
 
 (add-hook 'gnus-group-mode-hook 'gnus-topic-mode)
 
-(setq message-citation-line-function 'insert-trn-style-citation-line-plus)
-(defun insert-trn-style-citation-line-plus ()
-    (when (and message-reply-headers
-	       (not (string-equal gnus-newsgroup-name "INBOX"))
-	       (not (string-equal gnus-newsgroup-name "INBOX.Ebay")))
-      (let* ((first-line
-	      (if (string-equal gnus-newsgroup-name "INBOX.risks")
-		  "In RISKS Digest,"
-		(concat "In article " (mail-header-id message-reply-headers) ",")))
-	     (his-address
-	      (car (cdr (mail-extract-address-components
-			 (mail-header-from message-reply-headers)))))
-	    (second-line
-	     (concat (if (string-equal his-address user-mail-address)
-			 "I"
-		       (mail-header-from message-reply-headers)) " wrote:\n")))
-	(cond ((string-match "^INBOX.rennlist-" gnus-newsgroup-name)
-	       (insert second-line))
-	      ((not (string-equal his-address "tickets@tickets.above.net"))
-	       (insert first-line
-		       (if (> (+ (length first-line) (length second-line)) fill-column)
-			   "\n" " ")
-		       second-line))))))
+(setq message-citation-line-function nil)
+(defun insert-super-citation-line ()
+  (let* ((first-line
+	  (cond ((string-equal gnus-newsgroup-name "INBOX.risks")
+		 "In RISKS Digest,")
+		(t
+		 (concat (if (message-news-p) "In article " "In message ")
+			 (mail-header-id message-reply-headers) ","))))
+	 (his-address
+	  (car (cdr (mail-extract-address-components
+		     (mail-header-from message-reply-headers)))))
+	 (second-line
+	  (concat (if (string-equal his-address user-mail-address)
+		      "I"
+		    (mail-header-from message-reply-headers)) " wrote:\n")))
+    (cond ((string-match "^INBOX.rennlist-" gnus-newsgroup-name)
+	   (insert second-line))
+	  ((not (string-equal his-address "tickets@tickets.above.net"))
+	   (insert first-line
+		   (if (> (+ (length first-line) (length second-line)) fill-column)
+		       "\n" " ")
+		   second-line)))))
+(defun summary-followup-with-original-super-citation (n &optional force-news)
+  "Replacement for `gnus-summary-followup-with-original' to use super
+citation lines."
+  (interactive "P")
+  (let ((message-citation-line-function 'insert-super-citation-line))
+    (gnus-summary-followup (gnus-summary-work-articles n) force-news)))
 
 ;; Don't quote on `+' or `}'; those mess up patches and code especially.
 (setq gnus-cite-prefix-regexp "^[]>|: ]*[]>|:]\\(.*>\\)?\\|^.*>")
