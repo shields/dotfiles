@@ -331,6 +331,9 @@ citation lines."
 (setq mml-default-sign-method "pgpmime")
 (setq mml-default-encrypt-method "pgpmime")
 
+(setq pgg-query-keyserver t)
+(setq pgg-default-keyserver-address "keyserver.bu.edu")
+
 ;; Update marks in real time, so that the mail checker widget can have
 ;; current information.  This should really be on gnus-summary-mark-article,
 ;; but there is no appropriate hook for that.
