@@ -1,5 +1,5 @@
 !
-! ~/.Xresources 2001-08-11
+! ~/.Xresources 2001-08-13
 ! Michael Shields <shields@msrl.com>
 !
 
@@ -9,7 +9,9 @@
 *cursorColor: firebrick2
 
 ! 6x13 font:
-xemacs.font: -misc-fixed-medium-r-semicondensed--13-120-75-75-c-60-iso10646-1
+! challah -> mulligatwani doesn't parse this as of 2001-08-13; not sure why.
+!xemacs.font: -misc-fixed-medium-r-semicondensed--13-120-75-75-c-60-iso10646-1
+xemacs.font: -misc-fixed-medium-r-semicondensed--13-120-75-75-c-60-iso8859-1
 #if HEIGHT > 1200
 xemacs.geometry: 100x86
 #elif HEIGHT > 800
