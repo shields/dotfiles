@@ -1,0 +1,20 @@
+#
+# ~/.confile 1999-11-16
+# Michael Shields <shields@msrl.com>
+#
+# Run on logout by a trap set in .profile.
+#
+
+cd $HOME
+
+test -n "$KRB5CCNAME" && kdestroy
+
+test -n "$SSH_AGENT_PID" && eval `ssh-agent -k -s`
+
+test -f $HOME/.fetchmail.pid && fetchmail -q
+
+rm -f .article .letter Canceled.mail dead.article dead.letter
+
+rm -rf $HOME/.netscape/cache/*
+
+exit 0
