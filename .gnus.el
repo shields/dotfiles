@@ -83,7 +83,7 @@
 	    (define-key gnus-summary-mode-map [b] 'gnus-summary-prev-page)
 	    (define-key gnus-summary-mode-map [(return)] 'gnus-summary-next-unread-article)
 	    (define-key gnus-summary-mode-map [(tab)] 'scroll-up-command)
-	    (define-key gnus-summary-mode-map [(shift tab)] 'scroll-up-command)
+	    (define-key gnus-summary-mode-map [(shift tab)] 'scroll-down-command)
 	    (define-key gnus-summary-mode-map [j] 'gnus-summary-next-thread)
 	    (define-key gnus-summary-mode-map [k] 'gnus-summary-prev-thread)
 	    (define-key gnus-summary-mode-map [(control j)] 'gnus-summary-goto-article)
