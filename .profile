@@ -1,5 +1,5 @@
 #
-# ~/.profile 2001-08-10
+# ~/.profile 2001-10-18
 # Michael Shields <shields@msrl.com>
 #
 
@@ -49,6 +49,8 @@ test -d /usr/info && INFOPATH="$INFOPATH:/usr/info"
 test -d /usr/ccs/bin && NEWPATH="$NEWPATH:/usr/ccs/bin"
 
 test -d /usr/share/man && MANPATH="$MANPATH:/usr/share/man"
+test -d /usr/local/share/man && MANPATH="$MANPATH:/usr/local/share/man"
+test -d /usr/local/man && MANPATH="$MANPATH:/usr/local/man"
 
 test -d /usr/X11R6/bin && NEWPATH="$NEWPATH:/usr/X11R6/bin"
 test -d /usr/X11R6/man && MANPATH="$MANPATH:/usr/X11R6/man"
