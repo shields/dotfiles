@@ -1,0 +1,190 @@
+!
+! ~/.Xresources 2000-07-23
+! Michael Shields <shields@msrl.com>
+!
+
+#define DESKFG grey80
+#define DESKBG black
+
+! xterm, emacs, et al.
+*cursorColor: firebrick2
+
+! 6x13 font:
+emacs.font: -misc-fixed-medium-r-semicondensed--13-120-75-75-c-60-iso8859-1
+xemacs.font: -misc-fixed-medium-r-semicondensed--13-120-75-75-c-60-iso8859-1
+XEmacs.font: -misc-fixed-medium-r-semicondensed--13-120-75-75-c-60-iso8859-1
+#if HEIGHT > 1200
+emacs.geometry: 100x90
+xemacs.geometry: 100x86
+XEmacs.geometry: 100x86
+#elif HEIGHT > 800
+emacs.geometry: 100x72
+xemacs.geometry: 100x68
+XEmacs.geometry: 100x68
+#elif HEIGHT > 600
+emacs.geometry: 90x52
+xemacs.geometry: 90x46
+XEmacs.geometry: 90x46
+#else
+emacs.geometry: 103x34+0+0
+xemacs.geometry: 103x34+0+0
+XEmacs.geometry: 103x34+0+0
+#endif
+
+xterm*ttyModes: erase ^?
+xterm*font: -misc-fixed-medium-r-semicondensed--13-120-75-75-c-60-iso8859-1
+#if HEIGHT >= 1200
+xterm*geometry: 100x80
+#elif HEIGHT > 800
+xterm*geometry: 80x65
+#elif HEIGHT > 640
+xterm*geometry: 80x50
+#else
+xterm*geometry: 80x25
+#endif
+
+Ical*background: #e6e6e6
+Ical.itemBg: white
+Ical.itemSelectFg: #990000
+Ical.itemSelectBg: white
+Ical.weekdayColor: black
+Ical.weekendColor: black
+Ical.interestColor: #000099
+Ical.weekendInterestColor: #000099
+Ical.fontSize: small
+Ical.fontFamily: helvetica
+Ical.weekdayFont: -*helvetica*-medium-r-*-120-*
+Ical.weekendFont: -*helvetica*-medium-r-*-120-*
+Ical.interestFont: -*helvetica*-bold-r-*-120-*
+Ical.weekendInterestFont: -*helvetica*-bold-r-*-120-*
+#if WIDTH < 800
+Ical.Reminder.geometry: +0+0
+Ical.Listing.geometry: +0+0
+#endif
+
+Mosaic*confirmExit: false
+Mosaic*Background: grey93
+Mosaic*activeAnchorBG: grey93
+Mosaic*anchorUnderlines: 0
+Mosaic*visitedAnchorUnderlines: 0
+Mosaic*dashedVisitedAnchorUnderlines: false
+Mosaic*homeDocument: http://w.crosslink.net/
+Mosaic*documentsMenuSpecfile: .mosaic-specfile
+
+#if PLANES < 16
+netscape*installColormap: true
+#endif
+netscape*blinkingEnabled: false
+netscape*hysteresis: 6
+netscape*linkForeground: #000099
+netscape*vlinkForeground: #990000
+netscape*defaultForeground: #000000
+netscape*defaultBackground: #e6e6e6
+netscape.Navigator.form.topArea.topLeftArea.urlText.background: #f0f0f0
+! #if HEIGHT > 1200
+! netscape.Navigator.geometry: =800x1200
+! #elif HEIGHT > 1000
+! netscape.Navigator.geometry: =640x900
+! #else
+! netscape.Navigator.geometry: 634x456+0+0
+! #endif
+
+swisswatch*SwissWatch.tickTime: 1
+swisswatch*foreground: DESKFG
+swisswatch*background: DESKBG
+! Railroad mode means the minute hand steps instead of sweeps.
+swisswatch*railroad: true
+! Based loosely on the stock config.
+swisswatch*SwissWatch.nChildren:                5
+swisswatch*SwissWatch.Hand.inner:               -.05
+swisswatch*SwissWatch.Hand.width:               0
+swisswatch*SwissWatch.*.cap:                    round
+swisswatch*SwissWatch.Hand.shape:               triangle
+! Minute ticks:
+swisswatch*SwissWatch.child_0.class:            Mark
+swisswatch*SwissWatch.child_0.cycle:            60
+swisswatch*SwissWatch.child_0.strokeWidthR:     0.01
+swisswatch*SwissWatch.child_0.inner:            0.89
+swisswatch*SwissWatch.child_0.outer:            0.9
+! Hour ticks:
+swisswatch*SwissWatch.child_1.class:            Mark
+swisswatch*SwissWatch.child_1.cycle:            12
+swisswatch*SwissWatch.child_1.strokeWidthR:     0.02
+swisswatch*SwissWatch.child_1.inner:            .81
+swisswatch*SwissWatch.child_1.outer:            .9
+! Hour hand:
+swisswatch*SwissWatch.child_2.class:            Hand
+swisswatch*SwissWatch.child_2.cycle:            43200
+swisswatch*SwissWatch.child_2.outer:            .42
+swisswatch*SwissWatch.child_2.render:           filled
+swisswatch*SwissWatch.child_2.strokeWidth:	0
+swisswatch*SwissWatch.child_2.width:           	0.12
+! Minute hand:
+swisswatch*SwissWatch.child_3.class:            Hand
+swisswatch*SwissWatch.child_3.cycle:            3600
+swisswatch*SwissWatch.child_3.outer:            .70
+swisswatch*SwissWatch.child_3.render:           filled
+swisswatch*SwissWatch.child_3.strokeWidth:	0
+swisswatch*SwissWatch.child_3.width:           	0.12
+! Second hand:
+swisswatch*SwissWatch.child_4.class:            Hand
+swisswatch*SwissWatch.child_4.render:           filled
+swisswatch*SwissWatch.child_4.shape:            arrow
+swisswatch*SwissWatch.child_4.cycle:            60
+swisswatch*SwissWatch.child_4.inner:            0.75
+swisswatch*SwissWatch.child_4.outer:            0.8
+swisswatch*SwissWatch.child_4.strokeWidth:	0
+swisswatch*SwissWatch.child_4.width:            0.08
+swisswatch*SwissWatch.child_4.foreground:	firebrick2
+
+xbiff*borderWidth: 0
+xbiff*foreground: DESKFG
+xbiff*background: DESKBG
+xbiff*update: 1
+
+xclock*borderWidth: 0
+xclock*height: 82
+xclock*width: 82
+xclock*padding: 4
+xclock*background: DESKBG
+xclock*foreground: DESKFG
+xclock*hands: DESKFG
+xclock*highlight: DESKFG
+
+xearth*gamma: 2.5
+xearth*day: 85
+xearth*markers: false
+xearth*stars: false
+xearth*wait:60
+xearth*proj: merc
+xearth*pos: fixed 0 0
+xearth*term: 18
+!xearth*proj: ortho
+!xearth*pos: fixed 38.92 -77.40
+!xearth*term: 7
+
+! does not support tildes:
+xmdb*cddb: /home/shields/.cddb
+
+xplaycd*cddb: ~/.cddb
+xplaycd.geometry: +0+0
+xplaycd*autostart: true
+
+xraplayer.geometry: +0+0
+
+xv*perfect: true
+xv*force8: true
+xv*slow24: true
+
+XLock.mode: penrose
+XLock.erasemode: squaretate
+XLock.usefirst: off
+
+Xautolock.usefirst: on
+Xautolock.corners: ++++
+Xautolock.cornerdelay: 3
+
+! xscreensaver
+xscreensaver*grabVideoProbability: 1.0
+xscreensaver*videoGain: 1.0
+xscreensaver*grabVideoCommand: streamer -q -o /home/shields/.vidcap.ppm; cat /home/shields/.vidcap.ppm
