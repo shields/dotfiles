@@ -268,3 +268,11 @@
 	    (save-excursion
 	      (set-buffer gnus-original-article-buffer)
 	      (mc-verify))))
+
+;; Update marks in real time, so that the mail checker widget can have
+;; current information.  This should really be on gnus-summary-mark-article,
+;; but there is no appropriate hook for that.
+(add-hook 'gnus-select-article-hook
+	  (lambda ()
+	    (when (string= gnus-newsgroup-name "INBOX")
+	      (gnus-summary-update-info t))))
