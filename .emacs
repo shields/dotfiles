@@ -1,7 +1,7 @@
 ;;; .emacs --- Shields's Emacs initialization file
 
 ;; Author: Michael Shields <shields@msrl.com>
-;; Version: 2001-04-24
+;; Version: 2001-05-01
 
 ;;; Globals
 ;;{{{ Preliminaries
@@ -408,6 +408,8 @@ when called with a prefix argument."
 
 ;;}}}
 ;;{{{ Version control
+
+(require 'vc)
 
 ;; Default is "-c".
 (setq diff-switches "-u")
