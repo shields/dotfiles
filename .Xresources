@@ -1,5 +1,5 @@
 !
-! ~/.Xresources 2001-08-13
+! ~/.Xresources 2001-10-22
 ! Michael Shields <shields@msrl.com>
 !
 
@@ -34,25 +34,6 @@ xterm*geometry: 80x65
 xterm*geometry: 80x50
 #else
 xterm*geometry: 80x25
-#endif
-
-Ical*background: #e6e6e6
-Ical.itemBg: white
-Ical.itemSelectFg: #990000
-Ical.itemSelectBg: white
-Ical.weekdayColor: black
-Ical.weekendColor: black
-Ical.interestColor: #000099
-Ical.weekendInterestColor: #000099
-Ical.fontSize: small
-Ical.fontFamily: helvetica
-Ical.weekdayFont: -*helvetica*-medium-r-*-120-*
-Ical.weekendFont: -*helvetica*-medium-r-*-120-*
-Ical.interestFont: -*helvetica*-bold-r-*-120-*
-Ical.weekendInterestFont: -*helvetica*-bold-r-*-120-*
-#if WIDTH < 800
-Ical.Reminder.geometry: +0+0
-Ical.Listing.geometry: +0+0
 #endif
 
 Mosaic*confirmExit: false
@@ -144,7 +125,7 @@ xclock*foreground: DESKFG
 xclock*hands: DESKFG
 xclock*highlight: DESKFG
 
-xearth*gamma: 2.5
+xearth*gamma: 2.2
 xearth*day: 85
 xearth*markers: false
 xearth*stars: false
@@ -164,18 +145,6 @@ xplaycd.geometry: +0+0
 xplaycd*autostart: true
 
 xraplayer.geometry: +0+0
-
-xv*perfect: true
-xv*force8: true
-xv*slow24: true
-
-XLock.mode: penrose
-XLock.erasemode: squaretate
-XLock.usefirst: off
-
-Xautolock.usefirst: on
-Xautolock.corners: ++++
-Xautolock.cornerdelay: 3
 
 ! xscreensaver
 xscreensaver*grabVideoProbability: 1.0
