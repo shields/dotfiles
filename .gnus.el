@@ -1,7 +1,7 @@
 ;;; .gnus.el --- Shields's Gnus initialization file
 
 ;; Author: Michael Shields <shields@msrl.com>
-;; Version: 2001-08-19
+;; Version: 2001-08-20
 
 ;; XXX http://bugs.debian.org/cgi-bin/bugreport.cgi?bug=82226
 (load "mm-decode")
@@ -105,13 +105,23 @@
 	((message-news-p)
 	 ("Mail-Copies-To" "never"))
         ("^Ebay"
-	 (address "seb@msrl.com")
-	 ("FCC" (expand-file-name (format-time-string "~/Mail/Ebay/%Y-%m.out"))))
-	("^mfnx\\."
+	 (address "seb@msrl.com"))
+	("^\\(nnfolder\\+archive:\\)?mfnx\\."
 	 (address "michael.shields@mmfn.com")
 	 (organization "Metromedia Fiber Network")
-	 (signature "Shields, MFN.")
-	 ("FCC" (expand-file-name (format-time-string "~/Mail/ABV/OUT.%Y-%m"))))))
+	 (signature "Shields, MFN."))))
+
+(setq gnus-message-archive-method
+      '(nnfolder "archive"
+		 (nnfolder-directory   "~/Mail/archive")
+		 (nnfolder-active-file "~/Mail/archive/active")
+		 (nnfolder-get-new-mail nil)
+		 (nnfolder-inhibit-expiry t)))
+(setq gnus-message-archive-group
+      '((cond ((string-match "^\\(nnfolder\\+archive:\\)?mfnx\\." gnus-newsgroup-name)
+	       (format-time-string "mfnx.OUT.%Y-%m"))
+	      ((string-equal "Ebay" gnus-newsgroup-name)
+	       (format-time-string "ebay.OUT.%Y-%m")))))
 
 (setq gnus-large-newsgroup 2000)
 
@@ -179,9 +189,6 @@
 
 (setq gnus-save-newsrc-file nil)
 
-(setq gnus-use-cache t)
-(setq gnus-uncacheable-groups "^[^:]*$")
-
 (setq gnus-score-find-score-files-function
       '(gnus-score-find-bnews bbdb/gnus-score))
 
@@ -241,3 +248,8 @@
 (setq base64-decoder-switches '("-d"))
 
 (setq message-forward-before-signature nil)
+
+;; From the manual; don't autosave nnfolder files:
+(defun turn-off-backup ()
+  (set (make-local-variable 'backup-inhibited) t))
+(add-hook 'nnfolder-save-buffer-hook 'turn-off-backup)
