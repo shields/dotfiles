@@ -386,7 +386,7 @@ citation lines, and open in a newly created frame."
 (setq gnus-article-address-banner-alist
       '(("@address\\.com$" . "^---------+\nGet FREE INTERNET .*\n.*")
 	("@flashmail\\.com$" . "^_________+\n.*\n.*")
-	("@hotmail\\.com$" . "^_________+\n.*\n.*")
+	("@hotmail\\.com$" . "^_________+\n\\(.+\n\\)+")
 	("@netscape\\.net$" . "^_________+\n.*\n.*\nGet your own FREE, personal Netscape Mail account.*")
 	("@juno\\.com$" . "^_________+\n.*\n.*")
 	("@yahoo\\.com$" . "^\\(----------+\\|__________+\\)\nDo you Yahoo!\\?\n.*\n.*")
