@@ -11,7 +11,9 @@ use CGI qw(escapeHTML);
 use DB_File;
 use Fcntl;
 use IO::File;
-use LWP::Simple;
+use LWP::UserAgent;
+use HTTP::Headers;
+use HTTP::Request;
 use Mail::Internet;
 use Sys::Hostname;
 use URI;
@@ -42,8 +44,25 @@ tie my %cache, 'DB_File', "$ENV{HOME}/.blog2mail",
     O_CREAT|O_RDWR, 0600
     or die "couldn't tie: $!\n";
 
-my $raw_rss = get($url)
-    or die "couldn't get $url\n";
+my $ua = new LWP::UserAgent;
+my $headers = new HTTP::Headers;
+# This is better than using the if_modified_since method, which uses
+# native time_t arguments; see notes to RFC 2616 section 14.25.
+$headers->header('If-Modified-Since' => $cache{$url}) if $cache{$url};
+my $request = new HTTP::Request('GET' => $url, $headers);
+my $response = $ua->request($request);
+if ($response->code == 304) {	# not modified
+    exit 0;
+} elsif ($response->is_redirect) {
+    die "redirection of $url not implemented\n";  # FIXME
+} elsif ($response->is_error) {
+    die "error getting $url: ", $response->status_line, "\n";
+}
+$cache{$url} = $response->header('Last-Modified')
+    if $response->header('Last-Modified');
+
+my $raw_rss = $response->content;
+
 # This shouldn't be necessary, and is not really correct.  However,
 # people do manage to put characters in their blogs that are not even
 # valid UTF-8, and that chokes the XML::RSS parser.  Assume that
