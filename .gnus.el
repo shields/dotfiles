@@ -124,6 +124,7 @@
 		       (string-equal "INBOX.tz" gnus-newsgroup-name)
 		       (string-equal "INBOX.xabov" gnus-newsgroup-name)
 		       (string-match "INBOX\\.ietf\\." gnus-newsgroup-name)
+		       (string-match "INBOX\\.forensics" gnus-newsgroup-name)
 		       (string-match "^\\([^:]*:\\)?comp\\.arch"
 				     gnus-newsgroup-name)
 		       (string-match "^\\([^:]*:\\)?comp\\.lang\\.perl\\.moderated"
