@@ -1,7 +1,7 @@
 ;;; .gnus.el --- Shields's Gnus initialization file
 
 ;; Author: Michael Shields <shields@msrl.com>
-;; Version: 2002-01-07
+;; Version: 2002-01-26
 
 (setq mail-from-style 'parens)
 (setq mail-yank-prefix "> ")
@@ -110,11 +110,7 @@
 	((message-news-p)
 	 ("Mail-Copies-To" "never"))
         ("^Ebay"
-	 (address "seb@msrl.com"))
-	("^\\(nnfolder\\+archive:\\)?mfnx\\."
-	 (address "michael.shields@mfn.com")
-	 (organization "Metromedia Fiber Network")
-	 (signature "Shields, MFN."))))
+	 (address "seb@msrl.com"))))
 
 (setq gnus-message-archive-method
       '(nnfolder "archive"
