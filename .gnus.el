@@ -1,7 +1,7 @@
 ;;; .gnus.el --- Shields's Gnus initialization file
 
 ;; Author: Michael Shields <shields@msrl.com>
-;; Version: 2001-12-26
+;; Version: 2001-12-31
 
 ;; XXX http://bugs.debian.org/cgi-bin/bugreport.cgi?bug=82226
 (load "mm-decode")
@@ -37,6 +37,7 @@
 (setq nnslashdot-group-number 20)
  
 (setq gnus-subscribe-newsgroup-method 'gnus-subscribe-topics)
+(setq gnus-subscribe-options-newsgroup-method 'gnus-subscribe-topics)
 
 (setq gnus-kill-files-directory "~/News/Score/")
 (setq gnus-score-file-suffix "SCORE")
