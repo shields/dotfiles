@@ -12,9 +12,8 @@
 
 ;; /etc/xemacs21/site-start.d/20gnus-init.el instantiates the system
 ;; version of Gnus.  Be sure to override it.
+(provide 'gnus-init)   ; XXX will this work to suppress gnus-init?
 (load "gnus")
-;; XXX will this work to suppress gnus-init?
-(provide 'gnus-init)
 
 (require 'info)
 (setq Info-directory-list (cons "~/info" Info-default-directory-list))
