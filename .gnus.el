@@ -89,6 +89,7 @@
 		      (string-equal "big-internet" gnus-newsgroup-name)
 		      (string-equal "bugtraq" gnus-newsgroup-name)
 		      (string-equal "cryptography" gnus-newsgroup-name)
+		      (string-equal "cypherpunks" gnus-newsgroup-name)
 		      (string-equal "end2end" gnus-newsgroup-name)
 		      (string-equal "fsb" gnus-newsgroup-name)
 		      (string-equal "leapsecs" gnus-newsgroup-name)
