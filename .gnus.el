@@ -123,6 +123,8 @@
 	      ((string-equal "Ebay" gnus-newsgroup-name)
 	       (format-time-string "ebay.OUT.%Y-%m")))))
 
+(setq gnus-inews-mark-gcc-as-read t)
+
 (setq gnus-large-newsgroup 2000)
 
 (setq gnus-keep-same-level 'best)
