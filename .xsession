@@ -18,6 +18,8 @@ test -f .Xmodmap && xmodmap .Xmodmap
 # fast mouse
 xset m 4 4
 
+sawfish &
+
 # xloadimage -onroot /usr/local/lib/mac-7.5.3-bgs/23295.ppm
 # xearth &
 #xv -root -rm 5 -quit $HOME/.bgs/linside.gif
