@@ -1,0 +1,7 @@
+#
+# ~/.mailrc
+# Michael Shields <shields@msrl.com>
+# $Id$
+#
+
+unset askcc
