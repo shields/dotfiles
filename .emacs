@@ -325,6 +325,12 @@ when called with a prefix argument."
     (font-lock-make-faces t))
 
 ;;}}}
+;;{{{ Gnus
+
+;; Oort override before .gnus.el is read.
+(load "mm-util")
+
+;;}}}
 ;;{{{ Mailcrypt
 
 (load-library "mailcrypt")
