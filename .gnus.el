@@ -131,8 +131,6 @@
 		       (string-match "INBOX\\.forensics" gnus-newsgroup-name)
 		       (string-match "^\\([^:]*:\\)?comp\\.arch"
 				     gnus-newsgroup-name)
-		       (string-match "^\\([^:]*:\\)?comp\\.lang\\.perl\\.moderated"
-				     gnus-newsgroup-name)
 		       (string-match "^\\([^:]*:\\)?comp\\.std\\.c"
 				     gnus-newsgroup-name)
 		       (string-match "^\\([^:]*:\\)?comp\\.society\\.privacy"
