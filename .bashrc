@@ -45,3 +45,7 @@ else
 fi
 
 alias ll='ls -l'
+
+test -f /etc/bash_completion && . /etc/bash_completion
+
+true
