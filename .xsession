@@ -28,8 +28,6 @@ test "`hostname`" = vichyssoise && \
 xsetroot -solid black
 
 xscreensaver &
-xautolock -time 30 -locker 'xscreensaver-command -lock' \
-    -corners +000 -cornerredelay 3600 &
 
 test -x /usr/bin/ssh-askpass && SSH_ASKPASS=/usr/bin/ssh-askpass
 export SSH_ASKPASS
@@ -49,6 +47,6 @@ if test -d $HOME/.xplanet; then
 	-background $HOME/.xplanet/background.png &
 fi
 
-xwrits clock after=15 top &
+#xwrits clock after=15 top &
 
 exec gnome-session
