@@ -14,7 +14,10 @@
 (add-to-list 'load-path (expand-file-name "~/share/xemacs/site-lisp"))
 (add-to-list 'load-path (expand-file-name "~/share/xemacs/site-lisp"))
 (add-to-list 'load-path (expand-file-name "~/share/xemacs/site-packages/lisp"))
+
 ;; XXX XXX ugly
+(delete 'gnus-autoloads features)
+(require 'gnus-load)
 (add-to-list 'load-path (expand-file-name "~/share/xemacs/site-packages/lisp/gnus"))
 
 ;; XXX
@@ -155,6 +158,16 @@ when called with a prefix argument."
 
 (global-set-key [(control c) (F)] 'find-file-at-point)
 
+(global-set-key [(control x) (control n)] 'next-error)
+
+(global-set-key [(control c) (d)] 'dictionary-search)
+;(remove-hook 'text-mode-hook 'dictionary-tooltip-mode) ; not functional yet
+
+;; The default is just-one-space.
+(global-set-key [(meta space)] 'fixup-whitespace)
+
+(global-set-key [(control backspace)] 'join-line)
+
 ;;}}}
 
 ;;; Major modes
@@ -177,6 +190,47 @@ when called with a prefix argument."
 	     (define-key makefile-mode-map "\C-c\C-c" 'compile)))
 
 ;;}}}
+;;{{{ procmail-mode
+
+;; http://list-archive.xemacs.org/xemacs-design/200206/msg00103.html
+(define-derived-mode procmail-mode fundamental-mode "Procmail"
+  "Major mode for editing procmail recipes."
+  (setq comment-start "#")
+  (setq comment-start-skip "#[ \t]*")
+  (setq procmail-font-lock-keywords
+        (list '("#.*"
+                . font-lock-comment-face)
+              '("^[\t ]*:.*"
+                . font-lock-type-face)
+              '("[A-Za-z_]+=.*"
+                . font-lock-keyword-face)
+              '("^[\t ]*\\*.*"
+                . font-lock-doc-string-face)
+              '("\$[A-Za-z0-9_]+"
+                . font-lock-function-name-face)))
+  (font-lock-mode))
+(add-to-list 'auto-mode-alist '("\\.procmailrc\\'" . procmail-mode))
+
+;;}}}
+;;{{{ shell-mode
+
+(add-hook 'shell-mode-hook
+	  '(lambda ()
+	     (set-process-sentinel (get-buffer-process (current-buffer))
+				   'kill-shell-buffer-after-normal-exit)))
+(defun kill-shell-buffer-after-normal-exit (process reason)
+  "Kill the shell buffer after its process exits normally.
+If it exits abnormally, print a message instead, like the default
+sentinel."
+  (cond ((string= reason "finished\n")
+	 (kill-buffer (process-buffer process)))
+	((buffer-name (process-buffer process))
+	 (insert-string (concat "Process "
+				(process-name process)
+				" " reason)
+			(process-buffer process)))))
+
+;;}}}
 ;;{{{ sql-mode
 
 (add-hook 'sql-mode-hook 'turn-on-font-lock)
@@ -190,16 +244,18 @@ when called with a prefix argument."
 ;; Enable auto-fill.
 (add-hook 'text-mode-hook
 	  (function (lambda ()
+		      (turn-on-auto-fill)
 		      (filladapt-mode 1))))
 (add-hook 'indented-text-mode-hook
 	  (function (lambda ()
+		      (turn-on-auto-fill)
 		      (filladapt-mode 1))))
 (add-hook 'message-mode-hook
 	  (function (lambda ()
-		      (auto-fill-mode 1))))
+		      (turn-on-auto-fill))))
 (add-hook 'xml-mode-hook
 	  (function (lambda ()
-		      (auto-fill-mode 1))))
+		      (turn-on-auto-fill))))
 
 ;; Perl extension glues.  Not really like C; more like a Makefile.
 (or (assoc "\\.xs$" auto-mode-alist)
@@ -316,6 +372,11 @@ when called with a prefix argument."
 (require 'bbdb-pgp)
 (setq bbdb/pgp-method 'mml-pgpmime)
 
+;; XXX this should only happen if there are multiple windows open
+;; in the current frame.
+(eval-after-load "bbdb"
+  '(define-key bbdb-mode-map "q" 'delete-window))
+
 ;;}}}
 ;;{{{ Calc
 
@@ -359,6 +420,36 @@ when called with a prefix argument."
 (add-hook 'initial-calendar-window-hook 'mark-calendar-holidays)
 
 ;;}}}
+;;{{{ Flyspell
+
+(require 'flyspell)
+
+;; Normally using (flyspell-mode-on) directly is deprecated in favor
+;; of (flyspell-mode 1), which is smart enough not to reinitialize.
+;; However, we actually want to reinitialize.  For example,
+;; message-mode runs text-mode-hook before message-mode-hook; if
+;; flyspell mode is already on, then flyspell-generic-check-word-p
+;; will never get set with its message-mode-specific value.
+(add-hook 'text-mode-hook 'flyspell-mode-on)
+(add-hook 'message-mode-hook 'flyspell-mode-on)
+
+;; flyspell-prog-mode depends on font-lock to identify comments and
+;; strings, so it won't work without it anyway.
+(add-hook 'font-lock-mode-hook 'flyspell-prog-mode)
+
+(setq flyspell-abbrev-p nil)
+(setq flyspell-sort-corrections nil)
+
+(define-key flyspell-mouse-map [(button3)] #'flyspell-correct-word)
+
+(define-key flyspell-mode-map [(meta tab)] nil)
+
+(when (executable-find "aspell")
+  (setq-default ispell-program-name "aspell"))
+(setq ispell-silently-savep t)
+(setq ispell-extra-args '("-W" "3"))
+
+;;}}}
 ;;{{{ Font-lock
 
 (require 'font-lock)
@@ -396,7 +487,21 @@ when called with a prefix argument."
 (setq pgg-passphrase-cache-expiry 1200)
 
 ;;}}}
+;;{{{ Message
+;; See also .gnus.el
+
+;; Controls C-x m.  Like message-user-agent, but use gnus-msg-mail
+;; instead of message-send-mail in order to set up Gcc: et al.
+(define-mail-user-agent 'gnus-user-agent
+  'gnus-msg-mail 'message-send-and-exit
+  'message-kill-buffer 'message-send-hook)
+(setq mail-user-agent 'gnus-user-agent)
+
+;;}}}
 ;;{{{ Perl modes
+
+;; Make sure perl-mode doesn't even get loaded.
+(defalias 'perl-mode 'cperl-mode)
 
 (autoload 'describe-perl-symbol "perl-descr"
   "One-line information on a perl symbol" t)
@@ -446,5 +551,147 @@ when called with a prefix argument."
 (setq url-keep-history nil)
 
 (setq browse-url-browser-function 'browse-url-mozilla)
+
+;;}}}
+;;{{{ W3M
+
+(setq w3m-fill-column 70)
+
+;;}}}
+
+;;{{{ Unsorted additions
+
+(require 'eval-expr)
+(eval-expr-install)
+
+
+(resize-minibuffer-mode)
+
+
+(autoload 'rfcview-mode "rfcview")
+
+
+(require 'fff)
+(setq fff-map-prefix [(control c) (f)])
+(fff-install-map)
+(require 'fff-rfc)
+(fff-rfc-install-map)
+(setq fff-rfc-view-mode 'rfcview-mode)
+;; Debian doc-rfc-* packages use this directory:
+(add-to-list 'fff-rfc-path "/usr/share/doc/RFC/links")
+(require 'fff-elisp)
+(fff-elisp-install-map)
+
+
+;;(gnuserv-start)
+
+
+(eval-after-load "gnus"
+  '(progn
+     (defun pop-up-gnus-inbox ()
+       "Create a new frame with Gnus in it, selected to the inbox group.
+\(See gnus-inbox-name.)  This function is useful for binding to a hotkey."
+       (interactive)
+       (let ((frame (make-frame gnus-pop-up-frame-properties)))
+	 (select-frame frame)
+	 (focus-frame frame)
+	 (setq gnus-transient-frames (cons frame gnus-transient-frames))
+	 (if (not (gnus-alive-p))
+	     (gnus)
+	   (switch-to-buffer gnus-group-buffer)) ; is this kosher?
+	 (gnus-summary-jump-to-group gnus-inbox-name)
+	 (gnus-group-get-new-news-this-group)))
+     (defvar gnus-inbox-name "INBOX"
+       "The folder popped up by pop-up-gnus-inbox.")
+     (defvar gnus-pop-up-frame-properties nil
+       "Frame properties for frames created by \\[pop-up-gnus-inbox].")
+     (defvar gnus-transient-frames ()
+       "List of frames created by \\[pop-up-gnus-inbox].")
+     (defun gnus-delete-transient-frame ()
+       "Delete the current frame, if it is a member of gnus-transient-frames."
+       (when (member (selected-frame) gnus-transient-frames)
+	 (setq gnus-transient-frames
+	       (delete (selected-frame) gnus-transient-frames))
+	 (delete-frame)))
+     (add-hook 'gnus-summary-exit-hook 'gnus-delete-transient-frame)))
+
+
+(eval-after-load "calc"
+  '(progn
+     (defun pop-up-calc ()
+       "Create a new frame with Calc in it.
+The new frame has properties determined by calc-pop-up-frame-properties.
+This function is useful for binding to a hotkey."
+       (interactive)
+       (let ((frame (make-frame calc-pop-up-frame-properties))
+	     (buf (generate-new-buffer " pop-up-calc")))
+	 (select-frame frame)
+	 (focus-frame frame)
+	 (setq calc-transient-frames (cons frame calc-transient-frames))
+	 ;; If Calc starts up in its own buffer, it quits.  Hack around.
+	 (set-buffer buf)
+	 (full-calc)
+	 (kill-buffer buf)))
+     (defvar calc-pop-up-frame-properties '(height 30 width 60)
+       "Frame properties for frames created by \\[pop-up-calc].")
+     (defvar calc-transient-frames ()
+       "When calc-quit is run, the current frame will be deleted if it is in this list.")
+     (defun calc-quit-or-delete-transient-frame (&optional non-fatal)
+       "Deletes the current frame if it is a member of calc-transient-frames; otherwise, calc-quit."
+       (interactive)
+       (if (not (member (selected-frame) calc-transient-frames))
+	   (calc-quit non-fatal)
+	 (setq calc-transient-frames
+	       (delete (selected-frame) calc-transient-frames))
+	 (delete-frame)))
+     (define-key calc-mode-map "q" 'calc-quit-or-delete-transient-frame)))
+
+
+
+(setq visible-bell 'top-bottom)
+
+
+;; All ^M to go to the beginning of line in shell mode.  This lets the
+;; status update of apt-get, scp, &c. work correctly.
+(eval-after-load "comint"
+  '(progn
+     (require 'proc-filters)
+     (setq-default comint-output-filter-functions
+		   (cons 'proc-filter-shell-output-filter
+			 comint-output-filter-functions))))
+
+
+;; Disable the mouse wheel entirely.  If you want it to do something
+;; useful, see mwheel.el.
+(defun noop ()
+  "No effect."
+  (interactive))
+(global-set-key 'button4 'noop)
+(global-set-key 'button5 'noop)
+
+
+(setq try-oblique-before-italic-fonts t)
+
+
+(require 'mmm-mode)
+(setq mmm-global-mode 'maybe)
+
+
+(setq font-lock-maximum-size 2097152)
+
+
+(require 'patcher)
+(when (file-accessible-directory-p "~/gnus/lisp")
+  (add-to-list 'patcher-projects
+	       '("gnus" "~/gnus"
+		 :to-address "ding@gnus.org")))
+
+
+(require 'edebug)
+
+
+(setq mm-discouraged-alternatives
+      '("text/html" "text/richtext" "text/enriched"))
+
 
 ;;}}}
