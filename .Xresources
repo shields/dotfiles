@@ -15,9 +15,9 @@ Emacs.default.attributeFont: -misc-fixed-medium-r-semicondensed-*-*-120-*-*-*-*-
 Emacs*menubar*font: fixed
 Emacs.modeline.attributeFont: fixed
 #if HEIGHT > 1200
-Emacs.geometry: 100x86
+Emacs.geometry: 100x84
 #elif HEIGHT > 800
-Emacs.geometry: 100x70
+Emacs.geometry: 100x68
 #elif HEIGHT > 600
 Emacs.geometry: 90x46
 #else
@@ -28,11 +28,11 @@ xterm*foreground: black
 xterm*background: white
 xterm*ttyModes: erase ^?
 xterm*font: -misc-fixed-medium-r-semicondensed--13-120-75-75-c-60-iso10646-1
-xterm*faceName: andale:size=9:charwidth=6:minspace=1
+xterm*faceName: andale:size=8:charwidth=6:minspace=1
 #if HEIGHT >= 1200
 xterm*geometry: 100x80
 #elif HEIGHT > 800
-xterm*geometry: 80x65
+xterm*geometry: 80x68
 #elif HEIGHT > 640
 xterm*geometry: 80x50
 #else
