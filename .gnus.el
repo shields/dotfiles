@@ -1,7 +1,7 @@
 ;;; .gnus.el --- Shields's Gnus initialization file
 
 ;; Author: Michael Shields <shields@msrl.com>
-;; Version: 2001-12-13
+;; Version: 2001-12-26
 
 ;; XXX http://bugs.debian.org/cgi-bin/bugreport.cgi?bug=82226
 (load "mm-decode")
@@ -86,6 +86,7 @@
 (defun turn-gnus-bbdb-on-or-off ()
   (setq bbdb/news-auto-create-p
 	(not (not (or (string-equal "MSRL.COM" gnus-newsgroup-name)
+		      (string-equal "Ebay" gnus-newsgroup-name)
 		      (string-equal "big-internet" gnus-newsgroup-name)
 		      (string-equal "bugtraq" gnus-newsgroup-name)
 		      (string-equal "cryptography" gnus-newsgroup-name)
@@ -97,7 +98,6 @@
 		      (string-equal "risks" gnus-newsgroup-name)
 		      (string-equal "tz" gnus-newsgroup-name)
 		      (string-equal "xabov" gnus-newsgroup-name)
-		      (string-match "mfnx\\." gnus-newsgroup-name)
 		      (string-match "ietf\\." gnus-newsgroup-name))))))
 
 (setq gnus-button-url 'gnus-netscape-open-url)
