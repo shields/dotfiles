@@ -136,6 +136,8 @@
 (set-specifier default-gutter-visible-p nil)
 (setq progress-feedback-use-echo-area t)
 
+(add-hook 'find-file-hooks 'turn-on-font-lock)
+
 ;;}}}
 ;;{{{ Files and buffers
 
@@ -189,7 +191,6 @@ when called with a prefix argument."
 			  (setq c-basic-offset 4)))
 (add-hook 'c-mode-hook '(lambda ()
 			  (define-key c-mode-map "\C-c\C-c" 'compile)))
-(add-hook 'c-mode-hook 'turn-on-font-lock)
 
 (setq c-cleanup-list '(brace-else-brace defun-close-semi))
 
@@ -244,7 +245,6 @@ sentinel."
 ;;}}}
 ;;{{{ sql-mode
 
-(add-hook 'sql-mode-hook 'turn-on-font-lock)
 (add-hook 'sql-mode-hook 'sql-highlight-postgres-keywords)
 
 ;;}}}
@@ -473,6 +473,8 @@ sentinel."
 	(font-lock-type-face "DarkOliveGreen")
 	(font-lock-reference-face "OrangeRed")))
 
+(setq font-lock-maximum-size 2097152)
+
 ;;}}}
 ;;{{{ jka-compr
 
@@ -686,9 +688,6 @@ This function is useful for binding to a hotkey."
 
 (require 'mmm-mode)
 (setq mmm-global-mode 'maybe)
-
-
-(setq font-lock-maximum-size 2097152)
 
 
 (require 'patcher)
