@@ -13,13 +13,8 @@
 
 (add-hook 'gnus-startup-hook 'bbdb-insinuate-gnus)
 
-;;(setq gnus-select-method '(nntp "news.netaxs.com"))
-;;(setq gnus-select-method '(nntp ""))
-;;(setq gnus-secondary-select-methods '((nnml "") (nnslashdot "")))
-;;(setq gnus-secondary-select-methods '((nnml "")))
 (setq gnus-select-method '(nnml ""))
 (setq gnus-secondary-select-methods nil)
-;;(setq gnus-secondary-select-methods '((nnslashdot "")))
 
 (setq nnml-directory "~/Gnuspool/")
 (setq mail-sources
@@ -27,25 +22,12 @@
 		   :suffix ""
 		   :plugged t)))
 (setq mail-source-delete-incoming t)
-
-(load "~/.gnus.slashdot.el")  ; contains password
-(setq nnslashdot-threshold 5)
-(setq nnslashdot-group-number 20)
  
 (setq gnus-subscribe-newsgroup-method 'gnus-subscribe-topics)
 (setq gnus-subscribe-options-newsgroup-method 'gnus-subscribe-topics)
 
 (setq gnus-kill-files-directory "~/News/Score/")
 (setq gnus-score-file-suffix "SCORE")
-
-(setq gnus-home-score-file
-      '(("^nnslashdot:" "slashdot.SCORE")))
-(setq gnus-home-adapt-file
-      '(("^nnslashdot:" "slashdot.ADAPT")))
-
-;; This works with news servers, but not for nnml.
-;;(setq gnus-check-new-newsgroups 'ask-server)
-;;(setq gnus-read-active-file 'some)
 
 (setq gnus-total-expirable-newsgroups "^[^:]*$")
 
@@ -109,8 +91,6 @@
 		      (string-equal "fork" gnus-newsgroup-name)
 		      (string-match "ietf\\." gnus-newsgroup-name))))))
 
-(setq gnus-button-url 'gnus-netscape-open-url)
-
 (setq gnus-posting-styles
       '((".*"
 	 (name "Michael Shields")
@@ -164,11 +144,6 @@
 
 (setq gnus-cite-max-parse-size (* 100 1024))  ; up from 25000
 
-;; ah, trn.
-;;(setq gnus-use-trees t)
-;;(setq gnus-selected-tree-face 'highlight)
-;;(setq gnus-generate-tree-function 'gnus-generate-horizontal-tree)
-
 (add-hook 'gnus-group-mode-hook 'gnus-topic-mode)
 
 (setq message-citation-line-function 'insert-trn-style-citation-line-plus)
@@ -196,8 +171,6 @@
 			   "\n" " ")
 		       second-line))))))
 
-(setq nnweb-type 'altavista)
-
 ;; Don't quote on `+' or `}'; those mess up patches and code especially.
 (setq gnus-cite-prefix-regexp "^[]>|: ]*[]>|:]\\(.*>\\)?\\|^.*>")
 
@@ -222,7 +195,6 @@
 ;; the gnus-summary-line-format:
 (setq bbdb/gnus-summary-mark-known-posters nil)
 
-;; Mailcrypt, per the infopage:
 (require 'mailcrypt)
 (add-hook 'gnus-summary-mode-hook 'mc-install-read-mode)
 (add-hook 'message-mode-hook 'mc-install-write-mode)
@@ -241,25 +213,14 @@
 	   (browse-url url)
 	 (w3-fetch-orig url target)))))
 
+(setq gnus-button-url 'gnus-netscape-open-url)
+
 (setq message-dont-reply-to-names "\\(m?shields@\\(msrl\\.com\\|mfnx\\.net\\|above\\.net\\|iad\\.above\\.net\\)\\|michael\\.shields@m?mfn\\.com\\|seb@msrl\.com\\)")
 
 ;; Controls C-x m in message mode
 (setq mail-user-agent 'message-user-agent)
 
 (setq gnus-signature-limit 30.0)
-
-;; Run auto spam complaint with `$' from summary buffer.
-(autoload 'gnus-junk-complain "gnus-junk" "(not loaded yet)" t)
-(add-hook 'gnus-summary-mode-hook
-	  (lambda ()
-	    (define-key gnus-summary-mode-map "$" 'gnus-junk-complain)))
-(defadvice gnus-junk-check-hostname (around gnus-junk-no-raw-ip activate)
-  "Don't send mail to abuse@ a raw IP address (e.g., abuse@172.16.0.1)."
-  (cond ((not (ad-get-arg 0))
-	 nil)
-	((string-match "[a-zA-Z]" (ad-get-arg 0))
-	 ad-do-it)
-	(t nil)))
 
 ;; Faster than doing this with elisp.
 (setq base64-encoder-program "/usr/local/bin/base64")
@@ -281,11 +242,7 @@
 (require 'gnus-delay)
 (gnus-delay-initialize)
 
-(gnus-demon-add-scanmail)
+(gnus-demon-add-handler 'gnus-demon-scan-mail 5 15)
 
 ;; Don't move forward in group buffer with M-g.
 (setq gnus-goto-next-group-when-activating nil)
-
-;; Agent is used just for silly web backends (nnultimate, nnslashdot).
-;;(gnus-agentize)
-;;(setq gnus-plugged nil)
