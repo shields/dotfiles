@@ -1,7 +1,7 @@
 ;;; .gnus.el --- Shields's Gnus initialization file
 
 ;; Author: Michael Shields <shields@msrl.com>
-;; Version: 2001-06-15
+;; Version: 2001-07-10
 
 ;; XXX http://bugs.debian.org/cgi-bin/bugreport.cgi?bug=82226
 (load "mm-decode")
@@ -82,6 +82,7 @@
 	(not (not (or (string-equal "nnml:MSRL.COM" gnus-newsgroup-name)
 	              (string-equal "nnml:ABOVE.NET" gnus-newsgroup-name)
 		      (string-equal "nnml:big-internet" gnus-newsgroup-name)
+		      (string-equal "nnml:bugtraq" gnus-newsgroup-name)
 		      (string-equal "nnml:cryptography" gnus-newsgroup-name)
 		      (string-equal "nnml:end2end" gnus-newsgroup-name)
 		      (string-equal "nnml:fsb" gnus-newsgroup-name)
