@@ -108,7 +108,7 @@ fi
 # Set default editor and pager.
 EDITOR=vi
 VISUAL="$EDITOR"
-PAGER=less
+test -x /usr/bin/less && PAGER=less
 export EDITOR VISUAL PAGER
 
 # Set $MAIL so notification of new mail works.
