@@ -77,7 +77,8 @@
 	    (define-key gnus-summary-mode-map [(return)] 'gnus-summary-next-unread-article)
 	    (define-key gnus-summary-mode-map [(tab)] 'scroll-up-command)
 	    (define-key gnus-summary-mode-map [j] 'next-line)
-	    (define-key gnus-summary-mode-map [k] 'previous-line)))
+	    (define-key gnus-summary-mode-map [k] 'previous-line)
+	    (define-key gnus-summary-mode-map [J] 'gnus-summary-goto-article)))
 (add-hook 'gnus-article-mode-hook
 	  (lambda ()
 	    (define-key gnus-article-mode-map [b] 'gnus-summary-prev-page)
