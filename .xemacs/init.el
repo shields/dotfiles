@@ -390,7 +390,7 @@ sentinel."
 
 (defun bbdb-normalize-tmda-addresses (addr)
   (when addr
-    (cond ((string-match "\\(.*\\)[+-]dated[+-][0-9]+\\.[0-9]+\\(@.*\\)"
+    (cond ((string-match "\\(.*\\)[+-]dated[+-][0-9]+\\.[0-9a-f]+\\(@.*\\)"
 			 addr)
            (concat (substring addr (match-beginning 1) (match-end 1))
                    (substring addr (match-beginning 2) (match-end 2))))
