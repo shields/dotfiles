@@ -44,13 +44,9 @@ fi
 
 metacity &
 
-#if test -f /var/tmp/clouds_2000.jpg; then
-#    xplanetbg -cloud_image /var/tmp/clouds_2000.jpg -moonside -wait 90 &
-#fi
-if test -f $HOME/.xplanet/day-clouds.jpg; then
+if test -f $HOME/.xplanet/clouds_2000.jpg; then
     xplanetbg -moonside -wait 60 \
-        -image $HOME/.xplanet/day-clouds.jpg \
-        -night_image $HOME/.xplanet/night-clouds.jpg &
+        -cloud_image $HOME/.xplanet/clouds_2000.jpg &
 fi
 
 exec gnome-session
