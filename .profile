@@ -135,7 +135,7 @@ elif [ -d /home/cvs ]; then
 elif [ -d /var/mfnx/cvs ]; then
     CVSROOT=/var/mfnx/cvs
 elif [ "$hostname" = mulligatwani ]; then
-    CVSROOT=:ext:challah.msrl.com:/usr/local/cvs
+    CVSROOT=:ext:challah.msrl.com:/usr/local/cvsroot
 else
     CVSROOT=:ext:box.mfnx.net:/var/mfnx/cvs
 fi
