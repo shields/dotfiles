@@ -45,7 +45,7 @@ fi
 metacity &
 
 if test -d $HOME/.xplanet; then
-    xplanetbg -moonside -wait 60 -blend -radius 46 -center 780,520 \
+    xplanetbg -moonside -wait 60 -blend -radius 46 -center 680,520 \
         -cloud_image $HOME/.xplanet/clouds_2000.jpg -cloud_threshold 0 \
 	-background $HOME/.xplanet/background.png &
 fi
