@@ -1,7 +1,7 @@
 ;;; .emacs --- Shields's Emacs initialization file
 
 ;; Author: Michael Shields <shields@msrl.com>
-;; Version: 2001-07-26
+;; Version: 2001-08-18
 
 ;;; Globals
 ;;{{{ Preliminaries
@@ -233,6 +233,9 @@ when called with a prefix argument."
 ;;{{{ BBDB
 
 (require 'bbdb)
+(require 'gnus)
+(require 'message)
+(require 'w3)
 (bbdb-initialize 'gnus 'message 'w3)
 
 (setq bbdb-electric-p nil)
