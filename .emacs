@@ -252,7 +252,7 @@ when called with a prefix argument."
 	("Newsgroups" ("^bofh\." mark-char "@"))
 	("Newsgroups" ("^nnml:nanog" mark-char ":"))))
 
-(setq bbdb-send-mail-style 'vm)
+(setq bbdb-send-mail-style 'message)
 
 (add-hook 'bbdb-list-hook 'close-bbdb-if-no-entries)
 (defun close-bbdb-if-no-entries ()
