@@ -82,13 +82,14 @@
 		      (string-equal "cryptography" gnus-newsgroup-name)
 		      (string-equal "cypherpunks" gnus-newsgroup-name)
 		      (string-equal "end2end" gnus-newsgroup-name)
+		      (string-equal "fork" gnus-newsgroup-name)
 		      (string-equal "fsb" gnus-newsgroup-name)
 		      (string-equal "leapsecs" gnus-newsgroup-name)
 		      (string-equal "nanog" gnus-newsgroup-name)
+		      (string-equal "pennsic" gnus-newsgroup-name)
 		      (string-equal "risks" gnus-newsgroup-name)
 		      (string-equal "tz" gnus-newsgroup-name)
 		      (string-equal "xabov" gnus-newsgroup-name)
-		      (string-equal "fork" gnus-newsgroup-name)
 		      (string-match "ietf\\." gnus-newsgroup-name))))))
 
 (setq gnus-posting-styles
