@@ -1,6 +1,6 @@
 #!/bin/sh
 #
-# ~/.xsession 2002-03-31
+# ~/.xsession 2002-04-05
 # Michael Shields <shields@msrl.com>
 #
 
@@ -11,7 +11,6 @@ test "$PROFILE_WAS_RUN" = yes || . $HOME/.profile
 # Not all OSes do this automatically.
 xrdb -merge .Xresources
 
-test "`hostname`" = vichyssoise || xmodmap .xmodmap-dvorak
 xmodmap .xmodmap-pckb
 test -f .Xmodmap && xmodmap .Xmodmap
 
