@@ -354,7 +354,7 @@ citation lines."
       '((debian
 	 . "^-- \nTo UNSUBSCRIBE,.*\n.*")
 	(mailman
-	 . "^_________+\n.* mailing list\n.*@.*\nhttp.*\n")
+	 . "^_________+\n.* mailing list\n.*\\(@.*\n\\)?http.*\n")
 	(sourceforge
 	 . "^----------+\nThis \\(SF\\.NET\\|sf\\.net\\) email is sponsored by:\\(.*\n\\)+")
 	(yahoogroups
