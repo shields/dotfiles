@@ -10,7 +10,7 @@ cd $HOME
 test "$PROFILE_WAS_RUN" = yes || . $HOME/.profile
 
 # Not all OSes do this automatically.
-test -f .Xresourcse && xrdb -merge .Xresources
+test -f .Xresources && xrdb -merge .Xresources
 test -f .Xmodmap && xmodmap .Xmodmap
 
 GDK_USE_XFT=1
