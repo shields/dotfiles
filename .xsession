@@ -42,8 +42,6 @@ if test -f /proc/net/wireless; then
     wmwave &
 fi
 
-metacity &
-
 if test -d $HOME/.xplanet; then
     $HOME/bin/xplanet-moon-update
     xplanetbg -moonside -wait 60 -blend -radius 46 -center 680,520 \
