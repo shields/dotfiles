@@ -596,7 +596,7 @@ sentinel."
 (fff-elisp-install-map)
 
 
-;;(gnuserv-start)
+(gnuserv-start)
 
 
 (eval-after-load "gnus"
