@@ -1,5 +1,5 @@
 !
-! ~/.Xresources 2001-06-07
+! ~/.Xresources 2001-08-11
 ! Michael Shields <shields@msrl.com>
 !
 
@@ -10,9 +10,9 @@
 *cursorColor: firebrick2
 
 ! 6x13 font:
-emacs.font: -misc-fixed-medium-r-semicondensed--13-120-75-75-c-60-iso8859-1
-xemacs.font: -misc-fixed-medium-r-semicondensed--13-120-75-75-c-60-iso8859-1
-XEmacs.font: -misc-fixed-medium-r-semicondensed--13-120-75-75-c-60-iso8859-1
+emacs.font: -misc-fixed-medium-r-semicondensed--13-120-75-75-c-60-iso10646-1
+xemacs.font: -misc-fixed-medium-r-semicondensed--13-120-75-75-c-60-iso10646-1
+XEmacs.font: -misc-fixed-medium-r-semicondensed--13-120-75-75-c-60-iso10646-1
 #if HEIGHT > 1200
 emacs.geometry: 100x90
 xemacs.geometry: 100x86
@@ -34,7 +34,7 @@ XEmacs.geometry: 103x34+0+0
 xterm*foreground: black
 xterm*background: white
 xterm*ttyModes: erase ^?
-xterm*font: -misc-fixed-medium-r-semicondensed--13-120-75-75-c-60-iso8859-1
+xterm*font: -misc-fixed-medium-r-semicondensed--13-120-75-75-c-60-iso10646-1
 #if HEIGHT >= 1200
 xterm*geometry: 100x80
 #elif HEIGHT > 800
