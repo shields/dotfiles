@@ -167,6 +167,11 @@ if [ -d $HOME/.pgp ]; then
     export PGPPATH
 fi
 
+# pilot-link.
+PILOTPORT=/dev/usb/tts/0
+PILOTRATE=115200
+export PILOTPORT PILOTRATE
+
 # rlpr.
 if [ `expr "$MY_IP" : '198.176.193\.'` -gt 0 ]; then
    PRINTER=lp@toblerone.msrl.com
