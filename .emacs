@@ -83,8 +83,9 @@
 ;;(display-time)
 (setq display-time-mail-file "~/var/maildirs/crosslink.net/biff")
 
-(set-face-background 'default "white")
-(set-face-background 'modeline "grey88")
+(when (eq (console-type) 'x)
+  (set-face-background 'default "white")
+  (set-face-background 'modeline "grey88"))
 
 (setq blink-matching-delay 0.25)
 
@@ -333,9 +334,6 @@ when called with a prefix argument."
 	(font-lock-variable-name-face "Firebrick")
 	(font-lock-type-face "DarkOliveGreen")
 	(font-lock-reference-face "OrangeRed")))
-(if (and window-system
-	 (= emacs-major-version 16))
-    (font-lock-make-faces t))
 
 ;;}}}
 ;;{{{ Gnus
