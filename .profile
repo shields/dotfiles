@@ -141,10 +141,10 @@ elif [ -d /var/cvs ]; then
     CVSROOT=/var/cvs
 elif [ -d /home/cvs ]; then
     CVSROOT=/home/cvs
-elif [ -d /var/mfnx/cvs ]; then
-    CVSROOT=/var/mfnx/cvs
+elif [ -d /var/lib/cvs ]; then
+    CVSROOT=/var/lib/cvs
 else
-    CVSROOT=:ext:challah.msrl.com:/usr/local/cvsroot
+    CVSROOT=:ext:challah.msrl.com:/var/lib/cvs
 fi
 CVS_RSH=ssh
 export CVSROOT CVS_RSH
@@ -171,10 +171,6 @@ if [ -d $HOME/.pgp ]; then
     PGPPATH="$HOME/.pgp"
     export PGPPATH
 fi
-
-# pilot-link.
-PILOTRATE=115200
-export PILOTRATE
 
 # rlpr.
 if [ "$hostname" = mulligatwani ]; then
