@@ -242,7 +242,7 @@
 (require 'gnus-delay)
 (gnus-delay-initialize)
 
-(gnus-demon-add-handler 'gnus-demon-scan-mail 5 15)
+(gnus-demon-add-handler 'gnus-group-get-new-news 5 15)
 
 ;; Don't move forward in group buffer with M-g.
 (setq gnus-goto-next-group-when-activating nil)
