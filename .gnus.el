@@ -1,7 +1,7 @@
 ;;; .gnus.el --- Shields's Gnus initialization file
 
 ;; Author: Michael Shields <shields@msrl.com>
-;; Version: 2002-01-05
+;; Version: 2002-01-06
 
 (setq mail-from-style 'parens)
 (setq mail-yank-prefix "> ")
@@ -65,12 +65,11 @@
 (setq message-ignored-mail-headers
       "^[GF]cc:\\|^Resent-Fcc:\\|^Xref:\\|^X-Draft-From:")
 
-;; When displaying an article, go back with `b', like trn.
-;; Also make RET move forward an article, not a line, to avoid `n' fatigue.
 (add-hook 'gnus-summary-mode-hook
 	  (lambda ()
 	    (define-key gnus-summary-mode-map [b] 'gnus-summary-prev-page)
-	    (define-key gnus-summary-mode-map [(return)] 'gnus-summary-next-unread-article)))
+	    (define-key gnus-summary-mode-map [(return)] 'gnus-summary-next-unread-article)
+	    (define-key gnus-summary-mode-map [(tab)] 'scroll-up-command)))
 (add-hook 'gnus-article-mode-hook
 	  (lambda ()
 	    (define-key gnus-article-mode-map [b] 'gnus-summary-prev-page)
