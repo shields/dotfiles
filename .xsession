@@ -45,7 +45,7 @@ fi
 metacity &
 
 if test -f $HOME/.xplanet/clouds_2000.jpg; then
-    xplanetbg -moonside -wait 60 \
+    xplanetbg -moonside -wait 60 -blend \
         -cloud_image $HOME/.xplanet/clouds_2000.jpg -cloud_threshold 0 &
 fi
 
