@@ -75,10 +75,10 @@
   (setq bbdb/news-auto-create-p
 	(not (not (or (string-equal "nnml:MSRL.COM" gnus-newsgroup-name)
 	              (string-equal "nnml:ABOVE.NET" gnus-newsgroup-name)
-	              (string-equal "nnml:tembel.usenet2" gnus-newsgroup-name)
 		      (string-equal "nnml:big-internet" gnus-newsgroup-name)
 		      (string-equal "nnml:cryptography" gnus-newsgroup-name)
 		      (string-equal "nnml:end2end" gnus-newsgroup-name)
+		      (string-equal "nnml:fsb" gnus-newsgroup-name)
 		      (string-equal "nnml:leapsecs" gnus-newsgroup-name)
 		      (string-equal "nnml:nanog" gnus-newsgroup-name)
 		      (string-equal "nnml:risks" gnus-newsgroup-name)
