@@ -197,26 +197,27 @@
 
 (setq message-citation-line-function nil)
 (defun insert-super-citation-line ()
-  (let* ((first-line
+  (let* ((was-modified (buffer-modified-p))
+	 (first-line
 	  (cond ((string-match "\\bINBOX\\.risks\\b" gnus-newsgroup-name)
 		 "In RISKS Digest,")
-		(t
+		((not (nnheader-fake-message-id-p
+		       (mail-header-id message-reply-headers)))
 		 (concat (if (message-news-p) "In article " "In message ")
 			 (mail-header-id message-reply-headers) ","))))
-	 (his-address
+	 (address
 	  (car (cdr (mail-extract-address-components
 		     (mail-header-from message-reply-headers)))))
 	 (second-line
-	  (concat (if (string-equal his-address user-mail-address)
+	  (concat (if (string-equal address user-mail-address)
 		      "I"
 		    (mail-header-from message-reply-headers)) " wrote:\n")))
-    (cond ((string-match "^INBOX.rennlist-" gnus-newsgroup-name)
-	   (insert second-line))
-	  ((not (string-equal his-address "tickets@tickets.above.net"))
-	   (insert first-line
-		   (if (> (+ (length first-line) (length second-line)) fill-column)
-		       "\n" " ")
-		   second-line)))))
+    (when first-line
+      (insert first-line
+	      (if (> (+ (length first-line) (length second-line)) fill-column)
+		  "\n" " ")))
+    (insert second-line)
+    (set-buffer-modified-p was-modified)))
 (defun summary-followup-with-original-super-citation (n &optional force-news)
   "Replacement for `gnus-summary-followup-with-original' to use super
 citation lines."
