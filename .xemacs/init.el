@@ -16,9 +16,11 @@
 (add-to-list 'load-path (expand-file-name "~/share/xemacs/site-packages/lisp"))
 
 ;; XXX XXX ugly
-(delete 'gnus-autoloads features)
-(require 'gnus-load)
-(add-to-list 'load-path (expand-file-name "~/share/xemacs/site-packages/lisp/gnus"))
+(when (file-exists-p "~/share/xemacs/site-packages/lisp/gnus")
+  (delete 'gnus-autoloads features)
+  (require 'gnus-load)
+  (add-to-list 'load-path
+	       (expand-file-name "~/share/xemacs/site-packages/lisp/gnus")))
 
 ;; XXX
 (load "messagexmas")
@@ -27,13 +29,14 @@
 ;; Reload things in my dir that are already loaded.  Essential for
 ;; replacing Gnus elements with those built from the development
 ;; snapshot version.
-(mapcar '(lambda (x)
-	   (let ((base (concat (expand-file-name "~/share/xemacs/site-lisp")
-			       "/" (car x))))
-	     (if (or (file-readable-p (concat base ".elc"))
-		     (file-readable-p (concat base ".el")))
-		 (load base))))
-	load-history)
+(when (file-readable-p "~/share/xemacs/site-lisp")
+  (mapcar '(lambda (x)
+	     (let ((base (expand-file-name
+			  (concat "~/share/xemacs/site-lisp/" (car x)))))
+	       (if (or (file-readable-p (concat base ".elc"))
+		       (file-readable-p (concat base ".el")))
+		   (load base))))
+	  load-history))
 ;; XXX XXX ugly, fix, ugly ugly XXX
 (when (file-exists-p "~/share/xemacs/site-packages/lisp/gnus/netrc")
   (load "~/share/xemacs/site-packages/lisp/gnus/netrc")
@@ -58,22 +61,24 @@
 (require 'x-compose)
 (global-set-key "\C-x8" compose-map)
 
-;; UTF-8 voodoo from Stephen J. Turnbull:
-(require 'un-define)
-(unless (emacs-version>= 21 5 6)
-  (require 'mule-ucs-unicode "unicode"))
-(set-coding-category-system 'utf-8 'utf-8)
-(set-pathname-coding-system 'utf-8)
-(set-process-coding-system 'utf-8)
-(set-keyboard-coding-system 'utf-8)
-(set-terminal-coding-system 'utf-8)
-;; This doesn't wipe out other autodetection; instead, it rotates the
-;; listed coding categories to the front, and otherwise preserves
-;; order.
-(set-coding-priority-list '(utf-8))
-;; To have "only" UTF-8 in autodetection, the following tries UTF-8,
-;; and then reads the file as binary (which always succeeds)
-;;(set-coding-priority-list '(utf-8 binary))
+(when mm-emacs-mule
+  ;; UTF-8 voodoo from Stephen J. Turnbull:
+  (require 'un-define)
+  (unless (emacs-version>= 21 5 6)
+    (require 'mule-ucs-unicode "unicode"))
+  (set-coding-category-system 'utf-8 'utf-8)
+  (set-pathname-coding-system 'utf-8)
+  (set-process-coding-system 'utf-8)
+  (set-keyboard-coding-system 'utf-8)
+  (set-terminal-coding-system 'utf-8)
+  ;; To have "only" UTF-8 in autodetection, the following tries UTF-8,
+  ;; and then reads the file as binary (which always succeeds)
+  ;;(set-coding-priority-list '(utf-8 binary))
+  ;; This doesn't wipe out other autodetection; instead, it rotates the
+  ;; listed coding categories to the front, and otherwise preserves
+  ;; order.
+  (set-coding-priority-list '(utf-8)))
+ 
 
 ;; Protect against init.el borrowing by other users.
 (when (string-equal (user-login-name) "shields")
@@ -129,7 +134,8 @@
 
 (setq blink-matching-delay 0.25)
 
-(set-specifier menubar-visible-p nil)
+(when (eq (console-type) 'x)
+  (set-specifier menubar-visible-p nil))
 (set-specifier default-toolbar-visible-p nil)
 (set-specifier default-gutter-visible-p nil)
 (setq progress-feedback-use-echo-area t)
@@ -380,9 +386,10 @@ sentinel."
 
 (setq bbdb-hashtable-size 100003)
 
-;; needs my patch
-(require 'bbdb-pgp)
-(setq bbdb/pgp-method 'mml-pgpmime)
+(when (or (featurep 'bbdb-pgp)
+	  (load "bbdb-pgp" t))
+  ;; needs my patch
+  (setq bbdb/pgp-method 'mml-pgpmime))
 
 ;; XXX this should only happen if there are multiple windows open
 ;; in the current frame.
@@ -447,32 +454,35 @@ sentinel."
 ;;}}}
 ;;{{{ Flyspell
 
-(require 'flyspell)
-
-;; Normally using (flyspell-mode-on) directly is deprecated in favor
-;; of (flyspell-mode 1), which is smart enough not to reinitialize.
-;; However, we actually want to reinitialize.  For example,
-;; message-mode runs text-mode-hook before message-mode-hook; if
-;; flyspell mode is already on, then flyspell-generic-check-word-p
-;; will never get set with its message-mode-specific value.
-(add-hook 'text-mode-hook 'flyspell-mode-on)
-(add-hook 'message-mode-hook 'flyspell-mode-on)
-
-;; flyspell-prog-mode depends on font-lock to identify comments and
-;; strings, so it won't work without it anyway.
-(add-hook 'font-lock-mode-hook 'flyspell-prog-mode)
-
-(setq flyspell-abbrev-p nil)
-(setq flyspell-sort-corrections nil)
-
-(define-key flyspell-mouse-map [(button3)] #'flyspell-correct-word)
-
-(define-key flyspell-mode-map [(meta tab)] nil)
-
+(require 'ispell)
 (when (executable-find "aspell")
   (setq-default ispell-program-name "aspell"))
 (setq ispell-silently-savep t)
 (setq ispell-extra-args '("-W" "3"))
+
+(when (executable-find ispell-program-name)
+
+  (require 'flyspell)
+
+  ;; Normally using (flyspell-mode-on) directly is deprecated in favor
+  ;; of (flyspell-mode 1), which is smart enough not to reinitialize.
+  ;; However, we actually want to reinitialize.  For example,
+  ;; message-mode runs text-mode-hook before message-mode-hook; if
+  ;; flyspell mode is already on, then flyspell-generic-check-word-p
+  ;; will never get set with its message-mode-specific value.
+  (add-hook 'text-mode-hook 'flyspell-mode-on)
+  (add-hook 'message-mode-hook 'flyspell-mode-on)
+
+  ;; flyspell-prog-mode depends on font-lock to identify comments and
+  ;; strings, so it won't work without it anyway.
+  (add-hook 'font-lock-mode-hook 'flyspell-prog-mode)
+
+  (setq flyspell-abbrev-p nil)
+  (setq flyspell-sort-corrections nil)
+
+  (define-key flyspell-mouse-map [(button3)] #'flyspell-correct-word)
+
+  (define-key flyspell-mode-map [(meta tab)] nil))
 
 ;;}}}
 ;;{{{ Font-lock
@@ -598,19 +608,24 @@ sentinel."
 (autoload 'rfcview-mode "rfcview")
 
 
-(require 'fff)
-(setq fff-map-prefix [(control c) (f)])
-(fff-install-map)
-(require 'fff-rfc)
-(fff-rfc-install-map)
-(setq fff-rfc-view-mode 'rfcview-mode)
-;; Debian doc-rfc-* packages use this directory:
-(add-to-list 'fff-rfc-path "/usr/share/doc/RFC/links")
-(require 'fff-elisp)
-(fff-elisp-install-map)
+(eval-after-load "fff"
+  '(progn
+     (setq fff-map-prefix [(control c) (f)])
+     (fff-install-map)
+     (require 'fff-rfc)
+     (fff-rfc-install-map)
+     (setq fff-rfc-view-mode 'rfcview-mode)
+     ;; Debian doc-rfc-* packages use this directory:
+     (add-to-list 'fff-rfc-path "/usr/share/doc/RFC/links")
+     (require 'fff-elisp)
+     (fff-elisp-install-map)))
+(unless (featurep 'fff)
+  (load "fff" t))
 
 
-(gnuserv-start)
+;; This is probably not the right test.
+(unless (eq (console-type) 'mswindows)
+  (gnuserv-start))
 
 
 (eval-after-load "gnus"
@@ -682,10 +697,11 @@ This function is useful for binding to a hotkey."
 ;; status update of apt-get, scp, &c. work correctly.
 (eval-after-load "comint"
   '(progn
-     (require 'proc-filters)
-     (setq-default comint-output-filter-functions
-		   (cons 'proc-filter-shell-output-filter
-			 comint-output-filter-functions))))
+     (when (or (featurep 'proc-filters)
+	       (load "proc-filters" t))
+       (setq-default comint-output-filter-functions
+		     (cons 'proc-filter-shell-output-filter
+			   comint-output-filter-functions)))))
 
 
 ;; Enable the mouse wheel.
