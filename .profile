@@ -90,18 +90,11 @@ stty -ixon
 LANG=en_US.UTF-8
 export LANG
 
-# I'm curmudgeonly and don't believe in local time.  NB: Don't set TZ
-# yourself unless you know what you're doing.  And have read RFC 1305
-# without being bored and going off to play Doom.
-if [ ! -w / ]; then
-    # It's not good to play with time zones as root.
-    if [ -f /usr/lib/zoneinfo/right/UTC ]; then
-	# Violate POSIX.1 and account for leap seconds.
-	#TZ=right/UTC
-	# No, don't.  INN calls it the -0001 time zone.  That's too weird.
+if [ ! -w / ]; then	# It's not good to play with time zones as root.
+    if [ -f /usr/lib/zoneinfo/UTC -o /usr/share/zoneinfo/UTC ]; then
 	TZ=UTC
     else
-	TZ=GMT0 #UTC0
+	TZ=GMT0
     fi
     export TZ
 fi
