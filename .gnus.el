@@ -328,7 +328,10 @@
 (setq spam-move-spam-nonspam-groups-only nil)
 
 
-(setq gnus-asynchronous t)
+;; This is slow.  Maybe because a keystroke doesn't get processed
+;; until the article being prefetched is down downloading?  Should
+;; look into it.  XXX
+;;(setq gnus-asynchronous t)
 
 
 (setq gnus-article-banner-alist
