@@ -265,6 +265,8 @@ when called with a prefix argument."
 	  (function (lambda ()
 		      (set-specifier horizontal-scrollbar-visible-p nil))))
 
+(setq bbdb-completion-type 'primary-or-name)
+
 ;;}}}
 ;;{{{ Calc
 
