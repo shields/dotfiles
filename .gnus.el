@@ -1,7 +1,7 @@
 ;;; .gnus.el --- Shields's Gnus initialization file
 
 ;; Author: Michael Shields <shields@msrl.com>
-;; Version: 2001-08-23
+;; Version: 2001-10-12
 
 ;; XXX http://bugs.debian.org/cgi-bin/bugreport.cgi?bug=82226
 (load "mm-decode")
@@ -112,7 +112,7 @@
         ("^Ebay"
 	 (address "seb@msrl.com"))
 	("^\\(nnfolder\\+archive:\\)?mfnx\\."
-	 (address "michael.shields@mmfn.com")
+	 (address "michael.shields@mfn.com")
 	 (organization "Metromedia Fiber Network")
 	 (signature "Shields, MFN."))))
 
@@ -235,7 +235,7 @@
 	   (browse-url url)
 	 (w3-fetch-orig url target)))))
 
-(setq message-dont-reply-to-names "\\(m?shields@\\(msrl\\.com\\|mfnx\\.net\\|above\\.net\\|iad\\.above\\.net\\)\\|michael\\.shields@mmfn\\.com\\|seb@msrl\.com\\)")
+(setq message-dont-reply-to-names "\\(m?shields@\\(msrl\\.com\\|mfnx\\.net\\|above\\.net\\|iad\\.above\\.net\\)\\|michael\\.shields@m?mfn\\.com\\|seb@msrl\.com\\)")
 
 ;; Controls C-x m in message mode
 (setq mail-user-agent 'message-user-agent)
