@@ -1,7 +1,7 @@
 ;;; .gnus.el --- Shields's Gnus initialization file
 
 ;; Author: Michael Shields <shields@msrl.com>
-;; Version: 2001-08-20
+;; Version: 2001-08-22
 
 ;; XXX http://bugs.debian.org/cgi-bin/bugreport.cgi?bug=82226
 (load "mm-decode")
@@ -135,6 +135,7 @@
 (setq gnus-prompt-before-saving t)
 
 (setq gnus-cite-attribution-face 'default)  ; not underline
+(setq gnus-treat-display-picons nil)   ; includes x-face
 (setq gnus-treat-display-smileys nil)
 (setq gnus-treat-date-ut t)
 (setq gnus-treat-emphasize nil)
