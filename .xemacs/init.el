@@ -416,9 +416,10 @@ sentinel."
 ;;}}}
 ;;{{{ Calendar and friends
 
-;; For calculating the sunrise and sunset times.
-(setq calendar-latitude 38.909177)
-(setq calendar-longitude -77.044371)
+;; For calculating the sunrise and sunset times.  This is the NGS survey
+;; marker PID HV4283, at NAD 83(1993): 38°54'22.22884"N 77°02'48.19794"W
+(setq calendar-latitude 38.9061746778)
+(setq calendar-longitude -77.04672165)
 (setq calendar-location-name "Dupont Circle")
 
 ;; Use local (US Eastern) time, not my usual TZ, which is UTC.
