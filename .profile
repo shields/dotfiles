@@ -4,22 +4,21 @@
 # $Id$
 #
 
-test -z "$BASH_VERSION" -a -f $HOME/bin/bash && exec $HOME/bin/bash
+test -z "$BASH_VERSION" -a -f "$HOME/bin/bash" && exec "$HOME/bin/bash"
 
 # Parse out the base of the hostname, for use later in the script.
 hostname="`hostname`"
 hostname="`expr $hostname : '\([^.]*\).*'`"
 
-tty="`tty`"
 uname="`uname`"
 
 # I do this because I'm paranoid.
-cd $HOME
+cd "$HOME"
 
 # Set up .confile to be run on logout.  We could use .bash_logout, but
 # nothing in it is Bash-specific, and this gives more control over when
 # .confile should be run.
-trap ". $HOME/.confile" 0 1
+trap ". \"$HOME/.confile\"" 0 1
 
 #{{{ bash-specific setup
 
@@ -39,9 +38,9 @@ HOSTFILE=/etc/hosts; export HOSTFILE
 NEWPATH="" MANPATH="" INFOPATH="."
 
 # $HOME/*.
-test -d $HOME/bin && NEWPATH="$HOME/bin:"
-test -d $HOME/man && MANPATH="$HOME/man:"
-test -d $HOME/info && INFOPATH="$INFOPATH:$HOME/info"
+test -d "$HOME/bin" && NEWPATH="$HOME/bin:"
+test -d "$HOME/man" && MANPATH="$HOME/man:"
+test -d "$HOME/info" && INFOPATH="$INFOPATH:$HOME/info"
 
 NEWPATH="$NEWPATH/usr/local/sbin:/usr/local/bin:/sbin:/bin:/usr/sbin:/usr/bin"
 MANPATH="$MANPATH/usr/man"
@@ -68,7 +67,7 @@ test -d /usr/ucb && NEWPATH="$NEWPATH:/usr/ucb"
 
 test -d /usr/games && NEWPATH="$NEWPATH:/usr/games"
 
-PATH=$NEWPATH
+#PATH="$NEWPATH"
 export PATH MANPATH INFOPATH
 
 if [ "$uname" = SunOS ]; then
@@ -84,16 +83,19 @@ ulimit -c 0
 umask 022
 
 # Terminal and locale setup.
-#eval `resize -u`
-stty erase '^?'
-test "$uname" = SunOS || stty pass8
-stty cs8
-stty -ixon
+if [ ! "`expr $uname : MINGW32`" ]; then
+    #eval `resize -u`
+    stty erase '^?'
+    test "$uname" = SunOS || stty pass8
+    stty cs8
+    stty -ixon
+fi
+
 LANG=en_US.UTF-8
 export LANG
 
-if [ "$TERM" = linux -a "`expr $tty : '/dev/vc/'`" ]; then
-    unicode_start
+if [ "$TERM" = linux ]; then
+    tty | fgrep -q /dev/vc && unicode_start
 fi
 
 if [ ! -w / ]; then	# It's not good to play with time zones as root.
@@ -113,13 +115,13 @@ export EDITOR VISUAL PAGER
 
 # Set $MAIL so notification of new mail works.
 if [ -d /var/spool/mail ]; then
-    MAIL=/var/spool/mail/`whoami`; export MAIL
+    MAIL="/var/spool/mail/$LOGNAME"; export MAIL
 elif [ -d /var/mail ]; then
-    MAIL=/var/mail/`whoami`; export MAIL
+    MAIL="/var/mail/$LOGNAME"; export MAIL
 elif [ -d /usr/spool/mail ]; then
-    MAIL=/usr/spool/mail/`whoami`; export MAIL
+    MAIL="/usr/spool/mail/$LOGNAME"; export MAIL
 elif [ -d /usr/mail ]; then
-    MAIL=/usr/mail/`whoami`; export MAIL
+    MAIL="/usr/mail/$LOGNAME"; export MAIL
 #else
 #    echo ".profile: Couldn't find mail directory" 1>&2
 fi
@@ -154,7 +156,7 @@ DEBFULLNAME='Michael Shields'
 export DEBEMAIL DEBFULLNAME
 
 # IRC.
-test `whoami` = shields && IRCNICK=Shields
+test "$LOGNAME" = shields && IRCNICK=Shields
 export IRCNICK
 
 # less.
@@ -166,7 +168,7 @@ MOZILLA_NO_ASYNC_DNS=True
 export MOZILLA_NO_ASYNC_DNS
 
 # PGP.
-if [ -d $HOME/.pgp ]; then
+if [ -d "$HOME/.pgp" ]; then
     PGPPATH="$HOME/.pgp"
     export PGPPATH
 fi
@@ -220,10 +222,10 @@ unset oratab
 test -f /etc/oratab && oratab=/etc/oratab
 test -f /var/opt/oracle/oratab && oratab=/var/opt/oracle/oratab
 if [ -n "$oratab" ]; then
-    ORACLE_SID=`awk -F: '$3 == "Y" { print $1; exit }' $oratab`
-    ORACLE_HOME=`awk -F: '$3 == "Y" { print $2; exit }' $oratab`
+    ORACLE_SID="`awk -F: '$3 == "Y" { print $1; exit }' $oratab`"
+    ORACLE_HOME="`awk -F: '$3 == "Y" { print $2; exit }' $oratab`"
     export ORACLE_SID ORACLE_HOME
-    PATH=$PATH:$ORACLE_HOME/bin
+    PATH="$PATH:$ORACLE_HOME/bin"
 fi
 #}}}
 
