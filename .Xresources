@@ -1,5 +1,5 @@
 !
-! ~/.Xresources 2001-06-04
+! ~/.Xresources 2001-06-07
 ! Michael Shields <shields@msrl.com>
 !
 
@@ -19,8 +19,8 @@ xemacs.geometry: 100x86
 XEmacs.geometry: 100x86
 #elif HEIGHT > 800
 emacs.geometry: 100x72
-xemacs.geometry: 100x68
-XEmacs.geometry: 100x68
+xemacs.geometry: 100x67
+XEmacs.geometry: 100x67
 #elif HEIGHT > 600
 emacs.geometry: 90x52
 xemacs.geometry: 90x46
