@@ -277,5 +277,5 @@
 (setq gnus-goto-next-group-when-activating nil)
 
 ;; Agent is used just for silly web backends (nnultimate, nnslashdot).
-(gnus-agentize)
+;;(gnus-agentize)
 ;;(setq gnus-plugged nil)
