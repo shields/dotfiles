@@ -7,11 +7,9 @@
 ;;{{{ Preliminaries
 
 ;; Must elegantize this:
-;;(setq load-path (cons (expand-file-name "~/.elisp/gnus")
-;;		      (cons (expand-file-name "~/.elisp")
-;;			    load-path)))
-(setq load-path (cons (expand-file-name "~/.elisp")
-		      load-path))
+(setq load-path (cons (expand-file-name "~/.elisp/gnus")
+		      (cons (expand-file-name "~/.elisp")
+			    load-path)))
 
 (require 'info)
 (setq Info-directory-list (cons "~/.info" Info-default-directory-list))
