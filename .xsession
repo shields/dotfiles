@@ -44,9 +44,10 @@ fi
 
 metacity &
 
-if test -f $HOME/.xplanet/clouds_2000.jpg; then
-    xplanetbg -moonside -wait 60 -blend -radius 46 \
-        -cloud_image $HOME/.xplanet/clouds_2000.jpg -cloud_threshold 0 &
+if test -d $HOME/.xplanet; then
+    xplanetbg -moonside -wait 60 -blend -radius 46 -center 780,520 \
+        -cloud_image $HOME/.xplanet/clouds_2000.jpg -cloud_threshold 0 \
+	-background $HOME/.xplanet/background.png &
 fi
 
 exec gnome-session
