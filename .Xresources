@@ -6,29 +6,18 @@
 #define DESKFG grey80
 #define DESKBG black
 
-! xterm, emacs, et al.
 *cursorColor: firebrick2
 
 ! 6x13 font:
-emacs.font: -misc-fixed-medium-r-semicondensed--13-120-75-75-c-60-iso10646-1
 xemacs.font: -misc-fixed-medium-r-semicondensed--13-120-75-75-c-60-iso10646-1
-XEmacs.font: -misc-fixed-medium-r-semicondensed--13-120-75-75-c-60-iso10646-1
 #if HEIGHT > 1200
-emacs.geometry: 100x90
 xemacs.geometry: 100x86
-XEmacs.geometry: 100x86
 #elif HEIGHT > 800
-emacs.geometry: 100x72
 xemacs.geometry: 100x67
-XEmacs.geometry: 100x67
 #elif HEIGHT > 600
-emacs.geometry: 90x52
 xemacs.geometry: 90x46
-XEmacs.geometry: 90x46
 #else
-emacs.geometry: 103x34+0+0
 xemacs.geometry: 103x34+0+0
-XEmacs.geometry: 103x34+0+0
 #endif
 
 xterm*foreground: black
