@@ -1,7 +1,7 @@
 ;;; .gnus.el --- Shields's Gnus initialization file
 
 ;; Author: Michael Shields <shields@msrl.com>
-;; Version: 2001-07-24
+;; Version: 2001-08-19
 
 ;; XXX http://bugs.debian.org/cgi-bin/bugreport.cgi?bug=82226
 (load "mm-decode")
