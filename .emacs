@@ -1,7 +1,7 @@
 ;;; .emacs --- Shields's Emacs initialization file
 
 ;; Author: Michael Shields <shields@msrl.com>
-;; Version: 2001-07-02
+;; Version: 2001-07-26
 
 ;;; Globals
 ;;{{{ Preliminaries
@@ -258,29 +258,6 @@ when called with a prefix argument."
 
 (setq bbdb-send-mail-style 'vm)
 
-;; Doesn't correctly cease to display faces.
-;;(add-hook 'bbdb-list-hook 'display-bbdb-x-face)
-;; Modeled somewhat on code from bbdb-fontify-buffer.
-(defun display-bbdb-x-face ()
-  (save-excursion
-    (and (process-status "x-face")
-	 (delete-process "x-face"))
-    (set-buffer bbdb-buffer-name)
-    (let ((rest bbdb-records)
-	  record)
-      (while rest
-	(setq record (car (car rest))
-	      rest (cdr rest))
-	(let ((face (bbdb-record-getprop record 'face)))
-	  (if face
-	      (progn
-		(let ((process-connection-type nil))
-		  (process-kill-without-query
-		   (start-process-shell-command "x-face-bbdb" nil
-						"{ echo '/* Width=48, Height=48 */'; uncompface; } | icontopbm | xv -quit -"))
-		  (process-send-string "x-face-bbdb" face)
-		  (process-send-eof "x-face-bbdb")))))))))
-
 (add-hook 'bbdb-list-hook 'close-bbdb-if-no-entries)
 (defun close-bbdb-if-no-entries ()
   (save-excursion
@@ -308,12 +285,10 @@ when called with a prefix argument."
 ;;}}}
 ;;{{{ Calendar and friends
 
-;; For calculating the sunrise and sunset times.  Emacs is great.
-;; Location measured with Garmin GPS III+, 1999-01-29, in position
-;; averaging mode; estimated accuracy 17.8 m radius.
-(setq calendar-latitude 38.81953)
-(setq calendar-longitude -77.06332)
-(setq calendar-location-name "6 E. Nelson Ave.")
+;; For calculating the sunrise and sunset times.
+(setq calendar-latitude 38.909177)
+(setq calendar-longitude -77.044371)
+(setq calendar-location-name "Dupont Circle")
 
 ;; Use local (US Eastern) time, not my usual TZ, which is UTC.
 (setq calendar-time-zone -300)
@@ -327,20 +302,15 @@ when called with a prefix argument."
 (setq calendar-daylight-savings-starts-time 120)
 (setq calendar-daylight-savings-ends-time 120)
 
-;; Be sensible, not American.
 (setq calendar-week-start-day 1)
+
 (setq calendar-date-display-form '(year "-" (format "%02d-%02d"
 						    (string-to-number month)
 						    (string-to-number day))))
 (setq calendar-time-display-form '(24-hours ":" minutes
 					    (if time-zone" ") time-zone))
 
-(setq diary-file "~/.diary")
-
-(add-hook 'diary-display-hook 'fancy-diary-display)
-
 (add-hook 'initial-calendar-window-hook 'mark-calendar-holidays)
-(add-hook 'initial-calendar-window-hook 'mark-diary-entries)
 
 ;;}}}
 ;;{{{ Font-lock
@@ -363,8 +333,6 @@ when called with a prefix argument."
 
 (load-library "mailcrypt")
 
-;;XXX(mc-setversion "gpg")
-
 (setq mc-passwd-timeout 900)
 
 (setq mc-gpg-fetch-keyring-list
@@ -386,23 +354,6 @@ when called with a prefix argument."
 			'describe-perl-symbol)
 		      (define-key perl-mode-map "\M-od"
 			'switch-to-perl-doc-buffer))))
-
-;;}}}
-;;{{{ Server
-
-;;XXX(server-start)
-
-;;}}}
-;;{{{ Shell-filter
-
-;; This used to work but now it doesn't because I no longer have
-;; shell-filt.el and don't remember what it does.
-;;(autoload 'shell-filter "shell-filt")
-;;(add-hook 'shell-mode-hook
-;;	     (function (lambda ()
-;;			 (set-process-filter (get-buffer-process
-;;					      (current-buffer))
-;;					     (function shell-filter)))))
 
 ;;}}}
 ;;{{{ Suspension
