@@ -382,13 +382,6 @@ when called with a prefix argument."
 
 ;;}}}
 
-;;{{{ Local variables
-
-;;; local variables:
-;;; folded-file: t
-;;; end:
-
-;;}}}
 (custom-set-variables
  '(bbdb-gui nil)
  '(bbdb-complete-name-allow-cycling t)
