@@ -1,6 +1,6 @@
 #!/bin/sh
 #
-# ~/.xsession 2001-10-23
+# ~/.xsession 2001-12-12
 # Michael Shields <shields@msrl.com>
 #
 
@@ -36,6 +36,6 @@ if test -f /proc/net/wireless; then
     wmwave &
 fi
 
-sawfish &
+wmaker &
 
 exec gnome-session
