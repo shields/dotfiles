@@ -11,7 +11,7 @@
 
 ! This set of sizes is chosen so that two Emacs can fix abreast on a
 ! screen 1280 pixels wide.
-Emacs.default.attributeFont: -misc-fixed-medium-r-semicondensed-*-*-100-*-*-*-*-*-*
+Emacs.default.attributeFont: -misc-fixed-medium-r-semicondensed-*-*-120-*-*-*-*-*-*
 Emacs*menubar*font: fixed
 Emacs.modeline.attributeFont: fixed
 #if HEIGHT > 1200
