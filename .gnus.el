@@ -56,6 +56,7 @@
 (add-to-list 'gnus-ignored-headers "^X-LYRIS-Message-Id:")
 (add-to-list 'gnus-ignored-headers "^X-Mailer:")
 (add-to-list 'gnus-ignored-headers "^X-Newsreader:")
+(add-to-list 'gnus-ignored-headers "^X-NNTP-Posting-Date:")
 (add-to-list 'gnus-ignored-headers "^X-Spam-Checker-Version:")
 (add-to-list 'gnus-ignored-headers "^X-Spam-Status: No, hits=-")
 (add-to-list 'gnus-ignored-headers "^X-Spam-Status: No, hits=[0-2]\\.")
