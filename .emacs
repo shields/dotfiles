@@ -389,6 +389,7 @@ when called with a prefix argument."
  '(gnuserv-program (concat exec-directory "/gnuserv"))
  '(bbdb-time-display-format "%Y-%m-%d"))
 (custom-set-faces
+ '(info-node ((t (:foreground "darkblue"))))
  '(gnus-group-mail-3-face ((((class color) (background light)) nil)))
  '(gnus-summary-low-unread-face ((t (:foreground "grey18"))))
  '(gnus-summary-low-ticked-face ((((class color) (background light)) (:foreground "firebrick"))))
