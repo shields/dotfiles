@@ -246,9 +246,6 @@ when called with a prefix argument."
 	("Organisation" (".*" company "\\&"))
 	("X-Organization" (".*" company "\\&"))
 	("X-Organisation" (".*" company "\\&"))
-	;;  Straight from the manual for 1.5.1:
-	("X-Face"
-	 ("[ \t\n]*\\([^ \t\n]*\\)\\([ \t\n]+\\([^ \t\n]+\\)\\)?\\([ \t\n]+\\([^ \t\n]+\\)\\)?\\([ \t\n]+\\([^ \t\n]+\\)\\)?" face "\\1\\3\\5\\7"))
 	("Newsgroups" ("^bofh\." mark-char "@"))
 	("Newsgroups" ("^nnml:nanog" mark-char ":"))))
 
