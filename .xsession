@@ -19,10 +19,12 @@ export GDK_USE_XFT
 xmodmap .xmodmap-pckb
 test -f .Xmodmap && xmodmap .Xmodmap
 
-# fast mouse
-xset m 4 4
-
-#sawfish &
+# Accelerate a mouse (but not mochi's trackpad).
+if test "$hostname" = mochi; then
+    xset m default
+else
+    xset m 4 4
+fi
 
 # xloadimage -onroot /usr/local/lib/mac-7.5.3-bgs/23295.ppm
 # xearth &
@@ -49,5 +51,4 @@ fi
 
 #xwrits clock after=15 top &
 
-#exec gnome-session
 exec startkde
