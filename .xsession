@@ -1,6 +1,6 @@
 #!/bin/sh
 #
-# ~/.xsession 2000-03-10
+# ~/.xsession 2001-06-27
 # Michael Shields <shields@msrl.com>
 #
 
@@ -31,6 +31,10 @@ xautolock -time 30 -locker 'xscreensaver-command -lock' \
     -corners +000 -cornerredelay 3600 &
 
 eval `ssh-agent -s`
+
+if test -f /proc/net/wireless; then
+    wmwave &
+fi
 
 wmaker &
 
