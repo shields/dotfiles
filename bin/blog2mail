@@ -15,11 +15,11 @@ use LWP::UserAgent;
 use HTTP::Headers;
 use HTTP::Request;
 use Mail::Internet;
+use MIME::QuotedPrint;
 use Sys::Hostname;
 use URI;
 use XML::RSS;
 use strict;
-use bytes;  # see below
 
 $#ARGV == 2
     or die "usage: blog2mail URL FROM MAILDIR\n";
@@ -63,14 +63,16 @@ $cache{$url} = $response->header('Last-Modified')
 
 my $raw_rss = $response->content;
 
-# This shouldn't be necessary, and is not really correct.  However,
-# people do manage to put characters in their blogs that are not even
-# valid UTF-8, and that chokes the XML::RSS parser.  Assume that
-# anything valid is going to be escaped.  But that's probably wrong
-# for Asian languages.  The \octal syntax is odd, but at least it
-# doesn't lose information, and we can't know what is the right entity.
-# FIXME It would be best to do this only for invalid UTF-8; how?
-$raw_rss =~ s/([^\0-\176])/sprintf "\\%03o", ord $1/eg;
+{
+    # This shouldn't be necessary, and is not really correct.  However,
+    # people do manage to put characters in their blogs that are not even
+    # valid UTF-8, and that chokes the XML::RSS parser.
+    use utf8;
+    $raw_rss =~ s/([^\0-\176])/sprintf "&#x%x;", ord $1/eg;
+    use bytes;
+    $raw_rss =~ s/([^\0-\176])/sprintf "\\%03o", ord $1/eg;
+}
+
 # more hackaround:
 $raw_rss =~ s/&(?=\s)/&amp;/g;
 
@@ -97,7 +99,14 @@ foreach my $item (reverse @{$rss->{items}}) {
 	$mail->head->add('Date', $item->{pubDate});
     }
 
-    $mail->head->add('Subject', $item->{title});
+    # RFC 2047 encoding of UTF-8 headers.
+    # FIXME Mail::Header should really handle this internally...
+    my $subject = $item->{title};
+    if ($subject =~ /[^\040-\176]/) {
+        $subject = encode_qp($subject);
+	$subject = "=?utf-8?q?$subject?=";
+    }
+    $mail->head->add('Subject', $subject);
 
     my $body;
     if (defined $item->{'http://purl.org/rss/1.0/modules/content/'}) {
@@ -136,9 +145,9 @@ exit 0;
 
 
 sub iso8601_to_rfc2822 {
-    $_[0] =~ /^(\d\d\d\d)-(\d\d)-(\d\d)T(\d\d:\d\d:\d\d)([-+]\d\d):?(\d\d)$/
+    $_[0] =~ /^(\d\d\d\d)-(\d\d)-(\d\d)T(\d\d:\d\d:\d\d)(\.\d+)?([-+]\d\d):?(\d\d)$/
 	or die "couldn't parse date: $_[0]\n";
     sprintf '%d %s %d %s %s:%s', $3,
 	    (qw(Jan Feb Mar Apr May Jun Jul Aug Sep Oct Nov Dec))[$2-1],
-	    $1, $4, $5, $6;
+	    $1, $4, $6, $7;
 }
