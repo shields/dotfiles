@@ -388,14 +388,17 @@ sentinel."
 (eval-after-load "bbdb"
   '(define-key bbdb-mode-map "q" 'delete-window))
 
-(defun bbdb-normalize-tmda-addresses (addr)
+(defun bbdb-normalize-addresses (addr)
   (when addr
     (cond ((string-match "\\(.*\\)[+-]dated[+-][0-9]+\\.[0-9a-f]+\\(@.*\\)"
 			 addr)
            (concat (substring addr (match-beginning 1) (match-end 1))
                    (substring addr (match-beginning 2) (match-end 2))))
+	  ((string-match "\\(.*@aol\\.com\\)"
+			 addr)
+           (concat (substring addr (match-beginning 1) (match-end 1))))
           (t addr))))
-(setq bbdb-canonicalize-net-hook 'bbdb-normalize-tmda-addresses)
+(setq bbdb-canonicalize-net-hook 'bbdb-normalize-addresses)
 
 ;;}}}
 ;;{{{ Calc
