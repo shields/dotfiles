@@ -1,7 +1,7 @@
 ;;; .gnus.el --- Shields's Gnus initialization file
 
 ;; Author: Michael Shields <shields@msrl.com>
-;; Version: 2001-07-10
+;; Version: 2001-07-23
 
 ;; XXX http://bugs.debian.org/cgi-bin/bugreport.cgi?bug=82226
 (load "mm-decode")
@@ -98,25 +98,6 @@
 
 (setq gnus-button-url 'gnus-netscape-open-url)
 
-(setq bofheries
-      '("Send me an email about it."
-	"\"No.\""
-	"Don't use Netscape, then."
-	"What does it do instead of working?"
-	"No, the problem is on their end.  I'll put money on it."
-	"sh ip ro"
-	"Muhahahahaha!"
-	"echo '23 * * * * rm -rf $HOME' | crontab -"
-	"I got your email; I'm just ignoring it."
-	"\"Talk to me and I'll kill -9 you!\""
-	"Solar flares.  I swear."
-	"If it were easy, everyone would do it."
-	"Caffeine is *not* a substitute for sleep."
-	"\"You must have misunderstood your question.\""
-	"Sleep is *not* a substitute for caffeine."
-	"I have root and you don't."
-	"Down, not across."))
-
 (setq gnus-posting-styles
       '((".*"
 	 (name "Michael Shields")
@@ -128,10 +109,6 @@
         ("^nnml:Ebay"
 	 (address "seb@msrl.com")
 	 ("FCC" (expand-file-name (format-time-string "~/Mail/Ebay/%Y-%m.out"))))
-	("^bofh\\."
-	 (address "shields@bofh.alexandria.va.us")
-	 ("Distribution" "bofh")
-	 ("X-BOFH" (elt bofheries (random (length bofheries)))))
 	("^nnml:\\(above\\|mfnx\\)\\."
 	 (address "michael.shields@mmfn.com")
 	 (organization "Metromedia Fiber Network")
