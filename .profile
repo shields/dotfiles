@@ -1,5 +1,5 @@
 #
-# ~/.profile 2001-12-10
+# ~/.profile 2002-02-21
 # Michael Shields <shields@msrl.com>
 #
 
@@ -175,6 +175,12 @@ fi
 # pilot-link.
 PILOTRATE=115200
 export PILOTRATE
+
+# rlpr.
+if [ "$hostname" = mulligatwani ]; then
+   PRINTER=lp@toblerone.msrl.com
+   export PRINTER
+fi
 
 # vi.
 EXINIT=':set ai'; export EXINIT
