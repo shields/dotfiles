@@ -1,5 +1,5 @@
 #
-# ~/.profile 2001-07-11
+# ~/.profile 2001-07-16
 # Michael Shields <shields@msrl.com>
 #
 
@@ -142,10 +142,6 @@ fi
 CVS_RSH=ssh
 export CVSROOT CVS_RSH
 
-# ical.
-CALENDAR="$HOME/var/calendar"
-export CALENDAR
-
 # IRC.
 test `whoami` = shields && IRCNICK=Shields
 export IRCNICK
@@ -169,30 +165,8 @@ fi
 PILOTRATE=115200
 export PILOTRATE
 
-# trn.  Some of these could be considered more general than that.
-#AUTOUNSUBSCRIBE='*,!nyx.*,!comp.*,!misc.*,!rec.*,!sci.*'
-FAST_PNEWS=y	# "hundreds, if not thousands..."
-KILLGLOBAL='%p/KILL/GLOBAL'
-KILLLOCAL='%p/KILL/%C'
-LOCALTIMEFMT='%Y-%m-%d %T %Z'
-# Stupid Elm won't take headers.
-MAILHEADER='\n'
-MAILPOSTER="elm -i %h -s 'Re: %'s' %t"
-NEWSPOSTER="QUOTECHARS=%I $HOME/bin/Pnews -h %h"
-#ORGANIZATION="Tembel's Hedonic Commune"
-RNINIT='-e -f -F"> " -G -L -N -p -T -u -x11 -XX -hlines +hreply-to +hpath'
-SAVENAME='%C'
-export AUTOUNSUBSCRIBE FAST_PNEWS KILLGLOBAL KILLLOCAL LOCALTIMEFMT
-export MAILHEADER MAILPOSTER MAILTO NEWSPOSTER ORGANIZATION
-export RNINIT SAVENAME
-
 # vi.
 EXINIT=':set ai'; export EXINIT
-
-# xmcd.
-XMCD_CDDBPATH="`echo $HOME/.cddb/* | tr ' ' ';'`;@cddb.crosslink.net;@sunsite.unc.edu;@cddb.dartmouth.edu"
-XMCD_HTML="$HOME/.xmcd.html"
-export XMCD_CDDBPATH XMCD_HTML
 
 #}}}
 
@@ -236,7 +210,7 @@ fi
 PROFILE_WAS_RUN=yes
 export PROFILE_WAS_RUN
 
-# for noninteractive shells, display uptime:
+# for interactive shells, display uptime:
 test -z "$PS1" || uptime
 
 #{{{ Emacs local variables
