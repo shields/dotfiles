@@ -262,3 +262,7 @@
 (defun turn-off-backup ()
   (set (make-local-variable 'backup-inhibited) t))
 (add-hook 'nnfolder-save-buffer-hook 'turn-off-backup)
+
+;; Allow for multiple open windows on different groups (although, BBDB
+;; still displays only in one buffer; oh well).
+(setq gnus-single-article-buffer nil)
