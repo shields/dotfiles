@@ -1,6 +1,7 @@
 #
-# ~/.inputrc 1994/08/31
-# Michael Shields <mjshield@nyx.cs.du.edu>
+# ~/.inputrc
+# Michael Shields <shields@msrl.com>
+# $Id$
 #
 
 # Make input eight-bit clean.
@@ -9,6 +10,3 @@ set output-meta on
 
 # Set this to a large number.
 set completion-query-items 1638
-
-# An attempt.
-set bell-style visible
