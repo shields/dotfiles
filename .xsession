@@ -13,11 +13,10 @@ test "$PROFILE_WAS_RUN" = yes || . $HOME/.profile
 test -f .Xresources && xrdb -merge .Xresources
 test -f .Xmodmap && xmodmap .Xmodmap
 
+test -f .xmodmap-pckb && xmodmap .xmodmap-pckb
+
 GDK_USE_XFT=1
 export GDK_USE_XFT
-
-xmodmap .xmodmap-pckb
-test -f .Xmodmap && xmodmap .Xmodmap
 
 # Accelerate a mouse, but not mochi's trackpad.
 # Also start gtkpbbuttons if on the laptop.
