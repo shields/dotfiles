@@ -1,7 +1,7 @@
 ;;; .gnus.el --- Shields's Gnus initialization file
 
 ;; Author: Michael Shields <shields@msrl.com>
-;; Version: 2001-07-23
+;; Version: 2001-07-24
 
 ;; XXX http://bugs.debian.org/cgi-bin/bugreport.cgi?bug=82226
 (load "mm-decode")
@@ -23,6 +23,8 @@
 (setq gnus-select-method '(nntp ""))
 ;;(setq gnus-secondary-select-methods '((nnml "") (nnslashdot "")))
 (setq gnus-secondary-select-methods '((nnml "")))
+;;(setq gnus-select-method '(nnml ""))
+;;(setq gnus-secondary-select-methods nil)
 
 (setq nnml-directory "~/Gnuspool/")
 (setq mail-sources
