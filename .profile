@@ -1,5 +1,5 @@
 #
-# ~/.profile 2001-10-18
+# ~/.profile 2001-10-28
 # Michael Shields <shields@msrl.com>
 #
 
@@ -146,14 +146,18 @@ fi
 CVS_RSH=ssh
 export CVSROOT CVS_RSH
 
+# debchange.
+DEBEMAIL='shields@msrl.com'
+DEBFULLNAME='Michael Shields'
+export DEBEMAIL DEBFULLNAME
+
 # IRC.
 test `whoami` = shields && IRCNICK=Shields
 export IRCNICK
 
 # less.
 LESS='-eMc'
-LESSCHARSET='latin1'
-export LESS LESSCHARSET
+export LESS
 
 # Netscape -- thanks JD!
 MOZILLA_NO_ASYNC_DNS=True
