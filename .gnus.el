@@ -1,7 +1,7 @@
 ;;; .gnus.el --- Shields's Gnus initialization file
 
 ;; Author: Michael Shields <shields@msrl.com>
-;; Version: 2001-04-19
+;; Version: 2001-05-01
 
 (setq mail-from-style 'parens)
 (setq mail-yank-prefix "> ")
@@ -62,8 +62,10 @@
 (add-hook 'gnus-summary-mode-hook
 	  (lambda ()
 	    (define-key gnus-summary-mode-map [b] 'gnus-summary-prev-page)
+	    (define-key gnus-summary-mode-map [(return)] 'gnus-summary-next-unread-article)))
+(add-hook 'gnus-article-mode-hook
+	  (lambda ()
 	    (define-key gnus-article-mode-map [b] 'gnus-summary-prev-page)
-	    (define-key gnus-summary-mode-map [(return)] 'gnus-summary-next-unread-article)
 	    (define-key gnus-article-mode-map [(return)] 'gnus-summary-next-unread-article)))
 
 (setq gnus-default-article-saver 'gnus-summary-save-in-mail)
