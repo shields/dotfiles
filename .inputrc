@@ -1,0 +1,14 @@
+#
+# ~/.inputrc 1994/08/31
+# Michael Shields <mjshield@nyx.cs.du.edu>
+#
+
+# Make input eight-bit clean.
+set convert-meta off
+set output-meta on
+
+# Set this to a large number.
+set completion-query-items 1638
+
+# An attempt.
+set bell-style visible
