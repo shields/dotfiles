@@ -168,10 +168,14 @@ if [ -d $HOME/.pgp ]; then
 fi
 
 # rlpr.
-if [ "$hostname" = mulligatwani ]; then
+if [ `expr "$MY_IP" : '198.176.193\.'` -gt 0 ]; then
    PRINTER=lp@toblerone.msrl.com
    export PRINTER
 fi
+
+# rsync.
+RSYNC_RSH=ssh
+export RSYNC_RSH
 
 # vi.
 EXINIT=':set ai'; export EXINIT
