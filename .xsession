@@ -10,7 +10,11 @@ cd $HOME
 test "$PROFILE_WAS_RUN" = yes || . $HOME/.profile
 
 # Not all OSes do this automatically.
-xrdb -merge .Xresources
+test -f .Xresourcse && xrdb -merge .Xresources
+test -f .Xmodmap && xmodmap .Xmodmap
+
+GDK_USE_XFT=1
+export GDK_USE_XFT
 
 xmodmap .xmodmap-pckb
 test -f .Xmodmap && xmodmap .Xmodmap
@@ -18,7 +22,7 @@ test -f .Xmodmap && xmodmap .Xmodmap
 # fast mouse
 xset m 4 4
 
-sawfish &
+#sawfish &
 
 # xloadimage -onroot /usr/local/lib/mac-7.5.3-bgs/23295.ppm
 # xearth &
@@ -31,20 +35,19 @@ test -x /usr/bin/ssh-askpass && SSH_ASKPASS=/usr/bin/ssh-askpass
 export SSH_ASKPASS
 eval `ssh-agent -s`
 
-GDK_USE_XFT=1
-export GDK_USE_XFT
-
-if test -f /proc/net/wireless; then
-    wmwave &
+if test -x $HOME/bin/tunnelme; then
+    (netstat -tn | fgrep 127.0.0.1:1430 > /dev/null) \
+	|| $HOME/bin/tunnelme
 fi
 
-if test -d $HOME/.xplanet; then
-    $HOME/bin/xplanet-moon-update
-    xplanetbg -moonside -wait 60 -blend -radius 46 -center 680,520 \
-        -cloud_image $HOME/.xplanet/clouds_2000.jpg -cloud_threshold 0 \
-	-background $HOME/.xplanet/background.png &
-fi
+#if test -d $HOME/.xplanet; then
+#    $HOME/bin/xplanet-moon-update
+#    xplanetbg -moonside -wait 60 -blend -radius 46 -center 680,520 \
+#        -cloud_image $HOME/.xplanet/clouds_2000.jpg -cloud_threshold 0 \
+#	-background $HOME/.xplanet/background.png &
+#fi
 
 #xwrits clock after=15 top &
 
-exec gnome-session
+#exec gnome-session
+exec startkde
