@@ -60,11 +60,22 @@
 (require 'x-compose)
 (global-set-key "\C-x8" compose-map)
 
-(set-default-coding-systems 'utf-8)
-;;(prefer-coding-system 'utf-8)   ; broken in XEmacs 21.4.6
-;; try to stumble around it:
-(set-coding-priority-list '(utf-8))
+;; UTF-8 voodoo from Stephen J. Turnbull:
+(require 'un-define)
+(unless (emacs-version>= 21 5 6)
+  (require 'mule-ucs-unicode "unicode"))
 (set-coding-category-system 'utf-8 'utf-8)
+(set-pathname-coding-system 'utf-8)
+(set-process-coding-system 'utf-8)
+(set-keyboard-coding-system 'utf-8)
+(set-terminal-coding-system 'utf-8)
+;; This doesn't wipe out other autodetection; instead, it rotates the
+;; listed coding categories to the front, and otherwise preserves
+;; order.
+(set-coding-priority-list '(utf-8))
+;; To have "only" UTF-8 in autodetection, the following tries UTF-8,
+;; and then reads the file as binary (which always succeeds)
+;;(set-coding-priority-list '(utf-8 binary))
 
 ;; Protect against init.el borrowing by other users.
 (when (string-equal (user-login-name) "shields")
