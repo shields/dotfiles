@@ -1,6 +1,7 @@
 !
-! ~/.Xresources 2001-10-22
+! ~/.Xresources
 ! Michael Shields <shields@msrl.com>
+! $Id$
 !
 
 #define DESKFG grey80
@@ -8,18 +9,17 @@
 
 *cursorColor: firebrick2
 
-! 6x13 font:
-! challah -> mulligatwani doesn't parse this as of 2001-08-13; not sure why.
-!xemacs.font: -misc-fixed-medium-r-semicondensed--13-120-75-75-c-60-iso10646-1
-xemacs.font: -misc-fixed-medium-r-semicondensed--13-120-75-75-c-60-iso8859-1
+Emacs.default.attributeFont: -misc-fixed-medium-r-semicondensed-*-*-100-*-*-*-*-*-*
+Emacs*menubar*font: fixed
+Emacs.modeline.attributeFont: fixed
 #if HEIGHT > 1200
-xemacs.geometry: 100x86
+Emacs.geometry: 100x86
 #elif HEIGHT > 800
-xemacs.geometry: 100x67
+Emacs.geometry: 100x67
 #elif HEIGHT > 600
-xemacs.geometry: 90x46
+Emacs.geometry: 90x46
 #else
-xemacs.geometry: 103x34+0+0
+Emacs.geometry: 103x34+0+0
 #endif
 
 xterm*foreground: black
