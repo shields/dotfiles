@@ -1,7 +1,7 @@
 ;;; .gnus.el --- Shields's Gnus initialization file
 
 ;; Author: Michael Shields <shields@msrl.com>
-;; Version: 2002-05-19
+;; Version: $Id$
 
 (setq mail-from-style 'parens)
 (setq mail-yank-prefix "> ")
@@ -18,8 +18,8 @@
 ;;(setq gnus-secondary-select-methods '((nnml "") (nnslashdot "")))
 ;;(setq gnus-secondary-select-methods '((nnml "")))
 (setq gnus-select-method '(nnml ""))
-;;(setq gnus-secondary-select-methods nil)
-(setq gnus-secondary-select-methods '((nnslashdot "")))
+(setq gnus-secondary-select-methods nil)
+;;(setq gnus-secondary-select-methods '((nnslashdot "")))
 
 (setq nnml-directory "~/Gnuspool/")
 (setq mail-sources
@@ -43,8 +43,9 @@
 (setq gnus-home-adapt-file
       '(("^nnslashdot:" "slashdot.ADAPT")))
 
-(setq gnus-check-new-newsgroups 'ask-server)
-(setq gnus-read-active-file 'some)
+;; This works with news servers, but not for nnml.
+;;(setq gnus-check-new-newsgroups 'ask-server)
+;;(setq gnus-read-active-file 'some)
 
 (setq gnus-total-expirable-newsgroups "^[^:]*$")
 
