@@ -327,6 +327,9 @@ citation lines."
 ;; Automatically sign or encrypt replies to signed or encrypted mail:
 (setq gnus-message-replysign t)
 (setq gnus-message-replyencrypt t)
+;; XXX should use the same method as the replied mail
+(setq mml-default-sign-method "pgpmime")
+(setq mml-default-encrypt-method "pgpmime")
 
 ;; Update marks in real time, so that the mail checker widget can have
 ;; current information.  This should really be on gnus-summary-mark-article,
