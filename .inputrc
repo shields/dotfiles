@@ -10,3 +10,6 @@ set output-meta on
 
 # Set this to a large number.
 set completion-query-items 1638
+
+# Don't require double-tab to display list of possible completions.
+set show-all-if-ambiguous on
