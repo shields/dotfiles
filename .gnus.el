@@ -332,7 +332,9 @@
 
 
 (setq gnus-article-banner-alist
-      '((mailman
+      '((debian
+	 . "^-- \nTo UNSUBSCRIBE,.*\n.*")
+	(mailman
 	 . "^_________+\n.* mailing list\n.*@.*\nhttp.*\n")
 	(sourceforge
 	 . "^----------+\nThis \\(SF\\.NET\\|sf\\.net\\) email is sponsored by:\\(.*\n\\)+")
