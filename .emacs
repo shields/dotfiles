@@ -7,9 +7,8 @@
 ;;{{{ Preliminaries
 
 ;; Must elegantize this:
-(setq load-path (cons (expand-file-name "~/.elisp/gnus")
-		      (cons (expand-file-name "~/.elisp")
-			    load-path)))
+(setq load-path (cons (expand-file-name "~/share/xemacs21/site-lisp/gnus")
+		      load-path))
 
 ;; /etc/xemacs21/site-start.d/20gnus-init.el instantiates the system
 ;; version of Gnus.  Be sure to override it.
@@ -18,7 +17,7 @@
 (provide 'gnus-init)
 
 (require 'info)
-(setq Info-directory-list (cons "~/.info" Info-default-directory-list))
+(setq Info-directory-list (cons "~/info" Info-default-directory-list))
 
 ;; Enable correct handling of ISO8859-1, and the C-x 8 compose key.
 ;; *Note (emacs)European Display::.
