@@ -19,7 +19,7 @@ Emacs.geometry: 100x84
 #elif HEIGHT > 800
 Emacs.geometry: 100x68
 #elif HEIGHT > 600
-Emacs.geometry: 90x46
+Emacs.geometry: 90x53
 #else
 Emacs.geometry: 103x34+0+0
 #endif
