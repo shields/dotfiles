@@ -44,6 +44,4 @@ else
     alias slchal='slssh challah.msrl.com'
 fi
 
-alias wi='whois -h whois.geektools.com'
-
 alias ll='ls -l'
