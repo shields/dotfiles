@@ -94,7 +94,9 @@
 	    (define-key gnus-summary-mode-map [(F)]
 	      'summary-followup-with-original-super-citation)
 	    (define-key gnus-summary-mode-map [(control x) (?5) (F)]
-	      'summary-followup-with-original-super-citation-other-frame)))
+	      'summary-followup-with-original-super-citation-other-frame)
+	    (define-key gnus-summary-mode-map [(/)] 'isearch-forward)
+	    (define-key gnus-summary-mode-map [(meta /)] 'gnus-summary-limit-map)))
 (add-hook 'gnus-article-mode-hook
 	  (lambda ()
 	    (define-key gnus-article-mode-map [b] 'gnus-summary-prev-page)
