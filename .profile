@@ -1,5 +1,5 @@
 #
-# ~/.profile 2001-10-28
+# ~/.profile 2001-11-08
 # Michael Shields <shields@msrl.com>
 #
 
@@ -57,6 +57,10 @@ test -d /usr/X11R6/man && MANPATH="$MANPATH:/usr/X11R6/man"
 
 test -d /usr/X/bin && NEWPATH="$NEWPATH:/usr/X/bin"
 test -d /usr/X/man && MANPATH="$MANPATH:/usr/X/man"
+
+# MacOS X with Fink
+test -d /sw && NEWPATH="$NEWPATH:/sw/bin:/sw/sbin"
+test -d /sw && MANPATH="$MANPATH:/sw/share/man"
 
 test -d /usr/ucb && NEWPATH="$NEWPATH:/usr/ucb"
 
