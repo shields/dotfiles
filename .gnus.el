@@ -57,7 +57,8 @@
 (add-to-list 'gnus-ignored-headers "^X-Mailer:")
 (add-to-list 'gnus-ignored-headers "^X-Newsreader:")
 (add-to-list 'gnus-ignored-headers "^X-Spam-Checker-Version:")
-;;(add-to-list 'gnus-ignored-headers "^X-Spam-Status: No,")
+(add-to-list 'gnus-ignored-headers "^X-Spam-Status: No, hits=-")
+(add-to-list 'gnus-ignored-headers "^X-Spam-Status: No, hits=[0-2]\\.")
 (add-to-list 'gnus-ignored-headers "^X-Yahoo-Profile:")
 ;; for my scrapers:
 (add-to-list 'gnus-ignored-headers "^X-Followup-URL:")
@@ -350,6 +351,7 @@
 	("@netscape\\.net$" . "^_________+\n.*\n.*\nGet your own FREE, personal Netscape Mail account.*")
 	("@juno\\.com$" . "^_________+\n.*\n.*")
 	("@yahoo\\.com$" . "^\\(----------+\\|__________+\\)\nDo you Yahoo!\\?\n.*\n.*")
+	("." . "^-----= Posted via Newsfeeds\.Com, .* =-----\n.*\n-----=.*=-----\n")
 	("." . "^---\nOutgoing mail is certified Virus Free\\.\nChecked by AVG .*\nVersion: .*")))
 
 
