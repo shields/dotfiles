@@ -32,7 +32,7 @@ xterm*faceName: andale:size=8:charwidth=6:minspace=1
 #if HEIGHT >= 1200
 xterm*geometry: 100x80
 #elif HEIGHT > 800
-xterm*geometry: 80x68
+xterm*geometry: 80x65
 #elif HEIGHT > 640
 xterm*geometry: 80x50
 #else
