@@ -199,6 +199,8 @@ if [ "$uname" = FreeBSD -o "$uname" = SunOS -o "$uname" = Darwin ]; then
    MY_IP="`ifconfig -a | awk '$1 == \"inet\" { print $2 }' | grep -v '^127\.'`"
 elif [ "$uname" = Linux ]; then
    MY_IP="`ifconfig -a | sed -e '/inet addr:/!d' -e '/addr:127\\./d' -e 's/.*inet addr:\([0-9.]\+\).*/\\1/'`"
+elif [ "$uname" = MINGW32 ]; then
+   MY_IP="`ipconfig | grep 'IP Address' | sed -e 's/.*: //'`"
 else
    echo ".profile: warning: don't know how to calculate IP on $uname"
    unset MY_IP
