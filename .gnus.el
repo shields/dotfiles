@@ -1,7 +1,7 @@
 ;;; .gnus.el --- Shields's Gnus initialization file
 
 ;; Author: Michael Shields <shields@msrl.com>
-;; Version: 2001-05-06
+;; Version: 2001-05-24
 
 (setq mail-from-style 'parens)
 (setq mail-yank-prefix "> ")
@@ -172,7 +172,9 @@
 	       (not (string-equal gnus-newsgroup-name "nnml:mfnx.aleph"))
 	       (not (string-equal gnus-newsgroup-name "nnml:MSRL.COM")))
       (let* ((first-line
-	      (concat "In article " (mail-header-id message-reply-headers) ","))
+	      (if (string-equal gnus-newsgroup-name "nnml:risks")
+		  "In RISKS Digest,"
+		(concat "In article " (mail-header-id message-reply-headers) ",")))
 	     (his-address
 	      (car (cdr (mail-extract-address-components
 			 (mail-header-from message-reply-headers)))))
