@@ -13,28 +13,25 @@
 
 (add-hook 'gnus-startup-hook 'bbdb-insinuate-gnus)
 
-(setq gnus-select-method '(nnml ""))
+(setq gnus-select-method
+      '(nnimap "msrl"
+	       (nnimap-address "127.0.0.1")
+	       (nnimap-server-port 1430)))
 (setq gnus-secondary-select-methods nil)
 
-(setq nnml-directory "~/Gnuspool/")
-(setq mail-sources
-      '((directory :path (concat nnml-directory ".incoming/")
-		   :suffix ""
-		   :plugged t)))
-(setq mail-source-delete-incoming t)
+;; Be sure outbound mail is secured also, through an ssh tunnel.
+(setq message-send-mail-function 'smtpmail-send-it)
+(setq gnus-agent-send-mail-function 'smtpmail-send-it)
+(setq smtpmail-default-smtp-server "127.0.0.1")
+(setq smtpmail-smtp-service 2500)
  
 (setq gnus-subscribe-newsgroup-method 'gnus-subscribe-topics)
 (setq gnus-subscribe-options-newsgroup-method 'gnus-subscribe-topics)
 
 (setq gnus-kill-files-directory "~/News/Score/")
-(setq gnus-score-file-suffix "SCORE")
 
+;; All groups in the primary select method are total-expirable.
 (setq gnus-total-expirable-newsgroups "^[^:]*$")
-
-;; Normally Gnus matches on the backend so that e.g. "^nnml" is
-;; autosubscribed.  But since mail here is a primary select-method,
-;; the groups have no backend in their name.  Ugh.
-(setq gnus-auto-subscribed-groups ".")
 
 (setq gnus-default-adaptive-score-alist
       '((gnus-kill-file-mark)
@@ -48,7 +45,7 @@
 
 (setq gnus-visible-headers nil)
 (setq gnus-ignored-headers
-      "^Xref:\\|NNTP-Posting-\\|^X-Trace:\\|^X-Complaints-To:\\|^Lines:\\|^X-From-Line:\\|^Path:\\|^X-Newsreader:\\|^X-Nntp-Posting-\\|^X-No-Archive:\\|^X-BOFH-Archive:\\|^Mail-Copies-To:\\|^Resent-\\|^X-Mailing-List:\\|^X-Loop:\\|^Precedence:\\|^Approved:\\|^X-Original-Date:\\|^Originator:\\|^From \\|^Return-Path:\\|^Received:\\|^In-Reply-To:\\|^Message-Id:\\|^Sender:\\|^X-Mailer:\\|^MIME-\\|^Content-\\|^X-VM-\\|^X-Sender:\\|^References:\\|^Precedence:[ \t]+bulk\\|^X-Face\\|^Delivered-To:\\|^Mailing-List:\\|^Status:\\|^X-Listprocessor-Version:\\|^X-Authentication-Warning:[^:]*: majordom set\\|^Lines:\\|^Mail-Copies-To:\\|^X400-\\|^X-Priority:\\|^X-MSMail-Priority:\\|^X-Content-Length:\\|^X-Orcpt:\\|^X-MimeOLE:\\|^Illegal-Object:\\|^X-UIDL:\\|^X-MIME-Autoconverted:\\|^Approved-By:\\|^X-VM-\\|^X-Gnus-Mail-Source:\\|^User-Agent:\\|^X-Mailinglist:\\|^List-\\(Help\\|Unsubscribe\\|Post\\|Subscribe\\):\\|^Importance:\\|^X-Exmh-\\|^X-Accept-Language:\\|^X-eGroups-\\|^List-Archive:\\|^Phone:\\|^Fax:\\|^Errors-To:\\|^X-BeenThere:\\|^X-Mailman-Version:\\|^List-Id:\\|^X-Authentication-Warning: [^:]*: majordomo \\|^X-LYRIS-Message-Id:\\|^Cancel-Lock:\\|^X-Spam-Status:\\|^X-Yahoo-Profile:\\|^X-AntiAbuse:")
+      "^Xref:\\|NNTP-Posting-\\|^X-Trace:\\|^X-Complaints-To:\\|^Lines:\\|^X-From-Line:\\|^Path:\\|^X-Newsreader:\\|^X-Nntp-Posting-\\|^X-No-Archive:\\|^X-BOFH-Archive:\\|^Mail-Copies-To:\\|^Resent-\\|^X-Mailing-List:\\|^X-Loop:\\|^Precedence:\\|^Approved:\\|^X-Original-Date:\\|^Originator:\\|^From \\|^Return-Path:\\|^Received:\\|^In-Reply-To:\\|^Message-Id:\\|^Sender:\\|^X-Mailer:\\|^MIME-\\|^Content-\\|^X-VM-\\|^X-Sender:\\|^References:\\|^Precedence:[ \t]+bulk\\|^X-Face\\|^Delivered-To:\\|^Mailing-List:\\|^Status:\\|^X-Listprocessor-Version:\\|^X-Authentication-Warning:[^:]*: majordom set\\|^Lines:\\|^Mail-Copies-To:\\|^X400-\\|^X-Priority:\\|^X-MSMail-Priority:\\|^X-Content-Length:\\|^X-Orcpt:\\|^X-MimeOLE:\\|^Illegal-Object:\\|^X-UIDL:\\|^X-MIME-Autoconverted:\\|^Approved-By:\\|^X-VM-\\|^X-Gnus-Mail-Source:\\|^User-Agent:\\|^X-Mailinglist:\\|^List-\\(Help\\|Unsubscribe\\|Post\\|Subscribe\\):\\|^Importance:\\|^X-Exmh-\\|^X-Accept-Language:\\|^X-eGroups-\\|^List-Archive:\\|^Phone:\\|^Fax:\\|^Errors-To:\\|^X-BeenThere:\\|^X-Mailman-Version:\\|^List-Id:\\|^X-Authentication-Warning: [^:]*: majordomo \\|^X-LYRIS-Message-Id:\\|^Cancel-Lock:\\|^X-Spam-Status:\\|^X-Yahoo-Profile:\\|^X-AntiAbuse:\\|^X-Habeas-")
 (setq message-ignored-news-headers
       "^NNTP-Posting-Host:\\|^Xref:\\|^[BGF]cc:\\|^Resent-Fcc:\\|^X-Draft-From:")
 (setq message-ignored-mail-headers
@@ -66,7 +63,8 @@
 	    (define-key gnus-summary-mode-map [(tab)] 'scroll-up-command)
 	    (define-key gnus-summary-mode-map [j] 'next-line)
 	    (define-key gnus-summary-mode-map [k] 'previous-line)
-	    (define-key gnus-summary-mode-map [(control j)] 'gnus-summary-goto-article)))
+	    (define-key gnus-summary-mode-map [(control j)] 'gnus-summary-goto-article)
+	    (define-key gnus-summary-mode-map [(control k)] 'gnus-summary-kill-thread)))
 (add-hook 'gnus-article-mode-hook
 	  (lambda ()
 	    (define-key gnus-article-mode-map [b] 'gnus-summary-prev-page)
@@ -80,22 +78,22 @@
 (add-hook 'gnus-select-group-hook 'turn-gnus-bbdb-on-or-off)
 (defun turn-gnus-bbdb-on-or-off ()
   (setq bbdb/news-auto-create-p
-	(not (not (or (string-equal "MSRL.COM" gnus-newsgroup-name)
-		      (string-equal "Ebay" gnus-newsgroup-name)
-		      (string-equal "big-internet" gnus-newsgroup-name)
-		      (string-equal "bugtraq" gnus-newsgroup-name)
-		      (string-equal "cryptography" gnus-newsgroup-name)
-		      (string-equal "cypherpunks" gnus-newsgroup-name)
-		      (string-equal "end2end" gnus-newsgroup-name)
-		      (string-equal "fork" gnus-newsgroup-name)
-		      (string-equal "fsb" gnus-newsgroup-name)
-		      (string-equal "leapsecs" gnus-newsgroup-name)
-		      (string-equal "nanog" gnus-newsgroup-name)
-		      (string-equal "pennsic" gnus-newsgroup-name)
-		      (string-equal "risks" gnus-newsgroup-name)
-		      (string-equal "tz" gnus-newsgroup-name)
-		      (string-equal "xabov" gnus-newsgroup-name)
-		      (string-match "ietf\\." gnus-newsgroup-name))))))
+	(not (not (or (string-equal "INBOX" gnus-newsgroup-name)
+		      (string-equal "INBOX.Ebay" gnus-newsgroup-name)
+		      (string-equal "INBOX.big-internet" gnus-newsgroup-name)
+		      (string-equal "INBOX.bugtraq" gnus-newsgroup-name)
+		      (string-equal "INBOX.cryptography" gnus-newsgroup-name)
+		      (string-equal "INBOX.cypherpunks" gnus-newsgroup-name)
+		      (string-equal "INBOX.end2end" gnus-newsgroup-name)
+		      (string-equal "INBOX.fork" gnus-newsgroup-name)
+		      (string-equal "INBOX.fsb" gnus-newsgroup-name)
+		      (string-equal "INBOX.leapsecs" gnus-newsgroup-name)
+		      (string-equal "INBOX.nanog" gnus-newsgroup-name)
+		      (string-equal "INBOX.pennsic" gnus-newsgroup-name)
+		      (string-match "INBOX\\.risks-" gnus-newsgroup-name)
+		      (string-equal "INBOX.tz" gnus-newsgroup-name)
+		      (string-equal "INBOX.xabov" gnus-newsgroup-name)
+		      (string-match "INBOX\\.ietf\\." gnus-newsgroup-name))))))
 
 (setq gnus-posting-styles
       '((".*"
@@ -105,7 +103,7 @@
 	 (organization "Mad Science Research Labs"))
 	((message-news-p)
 	 ("Mail-Copies-To" "never"))
-        ("^Ebay"
+        ("^INBOX.Ebay"
 	 (address "seb@msrl.com"))))
 
 (setq gnus-message-archive-method
@@ -115,9 +113,12 @@
 		 (nnfolder-get-new-mail nil)
 		 (nnfolder-inhibit-expiry t)))
 (setq gnus-message-archive-group
-      '((cond ((string-match "^\\(nnfolder\\+archive:\\)?mfnx\\." gnus-newsgroup-name)
+      '((cond ((not gnus-newsgroup-name)
+	       nil)
+	      ((string-match "^\\(nnfolder\\+archive:\\)?mfnx\\."
+			     gnus-newsgroup-name)
 	       (format-time-string "mfnx.OUT.%Y-%m"))
-	      ((string-equal "Ebay" gnus-newsgroup-name)
+	      ((string-equal "INBOX.Ebay" gnus-newsgroup-name)
 	       (format-time-string "ebay.OUT.%Y-%m")))))
 
 (setq gnus-gcc-mark-as-read t)
@@ -155,11 +156,10 @@
 (setq message-citation-line-function 'insert-trn-style-citation-line-plus)
 (defun insert-trn-style-citation-line-plus ()
     (when (and message-reply-headers
-	       (not (string-equal gnus-newsgroup-name "ABOVE.NET"))
-	       (not (string-equal gnus-newsgroup-name "mfnx.aleph"))
-	       (not (string-equal gnus-newsgroup-name "MSRL.COM")))
+	       (not (string-equal gnus-newsgroup-name "INBOX"))
+	       (not (string-equal gnus-newsgroup-name "INBOX.Ebay")))
       (let* ((first-line
-	      (if (string-equal gnus-newsgroup-name "risks")
+	      (if (string-equal gnus-newsgroup-name "INBOX.risks")
 		  "In RISKS Digest,"
 		(concat "In article " (mail-header-id message-reply-headers) ",")))
 	     (his-address
@@ -169,7 +169,7 @@
 	     (concat (if (string-equal his-address user-mail-address)
 			 "I"
 		       (mail-header-from message-reply-headers)) " wrote:\n")))
-	(cond ((string-match "^rennlist\." gnus-newsgroup-name)
+	(cond ((string-match "^INBOX.rennlist-" gnus-newsgroup-name)
 	       (insert second-line))
 	      ((not (string-equal his-address "tickets@tickets.above.net"))
 	       (insert first-line
@@ -194,6 +194,7 @@
 ;; added, and with BBDB names replacing standard %n names.
 (setq gnus-summary-line-format
       "%U%R%z%ub%I%(%[%4L:%-23,23uB%]%) %s\n")
+(setq gnus-summary-zcore-fuzz 4)
 (setq bbdb/gnus-header-prefer-real-names t)
 ;; Not the same as (setq bbdb/gnus-mark-known-posters nil):
 (setq bbdb/gnus-summary-known-poster-mark " ")
@@ -257,3 +258,13 @@
 ;; want to remark several ticked articles, for example.)
 (setq gnus-summary-goto-unread nil)
 
+(setq mm-coding-system-priorities '(us-ascii iso-latin-1 utf-8))
+
+(setq mm-verify-option 'known)
+(setq mm-decrypt-option 'known)
+;; Only for classic PGP, not PGP/MIME:
+(add-hook 'gnus-article-hide-pgp-hook
+	  (lambda ()
+	    (save-excursion
+	      (set-buffer gnus-original-article-buffer)
+	      (mc-verify))))
