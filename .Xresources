@@ -11,9 +11,8 @@
 
 ! This set of sizes is chosen so that two Emacs can fix abreast on a
 ! screen 1280 pixels wide.
-Emacs.default.attributeFont: -misc-fixed-medium-r-semicondensed-*-*-120-*-*-*-*-*-*
-Emacs*menubar*font: fixed
-Emacs.modeline.attributeFont: fixed
+Emacs.default.attributeFont: -misc-fixed-medium-r-semicondensed-*-*-100-*-*-*-*-*-*
+Emacs.modeline.attributeFont: -microsoft-georgia-medium-r-normal-*-*-80-*-*-*-*-*-*
 #if HEIGHT > 1200
 Emacs.geometry: 100x84
 #elif HEIGHT > 800
@@ -38,15 +37,6 @@ xterm*geometry: 80x50
 #else
 xterm*geometry: 80x25
 #endif
-
-Mosaic*confirmExit: false
-Mosaic*Background: grey93
-Mosaic*activeAnchorBG: grey93
-Mosaic*anchorUnderlines: 0
-Mosaic*visitedAnchorUnderlines: 0
-Mosaic*dashedVisitedAnchorUnderlines: false
-Mosaic*homeDocument: http://w.crosslink.net/
-Mosaic*documentsMenuSpecfile: .mosaic-specfile
 
 #if PLANES < 16
 netscape*installColormap: true
