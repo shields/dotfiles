@@ -51,8 +51,6 @@
   (eval-after-load "info" '(add-to-list 'Info-directory-list
 					"~/share/xemacs/site-packages/info")))
 
-;; Enable correct handling of ISO8859-1, and the C-x 8 compose key.
-(standard-display-european 1)
 (set-input-mode (car (current-input-mode)) ; High bit is not meta
 		(nth 1 (current-input-mode))
 		0)
