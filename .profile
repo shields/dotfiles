@@ -1,6 +1,7 @@
 #
-# ~/.profile 2002-02-21
+# ~/.profile
 # Michael Shields <shields@msrl.com>
+# $Id$
 #
 
 test -z "$BASH_VERSION" -a -f $HOME/bin/bash && exec $HOME/bin/bash
