@@ -198,11 +198,15 @@
 (setq message-citation-line-function nil)
 (defun insert-super-citation-line ()
   (let* ((was-modified (buffer-modified-p))
+	 (message-id (mail-header-id message-reply-headers))
 	 (first-line
 	  (cond ((string-match "\\bINBOX\\.risks\\b" gnus-newsgroup-name)
 		 "In RISKS Digest,")
-		((not (nnheader-fake-message-id-p
-		       (mail-header-id message-reply-headers)))
+		((string-match "^<LYRIS-.*@.*>$" message-id)
+		 nil)
+		((nnheader-fake-message-id-p message-id)
+		 nil)
+		(t
 		 (concat (if (message-news-p) "In article " "In message ")
 			 (mail-header-id message-reply-headers) ","))))
 	 (address
