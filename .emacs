@@ -7,7 +7,7 @@
 ;;{{{ Preliminaries
 
 ;; Must elegantize this:
-(setq load-path (cons (expand-file-name "~/share/xemacs/site-lisp/gnus")
+(setq load-path (cons (expand-file-name "~/share/xemacs/site-lisp")
 		      load-path))
 
 ;; /etc/xemacs21/site-start.d/20gnus-init.el instantiates the system
