@@ -572,3 +572,6 @@ but it doesn't accept a prefix argument (which can wipe out all articles)."
   (gnus-summary-next-group))
 (define-key gnus-summary-mode-map
   "c" 'safe-gnus-summary-catchup-and-goto-next-group)
+
+
+(gnus-compile)
