@@ -51,4 +51,6 @@ if test -d $HOME/.xplanet; then
 	-background $HOME/.xplanet/background.png &
 fi
 
+xwrits clock after=15 top &
+
 exec gnome-session
