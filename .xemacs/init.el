@@ -134,7 +134,10 @@
 (set-specifier default-gutter-visible-p nil)
 (setq progress-feedback-use-echo-area t)
 
-(add-hook 'find-file-hooks 'turn-on-font-lock)
+(defun turn-on-font-lock-unless-binary ()
+  (unless (eq 'binary (coding-system-name buffer-file-coding-system))
+    (turn-on-font-lock)))
+(add-hook 'find-file-hooks 'turn-on-font-lock-unless-binary)
 
 ;;}}}
 ;;{{{ Files and buffers
