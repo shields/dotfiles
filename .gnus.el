@@ -1,7 +1,7 @@
 ;;; .gnus.el --- Shields's Gnus initialization file
 
 ;; Author: Michael Shields <shields@msrl.com>
-;; Version: 2002-04-24
+;; Version: 2002-05-19
 
 (setq mail-from-style 'parens)
 (setq mail-yank-prefix "> ")
@@ -97,6 +97,7 @@
 		      (string-equal "risks" gnus-newsgroup-name)
 		      (string-equal "tz" gnus-newsgroup-name)
 		      (string-equal "xabov" gnus-newsgroup-name)
+		      (string-equal "fork" gnus-newsgroup-name)
 		      (string-match "ietf\\." gnus-newsgroup-name))))))
 
 (setq gnus-button-url 'gnus-netscape-open-url)
