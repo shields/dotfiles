@@ -1,4 +1,4 @@
-;;; .emacs --- Shields's Emacs initialization file
+;;; .xemacs/init.el --- Shields's Emacs initialization file
 
 ;; Author: Michael Shields <shields@msrl.com>
 ;; Version: $Id$
