@@ -688,13 +688,17 @@ This function is useful for binding to a hotkey."
 			 comint-output-filter-functions))))
 
 
-;; Disable the mouse wheel entirely.  If you want it to do something
-;; useful, see mwheel.el.
-(defun noop ()
-  "No effect."
-  (interactive))
-(global-set-key 'button4 'noop)
-(global-set-key 'button5 'noop)
+;; Enable the mouse wheel.
+(require 'mwheel)
+(mwheel-install)
+
+;; This code disables the mouse wheel entirely:
+;;(defun noop ()
+;;  "No effect."
+;;  (interactive))
+;;(global-set-key 'button4 'noop)
+;;(global-set-key 'button5 'noop)
+
 
 
 (setq try-oblique-before-italic-fonts t)
