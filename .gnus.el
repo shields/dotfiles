@@ -109,6 +109,7 @@
 		       (string-equal "INBOX.cypherpunks" gnus-newsgroup-name)
 		       (string-equal "INBOX.end2end" gnus-newsgroup-name)
 		       (string-equal "INBOX.fork" gnus-newsgroup-name)
+		       (string-equal "INBOX.forum" gnus-newsgroup-name)
 		       (string-equal "INBOX.fsb" gnus-newsgroup-name)
 		       (string-equal "INBOX.leapsecs" gnus-newsgroup-name)
 		       (string-equal "INBOX.linux-elitists" gnus-newsgroup-name)
