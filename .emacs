@@ -393,7 +393,6 @@ when called with a prefix argument."
 (setq url-keep-history nil)
 
 (setq browse-url-browser-function 'browse-url-netscape)
-;; http://home.netscape.com/newsref/std/remote.c
 (setq browse-url-netscape-program "/usr/bin/X11/netscape-remote")
 (setq browse-url-netscape-arguments '("-noraise"))
 
