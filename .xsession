@@ -42,6 +42,10 @@ if test -f /proc/net/wireless; then
     wmwave &
 fi
 
-wmaker &
+metacity &
+
+if test -f /var/tmp/clouds_2000.jpg; then
+    xplanetbg -cloud_image /var/tmp/clouds_2000.jpg &
+fi
 
 exec gnome-session
