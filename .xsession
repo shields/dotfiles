@@ -15,6 +15,9 @@ test -f .Xmodmap && xmodmap .Xmodmap
 
 test -f .xmodmap-pckb && xmodmap .xmodmap-pckb
 
+xmodmap -e 'keycode 66 = Multi_key'
+xmodmap -e 'clear lock'
+
 GDK_USE_XFT=1
 export GDK_USE_XFT
 
