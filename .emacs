@@ -1,7 +1,7 @@
 ;;; .emacs --- Shields's Emacs initialization file
 
 ;; Author: Michael Shields <shields@msrl.com>
-;; Version: 2001-05-01
+;; Version: 2001-07-02
 
 ;;; Globals
 ;;{{{ Preliminaries
@@ -10,6 +10,12 @@
 (setq load-path (cons (expand-file-name "~/.elisp/gnus")
 		      (cons (expand-file-name "~/.elisp")
 			    load-path)))
+
+;; /etc/xemacs21/site-start.d/20gnus-init.el instantiates the system
+;; version of Gnus.  Be sure to override it.
+(load "gnus")
+;; XXX will this work to suppress gnus-init?
+(provide 'gnus-init)
 
 (require 'info)
 (setq Info-directory-list (cons "~/.info" Info-default-directory-list))
