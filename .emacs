@@ -385,10 +385,10 @@ when called with a prefix argument."
 ;;}}}
 ;;{{{ W3
 
-(cond ((or (string-equal (downcase (system-name)) "challah.msrl.com")
-	   (string-equal (downcase (system-name)) "apple-pie.msrl.com"))
-       (setq url-proxy-services '(("http" . "localhost:3128")
-				  ("ftp" . "localhost:3128")))))
+;;(cond ((or (string-equal (downcase (system-name)) "challah.msrl.com")
+;;	   (string-equal (downcase (system-name)) "apple-pie.msrl.com"))
+;;       (setq url-proxy-services '(("http" . "localhost:3128")
+;;				  ("ftp" . "localhost:3128")))))
 
 (setq url-keep-history nil)
 
