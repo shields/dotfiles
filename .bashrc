@@ -1,7 +1,8 @@
 #!/bin/bash
 #
-# ~/.bashrc 2000-11-07
+# ~/.bashrc
 # Michael Shields <shields@msrl.com>
+# $Id$
 #
 
 # This entire file is useless if this is a non-interactive shell, so
@@ -15,14 +16,9 @@ if [ "$TERM" = xterm-debian -a ! -e /etc/terminfo/x/xterm-debian \
     TERM=xterm
 fi
 
-if [ "`uname`" = Linux ]; then
-    raw_hostname="`hostname -f`"
-else
-    raw_hostname="`hostname`"
-fi
-trimmed_hostname="`echo $raw_hostname | sed -e 's/\.msrl\.com$//' \
-					    -e 's/\.above\.net$//' \
-					    -e 's/\.mfnx\.net$//'`"
+trimmed_hostname="`hostname | sed -e 's/\.msrl\.com$//' \
+				  -e 's/\.above\.net$//' \
+				  -e 's/\.mfnx\.net$//'`"
 if [ "$TERM" = xterm -o "$TERM" = xterm-debian ]; then
     PS1="\\[\\033]0;\\u@$trimmed_hostname\\007\\]\w\\$ "
 else
