@@ -23,8 +23,8 @@
 ;;(setq gnus-secondary-select-methods '((nnml "") (nnslashdot "")))
 ;;(setq gnus-secondary-select-methods '((nnml "")))
 (setq gnus-select-method '(nnml ""))
-(setq gnus-secondary-select-methods nil)
-;;(setq gnus-secondary-select-methods '((nnslashdot "")))
+;;(setq gnus-secondary-select-methods nil)
+(setq gnus-secondary-select-methods '((nnslashdot "")))
 
 (setq nnml-directory "~/Gnuspool/")
 (setq mail-sources
@@ -32,7 +32,7 @@
 		   :suffix "")))
 (setq mail-source-delete-incoming t)
 
-;;(load "~/.gnus.slashdot.el")  ; contains password
+(load "~/.gnus.slashdot.el")  ; contains password
 (setq nnslashdot-threshold 5)
 (setq nnslashdot-group-number 20)
  
