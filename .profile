@@ -168,7 +168,7 @@ if [ -d $HOME/.pgp ]; then
 fi
 
 # pilot-link.
-PILOTPORT=/dev/usb/tts/0
+PILOTPORT=/dev/tts/0
 PILOTRATE=115200
 export PILOTPORT PILOTRATE
 
