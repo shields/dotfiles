@@ -44,24 +44,27 @@
 	(gnus-del-mark (from -2) (subject -15))))
 (setq gnus-decay-scores t)
 
-(setq gnus-visible-headers nil)
-(add-to-list 'gnus-ignored-headers "^Mail-Copies-To:")
-(add-to-list 'gnus-ignored-headers "^Thread-") ; some Outlook thing
-(add-to-list 'gnus-ignored-headers "^User-Agent:")
-(add-to-list 'gnus-ignored-headers "^X-Apparently-To: .*@yahoogroups\.com")
-(add-to-list 'gnus-ignored-headers "^X-Bogosity: No,")
-(add-to-list 'gnus-ignored-headers "^X-eGroups-")
-(add-to-list 'gnus-ignored-headers "^X-Habeas-")
-(add-to-list 'gnus-ignored-headers "^X-LYRIS-Message-Id:")
-(add-to-list 'gnus-ignored-headers "^X-Mailer:")
-(add-to-list 'gnus-ignored-headers "^X-Newsreader:")
-(add-to-list 'gnus-ignored-headers "^X-Spam-Checker-Version:")
+(eval-after-load "gnus-art"
+  '(progn
+     (setq gnus-visible-headers nil)
+     (add-to-list 'gnus-ignored-headers "^Mail-Copies-To:")
+     (add-to-list 'gnus-ignored-headers "^Thread-") ; some Outlook thing
+     (add-to-list 'gnus-ignored-headers "^User-Agent:")
+     (add-to-list 'gnus-ignored-headers "^X-Apparently-To: .*@yahoogroups\.com")
+     (add-to-list 'gnus-ignored-headers "^X-Bogosity: No,")
+     (add-to-list 'gnus-ignored-headers "^X-eGroups-")
+     (add-to-list 'gnus-ignored-headers "^X-Habeas-")
+     (add-to-list 'gnus-ignored-headers "^X-LYRIS-Message-Id:")
+     (add-to-list 'gnus-ignored-headers "^X-Mailer:")
+     (add-to-list 'gnus-ignored-headers "^X-Newsreader:")
+     (add-to-list 'gnus-ignored-headers "^X-Spam-Checker-Version:")
 ;;(add-to-list 'gnus-ignored-headers "^X-Spam-Status: No,")
 ;;(setq gnus-ignored-headers (remove "^X-Spam-Status: No," gnus-ignored-headers))
-(add-to-list 'gnus-ignored-headers "^X-Yahoo-Profile:")
+     (add-to-list 'gnus-ignored-headers "^X-Yahoo-Profile:")
 ;; for my scrapers:
-(add-to-list 'gnus-ignored-headers "^X-Followup-URL:")
-(add-to-list 'gnus-ignored-headers "^X-Userpic-URL:") ; need to make this appear
+     (add-to-list 'gnus-ignored-headers "^X-Followup-URL:")
+     (add-to-list 'gnus-ignored-headers "^X-Userpic-URL:"))) ; need to make this appear
+
 (setq message-ignored-news-headers
       "^NNTP-Posting-Host:\\|^Xref:\\|^[BGF]cc:\\|^Resent-Fcc:\\|^X-Draft-From:")
 (setq message-ignored-mail-headers
