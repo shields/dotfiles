@@ -7,10 +7,11 @@
 test -z "$BASH_VERSION" -a -f $HOME/bin/bash && exec $HOME/bin/bash
 
 # Parse out the base of the hostname, for use later in the script.
-hostname=`hostname`
-hostname=`expr $hostname : '\([^.]*\).*'`
-# Also get the tty.
-tty=`tty`
+hostname="`hostname`"
+hostname="`expr $hostname : '\([^.]*\).*'`"
+
+tty="`tty`"
+uname="`uname`"
 
 # I do this because I'm paranoid.
 cd $HOME
@@ -70,7 +71,7 @@ test -d /usr/games && NEWPATH="$NEWPATH:/usr/games"
 PATH=$NEWPATH
 export PATH MANPATH INFOPATH
 
-if [ "`uname`" = SunOS ]; then
+if [ "$uname" = SunOS ]; then
     LD_RUN_PATH=/usr/local/lib
     export LD_RUN_PATH
 fi
@@ -85,7 +86,7 @@ umask 022
 # Terminal and locale setup.
 #eval `resize -u`
 stty erase '^?'
-test "`uname`" = SunOS || stty pass8
+test "$uname" = SunOS || stty pass8
 stty cs8
 stty -ixon
 LANG=en_US.UTF-8
@@ -119,7 +120,7 @@ elif [ -d /usr/mail ]; then
 #    echo ".profile: Couldn't find mail directory" 1>&2
 fi
 
-if [ "`uname`" = SunOS ]; then
+if [ "$uname" = SunOS ]; then
     CC=gcc
     export CC
 fi
@@ -177,22 +178,22 @@ EXINIT=':set ai'; export EXINIT
 
 #}}}
 
-#{{{ Proxy -- see also http://www.msrl.com/proxy.pac for Netscape
+#{{{ Proxy
 
-if [ "`uname`" = FreeBSD -o "`uname`" = SunOS ]; then
+if [ "$uname" = FreeBSD -o "$uname" = SunOS -o "$uname" = Darwin ]; then
    MY_IP="`ifconfig -a | awk '$1 == \"inet\" { print $2 }' | grep -v '^127\.'`"
-elif [ "`uname`" = Linux ]; then
+elif [ "$uname" = Linux ]; then
    MY_IP="`ifconfig -a | sed -e '/inet addr:/!d' -e '/addr:127\\./d' -e 's/.*inet addr:\([0-9.]\+\).*/\\1/'`"
 else
-   echo ".profile: warning: don't know how to calculate IP on `uname`"
+   echo ".profile: warning: don't know how to calculate IP on $uname"
    unset MY_IP
 fi
 
-#if [ `expr "$MY_IP" : '172.17.204\.'` -gt 0 ]; then
-#   http_proxy='http://172.17.204.5:3128/'
-#   ftp_proxy='http://172.17.204.5:3128/'
-#fi
-if [ "$hostname" = mulligatwani ]; then
+if [ `expr "$MY_IP" : '198.176.193\.'` -gt 0 ]; then
+   http_proxy='http://198.176.193.1:3128/'
+   ftp_proxy='http://198.176.193.1:3128/'
+fi
+if netstat -an | grep '[:\.]3128[ \t].*LISTEN' > /dev/null; then
    http_proxy='http://127.0.0.1:3128/'
    ftp_proxy='http://127.0.0.1:3128/'
 fi
