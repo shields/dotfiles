@@ -12,6 +12,7 @@ use DB_File;
 use Fcntl;
 use IO::File;
 use LWP::UserAgent;
+use HTML::Entities;
 use HTTP::Headers;
 use HTTP::Request;
 use Mail::Internet;
@@ -101,7 +102,7 @@ foreach my $item (reverse @{$rss->{items}}) {
 
     # RFC 2047 encoding of UTF-8 headers.
     # FIXME Mail::Header should really handle this internally...
-    my $subject = $item->{title};
+    my $subject = decode_entities($item->{title});
     if ($subject =~ /[^\040-\176]/) {
         $subject = encode_qp($subject);
 	$subject = "=?utf-8?q?$subject?=";
