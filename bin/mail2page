@@ -1,7 +1,8 @@
 #!/usr/bin/perl
 #
-# mail2page 2003-07-05
+# mail2page
 # Michael Shields <shields@msrl.com>
+# $Id$
 #
 
 use IO::Handle;
@@ -28,5 +29,6 @@ my $message;
 defined read(STDIN, $message, 4096)
     or die "couldn't read message: $!\n";
 
-exec "$ENV{HOME}/bin/attpage", $phone, $from, "($subject)\n" . $message;
+exec "$ENV{HOME}/bin/attpage", $phone, $from,
+     (length $subject ? "($subject)\n".$message : $message);
 die "couldn't exec attpage: $!\n";
