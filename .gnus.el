@@ -259,7 +259,7 @@ citation lines, and open in a newly created frame."
 (setq gnus-optional-headers 'bbdb/gnus-lines-and-from)
 
 (setq gnus-summary-line-format
-      "%U%R%z%ub%B%(%[%4L:%-23,23uB%]%) %s\n")
+      "%U%R%z%ub%I%(%[%4L:%-23,23uB%]%) %s\n")
 (setq gnus-summary-zcore-fuzz 4)
 (setq bbdb/gnus-header-prefer-real-names t)
 ;; Not the same as (setq bbdb/gnus-mark-known-posters nil):
@@ -267,13 +267,14 @@ citation lines, and open in a newly created frame."
 ;; This affects only %uB; we get the info onscreen with %ub earlier in
 ;; the gnus-summary-line-format:
 (setq bbdb/gnus-summary-mark-known-posters nil)
-;; From Vlad Berditchevskiy in <m3ofqbnq8r.fsf@arrakis.hashbang.de>:
+
 (setq gnus-sum-thread-tree-root            ""
+      gnus-sum-thread-tree-false-root      ""
       gnus-sum-thread-tree-single-indent   ""
-      gnus-sum-thread-tree-vertical        " |  "
-      gnus-sum-thread-tree-indent          "    "
-      gnus-sum-thread-tree-leaf-with-other " |--"
-      gnus-sum-thread-tree-single-leaf     " `--")
+      gnus-sum-thread-tree-vertical        " | "
+      gnus-sum-thread-tree-indent          "   "
+      gnus-sum-thread-tree-leaf-with-other " +- "
+      gnus-sum-thread-tree-single-leaf     " +- ")
 ;; Adapted from Reiner Steib in <v91xsxfbht.fsf@marauder.physik.uni-ulm.de>.
 ;; This actually doesn't work well with the fixed font, but it looks great
 ;; in Andale Mono.
