@@ -1,7 +1,8 @@
 #!/bin/sh
 #
-# ~/.xsession 2002-04-05
+# ~/.xsession
 # Michael Shields <shields@msrl.com>
+# $Id$
 #
 
 cd $HOME
@@ -30,7 +31,12 @@ xscreensaver &
 xautolock -time 30 -locker 'xscreensaver-command -lock' \
     -corners +000 -cornerredelay 3600 &
 
+test -x /usr/bin/ssh-askpass && SSH_ASKPASS=/usr/bin/ssh-askpass
+export SSH_ASKPASS
 eval `ssh-agent -s`
+
+GDK_USE_XFT=1
+export GDK_USE_XFT
 
 if test -f /proc/net/wireless; then
     wmwave &
