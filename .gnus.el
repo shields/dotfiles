@@ -67,6 +67,10 @@
 (setq message-ignored-mail-headers
       "^[GF]cc:\\|^Resent-Fcc:\\|^Xref:\\|^X-Draft-From:")
 
+(add-hook 'gnus-group-mode-hook
+	  (lambda ()
+	    (define-key gnus-group-mode-map [j] 'next-line)
+	    (define-key gnus-group-mode-map [k] 'previous-line)))
 (add-hook 'gnus-summary-mode-hook
 	  (lambda ()
 	    (define-key gnus-summary-mode-map [b] 'gnus-summary-prev-page)
