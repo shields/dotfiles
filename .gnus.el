@@ -1,7 +1,12 @@
 ;;; .gnus.el --- Shields's Gnus initialization file
 
 ;; Author: Michael Shields <shields@msrl.com>
-;; Version: 2001-05-24
+;; Version: 2001-06-15
+
+;; XXX http://bugs.debian.org/cgi-bin/bugreport.cgi?bug=82226
+(load "mm-util")
+(load "messagexmas")
+(load "message")
 
 (setq mail-from-style 'parens)
 (setq mail-yank-prefix "> ")
