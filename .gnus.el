@@ -26,8 +26,8 @@
 (setq smtpmail-default-smtp-server "127.0.0.1")
 (setq smtpmail-smtp-service 2500)
  
-(setq gnus-subscribe-newsgroup-method 'gnus-subscribe-topics)
-(setq gnus-subscribe-options-newsgroup-method 'gnus-subscribe-topics)
+(setq gnus-subscribe-newsgroup-method 'gnus-subscribe-randomly)
+(setq gnus-subscribe-options-newsgroup-method 'gnus-subscribe-randomly)
 
 (setq gnus-kill-files-directory "~/News/Score/")
 
