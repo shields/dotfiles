@@ -324,6 +324,9 @@ citation lines."
 (setq gnus-buttonized-mime-types
       (append (list "multipart/signed" "multipart/encrypted")
 	      gnus-buttonized-mime-types))
+;; Automatically sign or encrypt replies to signed or encrypted mail:
+(setq gnus-message-replysign t)
+(setq gnus-message-replyencrypt t)
 
 ;; Update marks in real time, so that the mail checker widget can have
 ;; current information.  This should really be on gnus-summary-mark-article,
