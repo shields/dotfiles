@@ -24,7 +24,8 @@
 (setq nnml-directory "~/Gnuspool/")
 (setq mail-sources
       '((directory :path (concat nnml-directory ".incoming/")
-		   :suffix "")))
+		   :suffix ""
+		   :plugged t)))
 (setq mail-source-delete-incoming t)
 
 (load "~/.gnus.slashdot.el")  ; contains password
@@ -275,3 +276,6 @@
 
 ;; Don't move forward in group buffer with M-g.
 (setq gnus-goto-next-group-when-activating nil)
+
+;; Agent is used just for silly web backends (nnultimate, nnslashdot).
+(gnus-agentize)
