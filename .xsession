@@ -45,7 +45,8 @@ fi
 metacity &
 
 if test -f /var/tmp/clouds_2000.jpg; then
-    xplanetbg -cloud_image /var/tmp/clouds_2000.jpg &
+    xplanetbg -cloud_image /var/tmp/clouds_2000.jpg \
+              -lat 38.909177 -lon -77.044371 &
 fi
 
 exec gnome-session
