@@ -1,5 +1,5 @@
 !
-! ~/.Xresources 2000-07-23
+! ~/.Xresources 2001-06-04
 ! Michael Shields <shields@msrl.com>
 !
 
@@ -31,6 +31,8 @@ xemacs.geometry: 103x34+0+0
 XEmacs.geometry: 103x34+0+0
 #endif
 
+xterm*foreground: black
+xterm*background: white
 xterm*ttyModes: erase ^?
 xterm*font: -misc-fixed-medium-r-semicondensed--13-120-75-75-c-60-iso8859-1
 #if HEIGHT >= 1200
