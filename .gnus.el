@@ -58,7 +58,6 @@
 (add-to-list 'gnus-ignored-headers "^X-Newsreader:")
 (add-to-list 'gnus-ignored-headers "^X-Spam-Checker-Version:")
 ;;(add-to-list 'gnus-ignored-headers "^X-Spam-Status: No,")
-;;(setq gnus-ignored-headers (remove "^X-Spam-Status: No," gnus-ignored-headers))
 (add-to-list 'gnus-ignored-headers "^X-Yahoo-Profile:")
 ;; for my scrapers:
 (add-to-list 'gnus-ignored-headers "^X-Followup-URL:")
@@ -454,14 +453,20 @@ in the group buffer.")
 
 
 
+(defvar gnus-topic-needs-mumbling nil)
 (defun gnus-topic-mumble ()
-  (gnus-group-sort-groups-by-mumble t))
+  (when gnus-topic-needs-mumbling
+    (gnus-group-sort-groups-by-mumble t)))
 ;;  (gnus-group-next-unread-group))
-(add-hook 'gnus-summary-exit-hook 'gnus-topic-mumble)
+(add-hook 'gnus-group-prepare-hook 'gnus-topic-mumble)
+(add-hook 'gnus-summary-exit-hook
+	  (lambda ()
+	    (setq gnus-topic-needs-mumbling t)))
 ;; Much here adapted from gnus-group-sort-by-unread.
 (defun gnus-group-sort-by-mumble (info1 info2)
   "Sort by weighted blah blah.
-Number of unread articles plus 10 times hours since last read (max 30*24)."
+Number of unread articles plus 10 times hours since last read
+(never = 30 days)."
   (let* ((g1 (gnus-info-group info1))
 	 (g2 (gnus-info-group info2))
 	 (n1 (car (gnus-gethash g1 gnus-newsrc-hashtb)))
