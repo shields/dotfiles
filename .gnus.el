@@ -5,7 +5,6 @@
 
 ;; XXX http://bugs.debian.org/cgi-bin/bugreport.cgi?bug=82226
 (load "mm-decode")
-(load "mm-util")
 (load "messagexmas")
 (load "message")
 
