@@ -279,3 +279,4 @@
 
 ;; Agent is used just for silly web backends (nnultimate, nnslashdot).
 (gnus-agentize)
+(setq gnus-plugged nil)
