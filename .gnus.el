@@ -17,7 +17,8 @@
       '(nnimap "msrl"
 	       (nnimap-address "127.0.0.1")
 	       (nnimap-server-port 1430)))
-(setq gnus-secondary-select-methods nil)
+(setq gnus-secondary-select-methods
+      '((nntp "news.cis.dfn.de")))
 
 ;; Be sure outbound mail is secured also, through an ssh tunnel.
 (setq message-send-mail-function 'smtpmail-send-it)
@@ -44,8 +45,8 @@
 (setq gnus-decay-scores t)
 
 (setq gnus-visible-headers nil)
-(setq gnus-ignored-headers
-      "^Xref:\\|NNTP-Posting-\\|^X-Trace:\\|^X-Complaints-To:\\|^Lines:\\|^X-From-Line:\\|^Path:\\|^X-Newsreader:\\|^X-Nntp-Posting-\\|^X-No-Archive:\\|^X-BOFH-Archive:\\|^Mail-Copies-To:\\|^Resent-\\|^X-Mailing-List:\\|^X-Loop:\\|^Precedence:\\|^Approved:\\|^X-Original-Date:\\|^Originator:\\|^From \\|^Return-Path:\\|^Received:\\|^In-Reply-To:\\|^Message-Id:\\|^Sender:\\|^X-Mailer:\\|^MIME-\\|^Content-\\|^X-VM-\\|^X-Sender:\\|^References:\\|^Precedence:[ \t]+bulk\\|^X-Face\\|^Delivered-To:\\|^Mailing-List:\\|^Status:\\|^X-Listprocessor-Version:\\|^X-Authentication-Warning:[^:]*: majordom set\\|^Lines:\\|^Mail-Copies-To:\\|^X400-\\|^X-Priority:\\|^X-MSMail-Priority:\\|^X-Content-Length:\\|^X-Orcpt:\\|^X-MimeOLE:\\|^Illegal-Object:\\|^X-UIDL:\\|^X-MIME-Autoconverted:\\|^Approved-By:\\|^X-VM-\\|^X-Gnus-Mail-Source:\\|^User-Agent:\\|^X-Mailinglist:\\|^List-\\(Help\\|Unsubscribe\\|Post\\|Subscribe\\):\\|^Importance:\\|^X-Exmh-\\|^X-Accept-Language:\\|^X-eGroups-\\|^List-Archive:\\|^Phone:\\|^Fax:\\|^Errors-To:\\|^X-BeenThere:\\|^X-Mailman-Version:\\|^List-Id:\\|^X-Authentication-Warning: [^:]*: majordomo \\|^X-LYRIS-Message-Id:\\|^Cancel-Lock:\\|^X-Spam-Status:\\|^X-Yahoo-Profile:\\|^X-AntiAbuse:\\|^X-Habeas-")
+;;(setq gnus-ignored-headers
+;;      "^Xref:\\|NNTP-Posting-\\|^X-Trace:\\|^X-Complaints-To:\\|^Lines:\\|^X-From-Line:\\|^Path:\\|^X-Newsreader:\\|^X-Nntp-Posting-\\|^X-No-Archive:\\|^X-BOFH-Archive:\\|^Mail-Copies-To:\\|^Resent-\\|^X-Mailing-List:\\|^X-Loop:\\|^Precedence:\\|^Approved:\\|^X-Original-Date:\\|^Originator:\\|^From \\|^Return-Path:\\|^Received:\\|^In-Reply-To:\\|^Message-Id:\\|^Sender:\\|^X-Mailer:\\|^MIME-\\|^Content-\\|^X-VM-\\|^X-Sender:\\|^References:\\|^Precedence:[ \t]+bulk\\|^X-Face\\|^Delivered-To:\\|^Mailing-List:\\|^Status:\\|^X-Listprocessor-Version:\\|^X-Authentication-Warning:[^:]*: majordom set\\|^Lines:\\|^Mail-Copies-To:\\|^X400-\\|^X-Priority:\\|^X-MSMail-Priority:\\|^X-Content-Length:\\|^X-Orcpt:\\|^X-MimeOLE:\\|^Illegal-Object:\\|^X-UIDL:\\|^X-MIME-Autoconverted:\\|^Approved-By:\\|^X-VM-\\|^X-Gnus-Mail-Source:\\|^User-Agent:\\|^X-Mailinglist:\\|^List-\\(Help\\|Unsubscribe\\|Post\\|Subscribe\\):\\|^Importance:\\|^X-Exmh-\\|^X-Accept-Language:\\|^X-eGroups-\\|^List-Archive:\\|^Phone:\\|^Fax:\\|^Errors-To:\\|^X-BeenThere:\\|^X-Mailman-Version:\\|^List-Id:\\|^X-Authentication-Warning: [^:]*: majordomo \\|^X-LYRIS-Message-Id:\\|^Cancel-Lock:\\|^X-Spam-Status:\\|^X-Yahoo-Profile:\\|^X-AntiAbuse:\\|^X-Habeas-")
 (setq message-ignored-news-headers
       "^NNTP-Posting-Host:\\|^Xref:\\|^[BGF]cc:\\|^Resent-Fcc:\\|^X-Draft-From:")
 (setq message-ignored-mail-headers
@@ -55,16 +56,22 @@
 	  (lambda ()
 	    (define-key gnus-group-mode-map [j] 'next-line)
 	    (define-key gnus-group-mode-map [k] 'previous-line)
-	    (define-key gnus-group-mode-map [(control j)] 'gnus-group-jump-to-group)))
+	    (define-key gnus-group-mode-map [(control j)] 'gnus-group-jump-to-group)
+	    (define-key gnus-group-mode-map [(home)] '(lambda ()
+							(interactive)
+							(gnus-summary-jump-to-group
+							 gnus-inbox-name)))))
 (add-hook 'gnus-summary-mode-hook
 	  (lambda ()
 	    (define-key gnus-summary-mode-map [b] 'gnus-summary-prev-page)
 	    (define-key gnus-summary-mode-map [(return)] 'gnus-summary-next-unread-article)
 	    (define-key gnus-summary-mode-map [(tab)] 'scroll-up-command)
-	    (define-key gnus-summary-mode-map [j] 'next-line)
-	    (define-key gnus-summary-mode-map [k] 'previous-line)
+	    (define-key gnus-summary-mode-map [j] 'gnus-summary-next-thread)
+	    (define-key gnus-summary-mode-map [k] 'gnus-summary-prev-thread)
 	    (define-key gnus-summary-mode-map [(control j)] 'gnus-summary-goto-article)
-	    (define-key gnus-summary-mode-map [(control k)] 'gnus-summary-kill-thread)))
+	    (define-key gnus-summary-mode-map [(control k)] 'gnus-summary-kill-thread)
+	    (define-key gnus-summary-mode-map [(meta n)] 'gnus-summary-next-thread)
+	    (define-key gnus-summary-mode-map [(meta p)] 'gnus-summary-prev-thread)))
 (add-hook 'gnus-article-mode-hook
 	  (lambda ()
 	    (define-key gnus-article-mode-map [b] 'gnus-summary-prev-page)
@@ -75,7 +82,6 @@
 
 (setq gnus-default-article-saver 'gnus-summary-save-in-mail)
 
-(remove-hook 'gnus-select-group-hook 'turn-gnus-bbdb-on-or-off)
 (setq bbdb/news-auto-create-p
       '(lambda ()
 	 (not (not (or (string-equal "INBOX" gnus-newsgroup-name)
@@ -88,12 +94,21 @@
 		       (string-equal "INBOX.fork" gnus-newsgroup-name)
 		       (string-equal "INBOX.fsb" gnus-newsgroup-name)
 		       (string-equal "INBOX.leapsecs" gnus-newsgroup-name)
+		       (string-equal "INBOX.linux-elitists" gnus-newsgroup-name)
 		       (string-equal "INBOX.nanog" gnus-newsgroup-name)
 		       (string-equal "INBOX.pennsic" gnus-newsgroup-name)
 		       (string-match "INBOX\\.risks-" gnus-newsgroup-name)
 		       (string-equal "INBOX.tz" gnus-newsgroup-name)
 		       (string-equal "INBOX.xabov" gnus-newsgroup-name)
-		       (string-match "INBOX\\.ietf\\." gnus-newsgroup-name))))))
+		       (string-match "INBOX\\.ietf\\." gnus-newsgroup-name)
+		       (string-match "^\\([^:]*:\\)?comp\\.lang\\.perl\\.moderated"
+				     gnus-newsgroup-name)
+		       (string-match "^\\([^:]*:\\)?comp\\.dcom\\.telecom"
+				     gnus-newsgroup-name)
+		       (string-match "^\\([^:]*:\\)?comp\\.std\\.c"
+				     gnus-newsgroup-name)
+		       (string-match "^\\([^:]*:\\)?comp\\.society\\.privacy"
+				     gnus-newsgroup-name))))))
 
 (setq gnus-posting-styles
       '((".*"
