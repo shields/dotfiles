@@ -31,6 +31,11 @@
 
 (setq gnus-total-expirable-newsgroups "^[^:]*$")
 
+;; Normally Gnus matches on the backend so that e.g. "^nnml" is
+;; autosubscribed.  But since mail here is a primary select-method,
+;; the groups have no backend in their name.  Ugh.
+(setq gnus-auto-subscribed-groups ".")
+
 (setq gnus-default-adaptive-score-alist
       '((gnus-kill-file-mark)
 	(gnus-unread-mark)
