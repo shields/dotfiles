@@ -125,9 +125,10 @@ elif [ -d /usr/mail ]; then
 #    echo ".profile: Couldn't find mail directory" 1>&2
 fi
 
-# Route around Solaris damage.
-CC=gcc
-export CC
+if [ "`uname`" = SunOS ]; then
+    CC=gcc
+    export CC
+fi
 
 #}}}
 #{{{ Setup for specific apps
