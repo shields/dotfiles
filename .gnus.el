@@ -189,6 +189,9 @@
 
 (setq gnus-save-newsrc-file nil)
 
+(setq gnus-use-cache t)
+(setq gnus-uncacheable-groups "^[^:]*$")
+
 (setq gnus-score-find-score-files-function
       '(gnus-score-find-bnews bbdb/gnus-score))
 
