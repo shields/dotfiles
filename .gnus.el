@@ -1,7 +1,7 @@
 ;;; .gnus.el --- Shields's Gnus initialization file
 
 ;; Author: Michael Shields <shields@msrl.com>
-;; Version: 2002-01-02
+;; Version: 2002-01-05
 
 (setq mail-from-style 'parens)
 (setq mail-yank-prefix "> ")
@@ -273,3 +273,6 @@
 (gnus-delay-initialize)
 
 (gnus-demon-add-scanmail)
+
+;; Don't move forward in group buffer with M-g.
+(setq gnus-goto-next-group-when-activating nil)
