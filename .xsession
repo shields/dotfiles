@@ -52,5 +52,9 @@ fi
 #fi
 
 #xwrits clock after=15 top &
+# workrave session-manages
+#workrave &
+
+unclutter &
 
 exec startkde
