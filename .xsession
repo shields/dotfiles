@@ -23,7 +23,7 @@ test -f .Xmodmap && xmodmap .Xmodmap
 # Also start gtkpbbuttons if on the laptop.
 if test -e /dev/.devfsd -a -e /dev/adb; then
     xset m default
-    artsdsp gtkpbbuttons -b &
+    artsdsp gtkpbbuttons -b --popups=bvpt &
 else
     xset m 4 4
 fi
