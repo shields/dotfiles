@@ -71,7 +71,7 @@
 	  (lambda ()
 	    (define-key gnus-group-mode-map [j] 'next-line)
 	    (define-key gnus-group-mode-map [k] 'previous-line)
-	    (define-key gnus-group-mode-map [J] 'gnus-group-jump-to-group)))
+	    (define-key gnus-group-mode-map [(control j)] 'gnus-group-jump-to-group)))
 (add-hook 'gnus-summary-mode-hook
 	  (lambda ()
 	    (define-key gnus-summary-mode-map [b] 'gnus-summary-prev-page)
