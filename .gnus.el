@@ -268,6 +268,10 @@
 	    (save-excursion
 	      (set-buffer gnus-original-article-buffer)
 	      (mc-verify))))
+;; Display visible confirmation that the mail was encrypted:
+(setq gnus-buttonized-mime-types
+      (append (list "multipart/signed" "multipart/encrypted")
+	      gnus-buttonized-mime-types))
 
 ;; Update marks in real time, so that the mail checker widget can have
 ;; current information.  This should really be on gnus-summary-mark-article,
