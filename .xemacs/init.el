@@ -388,6 +388,15 @@ sentinel."
 (eval-after-load "bbdb"
   '(define-key bbdb-mode-map "q" 'delete-window))
 
+(defun bbdb-normalize-tmda-addresses (addr)
+  (when addr
+    (cond ((string-match "\\(.*\\)[+-]dated[+-][0-9]+\\.[0-9]+\\(@.*\\)"
+			 addr)
+           (concat (substring addr (match-beginning 1) (match-end 1))
+                   (substring addr (match-beginning 2) (match-end 2))))
+          (t addr))))
+(setq bbdb-canonicalize-net-hook 'bbdb-normalize-tmda-addresses)
+
 ;;}}}
 ;;{{{ Calc
 
