@@ -19,9 +19,11 @@ export GDK_USE_XFT
 xmodmap .xmodmap-pckb
 test -f .Xmodmap && xmodmap .Xmodmap
 
-# Accelerate a mouse (but not mochi's trackpad).
-if test "$hostname" = mochi; then
+# Accelerate a mouse, but not mochi's trackpad.
+# Also start gtkpbbuttons if on the laptop.
+if test -e /dev/.devfsd -a -e /dev/adb; then
     xset m default
+    gtkpbbuttons &
 else
     xset m 4 4
 fi
