@@ -258,6 +258,21 @@ citation lines, and open in a newly created frame."
 
 (setq gnus-optional-headers 'bbdb/gnus-lines-and-from)
 
+(add-to-list 'nnmail-extra-headers 'X-Spam-Status)
+(defun gnus-article-spamassassin-score (header)
+  "Return the Spamassassin score of this article, as a string."
+  (gnus-replace-in-string
+   (gnus-replace-in-string
+    (gnus-extra-header 'X-Spam-Status header)
+    ".*hits=" "")
+   " .*" ""))
+(defun gnus-user-format-function-s (header)
+  (gnus-article-spamassassin-score header))
+(defun gnus-article-sort-by-spam-status (h1 h2)
+  "Sort articles by Spamassassin score."
+  (< (string-to-number (gnus-article-spamassassin-score h1))
+     (string-to-number (gnus-article-spamassassin-score h2))))
+
 (setq gnus-summary-line-format
       "%U%R%z%ub%I%(%[%4L:%-23,23uB%]%) %s\n")
 (setq gnus-summary-zcore-fuzz 4)
@@ -485,17 +500,6 @@ in the group buffer.")
 
 (add-hook 'gnus-select-group-hook 'gnus-group-get-new-news-this-group)
 (add-hook 'gnus-select-group-hook 'gnus-summary-insert-new-articles)
-
-
-(add-to-list 'nnmail-extra-headers 'X-Spam-Status)
-(defun gnus-article-sort-by-spam-status (h1 h2)
-  "Sort articles by score from the X-Spam-Status: header."
-  (< (string-to-number (gnus-replace-in-string
-			(gnus-extra-header 'X-Spam-Status h1)
-			".*hits=" ""))
-     (string-to-number (gnus-replace-in-string
-			(gnus-extra-header 'X-Spam-Status h2)
-			".*hits=" ""))))
 
 
 (eval-after-load "w3m"
