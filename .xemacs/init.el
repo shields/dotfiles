@@ -395,7 +395,7 @@ sentinel."
 			 addr)
            (concat (substring addr (match-beginning 1) (match-end 1))
                    (substring addr (match-beginning 2) (match-end 2))))
-	  ((string-match "\\(.*@aol\\.com\\)"
+	  ((string-match "\\(.*@aol\\.com\\).+"
 			 addr)
            (concat (substring addr (match-beginning 1) (match-end 1))))
           (t addr))))
