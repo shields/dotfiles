@@ -46,7 +46,7 @@ metacity &
 
 if test -f $HOME/.xplanet/clouds_2000.jpg; then
     xplanetbg -moonside -wait 60 \
-        -cloud_image $HOME/.xplanet/clouds_2000.jpg &
+        -cloud_image $HOME/.xplanet/clouds_2000.jpg -cloud_threshold 0 &
 fi
 
 exec gnome-session
