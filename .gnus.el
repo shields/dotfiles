@@ -198,7 +198,7 @@
 (setq message-citation-line-function nil)
 (defun insert-super-citation-line ()
   (let* ((first-line
-	  (cond ((string-equal gnus-newsgroup-name "INBOX.risks")
+	  (cond ((string-match "\\bINBOX\\.risks\\b" gnus-newsgroup-name)
 		 "In RISKS Digest,")
 		(t
 		 (concat (if (message-news-p) "In article " "In message ")
