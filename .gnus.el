@@ -91,13 +91,17 @@
 	    (define-key gnus-summary-mode-map [(meta n)] 'gnus-summary-next-thread)
 	    (define-key gnus-summary-mode-map [(meta p)] 'gnus-summary-prev-thread)
 	    (define-key gnus-summary-mode-map [(F)]
-	      'summary-followup-with-original-super-citation)))
+	      'summary-followup-with-original-super-citation)
+	    (define-key gnus-summary-mode-map [(control x) (?5) (F)]
+	      'summary-followup-with-original-super-citation-other-frame)))
 (add-hook 'gnus-article-mode-hook
 	  (lambda ()
 	    (define-key gnus-article-mode-map [b] 'gnus-summary-prev-page)
 	    (define-key gnus-article-mode-map [(return)] 'gnus-summary-next-unread-article)
 	    (define-key gnus-article-mode-map [(F)]
-	      'summary-followup-with-original-super-citation)))
+	      'summary-followup-with-original-super-citation)
+	    (define-key gnus-summary-mode-map [(control x) (?5) (F)]
+	      'summary-followup-with-original-super-citation-other-frame)))
 
 (load "gnus-ml")
 (add-hook 'gnus-summary-mode-hook (lambda () (gnus-mailing-list-mode 1)))
@@ -224,12 +228,21 @@
 		  "\n" " ")))
     (insert second-line)
     (set-buffer-modified-p was-modified)))
+
 (defun summary-followup-with-original-super-citation (n &optional force-news)
   "Replacement for `gnus-summary-followup-with-original' to use super
 citation lines."
   (interactive "P")
   (let ((message-citation-line-function 'insert-super-citation-line))
     (gnus-summary-followup (gnus-summary-work-articles n) force-news)))
+
+(defun summary-followup-with-original-super-citation-other-frame
+  (n &optional force-news)
+  "Replacement for `gnus-summary-followup-with-original' to use super
+citation lines, and open in a newly created frame."
+  (interactive "P")
+  (focus-frame (new-frame))
+  (summary-followup-with-original-super-citation n force-news))
 
 ;; Don't quote on `+' or `}'; those mess up patches and code especially.
 (setq gnus-cite-prefix-regexp "^[]>|: ]*[]>|:]\\(.*>\\)?\\|^.*>")
