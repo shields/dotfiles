@@ -246,3 +246,8 @@
 
 ;; Don't move forward in group buffer with M-g.
 (setq gnus-goto-next-group-when-activating nil)
+
+;; Don't jump over articles after setting a mark.  (It is common to
+;; want to remark several ticked articles, for example.)
+(setq gnus-summary-goto-unread nil)
+
