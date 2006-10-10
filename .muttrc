@@ -1,0 +1,88 @@
+set mbox_type = Maildir
+set spoolfile = ~/Maildir
+
+set pager_index_lines = 12
+
+unignore Date:
+ignore Mail-Copies-To:
+ignore Thread-		# some Outlook thing
+ignore User-Agent:
+#"^X-Apparently-To: .*@yahoogroups\.com")
+#"^X-Bogosity: No,")
+ignore X-DSPAM-
+ignore X-eGroups-
+ignore X-Habeas-
+ignore X-LYRIS-Message-Id:
+ignore X-Mailer:
+ignore X-Newsreader:
+ignore X-NNTP-Posting-Date:
+ignore X-Spam-Checker-Version:
+#"^X-Spam-Status: No, hits=-")
+#"^X-Spam-Status: No, hits=[0-2]\\.")
+ignore X-Yahoo-Profile:
+ignore X-No-Archive:
+ignore Mailing-List:
+ignore List-
+
+macro index $ "<delete-message><pipe-message>dspam --source=error --class=spam\n"
+macro pager $ "<delete-message><pipe-message>dspam --source=error --class=spam\n"
+
+set date_format = "%Y-%m-%d %H:%M:%S"
+set index_format = "%4C %Z %{%b %D} %-25.25F %s"
+set move = no
+
+set use_from = yes
+my_hdr Organization: Mad Science Research Labs
+
+set delete = yes
+
+set edit_headers = yes
+
+set encode_from = yes
+
+set envelope_from = yes
+
+set followup_to = no
+set reply_to = yes
+
+set history = 100
+
+set fast_reply = yes
+set include = yes
+set header = yes
+
+set ispell = "aspell"
+
+set mime_forward = yes
+
+set pgp_replyencrypt = yes
+set pgp_replysign = yes
+set pgp_replysignencrypted = yes
+
+set pgp_show_unusable = no
+
+set reverse_alias = yes
+
+set tilde = yes
+
+set editor = "vi +/^$/ +j"
+
+set record = "~/outbound-mail"
+
+color normal	 black   brightwhite
+color attachment cyan    brightwhite
+color hdrdefault red     brightwhite
+color indicator  black   brightcyan
+color markers	 black   brightred
+color quoted	 blue    brightwhite
+color signature  green   brightwhite
+color status	 brightgreen blue
+color tilde	 cyan    brightwhite
+color tree	 green   brightwhite
+#color header	brightgreen black ^From:
+#color header	brightcyan black ^To:
+#color header	brightcyan black ^Reply-To:
+#color header	brightcyan black ^Cc:
+#color header	brightblue black ^Subject:
+#color body	brightred black [\-\.+_a-zA-Z0-9]+@[\-\.a-zA-Z0-9]+
+#color body	brightblue black (https?|ftp)://[\-\.\,/%~_:?\#a-zA-Z0-9]+

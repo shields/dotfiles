@@ -78,7 +78,7 @@ fi
 #}}}
 #{{{ General configuration
 
-ulimit -c 0
+#ulimit -c 0
 
 umask 022
 
@@ -131,6 +131,10 @@ if [ "$uname" = SunOS ]; then
     export CC
 fi
 
+# For Mutt, maybe others.
+EMAIL=shields@msrl.com
+export EMAIL
+
 #}}}
 #{{{ Setup for specific apps
 
@@ -151,7 +155,7 @@ CVS_RSH=ssh
 export CVSROOT CVS_RSH
 
 # debchange.
-DEBEMAIL='shields@msrl.com'
+DEBEMAIL="$EMAIL"
 DEBFULLNAME='Michael Shields'
 export DEBEMAIL DEBFULLNAME
 
@@ -235,8 +239,7 @@ fi
 PROFILE_WAS_RUN=yes
 export PROFILE_WAS_RUN
 
-# for interactive shells, display uptime:
-test -z "$PS1" || uptime
+test "$tty" != "not a tty" && uptime
 
 #{{{ Emacs local variables
 
