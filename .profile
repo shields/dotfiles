@@ -67,7 +67,7 @@ test -d /usr/ucb && NEWPATH="$NEWPATH:/usr/ucb"
 
 test -d /usr/games && NEWPATH="$NEWPATH:/usr/games"
 
-#PATH="$NEWPATH"
+PATH="$NEWPATH"
 export PATH MANPATH INFOPATH
 
 if [ "$uname" = SunOS ]; then
@@ -167,20 +167,11 @@ export IRCNICK
 LESS='-eMc'
 export LESS
 
-# Netscape -- thanks JD!
-MOZILLA_NO_ASYNC_DNS=True
-export MOZILLA_NO_ASYNC_DNS
-
 # PGP.
 if [ -d "$HOME/.pgp" ]; then
     PGPPATH="$HOME/.pgp"
     export PGPPATH
 fi
-
-# pilot-link.
-PILOTPORT=/dev/tts/0
-PILOTRATE=115200
-export PILOTPORT PILOTRATE
 
 # rlpr.
 if [ `expr "$MY_IP" : '198.176.193\.'` -gt 0 ]; then
