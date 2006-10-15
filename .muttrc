@@ -68,21 +68,3 @@ set tilde = yes
 set editor = "vi +/^$/ +j"
 
 set record = "~/outbound-mail"
-
-color normal	 black   brightwhite
-color attachment cyan    brightwhite
-color hdrdefault red     brightwhite
-color indicator  black   brightcyan
-color markers	 black   brightred
-color quoted	 blue    brightwhite
-color signature  green   brightwhite
-color status	 brightgreen blue
-color tilde	 cyan    brightwhite
-color tree	 green   brightwhite
-#color header	brightgreen black ^From:
-#color header	brightcyan black ^To:
-#color header	brightcyan black ^Reply-To:
-#color header	brightcyan black ^Cc:
-#color header	brightblue black ^Subject:
-#color body	brightred black [\-\.+_a-zA-Z0-9]+@[\-\.a-zA-Z0-9]+
-#color body	brightblue black (https?|ftp)://[\-\.\,/%~_:?\#a-zA-Z0-9]+
