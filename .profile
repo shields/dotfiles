@@ -91,8 +91,10 @@ if [ ! "`expr $uname : MINGW32`" ]; then
     stty -ixon
 fi
 
-LANG=en_US.UTF-8
-export LANG
+if [ -z "$LANG" ]; then
+    LANG=en_US.UTF-8
+    export LANG
+fi
 
 if [ "$TERM" = linux ]; then
     tty | fgrep -q /dev/vc && unicode_start

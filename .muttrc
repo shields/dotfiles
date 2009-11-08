@@ -8,7 +8,9 @@ ignore Mail-Copies-To:
 ignore Thread-		# some Outlook thing
 ignore User-Agent:
 #"^X-Apparently-To: .*@yahoogroups\.com")
+ignore X-Barracuda-
 #"^X-Bogosity: No,")
+ignore X-DCC-
 ignore X-DSPAM-
 ignore X-eGroups-
 ignore X-Habeas-
@@ -23,9 +25,17 @@ ignore X-Yahoo-Profile:
 ignore X-No-Archive:
 ignore Mailing-List:
 ignore List-
+ignore DKIM-Signature:
 
-macro index $ "<delete-message><pipe-message>dspam --source=error --class=spam\n"
-macro pager $ "<delete-message><pipe-message>dspam --source=error --class=spam\n"
+#macro index $ "<delete-message><pipe-message>dspam --source=error --class=spam\n"
+#macro pager $ "<delete-message><pipe-message>dspam --source=error --class=spam\n"
+#macro index % "<delete-message><pipe-message>dspam --source=error --class=innocent\n"
+#macro pager % "<delete-message><pipe-message>dspam --source=error --class=innocent\n"
+macro index,pager $ "<save-message>~/Mail/retrain-spam<enter><enter>"
+macro index,pager % "<save-message>~/Mail/retrain-innocent<enter><enter>"
+# temp:
+macro index,pager ( "<save-message>~/Mail/train-spam<enter><enter>"
+macro index,pager ) "<save-message>~/Mail/train-innocent<enter><enter>"
 
 set date_format = "%Y-%m-%d %H:%M:%S"
 set index_format = "%4C %Z %{%b %D} %-25.25F %s"
