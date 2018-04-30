@@ -1,7 +1,6 @@
 ;;; .gnus.el --- Shields's Gnus initialization file
 
 ;; Author: Michael Shields <shields@msrl.com>
-;; Version: $Id$
 
 (setq mail-from-style 'parens)
 (setq mail-yank-prefix "> ")

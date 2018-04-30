@@ -1,7 +1,6 @@
 #
 # ~/.confile
 # Michael Shields <shields@msrl.com>
-# $Id$
 #
 # Run on logout by a trap set in .profile.
 #

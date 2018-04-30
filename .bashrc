@@ -2,7 +2,6 @@
 #
 # ~/.bashrc
 # Michael Shields <shields@msrl.com>
-# $Id$
 #
 
 # This entire file is useless if this is a non-interactive shell, so
