@@ -14,11 +14,6 @@ uname="`uname`"
 # I do this because I'm paranoid.
 cd "$HOME"
 
-# Set up .confile to be run on logout.  We could use .bash_logout, but
-# nothing in it is Bash-specific, and this gives more control over when
-# .confile should be run.
-trap ". \"$HOME/.confile\"" 0 1
-
 #{{{ bash-specific setup
 
 # This is basically in the .bashrc.
