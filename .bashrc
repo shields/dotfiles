@@ -25,10 +25,12 @@ else
 fi
 export PS1
 
-# "slow ssh"
-alias slssh='ssh -C -x'
-
 alias ll='ls -l'
+alias lla='ls -la'
+alias llr='ls -lR'
+alias llar='ls -laR'
+
+alias pushdots="git --git-dir $HOME/.dotfiles.git --work-tree $HOME checkout -f master"
 
 test -f /etc/bash_completion && . /etc/bash_completion
 
