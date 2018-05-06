@@ -342,10 +342,6 @@ sentinel."
 
 (setq bbdb-electric-p nil)
 
-;; XXX need to generalize this to concept of "home machine"
-;;(unless (string= hostname "challah")
-;;  (setq bbdb-file-remote "/[challah].bbdb"))
-
 (setq bbdb-north-american-phone-numbers-p nil)
 (setq bbdb-default-area-code nil)
 
@@ -578,11 +574,6 @@ sentinel."
 
 ;;}}}
 ;;{{{ W3
-
-;;(cond ((or (string-equal (downcase (system-name)) "challah.msrl.com")
-;;	   (string-equal (downcase (system-name)) "apple-pie.msrl.com"))
-;;       (setq url-proxy-services '(("http" . "localhost:3128")
-;;				  ("ftp" . "localhost:3128")))))
 
 (setq url-keep-history nil)
 

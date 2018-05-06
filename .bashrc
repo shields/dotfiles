@@ -28,21 +28,6 @@ export PS1
 # "slow ssh"
 alias slssh='ssh -C -x'
 
-if [ "$trimmed_hostname" = mulligatwani ]; then
-    alias mull=:
-    alias slmull=:
-else
-    alias mull='ssh mulligatwani.msrl.com'
-    alias slmull='slssh mulligatwani.msrl.com'
-fi
-if [ "$trimmed_hostname" = challah ]; then
-    alias chal=:
-    alias slchal=:
-else
-    alias chal='ssh challah.msrl.com'
-    alias slchal='slssh challah.msrl.com'
-fi
-
 alias ll='ls -l'
 
 test -f /etc/bash_completion && . /etc/bash_completion
