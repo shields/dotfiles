@@ -8,14 +8,6 @@
 (setq custom-file "~/.emacs.d/custom.el")
 (load custom-file)
 
-(unless (boundp 'hostname)
-  (setq hostname (replace-in-string (shell-command-to-string "hostname")
-				    "[\r\n]" "")))
-
-;; XXX
-(load "messagexmas")
-(load "mm-util")
-
 (when (file-accessible-directory-p "~/info")
   (eval-after-load "info" '(add-to-list 'Info-directory-list "~/info")))
 (when (file-accessible-directory-p "~/share/xemacs/site-packages/info")
@@ -26,31 +18,6 @@
 		(nth 1 (current-input-mode))
 		0)
 (setq hexl-iso "-iso")
-(require 'x-compose)
-(global-set-key "\C-x8" compose-map)
-
-(when mm-emacs-mule
-  ;; UTF-8 voodoo from Stephen J. Turnbull:
-  (require 'un-define)
-  (unless (emacs-version>= 21 5 6)
-    (require 'mule-ucs-unicode "unicode"))
-  (set-coding-category-system 'utf-8 'utf-8)
-  (set-pathname-coding-system 'utf-8)
-  (set-process-coding-system 'utf-8)
-  (set-keyboard-coding-system 'utf-8)
-  (set-terminal-coding-system 'utf-8)
-  ;; To have "only" UTF-8 in autodetection, the following tries UTF-8,
-  ;; and then reads the file as binary (which always succeeds)
-  ;;(set-coding-priority-list '(utf-8 binary))
-  ;; This doesn't wipe out other autodetection; instead, it rotates the
-  ;; listed coding categories to the front, and otherwise preserves
-  ;; order.
-  (set-coding-priority-list '(utf-8)))
- 
-
-;; Protect against init.el borrowing by other users.
-(when (string-equal (user-login-name) "shields")
-  (setq user-mail-address "shields@msrl.com"))
 
 ;; Protect .saves-PID-HOST file.  Adapted from Mike Long <mikel@shore.net>.
 (and (boundp 'auto-save-list-file-name)
@@ -90,23 +57,9 @@
 
 (setq display-time-24hr-format t)
 
-(when (eq (console-type) 'x)
-  (set-face-background 'default "white")
-  (set-face-background 'modeline "grey88")
-  (setq frame-title-format '("" hostname ": %b")))
-
 (setq blink-matching-delay 0.25)
 
-(when (eq (console-type) 'x)
-  (set-specifier menubar-visible-p nil))
-(set-specifier default-toolbar-visible-p nil)
-(set-specifier default-gutter-visible-p nil)
 (setq progress-feedback-use-echo-area t)
-
-(defun turn-on-font-lock-unless-binary ()
-  (unless (eq 'binary (coding-system-name buffer-file-coding-system))
-    (turn-on-font-lock)))
-(add-hook 'find-file-hooks 'turn-on-font-lock-unless-binary)
 
 ;;}}}
 ;;{{{ Files and buffers
@@ -130,13 +83,13 @@ when called with a prefix argument."
 
 ;;}}}
 ;;{{{ Global keybindings
-
+ 
 ;; Make auto-indentation work when I just hit RET.
 (global-set-key [(return)] 'newline-and-indent)
 
 ;; C-x M-, will search; M-, will repeat.
-(global-set-key [(control x) (meta ,)] 'tags-search)
-      
+;;(global-set-key [(control x) (meta ,)] 'tags-search)
+
 (global-set-key [(control c) (g)] 'goto-line)
 
 (global-set-key [(control c) (F)] 'find-file-at-point)
@@ -144,7 +97,6 @@ when called with a prefix argument."
 (global-set-key [(control x) (control n)] 'next-error)
 
 (global-set-key [(control c) (d)] 'dictionary-search)
-;(remove-hook 'text-mode-hook 'dictionary-tooltip-mode) ; not functional yet
 
 ;; The default is just-one-space.
 (global-set-key [(meta space)] 'fixup-whitespace)
@@ -193,17 +145,13 @@ sentinel."
 ;;}}}
 ;;{{{ text-mode and indented-text-mode
 
-(require 'filladapt)
-
 ;; Enable auto-fill.
 (add-hook 'text-mode-hook
 	  (function (lambda ()
-		      (turn-on-auto-fill)
-		      (filladapt-mode 1))))
+		      (turn-on-auto-fill))))
 (add-hook 'indented-text-mode-hook
 	  (function (lambda ()
-		      (turn-on-auto-fill)
-		      (filladapt-mode 1))))
+		      (turn-on-auto-fill))))
 (add-hook 'message-mode-hook
 	  (function (lambda ()
 		      (turn-on-auto-fill))))
@@ -420,13 +368,6 @@ sentinel."
 
 ;;{{{ Unsorted additions
 
-(require 'eval-expr)
-(eval-expr-install)
-
-
-(resize-minibuffer-mode)
-
-
 (autoload 'rfcview-mode "rfcview")
 
 
@@ -498,10 +439,6 @@ This function is useful for binding to a hotkey."
 
 
 (setq try-oblique-before-italic-fonts t)
-
-
-(require 'mmm-mode)
-(setq mmm-global-mode 'maybe)
 
 
 (require 'edebug)
