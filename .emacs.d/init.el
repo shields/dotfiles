@@ -326,6 +326,16 @@ sentinel."
 (setq font-lock-maximum-size 2097152)
 
 ;;}}}
+;;{{{ ido
+
+(ido-mode 1)
+(ido-everywhere 1)
+(flx-ido-mode 1)
+;; Disable ido faces to see flx highlights.
+(setq ido-enable-flex-matching t)
+(setq ido-use-faces nil)
+
+;;}}}
 ;;{{{ jka-compr
 
 (jka-compr-install)
@@ -351,6 +361,11 @@ sentinel."
 
 (eval-after-load "cperl-mode"
   '(cperl-set-style "PerlStyle"))
+
+;;}}}
+;;{{{ Projectile
+
+(projectile-mode)
 
 ;;}}}
 ;;{{{ Smartparens
