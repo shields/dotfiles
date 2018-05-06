@@ -31,7 +31,7 @@ alias llr='ls -lR'
 alias llar='ls -laR'
 
 alias dotgit="git --git-dir $HOME/src/dotfiles/.git --work-tree $HOME -c status.showUntrackedFiles=no"
-alias pushdots="dotgit $HOME checkout -f master"
+alias pushdots="dotgit checkout -f master"
 
 test -f /etc/bash_completion && . /etc/bash_completion
 
