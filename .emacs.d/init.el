@@ -432,7 +432,8 @@ This function is useful for binding to a hotkey."
 			   comint-output-filter-functions)))))
 
 
-;; Enable the mouse wheel.
+;; Enable the mouse.
+(xterm-mouse-mode 1)
 (require 'mwheel)
 (mwheel-install)
 
