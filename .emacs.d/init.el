@@ -1,9 +1,12 @@
-;;; .xemacs/init.el --- Shields's Emacs initialization file
+;;; .emacs.d/init.el --- Shields's Emacs initialization file
 
 ;; Author: Michael Shields <shields@msrl.com>
 
 ;;; Globals
 ;;{{{ Preliminaries
+
+(setq custom-file "~/.emacs.d/custom.el")
+(load custom-file)
 
 (unless (boundp 'hostname)
   (setq hostname (replace-in-string (shell-command-to-string "hostname")
