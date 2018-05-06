@@ -9,43 +9,9 @@
   (setq hostname (replace-in-string (shell-command-to-string "hostname")
 				    "[\r\n]" "")))
 
-;; Must elegantize this:
-(add-to-list 'load-path (expand-file-name "~/share/xemacs/site-lisp"))
-(add-to-list 'load-path (expand-file-name "~/share/xemacs/site-lisp"))
-(add-to-list 'load-path (expand-file-name "~/share/xemacs/site-packages/lisp"))
-
-;; XXX XXX ugly
-(when (file-exists-p "~/share/xemacs/site-packages/lisp/gnus")
-  (delete 'gnus-autoloads features)
-  (require 'gnus-load)
-  (add-to-list 'load-path
-	       (expand-file-name "~/share/xemacs/site-packages/lisp/gnus")))
-
 ;; XXX
 (load "messagexmas")
 (load "mm-util")
-
-;; Reload things in my dir that are already loaded.  Essential for
-;; replacing Gnus elements with those built from the development
-;; snapshot version.
-(when (file-readable-p "~/share/xemacs/site-lisp")
-  (mapcar '(lambda (x)
-	     (let ((base (expand-file-name
-			  (concat "~/share/xemacs/site-lisp/" (car x)))))
-	       (if (or (file-readable-p (concat base ".elc"))
-		       (file-readable-p (concat base ".el")))
-		   (load base))))
-	  load-history))
-;; XXX XXX ugly, fix, ugly ugly XXX
-(when (file-exists-p "~/share/xemacs/site-packages/lisp/gnus/netrc")
-  (load "~/share/xemacs/site-packages/lisp/gnus/netrc")
-  (mapcar '(lambda (x)
-	     (let ((base (concat (expand-file-name "~/share/xemacs/site-packages/lisp/gnus")
-				 "/" (car x))))
-	       (if (or (file-readable-p (concat base ".elc"))
-		       (file-readable-p (concat base ".el")))
-		   (load base))))
-	  load-history))
 
 (when (file-accessible-directory-p "~/info")
   (eval-after-load "info" '(add-to-list 'Info-directory-list "~/info")))
@@ -93,9 +59,6 @@
 
 (autoload 'debian-changelog-mode "debian-changelog-mode" nil t)
 
-;; umask
-;;(set-default-file-modes 448)  ; 0700
-
 ;;}}}
 ;;{{{ Customization of commands
 
@@ -117,8 +80,6 @@
 
 (setq search-slow-speed 2400)
 (setq search-slow-window-lines 3)
-
-;;(setq visible-bell nil)
 
 ;; Don't close windows because they're too short.  Sometimes a
 ;; single-line (plus mode line) window can be useful.
@@ -208,28 +169,6 @@ when called with a prefix argument."
 	     (define-key makefile-mode-map "\C-c\C-c" 'compile)))
 
 ;;}}}
-;;{{{ procmail-mode
-
-;; http://list-archive.xemacs.org/xemacs-design/200206/msg00103.html
-(define-derived-mode procmail-mode fundamental-mode "Procmail"
-  "Major mode for editing procmail recipes."
-  (setq comment-start "#")
-  (setq comment-start-skip "#[ \t]*")
-  (setq procmail-font-lock-keywords
-        (list '("#.*"
-                . font-lock-comment-face)
-              '("^[\t ]*:.*"
-                . font-lock-type-face)
-              '("[A-Za-z_]+=.*"
-                . font-lock-keyword-face)
-              '("^[\t ]*\\*.*"
-                . font-lock-doc-string-face)
-              '("\$[A-Za-z0-9_]+"
-                . font-lock-function-name-face)))
-  (font-lock-mode))
-(add-to-list 'auto-mode-alist '("\\.procmailrc\\'" . procmail-mode))
-
-;;}}}
 ;;{{{ shell-mode
 
 (add-hook 'shell-mode-hook
@@ -247,11 +186,6 @@ sentinel."
 				(process-name process)
 				" " reason)
 			(process-buffer process)))))
-
-;;}}}
-;;{{{ sql-mode
-
-(add-hook 'sql-mode-hook 'sql-highlight-postgres-keywords)
 
 ;;}}}
 ;;{{{ text-mode and indented-text-mode
@@ -335,75 +269,6 @@ sentinel."
 (setq efs-use-passive-mode t)
 
 ;;}}}
-;;{{{ BBDB
-
-(require 'bbdb)
-(bbdb-initialize 'gnus 'message 'w3)
-
-(setq bbdb-electric-p nil)
-
-(setq bbdb-north-american-phone-numbers-p nil)
-(setq bbdb-default-area-code nil)
-
-(setq bbdb-notice-auto-save-file t)
-
-(setq bbdb-pop-up-target-lines 3)
-;; On a 25-line terminal, the BBDB takes up too much space.  This
-;; isn't a strictly correct fix; BBDB ought to check height at the
-;; time it is thinking about whether or not to pop up a window, and
-;; bbdb-pop-up-target-lines should probably just be a lambda function
-;; that could return a percentage of (frame-height) or something
-;; similar.  But this fixes the immediate problem.
-(when (< (frame-height) 40)
-  (setq bbdb-use-pop-up nil))
-
-(add-hook 'bbdb-notice-hook 'bbdb-auto-notes-hook)
-(setq bbdb-auto-notes-alist
-      '(("Organization" (".*" company "\\&"))
-	("Organisation" (".*" company "\\&"))
-	("X-Organization" (".*" company "\\&"))
-	("X-Organisation" (".*" company "\\&"))))
-
-(setq bbdb-send-mail-style 'message)
-
-(add-hook 'bbdb-list-hook 'close-bbdb-if-no-entries)
-(defun close-bbdb-if-no-entries ()
-  (save-excursion
-    (set-buffer bbdb-buffer-name)
-    (if (not bbdb-records)
-	(delete-window (get-buffer-window bbdb-buffer-name)))))
-
-(add-hook 'bbdb-list-hook
-	  (function (lambda ()
-		      (set-specifier horizontal-scrollbar-visible-p nil))))
-
-(setq bbdb-completion-type 'primary-or-name)
-
-(setq bbdb-hashtable-size 100003)
-
-(when (or (featurep 'bbdb-pgp)
-	  (load "bbdb-pgp" t))
-  ;; needs my patch
-  (setq bbdb/pgp-method 'mml-pgpmime))
-
-;; XXX this should only happen if there are multiple windows open
-;; in the current frame.
-(eval-after-load "bbdb"
-  '(define-key bbdb-mode-map "q" 'delete-window))
-
-(defun bbdb-normalize-addresses (addr)
-  (when addr
-    (cond ((string-match "\\(.*\\)[+-]dated[+-][0-9]+\\.[0-9a-f]+\\(@.*\\)"
-			 addr)
-           (concat (substring addr (match-beginning 1) (match-end 1))
-                   (substring addr (match-beginning 2) (match-end 2))))
-	  ((string-match "\\(.*@aol\\.com\\).+"
-			 addr)
-           (concat (substring addr (match-beginning 1) (match-end 1))))
-          (t addr))))
-(setq bbdb-canonicalize-net-hook 'bbdb-normalize-addresses)
-
-;;}}}
 ;;{{{ Calc
 
 (setq calc-group-char " ")
@@ -418,20 +283,14 @@ sentinel."
 ;;}}}
 ;;{{{ Calendar and friends
 
-;; For calculating the sunrise and sunset times.  This is the NGS survey
-;; marker PID HV4283, at NAD 83(1993): 38°54'22.22884"N 77°02'48.19794"W
-(setq calendar-latitude 38.9061746778)
-(setq calendar-longitude -77.04672165)
-(setq calendar-location-name "Dupont Circle")
-
-;; Use local (US Eastern) time, not my usual TZ, which is UTC.
-(setq calendar-time-zone -300)
-(setq calendar-standard-time-zone-name "EST")
-(setq calendar-daylight-time-zone-name "EDT")
+;; Use local (US Pacific) time, not my usual TZ, which is UTC.
+(setq calendar-time-zone -480)
+(setq calendar-standard-time-zone-name "PST")
+(setq calendar-daylight-time-zone-name "PDT")
 (setq calendar-daylight-savings-starts
-      '(calendar-nth-named-day 1 0 4 year))
+      '(calendar-nth-named-day 2 0 3 year))
 (setq calendar-daylight-savings-ends
-      '(calendar-nth-named-day -1 0 10 year))
+      '(calendar-nth-named-day 1 0 11 year))
 (setq calendar-daylight-time-offset 60)
 (setq calendar-daylight-savings-starts-time 120)
 (setq calendar-daylight-savings-ends-time 120)
@@ -498,36 +357,6 @@ sentinel."
 ;;{{{ jka-compr
 
 (jka-compr-install)
-
-;;}}}
-;;{{{ Mailcrypt
-
-(load-library "mailcrypt")
-
-(mc-setversion "gpg")
-
-(setq mc-passwd-timeout 900)
-
-(setq mc-gpg-fetch-keyring-list
-      '("/usr/share/keyrings/debian-keyring.gpg"))
-(setq mc-pgp-fetch-keyring-list
-      '("/usr/share/keyrings/debian-keyring.pgp"))
-
-(setq mc-gpg-user-id "7F9F872C")
-;; should be in .gnus.el?:
-(setq pgg-default-user-id mc-gpg-user-id)
-(setq pgg-passphrase-cache-expiry 1200)
-
-;;}}}
-;;{{{ Message
-;; See also .gnus.el
-
-;; Controls C-x m.  Like message-user-agent, but use gnus-msg-mail
-;; instead of message-send-mail in order to set up Gcc: et al.
-(define-mail-user-agent 'gnus-user-agent
-  'gnus-msg-mail 'message-send-and-exit
-  'message-kill-buffer 'message-send-hook)
-(setq mail-user-agent 'gnus-user-agent)
 
 ;;}}}
 ;;{{{ Perl modes
@@ -613,41 +442,6 @@ sentinel."
   (load "fff" t))
 
 
-;; This is probably not the right test.
-(unless (eq (console-type) 'mswindows)
-  (gnuserv-start))
-
-
-(eval-after-load "gnus"
-  '(progn
-     (defun pop-up-gnus-inbox ()
-       "Create a new frame with Gnus in it, selected to the inbox group.
-\(See gnus-inbox-name.)  This function is useful for binding to a hotkey."
-       (interactive)
-       (let ((frame (make-frame gnus-pop-up-frame-properties)))
-	 (select-frame frame)
-	 (focus-frame frame)
-	 (setq gnus-transient-frames (cons frame gnus-transient-frames))
-	 (if (not (gnus-alive-p))
-	     (gnus)
-	   (switch-to-buffer gnus-group-buffer)) ; is this kosher?
-	 (gnus-summary-jump-to-group gnus-inbox-name)
-	 (gnus-group-get-new-news-this-group)))
-     (defvar gnus-inbox-name "INBOX"
-       "The folder popped up by pop-up-gnus-inbox.")
-     (defvar gnus-pop-up-frame-properties nil
-       "Frame properties for frames created by \\[pop-up-gnus-inbox].")
-     (defvar gnus-transient-frames ()
-       "List of frames created by \\[pop-up-gnus-inbox].")
-     (defun gnus-delete-transient-frame ()
-       "Delete the current frame, if it is a member of gnus-transient-frames."
-       (when (member (selected-frame) gnus-transient-frames)
-	 (setq gnus-transient-frames
-	       (delete (selected-frame) gnus-transient-frames))
-	 (delete-frame)))
-     (add-hook 'gnus-summary-exit-hook 'gnus-delete-transient-frame)))
-
-
 (eval-after-load "calc"
   '(progn
      (defun pop-up-calc ()
@@ -698,13 +492,6 @@ This function is useful for binding to a hotkey."
 (require 'mwheel)
 (mwheel-install)
 
-;; This code disables the mouse wheel entirely:
-;;(defun noop ()
-;;  "No effect."
-;;  (interactive))
-;;(global-set-key 'button4 'noop)
-;;(global-set-key 'button5 'noop)
-
 
 
 (setq try-oblique-before-italic-fonts t)
@@ -714,18 +501,7 @@ This function is useful for binding to a hotkey."
 (setq mmm-global-mode 'maybe)
 
 
-(require 'patcher)
-(when (file-accessible-directory-p "~/gnus/lisp")
-  (add-to-list 'patcher-projects
-	       '("gnus" "~/gnus"
-		 :to-address "ding@gnus.org")))
-
-
 (require 'edebug)
-
-
-(setq mm-discouraged-alternatives
-      '("text/html" "text/richtext" "text/enriched"))
 
 
 ;;}}}
