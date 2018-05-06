@@ -365,7 +365,13 @@ sentinel."
 ;;}}}
 ;;{{{ Projectile
 
-(projectile-mode)
+(projectile-global-mode)
+(setq projectile-mode-line
+      '(:eval
+	(if (file-remote-p default-directory)
+	    " Proj"
+	  (format " Proj[%s]"
+		  (projectile-project-name)))))
 
 ;;}}}
 ;;{{{ Smartparens
