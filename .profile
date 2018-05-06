@@ -47,15 +47,8 @@ test -d /usr/share/man && MANPATH="$MANPATH:/usr/share/man"
 test -d /usr/local/share/man && MANPATH="$MANPATH:/usr/local/share/man"
 test -d /usr/local/man && MANPATH="$MANPATH:/usr/local/man"
 
-test -d /usr/X11R6/bin && NEWPATH="$NEWPATH:/usr/X11R6/bin"
-test -d /usr/X11R6/man && MANPATH="$MANPATH:/usr/X11R6/man"
-
 test -d /usr/X/bin && NEWPATH="$NEWPATH:/usr/X/bin"
 test -d /usr/X/man && MANPATH="$MANPATH:/usr/X/man"
-
-# MacOS X with Fink
-test -d /sw && NEWPATH="$NEWPATH:/sw/bin:/sw/sbin"
-test -d /sw && MANPATH="$MANPATH:/sw/share/man"
 
 test -d /usr/ucb && NEWPATH="$NEWPATH:/usr/ucb"
 
@@ -109,46 +102,12 @@ VISUAL="$EDITOR"
 test -x /usr/bin/less && PAGER=less
 export EDITOR VISUAL PAGER
 
-# Set $MAIL so notification of new mail works.
-if [ -d /var/spool/mail ]; then
-    MAIL="/var/spool/mail/$LOGNAME"; export MAIL
-elif [ -d /var/mail ]; then
-    MAIL="/var/mail/$LOGNAME"; export MAIL
-elif [ -d /usr/spool/mail ]; then
-    MAIL="/usr/spool/mail/$LOGNAME"; export MAIL
-elif [ -d /usr/mail ]; then
-    MAIL="/usr/mail/$LOGNAME"; export MAIL
-#else
-#    echo ".profile: Couldn't find mail directory" 1>&2
-fi
-
-if [ "$uname" = SunOS ]; then
-    CC=gcc
-    export CC
-fi
-
 # For Mutt, maybe others.
 EMAIL=shields@msrl.com
 export EMAIL
 
 #}}}
 #{{{ Setup for specific apps
-
-# CVS.
-# "The Master wants you but he can't have you..."
-if [ -d /usr/local/cvsroot ]; then
-    CVSROOT=/usr/local/cvsroot
-elif [ -d /var/cvs ]; then
-    CVSROOT=/var/cvs
-elif [ -d /home/cvs ]; then
-    CVSROOT=/home/cvs
-elif [ -d /var/lib/cvs ]; then
-    CVSROOT=/var/lib/cvs
-else
-    CVSROOT=:ext:challah.msrl.com:/var/lib/cvs
-fi
-CVS_RSH=ssh
-export CVSROOT CVS_RSH
 
 # debchange.
 DEBEMAIL="$EMAIL"
@@ -169,12 +128,6 @@ if [ -d "$HOME/.pgp" ]; then
     export PGPPATH
 fi
 
-# rlpr.
-if [ `expr "$MY_IP" : '198.176.193\.'` -gt 0 ]; then
-   PRINTER=lp@toblerone.msrl.com
-   export PRINTER
-fi
-
 # rsync.
 RSYNC_RSH=ssh
 export RSYNC_RSH
@@ -183,48 +136,6 @@ export RSYNC_RSH
 EXINIT=':set ai'; export EXINIT
 
 #}}}
-
-#{{{ Proxy
-
-if [ "$uname" = FreeBSD -o "$uname" = SunOS -o "$uname" = Darwin ]; then
-   MY_IP="`ifconfig -a | awk '$1 == \"inet\" { print $2 }' | grep -v '^127\.'`"
-elif [ "$uname" = Linux ]; then
-   MY_IP="`ifconfig -a | sed -e '/inet addr:/!d' -e '/addr:127\\./d' -e 's/.*inet addr:\([0-9.]\+\).*/\\1/'`"
-elif [ "$uname" = MINGW32 ]; then
-   MY_IP="`ipconfig | grep 'IP Address' | sed -e 's/.*: //'`"
-else
-   echo ".profile: warning: don't know how to calculate IP on $uname"
-   unset MY_IP
-fi
-
-if [ `expr "$MY_IP" : '198.176.193\.'` -gt 0 ]; then
-   http_proxy='http://198.176.193.1:3128/'
-   ftp_proxy='http://198.176.193.1:3128/'
-fi
-if netstat -an | grep '[:\.]3128[ \t].*LISTEN' > /dev/null; then
-   http_proxy='http://127.0.0.1:3128/'
-   ftp_proxy='http://127.0.0.1:3128/'
-fi
-
-export http_proxy ftp_proxy
-
-#}}}
-
-#{{{ Oracle
-unset oratab
-test -f /etc/oratab && oratab=/etc/oratab
-test -f /var/opt/oracle/oratab && oratab=/var/opt/oracle/oratab
-if [ -n "$oratab" ]; then
-    ORACLE_SID="`awk -F: '$3 == "Y" { print $1; exit }' $oratab`"
-    ORACLE_HOME="`awk -F: '$3 == "Y" { print $2; exit }' $oratab`"
-    export ORACLE_SID ORACLE_HOME
-    PATH="$PATH:$ORACLE_HOME/bin"
-fi
-#}}}
-
-# used by .xsession to get this run even under xdm:
-PROFILE_WAS_RUN=yes
-export PROFILE_WAS_RUN
 
 test "$tty" != "not a tty" && uptime
 
