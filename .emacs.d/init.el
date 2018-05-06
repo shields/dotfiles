@@ -123,13 +123,13 @@ when called with a prefix argument."
 ;;}}}
 ;;{{{ shell-mode
 
-;; XXX
 (defun sh ()
   (interactive)
   (let ((buf (get-buffer "*terminal*")))
     (if buf
 	(switch-to-buffer buf)
-      (term "/bin/bash"))))
+      (term "/bin/bash")
+      (term-line-mode))))
 
 (add-hook 'shell-mode-hook
 	  '(lambda ()
