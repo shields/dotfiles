@@ -29,38 +29,20 @@ HOSTFILE=/etc/hosts; export HOSTFILE
 #}}}
 #{{{ *PATH
 
-NEWPATH="" MANPATH="" INFOPATH="."
-
-# $HOME/*.
-test -d "$HOME/bin" && NEWPATH="$HOME/bin:"
-test -d "$HOME/man" && MANPATH="$HOME/man:"
-test -d "$HOME/info" && INFOPATH="$INFOPATH:$HOME/info"
-
-NEWPATH="$NEWPATH/usr/local/sbin:/usr/local/bin:/sbin:/bin:/usr/sbin:/usr/bin"
-MANPATH="$MANPATH/usr/man"
-test -d /usr/local/info && INFOPATH="$INFOPATH:/usr/local/info"
-test -d /usr/info && INFOPATH="$INFOPATH:/usr/info"
-
-test -d /usr/ccs/bin && NEWPATH="$NEWPATH:/usr/ccs/bin"
+NEWPATH="$HOME/bin:$HOME/go/bin:/usr/local/sbin:/usr/local/bin:/sbin:/bin:/usr/sbin:/usr/bin"
+MANPATH="$HOME/man:/usr/local/man:/usr/man"
+INFOPATH="$HOME/info:/usr/local/info"
 
 test -d /usr/share/man && MANPATH="$MANPATH:/usr/share/man"
 test -d /usr/local/share/man && MANPATH="$MANPATH:/usr/local/share/man"
-test -d /usr/local/man && MANPATH="$MANPATH:/usr/local/man"
 
 test -d /usr/X/bin && NEWPATH="$NEWPATH:/usr/X/bin"
 test -d /usr/X/man && MANPATH="$MANPATH:/usr/X/man"
-
-test -d /usr/ucb && NEWPATH="$NEWPATH:/usr/ucb"
 
 test -d /usr/games && NEWPATH="$NEWPATH:/usr/games"
 
 PATH="$NEWPATH"
 export PATH MANPATH INFOPATH
-
-if [ "$uname" = SunOS ]; then
-    LD_RUN_PATH=/usr/local/lib
-    export LD_RUN_PATH
-fi
 
 #}}}
 #{{{ General configuration

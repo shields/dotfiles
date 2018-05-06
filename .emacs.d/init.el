@@ -8,26 +8,13 @@
 (setq custom-file "~/.emacs.d/custom.el")
 (load custom-file)
 
-(when (file-accessible-directory-p "~/info")
-  (eval-after-load "info" '(add-to-list 'Info-directory-list "~/info")))
-(when (file-accessible-directory-p "~/share/xemacs/site-packages/info")
-  (eval-after-load "info" '(add-to-list 'Info-directory-list
-					"~/share/xemacs/site-packages/info")))
+(require 'package)
+(setq package-archives
+      '(("gnu" . "https://elpa.gnu.org/packages/")
+	("melpa-stable" . "https://stable.melpa.org/packages/")))
+(package-initialize)
 
-(set-input-mode (car (current-input-mode)) ; High bit is not meta
-		(nth 1 (current-input-mode))
-		0)
 (setq hexl-iso "-iso")
-
-;; Protect .saves-PID-HOST file.  Adapted from Mike Long <mikel@shore.net>.
-(and (boundp 'auto-save-list-file-name)
-     (not (null auto-save-list-file-name)) ; added by Tim Moore <tmoore@tembel.org>
-     (progn
-       (or (file-exists-p auto-save-list-file-name)
-	   (write-region "" nil auto-save-list-file-name nil 'quiet))
-       (set-file-modes auto-save-list-file-name 384)))
-
-(autoload 'debian-changelog-mode "debian-changelog-mode" nil t)
 
 ;;}}}
 ;;{{{ Customization of commands
@@ -117,6 +104,16 @@ when called with a prefix argument."
 (setq c-cleanup-list '(brace-else-brace defun-close-semi))
 
 ;;}}}
+;;{{{ go-mode
+
+(setq godoc-at-point-function #'godoc-gogetdoc)
+
+(add-hook 'go-mode-hook #'go-eldoc-setup)
+
+(add-hook 'before-save-hook 'gofmt-before-save)
+(setq gofmt-command "goimports")
+
+;;}}}
 ;;{{{ makefile-mode
 
 (add-hook 'makefile-mode-hook
@@ -125,6 +122,14 @@ when called with a prefix argument."
 
 ;;}}}
 ;;{{{ shell-mode
+
+;; XXX
+(defun sh ()
+  (interactive)
+  (let ((buf (get-buffer "*terminal*")))
+    (if buf
+	(switch-to-buffer buf)
+      (term "/bin/bash"))))
 
 (add-hook 'shell-mode-hook
 	  '(lambda ()
@@ -209,6 +214,11 @@ sentinel."
 ;;}}}
 
 ;;; Features
+;;{{{ aggressive-indent
+
+(add-hook 'prog-mode-hook #'aggressive-indent-mode)
+
+;;}}}
 ;;{{{ Ange-ftp / EFS
 
 ;; Use anonymous by default, under the assumption that other machines
@@ -257,6 +267,17 @@ sentinel."
 (add-hook 'initial-calendar-window-hook 'mark-calendar-holidays)
 
 ;;}}}
+;;{{{ Company
+
+(add-hook 'after-init-hook 'global-company-mode)
+(global-set-key "\M-/" 'company-complete)
+
+;;}}}
+;;{{{ Flycheck
+
+(add-hook 'after-init-hook #'global-flycheck-mode)
+
+;; }}}
 ;;{{{ Flyspell
 
 (require 'ispell)
@@ -332,9 +353,10 @@ sentinel."
   '(cperl-set-style "PerlStyle"))
 
 ;;}}}
-;;{{{ Suspension
+;;{{{ Smartparens
 
-(add-hook 'suspend-hook 'resume-suspend-hook)
+(require 'smartparens-config)
+(smartparens-global-mode)
 
 ;;}}}
 ;;{{{ TRAMP
