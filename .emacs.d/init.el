@@ -8,11 +8,7 @@
 (setq custom-file "~/.emacs.d/custom.el")
 (load custom-file)
 
-(require 'package)
-(setq package-archives
-      '(("gnu" . "https://elpa.gnu.org/packages/")
-	("melpa-stable" . "https://stable.melpa.org/packages/")))
-(package-initialize)
+(load "~/.emacs.d/package-repos.el")
 
 (setq hexl-iso "-iso")
 
