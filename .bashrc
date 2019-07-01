@@ -30,6 +30,9 @@ alias lla='ls -la'
 alias llr='ls -lR'
 alias llar='ls -laR'
 
-test -f /etc/bash_completion && . /etc/bash_completion
+# For Linux:
+test -r /etc/bash_completion && . /etc/bash_completion
+# For macOS Homebrew:
+test -r /usr/local/etc/profile.d/bash_completion.sh && . /usr/local/etc/profile.d/bash_completion.sh
 
 true
