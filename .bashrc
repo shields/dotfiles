@@ -32,4 +32,8 @@ alias llar='ls -laR'
 
 test -f /etc/bash_completion && . /etc/bash_completion
 
+export NVM_DIR="$HOME/.nvm"
+[ -s "/usr/local/opt/nvm/nvm.sh" ] && . "/usr/local/opt/nvm/nvm.sh"
+[ -s "/usr/local/opt/nvm/etc/bash_completion" ] && . "/usr/local/opt/nvm/etc/bash_completion"
+
 true
