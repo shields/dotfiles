@@ -41,4 +41,9 @@ if [ -d "$HOME/google-cloud-sdk" ]; then
     . "$HOME/google-cloud-sdk/completion.bash.inc"
 fi
 
+# Travis CLI
+if [ -f "$HOME/.travis/travis.sh" ]; then
+    . "$HOME/.travis/travis.sh"
+fi
+
 true
