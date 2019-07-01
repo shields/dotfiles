@@ -96,6 +96,9 @@ DEBEMAIL="$EMAIL"
 DEBFULLNAME='Michael Shields'
 export DEBEMAIL DEBFULLNAME
 
+# Go.
+export GOPATH="$HOME/go"
+
 # IRC.
 test "$LOGNAME" = shields && IRCNICK=Shields
 export IRCNICK
