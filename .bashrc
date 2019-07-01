@@ -35,4 +35,10 @@ test -r /etc/bash_completion && . /etc/bash_completion
 # For macOS Homebrew:
 test -r /usr/local/etc/profile.d/bash_completion.sh && . /usr/local/etc/profile.d/bash_completion.sh
 
+# Google Cloud SDK
+if [ -d "$HOME/google-cloud-sdk" ]; then
+    . "$HOME/google-cloud-sdk/path.bash.inc"
+    . "$HOME/google-cloud-sdk/completion.bash.inc"
+fi
+
 true
