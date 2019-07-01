@@ -50,4 +50,9 @@ if command -v pyenv 1>/dev/null 2>&1; then
     eval "$(pyenv init -)"
 fi
 
+# Travis CLI
+if [ -f "$HOME/.travis/travis.sh" ]; then
+    . "$HOME/.travis/travis.sh"
+fi
+
 true
