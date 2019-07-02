@@ -18,7 +18,7 @@ fi
 trimmed_hostname="`hostname | sed -e 's/\.msrl\.com$//' \
 				  -e 's/\.above\.net$//' \
 				  -e 's/\.mfnx\.net$//'`"
-if [ "$TERM" = xterm -o "$TERM" = xterm-debian ]; then
+if [ "$TERM" = xterm -o "$TERM" = xterm-debian -o "$TERM" = xterm-256color ]; then
     PS1="\\[\\033]0;\\u@$trimmed_hostname\\007\\]\w\\$ "
 else
     PS1="\\u@$trimmed_hostname:\\w\\$ "
