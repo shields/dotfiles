@@ -1,3 +1,5 @@
 [user]
 	name = Michael Shields
 	email = michael.shields@freenome.com
+[core]
+	pager = less -R
