@@ -3,3 +3,9 @@
 	email = shields@msrl.com
 [core]
 	pager = less -R
+[alias]
+	br = branch
+	c = commit
+	ca = commit -a
+	co = checkout 
+	p = status
