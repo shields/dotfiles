@@ -113,6 +113,10 @@ if [ -d "$HOME/.pgp" ]; then
     export PGPPATH
 fi
 
+# ripgrep.
+RIPGREP_CONFIG_PATH="$HOME/.ripgreprc"
+export RIPGREP_CONFIG_PATH
+
 # rsync.
 RSYNC_RSH=ssh
 export RSYNC_RSH
