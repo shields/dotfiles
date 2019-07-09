@@ -16,7 +16,7 @@
                 },
                 "rules": [
                     {
-                        "description": "Caps Lock to Escape on single press, Control on press and hold.",
+                        "description": "Non-browser: Caps Lock to Escape on single press, Control on press and hold.",
                         "manipulators": [
                             {
                                 "from": {
@@ -37,7 +37,54 @@
                                         "key_code": "escape"
                                     }
                                 ],
-                                "type": "basic"
+                                "type": "basic",
+				"conditions": [
+				    {
+					"type": "frontmost_application_unless",
+					"bundle_identifiers": [
+					    "^com\\.apple\\.Safari$",
+					    "^com\\.google\\.Chrome$"
+					]
+				    }
+				]
+                            }
+                        ]
+                    },
+                    {
+                        "description": "Browser: Caps Lock to ⌘--Left on single press, Control on press and hold.",
+                        "manipulators": [
+                            {
+                                "from": {
+                                    "key_code": "caps_lock",
+                                    "modifiers": {
+                                        "optional": [
+                                            "any"
+                                        ]
+                                    }
+                                },
+                                "to": [
+                                    {
+                                        "key_code": "left_control"
+                                    }
+                                ],
+                                "to_if_alone": [
+                                    {
+                                        "key_code": "left_arrow",
+					"modifiers": [
+					    "left_command"
+					]
+                                    }
+                                ],
+                                "type": "basic",
+				"conditions": [
+				    {
+					"type": "frontmost_application_if",
+					"bundle_identifiers": [
+					    "^com\\.apple\\.Safari$",
+					    "^com\\.google\\.Chrome$"
+					]
+				    }
+				]
                             }
                         ]
                     },
