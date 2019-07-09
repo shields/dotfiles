@@ -5,10 +5,11 @@
 	pager = less -R
 [alias]
 	br = branch
+	branch-name = !git rev-parse --abbrev-ref HEAD
 	c = commit
 	ca = commit -a
 	co = checkout 
 	cob = checkout -b
 	d = diff
 	p = status
-	por = git push --set-upstream origin $(git rev-parse -- abbrev-ref HEAD)
+	por = !git push -u origin $(git branch-name)
