@@ -23,7 +23,7 @@ if [ "$TERM" = xterm -o "$TERM" = xterm-debian -o "$TERM" = xterm-256color ]; th
     # On iTerm2, display git branch name on the touch bar.  For
     # safety, limit characters allowed.
     if [ -x ~/.iterm2/it2check ] && ~/.iterm2/it2check; then
-	PS1='\[$(~/.iterm2/it2setkeylabel set status $(git branch-name | tr -Cd a-z0-9_- 2>/dev/null || echo ∅))\]'"$PS1"
+	PS1='\[$(~/.iterm2/it2setkeylabel set status $((git branch-name 2>/dev/null || echo ∅) | tr -Cd ∅a-z0-9_-))\]'"$PS1"
     fi
 else
     PS1="\\u@$trimmed_hostname:\\w\\$ "
