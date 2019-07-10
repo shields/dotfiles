@@ -126,6 +126,8 @@ EXINIT=':set ai'; export EXINIT
 
 #}}}
 
+test -e "${HOME}/.iterm2_shell_integration.bash" && source "${HOME}/.iterm2_shell_integration.bash"
+
 test "$tty" != "not a tty" && uptime
 
 #{{{ Emacs local variables
