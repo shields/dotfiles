@@ -8,8 +8,6 @@
 # just quit now.
 test -z "$PS1" && return
 
-alias which='type -path'
-
 if [ "$TERM" = xterm-debian -a ! -e /etc/terminfo/x/xterm-debian \
      -a ! -e /usr/share/terminfo/x/xterm-debian ]; then
     TERM=xterm
@@ -30,10 +28,14 @@ else
 fi
 export PS1
 
+alias g='git'
+
 alias ll='ls -l'
 alias lla='ls -la'
 alias llr='ls -lR'
 alias llar='ls -laR'
+
+alias which='type -path'
 
 # For Linux:
 test -r /etc/bash_completion && . /etc/bash_completion
