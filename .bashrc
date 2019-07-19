@@ -30,6 +30,17 @@ export PS1
 
 alias g='git'
 
+gc() {
+    gcloud config get-value project
+    [[ "$#" = 0 ]] && return
+    gcloud "$@"
+}
+kc() {
+    kubectl config current-context
+    [[ "$#" = 0 ]] && return
+    kubectl "$@"
+}
+
 alias ll='ls -l'
 alias lla='ls -la'
 alias llr='ls -lR'
