@@ -37,6 +37,10 @@ alias llar='ls -laR'
 
 alias which='type -path'
 
+zdate() {
+    TZ=UTC0 date "$@"
+}
+
 # For Linux:
 test -r /etc/bash_completion && . /etc/bash_completion
 # For macOS Homebrew:
