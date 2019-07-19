@@ -17,7 +17,7 @@ trimmed_hostname="`hostname | sed -e 's/\.msrl\.com$//' \
 				  -e 's/\.above\.net$//' \
 				  -e 's/\.mfnx\.net$//'`"
 if [ "$TERM" = xterm -o "$TERM" = xterm-debian -o "$TERM" = xterm-256color ]; then
-    PS1="\\[\\033]0;\\u@$trimmed_hostname\\007\\]\w\\$ "
+    PS1="\\[\\033]0;\\u@$trimmed_hostname\\007\\]\\w\\$ "
     # On iTerm2, display git branch name on the touch bar.  For
     # safety, limit characters allowed.
     if [ -x ~/.iterm2/it2check ] && ~/.iterm2/it2check; then
