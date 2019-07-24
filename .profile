@@ -41,6 +41,8 @@ test -d /usr/X/man && MANPATH="$MANPATH:/usr/X/man"
 
 test -d /usr/games && NEWPATH="$NEWPATH:/usr/games"
 
+test -d "$HOME/google-cloud-sdk/bin" && NEWPATH="$NEWPATH:$HOME/google-cloud-sdk/bin"
+
 PATH="$NEWPATH"
 export PATH MANPATH INFOPATH
 
