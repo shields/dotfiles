@@ -46,8 +46,8 @@ alias lla='ls -la'
 alias llr='ls -lR'
 alias llar='ls -laR'
 
-alias tp='terraform plan -refresh=false'
-alias tpr='terraform plan -refresh=true'
+alias tfp='terraform plan -refresh=false'
+alias tfpr='terraform plan -refresh=true'
 
 alias which='type -path'
 
