@@ -41,6 +41,8 @@ kc() {
     kubectl "$@"
 }
 
+alias hpr='hub pull-request --no-edit -p'
+
 alias ll='ls -l'
 alias lla='ls -la'
 alias llr='ls -lR'
