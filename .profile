@@ -115,6 +115,11 @@ if [ -d "$HOME/.pgp" ]; then
     export PGPPATH
 fi
 
+# pyenv.
+if command -v pyenv 1>/dev/null 2>&1; then
+    eval "$(pyenv init -)"
+fi
+
 # ripgrep.
 RIPGREP_CONFIG_PATH="$HOME/.ripgreprc"
 export RIPGREP_CONFIG_PATH
