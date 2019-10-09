@@ -28,6 +28,8 @@ else
 fi
 export PS1
 
+alias drit='docker run -it --rm'
+
 alias g='git'
 
 gc() {
