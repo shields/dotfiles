@@ -31,6 +31,7 @@ export PS1
 alias drit='docker run -it --rm'
 
 alias g='git'
+alias gdi='git diff origin/master'
 
 gc() {
     gcloud config get-value project
