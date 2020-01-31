@@ -44,7 +44,14 @@ kc() {
     kubectl "$@"
 }
 
-alias hpr='hub pull-request --no-edit -p'
+hpr() {
+    # Verify that the working directory is clean.
+    if [ -n "$(git status --porcelain=v1 2>&1)" ]; then
+	git status --short 1>&2
+	return 1
+    fi
+    hub pull-request --no-edit -p "$@"
+}
 
 alias ll='ls -l'
 alias lla='ls -la'
