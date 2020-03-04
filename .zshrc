@@ -92,3 +92,7 @@ source $ZSH/oh-my-zsh.sh
 # Example aliases
 # alias zshconfig="mate ~/.zshrc"
 # alias ohmyzsh="mate ~/.oh-my-zsh"
+
+for f in /usr/local/Caskroom/google-cloud-sdk/latest/google-cloud-sdk/*.zsh.inc(.N); do
+    source $f
+done
