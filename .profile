@@ -3,17 +3,6 @@
 # Michael Shields <shields@msrl.com>
 #
 
-test -z "$BASH_VERSION" -a -f "$HOME/bin/bash" && exec "$HOME/bin/bash"
-
-# Parse out the base of the hostname, for use later in the script.
-hostname="`hostname`"
-hostname="`expr $hostname : '\([^.]*\).*'`"
-
-uname="`uname`"
-
-# I do this because I'm paranoid.
-cd "$HOME"
-
 #{{{ bash-specific setup
 
 # This is basically in the .bashrc.
@@ -49,18 +38,12 @@ export PATH MANPATH INFOPATH
 #}}}
 #{{{ General configuration
 
-#ulimit -c 0
-
 umask 022
 
 # Terminal and locale setup.
-if [ ! "`expr $uname : MINGW32`" ]; then
-    #eval `resize -u`
-    stty erase '^?'
-    test "$uname" = SunOS || stty pass8
-    stty cs8
-    stty -ixon
-fi
+stty erase '^?'
+stty cs8
+stty -ixon
 
 if [ -z "$LANG" ]; then
     LANG=en_US.UTF-8
@@ -132,10 +115,6 @@ export RSYNC_RSH
 EXINIT=':set ai'; export EXINIT
 
 #}}}
-
-test -e "${HOME}/.iterm2_shell_integration.bash" && source "${HOME}/.iterm2_shell_integration.bash"
-
-test "$tty" != "not a tty" && uptime
 
 #{{{ Emacs local variables
 
