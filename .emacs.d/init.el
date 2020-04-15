@@ -26,6 +26,9 @@
 ;; doesn't.  It's weird.
 (setq next-line-add-newlines nil)
 
+;; Format on RET.
+(electric-indent-mode 1)
+
 (setq enable-recursive-minibuffers t)
 
 ;;}}}
