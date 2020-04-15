@@ -10,8 +10,6 @@
 
 (load "~/.emacs.d/package-repos.el")
 
-(setq hexl-iso "-iso")
-
 ;; Native macOS Emacs isn't invoked from a shell.
 (when (eq window-system 'ns)
   (exec-path-from-shell-copy-env "PATH"))
@@ -42,11 +40,7 @@
 ;; single-line (plus mode line) window can be useful.
 (setq window-min-height 2)
 
-(setq display-time-24hr-format t)
-
 (setq blink-matching-delay 0.25)
-
-(setq progress-feedback-use-echo-area t)
 
 ;; Enable visual bell.  But on macOS, the visual bell pops up "the
 ;; standard NextStep image 'caution'" (src/nsterm.m).  This is not
