@@ -43,6 +43,8 @@
 ;; single-line (plus mode line) window can be useful.
 (setq window-min-height 2)
 
+(blink-cursor-mode 0)
+
 (setq blink-matching-delay 0.25)
 
 ;; Enable visual bell.  But on macOS, the visual bell pops up "the
