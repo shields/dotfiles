@@ -51,7 +51,7 @@
                         ]
                     },
                     {
-                        "description": "Browser: Caps Lock to ⌘--Left on single press, Control on press and hold.",
+                        "description": "Browser: Caps Lock to ⌘-Left on single press, Control on press and hold.",
                         "manipulators": [
                             {
                                 "conditions": [
@@ -85,6 +85,39 @@
                                     }
                                 ],
                                 "type": "basic"
+                            }
+                        ]
+                    },
+                    {
+                        "description": "Browser: Ctrl-Space to ⌘-W.",
+                        "manipulators": [
+                            {
+                                "conditions": [
+                                    {
+                                        "bundle_identifiers": [
+                                            "^com\\.apple\\.Safari$",
+                                            "^com\\.google\\.Chrome$"
+                                        ],
+                                        "type": "frontmost_application_if"
+                                    }
+                                ],
+                                "from": {
+                                    "key_code": "spacebar",
+                                    "modifiers": {
+					"mandatory": [
+					    "control"
+					]
+				    }
+                                },
+                                "to": [
+                                    {
+                                        "key_code": "w",
+					"modifiers": [
+					    "left_command"
+					]
+                                    }
+                                ],
+				"type": "basic"
                             }
                         ]
                     },
