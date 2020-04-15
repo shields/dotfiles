@@ -129,11 +129,10 @@ when called with a prefix argument."
 
 (defun sh ()
   (interactive)
-  (let ((buf (get-buffer "*terminal*")))
+  (let ((buf (get-buffer "*sh*")))
     (if buf
 	(switch-to-buffer buf)
-      (term (getenv "SHELL"))
-      (term-line-mode))))
+      (ansi-term (getenv "SHELL")))))
 
 (add-hook 'shell-mode-hook
 	  '(lambda ()
