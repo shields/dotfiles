@@ -5,6 +5,7 @@
 (package-install 'aggressive-indent)
 (package-install 'company)
 (package-install 'company-go)
+(package-install 'exec-path-from-shell)
 (package-install 'flx-ido)
 (package-install 'flycheck)
 (package-install 'go-eldoc)

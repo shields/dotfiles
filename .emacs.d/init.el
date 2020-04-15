@@ -12,6 +12,10 @@
 
 (setq hexl-iso "-iso")
 
+;; Native macOS Emacs isn't invoked from a shell.
+(when (eq window-system 'ns)
+  (exec-path-from-shell-copy-env "PATH"))
+
 ;;}}}
 ;;{{{ Customization of commands
 
