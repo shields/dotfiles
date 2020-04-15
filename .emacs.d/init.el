@@ -132,7 +132,7 @@ when called with a prefix argument."
   (let ((buf (get-buffer "*terminal*")))
     (if buf
 	(switch-to-buffer buf)
-      (term "/bin/bash")
+      (term (getenv "SHELL"))
       (term-line-mode))))
 
 (add-hook 'shell-mode-hook
