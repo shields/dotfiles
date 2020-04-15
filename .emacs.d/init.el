@@ -83,9 +83,6 @@ when called with a prefix argument."
 
 ;;}}}
 ;;{{{ Global keybindings
- 
-;; Make auto-indentation work when I just hit RET.
-(global-set-key [(return)] 'newline-and-indent)
 
 ;; C-x M-, will search; M-, will repeat.
 ;;(global-set-key [(control x) (meta ,)] 'tags-search)
