@@ -44,6 +44,19 @@
 
 (setq progress-feedback-use-echo-area t)
 
+;; Enable visual bell.  But on macOS, the visual bell pops up "the
+;; standard NextStep image 'caution'" (src/nsterm.m).  This is not
+;; correct.  Better is to set "Flash the screen when an alert sound
+;; occurs" in Accessibility preferences.
+(defun macos-system-alert ()
+  "Make the systemwide alert event (sound or screen flash)."
+  (do-applescript "tell application \"System Events\" to beep"))
+(cond ((eq window-system 'ns)
+       (setq visible-bell nil)
+       (setq ring-bell-function 'macos-system-alert))
+      (t
+       (setq visible-bell t)))
+
 ;;}}}
 ;;{{{ Files and buffers
 
@@ -454,11 +467,6 @@ This function is useful for binding to a hotkey."
 	       (delete (selected-frame) calc-transient-frames))
 	 (delete-frame)))
      (define-key calc-mode-map "q" 'calc-quit-or-delete-transient-frame)))
-
-
-
-(setq visible-bell 'top-bottom)
-
 
 ;; All ^M to go to the beginning of line in shell mode.  This lets the
 ;; status update of apt-get, scp, &c. work correctly.
