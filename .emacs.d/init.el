@@ -110,6 +110,8 @@ when called with a prefix argument."
 (global-set-key [(super w)] 'delete-window)
 (global-set-key [(super t)] 'split-window-right)
 
+(global-set-key [(super q)] 'magit-status)
+
 ;;}}}
 
 ;;; Major modes
