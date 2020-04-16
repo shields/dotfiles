@@ -64,6 +64,8 @@
 (column-number-mode)
 (setq column-number-indicator-zero-based nil)
 
+(delete-selection-mode 1)
+
 ;;}}}
 ;;{{{ Files and buffers
 
