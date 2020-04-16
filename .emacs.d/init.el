@@ -111,6 +111,8 @@ when called with a prefix argument."
 
 (global-set-key [(super \,)] 'ido-find-file)
 
+(global-set-key [(super S)] 'vc-next-action)
+
 ;;}}}
 
 ;;; Major modes
