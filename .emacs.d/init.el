@@ -242,17 +242,6 @@ when called with a prefix argument."
 (add-hook 'prog-mode-hook #'aggressive-indent-mode)
 
 ;;}}}
-;;{{{ Ange-ftp / EFS
-
-;; Use anonymous by default, under the assumption that other machines
-;; will be listed in .netrc.  
-(setq ange-ftp-default-user "anonymous")
-(setq ange-ftp-generate-anonymous-password (or (getenv "MAILTO")
-					       t))
-
-(setq efs-use-passive-mode t)
-
-;;}}}
 ;;{{{ Calc
 
 (setq calc-group-char " ")
