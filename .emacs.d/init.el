@@ -109,6 +109,8 @@ when called with a prefix argument."
 
 (global-set-key [(super q)] 'magit-status)
 
+(global-set-key [(super \,)] 'ido-find-file)
+
 ;;}}}
 
 ;;; Major modes
