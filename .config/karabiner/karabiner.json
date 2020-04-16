@@ -240,7 +240,7 @@
                         ]
                     },
 		    {
-			"description": "ErgoEmacs-style motion",
+			"description": "ErgoEmacs-inspired swaps",
 			"manipulators": [
 			    {
 				"from": {
@@ -370,6 +370,25 @@
 				"to": [
 				    {
 					"key_code": "end"
+				    }
+				],
+				"type": "basic"
+			    },
+			    {
+				"from": {
+				    "key_code": "d",
+                                    "modifiers": {
+                                        "mandatory": [
+                                            "command"
+                                        ]
+				    }
+				},
+				"to": [
+				    {
+					"key_code": "a",
+					"modifiers": [
+					    "command"
+					]
 				    }
 				],
 				"type": "basic"
