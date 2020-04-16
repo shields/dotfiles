@@ -70,9 +70,6 @@
 ;; Make sure editing a hard-linked file edits all its links.
 (setq backup-by-copying-when-linked t)
 
-;; Open only one buffer per file, regardless of how things are linked.
-(setq find-file-existing-other-name t)
-
 ;; Ask for confirmation before saving without a newline.
 (setq require-final-newline 'maybe)
 
