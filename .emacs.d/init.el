@@ -59,6 +59,11 @@
       (t
        (setq visible-bell t)))
 
+(set-fringe-mode '(nil . 0))		; left-only
+
+(column-number-mode)
+(setq column-number-indicator-zero-based nil)
+
 ;;}}}
 ;;{{{ Files and buffers
 
@@ -98,7 +103,12 @@ when called with a prefix argument."
 
 (global-set-key [(control backspace)] 'join-line)
 
-(global-set-key [(super \,)] 'multi-term)
+(global-set-key [(super p)] 'multi-term)
+
+(global-set-key [(super \;)] 'comment-dwim)
+
+(global-set-key [(super w)] 'delete-window)
+(global-set-key [(super t)] 'split-window-right)
 
 ;;}}}
 
@@ -124,11 +134,36 @@ when called with a prefix argument."
 (setq gofmt-command "goimports")
 
 ;;}}}
+;;{{{ help-mode
+
+(setq help-window-select t)
+
+;; }}}
 ;;{{{ makefile-mode
 
 (add-hook 'makefile-mode-hook
 	  '(lambda ()
 	     (define-key makefile-mode-map "\C-c\C-c" 'compile)))
+
+;;}}}
+;;{{{ term-mode
+
+;; Run multi-term-keystroke-setup after modifying this.
+(setq term-bind-key-alist
+      '(("C-c C-c" . term-interrupt-subjob)
+	("C-c C-e" . term-send-esc)
+	("C-m" . term-send-return)
+	("S-v" . term-paste)
+	("M-f" . term-send-forward-word)
+	("M-b" . term-send-backward-word)
+	("M-o" . term-send-backspace)
+	("M-p" . term-send-up)
+	("M-n" . term-send-down)
+	("M-M" . term-send-forward-kill-word)
+	("M-N" . term-send-backward-kill-word)
+	("M-r" . term-send-reverse-search-history)
+	("M-," . term-send-raw)
+	("M-." . comint-dynamic-complete)))
 
 ;;}}}
 ;;{{{ text-mode and indented-text-mode
