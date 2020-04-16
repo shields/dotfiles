@@ -102,6 +102,8 @@ when called with a prefix argument."
 
 (global-set-key [(control backspace)] 'join-line)
 
+(global-set-key [(super \,)] 'multi-term)
+
 ;;}}}
 
 ;;; Major modes
@@ -131,32 +133,6 @@ when called with a prefix argument."
 (add-hook 'makefile-mode-hook
 	  '(lambda ()
 	     (define-key makefile-mode-map "\C-c\C-c" 'compile)))
-
-;;}}}
-;;{{{ shell-mode
-
-(defun sh ()
-  (interactive)
-  (let ((buf (get-buffer "*sh*")))
-    (if buf
-	(switch-to-buffer buf)
-      (ansi-term (getenv "SHELL")))))
-
-(add-hook 'shell-mode-hook
-	  '(lambda ()
-	     (set-process-sentinel (get-buffer-process (current-buffer))
-				   'kill-shell-buffer-after-normal-exit)))
-(defun kill-shell-buffer-after-normal-exit (process reason)
-  "Kill the shell buffer after its process exits normally.
-If it exits abnormally, print a message instead, like the default
-sentinel."
-  (cond ((string= reason "finished\n")
-	 (kill-buffer (process-buffer process)))
-	((buffer-name (process-buffer process))
-	 (insert-string (concat "Process "
-				(process-name process)
-				" " reason)
-			(process-buffer process)))))
 
 ;;}}}
 ;;{{{ text-mode and indented-text-mode
@@ -469,16 +445,6 @@ This function is useful for binding to a hotkey."
 	       (delete (selected-frame) calc-transient-frames))
 	 (delete-frame)))
      (define-key calc-mode-map "q" 'calc-quit-or-delete-transient-frame)))
-
-;; All ^M to go to the beginning of line in shell mode.  This lets the
-;; status update of apt-get, scp, &c. work correctly.
-(eval-after-load "comint"
-  '(progn
-     (when (or (featurep 'proc-filters)
-	       (load "proc-filters" t))
-       (setq-default comint-output-filter-functions
-		     (cons 'proc-filter-shell-output-filter
-			   comint-output-filter-functions)))))
 
 
 ;; Enable the mouse.

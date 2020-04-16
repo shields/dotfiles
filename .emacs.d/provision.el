@@ -12,6 +12,7 @@
 (package-install 'go-mode)
 (package-install 'magit)
 (package-install 'markdown-mode)
+(package-install 'multi-term)
 (package-install 'projectile)
 (package-install 'smartparens)
 (package-install 'yasnippet)
