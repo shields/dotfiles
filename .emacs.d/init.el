@@ -25,10 +25,6 @@
 ;; Stop saying "You can run the command blah-blah with M-x bl-b".
 (setq extended-command-suggest-shorter nil)
 
-;; Stop C-n from adding newlines.  C-f doesn't add anything.  C-p
-;; doesn't.  It's weird.
-(setq next-line-add-newlines nil)
-
 ;; Format on RET.
 (electric-indent-mode 1)
 
