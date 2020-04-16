@@ -102,7 +102,7 @@ when called with a prefix argument."
 
 (global-set-key [(control backspace)] 'join-line)
 
-(global-set-key [(super p)] 'multi-term)
+(global-set-key [(super p)] 'multi-term-next)
 
 (global-set-key [(super \;)] 'comment-dwim)
 
