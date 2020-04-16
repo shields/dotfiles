@@ -113,9 +113,8 @@ when called with a prefix argument."
 
 (global-set-key [(super \,)] 'ido-find-file)
 
-(global-set-key [(control v)] 'vc-next-action)
-
-(global-set-key (kbd "S-SPC") 'scroll-down-command)
+;; Break old C-v / M-v habits now that S-v is paste (yank).
+(global-set-key [(control v)] nil)
 
 ;;}}}
 
