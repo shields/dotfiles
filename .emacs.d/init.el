@@ -87,7 +87,7 @@ when called with a prefix argument."
 ;;{{{ Global keybindings
 
 ;; C-x M-, will search; M-, will repeat.
-;;(global-set-key [(control x) (meta ,)] 'tags-search)
+;;(global-set-key [(control x) (super ,)] 'tags-search)
 
 (global-set-key [(control c) (g)] 'goto-line)
 
@@ -98,7 +98,7 @@ when called with a prefix argument."
 (global-set-key [(control c) (d)] 'dictionary-search)
 
 ;; The default is just-one-space.
-(global-set-key [(meta space)] 'fixup-whitespace)
+(global-set-key [(super space)] 'fixup-whitespace)
 
 (global-set-key [(control backspace)] 'join-line)
 
@@ -320,7 +320,7 @@ when called with a prefix argument."
 
   (define-key flyspell-mouse-map [(button3)] #'flyspell-correct-word)
 
-  (define-key flyspell-mode-map [(meta tab)] nil))
+  (define-key flyspell-mode-map [(super tab)] nil))
 
 ;;}}}
 ;;{{{ Font-lock
