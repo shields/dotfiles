@@ -115,6 +115,8 @@ when called with a prefix argument."
 
 (global-set-key [(control v)] 'vc-next-action)
 
+(global-set-key (kbd "S-SPC") 'scroll-down-command)
+
 ;;}}}
 
 ;;; Major modes
