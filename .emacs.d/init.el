@@ -22,6 +22,9 @@
 (put 'narrow-to-region 'disabled nil)	; C-x n n
 ;;(setq disabled-command-hook 'ignore)
 
+;; Stop saying "You can run the command blah-blah with M-x bl-b".
+(setq extended-command-suggest-shorter nil)
+
 ;; Stop C-n from adding newlines.  C-f doesn't add anything.  C-p
 ;; doesn't.  It's weird.
 (setq next-line-add-newlines nil)
