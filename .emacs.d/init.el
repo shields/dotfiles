@@ -379,6 +379,12 @@ when called with a prefix argument."
 (setq ido-use-faces nil)
 
 ;;}}}
+;;{{{ Info
+
+(add-hook 'Info-mode-hook
+	  #'(lambda () (variable-pitch-mode 1)))
+
+;;}}}
 ;;{{{ jka-compr
 
 (jka-compr-install)

@@ -12,6 +12,7 @@
  ;; Your init file should contain only one such instance.
  ;; If there is more than one, they won't work right.
  '(default ((t (:inherit nil :stipple nil :background "White" :foreground "Black" :inverse-video nil :box nil :strike-through nil :overline nil :underline nil :slant normal :weight normal :height 120 :width normal :foundry "nil" :family "Andale Mono"))))
+ '(Info-quoted ((t (:inherit fixed-pitch))))
  '(cperl-array-face ((t (:foreground "Blue"))))
  '(cperl-hash-face ((t (:foreground "Red" :weight bold))))
  '(cursor ((t (:background "firebrick"))))
@@ -23,6 +24,7 @@
  '(doom-modeline-buffer-path ((t (:inherit mode-line-emphasis))))
  '(doom-modeline-project-dir ((t nil)))
  '(fixed-pitch ((t (:family "Andale Mono"))))
+ '(link-visited ((t (:inherit link))))
  '(markdown-header-face ((t (:weight bold))))
  '(minibuffer-prompt ((t (:weight bold))))
  '(mode-line ((t (:background "grey90" :foreground "black" :box (:line-width -1 :style released-button) :family "Avenir Next"))))
@@ -31,4 +33,4 @@
  '(mode-line-inactive ((t (:inherit mode-line :background "grey80" :foreground "grey20" :box (:line-width -1 :color "grey75") :weight light))))
  '(show-paren-match ((t (:foreground "magenta" :weight bold))))
  '(show-paren-match-expression ((t (:background "#f4f4ff"))))
- '(variable-pitch ((t (:height 1.05 :family "Avenir Next")))))
+ '(variable-pitch ((t (:height 1.2 :family "Avenir Next")))))
