@@ -369,6 +369,12 @@ when called with a prefix argument."
 (jka-compr-install)
 
 ;;}}}
+;;{{{ Markdown
+
+(add-hook 'markdown-mode-hook
+	  #'(lambda () (variable-pitch-mode 1)))
+
+;;}}}
 ;;{{{ Perl modes
 
 ;; Make sure perl-mode doesn't even get loaded.
