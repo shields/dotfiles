@@ -173,22 +173,14 @@ when called with a prefix argument."
 ;;}}}
 ;;{{{ term-mode
 
-;; Run multi-term-keystroke-setup after modifying this.
 (setq term-bind-key-alist
       '(("C-c C-c" . term-interrupt-subjob)
 	("C-c C-e" . term-send-esc)
 	("C-m" . term-send-return)
-	("S-v" . term-paste)
-	("M-f" . term-send-forward-word)
-	("M-b" . term-send-backward-word)
-	("M-o" . term-send-backspace)
-	("M-p" . term-send-up)
-	("M-n" . term-send-down)
-	("M-M" . term-send-forward-kill-word)
-	("M-N" . term-send-backward-kill-word)
-	("M-r" . term-send-reverse-search-history)
-	("M-," . term-send-raw)
+	("s-v" . term-paste)
+	("C-r" . term-send-reverse-search-history)
 	("M-." . comint-dynamic-complete)))
+(multi-term-keystroke-setup)
 
 (add-hook 'term-mode-hook #'eterm-256color-mode)
 
