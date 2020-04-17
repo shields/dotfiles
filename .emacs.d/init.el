@@ -130,6 +130,8 @@ when called with a prefix argument."
 
 (global-set-key [(super k)] #'avy-goto-char-timer)
 
+(global-set-key [(control t)] #'other-window)
+
 ;;}}}
 
 ;;{{{ avy
