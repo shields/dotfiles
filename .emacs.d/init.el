@@ -129,6 +129,8 @@ when called with a prefix argument."
 (global-set-key [(super .)] #'xref-find-definitions)
 (global-set-key [(super \,)] #'xref-pop-marker-stack)
 
+(global-set-key [(super /)] 'company-complete)
+
 ;;}}}
 
 ;;; Major modes
@@ -306,7 +308,11 @@ when called with a prefix argument."
 ;;{{{ Company
 
 (add-hook 'after-init-hook 'global-company-mode)
-(global-set-key "\M-/" 'company-complete)
+
+(setq company-show-numbers t)
+(setq company-minimum-prefix-length 2)
+(setq company-tooltip-align-annotations t)
+(setq company-tooltip-flip-when-above t)
 
 ;;}}}
 ;;{{{ Flycheck
