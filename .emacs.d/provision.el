@@ -18,6 +18,7 @@
 	go-eldoc
 	go-mode
 	hl-todo
+	ido-vertical-mode
 	magit
 	markdown-mode
 	minions

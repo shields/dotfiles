@@ -423,6 +423,8 @@ In that case, insert the number."
 (setq ido-enable-flex-matching t)
 (setq ido-use-faces nil)
 
+(ido-vertical-mode 1)
+
 ;;}}}
 ;;{{{ Info
 
