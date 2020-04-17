@@ -189,6 +189,11 @@ when called with a prefix argument."
 
 (add-hook 'terraform-mode-hook #'terraform-format-on-save-mode)
 
+;; terraform-mode doesn't indent quite correctly, and will even undo
+;; changes made by format-on-save.
+(add-hook 'terraform-mode-hook
+	  #'(lambda () (aggressive-indent-mode 0)))
+
 ;;}}}
 ;;{{{ text-mode and indented-text-mode
 
