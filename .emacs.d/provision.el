@@ -2,23 +2,25 @@
 (package-initialize)
 (package-refresh-contents nil)
 
-(package-install 'aggressive-indent)
-(package-install 'all-the-icons)
-(package-install 'company)
-(package-install 'company-go)
-(package-install 'doom-modeline)
-(package-install 'eterm-256color)
-(package-install 'exec-path-from-shell)
-(package-install 'flx-ido)
-(package-install 'flycheck)
-(package-install 'go-eldoc)
-(package-install 'go-mode)
-(package-install 'magit)
-(package-install 'markdown-mode)
-(package-install 'minions)
-(package-install 'multi-term)
-(package-install 'projectile)
-(package-install 'smartparens)
-(package-install 'yasnippet)
+(setq package-selected-packages
+      '(aggressive-indent
+	all-the-icons
+	company
+	company-go
+	doom-modeline
+	eterm-256color
+	exec-path-from-shell
+	flx-ido
+	flycheck
+	go-eldoc
+	go-mode
+	magit
+	markdown-mode
+	minions
+	multi-term
+	projectile
+	smartparens
+	yasnippet))
+(package-install-selected-packages)
 
 (all-the-icons-install-fonts 1)
