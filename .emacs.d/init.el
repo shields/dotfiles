@@ -69,6 +69,11 @@
 (show-paren-mode t)
 (setq show-paren-style 'expression)
 
+(global-hl-todo-mode 1)
+(setq hl-todo-keyword-faces
+      '(("FIXME" . "#ff0000")
+	("XXX+"  . "#ff0000")))
+
 ;;}}}
 ;;{{{ Mode line
 

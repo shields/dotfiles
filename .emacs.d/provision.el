@@ -15,6 +15,7 @@
 	flycheck
 	go-eldoc
 	go-mode
+	hl-todo
 	magit
 	markdown-mode
 	minions
