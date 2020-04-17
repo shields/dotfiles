@@ -7,6 +7,7 @@
 	all-the-icons
 	company
 	company-go
+	dockerfile-mode
 	doom-modeline
 	eterm-256color
 	exec-path-from-shell
