@@ -539,6 +539,7 @@ This function is useful for binding to a hotkey."
 (require 'mwheel)
 (mwheel-install)
 
+(global-set-key [s-mouse-1] 'ffap-at-mouse)
 
 
 (setq try-oblique-before-italic-fonts t)
