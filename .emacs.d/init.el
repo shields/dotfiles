@@ -155,7 +155,8 @@ when called with a prefix argument."
 
 (setq gofmt-command "goimports")
 
-(define-key go-mode-map [(super .)] #'godef-jump)
+(eval-after-load "go-mode"
+  '(define-key go-mode-map [(super .)] #'godef-jump))
 
 ;;}}}
 ;;{{{ help-mode
