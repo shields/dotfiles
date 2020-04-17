@@ -101,11 +101,6 @@ when called with a prefix argument."
 ;;}}}
 ;;{{{ Global keybindings
 
-;; C-x M-, will search; M-, will repeat.
-;;(global-set-key [(control x) (super ,)] 'tags-search)
-
-(global-set-key [(control c) (g)] 'goto-line)
-
 (global-set-key [(control c) (F)] 'find-file-at-point)
 
 (global-set-key [(control x) (control n)] 'next-error)
@@ -126,10 +121,13 @@ when called with a prefix argument."
 
 (global-set-key [(super q)] 'magit-status)
 
-(global-set-key [(super \,)] 'ido-find-file)
+(global-set-key [(super \m)] 'ido-find-file)
 
 ;; Break old C-v / M-v habits now that S-v is paste (yank).
 (global-set-key [(control v)] nil)
+
+(global-set-key [(super .)] #'xref-find-definitions)
+(global-set-key [(super \,)] #'xref-pop-marker-stack)
 
 ;;}}}
 
@@ -152,7 +150,10 @@ when called with a prefix argument."
 (add-hook 'go-mode-hook #'go-eldoc-setup)
 
 (add-hook 'before-save-hook 'gofmt-before-save)
+
 (setq gofmt-command "goimports")
+
+(define-key go-mode-map [(super .)] #'godef-jump)
 
 ;;}}}
 ;;{{{ help-mode
