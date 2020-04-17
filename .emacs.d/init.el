@@ -128,6 +128,27 @@ when called with a prefix argument."
 
 (global-set-key [(super /)] 'company-complete)
 
+(global-set-key [(super k)] #'avy-goto-char-timer)
+
+;;}}}
+
+;;{{{ avy
+
+;; QGMLWY home row, ordered by finger strength, starting with left
+;; because S-k is on the right.
+(setq avy-keys '(?n ?a ?t ?e ?s ?o ?d ?h ?r ?i)) ; QGMLWY home row
+
+(setq avy-background t)
+
+(setq avy-lead-faces '(error error error error error error))
+
+(defun shields/avy-handler (char)
+  "Terminate avy on RET."
+  (if (eq char ?\C-m)
+      (throw 'done 'exit)
+    (avy-handler-default char)))
+(setq avy-handler-function #'shields/avy-handler)
+
 ;;}}}
 
 ;;; Major modes

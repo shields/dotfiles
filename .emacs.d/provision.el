@@ -5,6 +5,7 @@
 (setq package-selected-packages
       '(aggressive-indent
 	all-the-icons
+	avy
 	company
 	company-go
 	dockerfile-mode
