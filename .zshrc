@@ -96,3 +96,11 @@ source $ZSH/oh-my-zsh.sh
 for f in /usr/local/Caskroom/google-cloud-sdk/latest/google-cloud-sdk/*.zsh.inc(.N); do
     source $f
 done
+
+# Emacs shell dir tracking; see comments in term.el.
+if [ -n "$INSIDE_EMACS" ]; then
+    chpwd() {
+	echo -n '\032/'
+	pwd
+    }
+fi
