@@ -7,6 +7,7 @@
 (package-install 'company)
 (package-install 'company-go)
 (package-install 'doom-modeline)
+(package-install 'eterm-256color)
 (package-install 'exec-path-from-shell)
 (package-install 'flx-ido)
 (package-install 'flycheck)
