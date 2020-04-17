@@ -186,6 +186,8 @@ when called with a prefix argument."
 	("M-," . term-send-raw)
 	("M-." . comint-dynamic-complete)))
 
+(add-hook 'term-mode-hook #'eterm-256color-mode)
+
 ;;}}}
 ;;{{{ text-mode and indented-text-mode
 
