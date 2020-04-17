@@ -66,6 +66,11 @@
 
 (delete-selection-mode 1)
 
+(doom-modeline-mode 1)
+(setq doom-modeline-buffer-encoding nil)
+(setq doom-modeline-major-mode-color-icon nil)
+(setq doom-modeline-buffer-file-name-style 'relative-from-project)
+
 ;;}}}
 ;;{{{ Files and buffers
 
