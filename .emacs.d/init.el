@@ -134,6 +134,12 @@ when called with a prefix argument."
 
 ;;}}}
 
+;; Minor modes
+;;{{{ anzu
+
+(global-anzu-mode 1)
+
+;;}}}
 ;;{{{ avy
 
 ;; QGMLWY home row, ordered by finger strength, starting with left
