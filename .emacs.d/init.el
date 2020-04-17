@@ -471,8 +471,6 @@ In that case, insert the number."
 
 (setq url-keep-history nil)
 
-(setq browse-url-browser-function 'browse-url-mozilla)
-
 ;;}}}
 ;;{{{ W3M
 
