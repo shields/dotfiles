@@ -28,15 +28,10 @@
 ;; Format on RET.
 (electric-indent-mode 1)
 
-(setq enable-recursive-minibuffers t)
-
 ;;}}}
 ;;{{{ Display
 
 (setq inhibit-startup-message t)
-
-(setq search-slow-speed 2400)
-(setq search-slow-window-lines 3)
 
 ;; Don't close windows because they're too short.  Sometimes a
 ;; single-line (plus mode line) window can be useful.
