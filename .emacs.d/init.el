@@ -66,10 +66,17 @@
 
 (delete-selection-mode 1)
 
+;;}}}
+;;{{{ Mode line
+
 (doom-modeline-mode 1)
+
 (setq doom-modeline-buffer-encoding nil)
 (setq doom-modeline-major-mode-icon nil)
 (setq doom-modeline-buffer-file-name-style 'relative-from-project)
+(setq doom-modeline-minor-modes t)
+
+(minions-mode 1)
 
 ;;}}}
 ;;{{{ Files and buffers
