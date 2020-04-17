@@ -25,9 +25,6 @@
 ;; Stop saying "You can run the command blah-blah with M-x bl-b".
 (setq extended-command-suggest-shorter nil)
 
-;; Format on RET.
-(electric-indent-mode 1)
-
 ;;}}}
 ;;{{{ Display
 
@@ -191,8 +188,7 @@ when called with a prefix argument."
 
 ;; terraform-mode doesn't indent quite correctly, and will even undo
 ;; changes made by format-on-save.
-(add-hook 'terraform-mode-hook
-	  #'(lambda () (aggressive-indent-mode 0)))
+(add-to-list 'aggressive-indent-excluded-modes 'terraform-mode)
 
 ;;}}}
 ;;{{{ text-mode and indented-text-mode
@@ -263,7 +259,12 @@ when called with a prefix argument."
 ;;; Features
 ;;{{{ aggressive-indent
 
-(add-hook 'prog-mode-hook #'aggressive-indent-mode)
+(add-hook 'prog-mode-hook
+	  #'(lamdba () (aggressive-indent-mode 1)))
+
+;; Leave electric-indent enabled for modes that don't work well with
+;; aggressive-indent.
+(electric-indent-mode 1)
 
 ;;}}}
 ;;{{{ Calc
