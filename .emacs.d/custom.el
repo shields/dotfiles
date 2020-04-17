@@ -16,6 +16,8 @@
  '(doom-modeline-bar ((t nil)))
  '(doom-modeline-buffer-file ((t (:inherit mode-line-buffer-id))))
  '(doom-modeline-buffer-modified ((t (:inherit doom-modeline-buffer-path :foreground "blue"))))
+ '(doom-modeline-buffer-path ((t (:inherit mode-line-emphasis))))
+ '(doom-modeline-project-dir ((t nil)))
  '(fixed-pitch ((t nil)))
  '(mode-line ((t (:background "grey90" :foreground "black" :box (:line-width -1 :style released-button) :family "Avenir Next"))))
  '(mode-line-buffer-id ((t (:weight semi-bold))))
