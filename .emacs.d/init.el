@@ -399,6 +399,12 @@ when called with a prefix argument."
 		  (projectile-project-name)))))
 
 ;;}}}
+;;{{{ Python
+
+;; "python" on macOS 10.15 is 2.7.
+(setq python-shell-interpreter "python3")
+
+;;}}}
 ;;{{{ Smartparens
 
 (require 'smartparens-config)
