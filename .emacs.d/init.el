@@ -190,6 +190,11 @@ when called with a prefix argument."
 (add-hook 'term-mode-hook #'eterm-256color-mode)
 
 ;;}}}
+;;{{{ Terraform
+
+(add-hook 'terraform-mode-hook #'terraform-format-on-save-mode)
+
+;;}}}
 ;;{{{ text-mode and indented-text-mode
 
 ;; Enable auto-fill.

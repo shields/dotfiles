@@ -21,6 +21,7 @@
 	multi-term
 	projectile
 	smartparens
+	terraform-mode
 	yasnippet))
 (package-install-selected-packages)
 
