@@ -56,8 +56,6 @@
 (column-number-mode)
 (setq column-number-indicator-zero-based nil)
 
-(delete-selection-mode 1)
-
 (show-paren-mode t)
 (setq show-paren-style 'expression)
 
@@ -65,6 +63,16 @@
 (setq hl-todo-keyword-faces
       '(("FIXME" . "#ff0000")
 	("XXX+"  . "#ff0000")))
+
+(setq scroll-error-top-bottom t)
+
+;;}}}
+;;{{{ Editing behavior
+
+(delete-selection-mode 1)
+
+(add-hook 'prog-mode-hook
+	  #'(lambda () (subword-mode 1)))
 
 ;;}}}
 ;;{{{ Mode line
@@ -95,8 +103,14 @@ when called with a prefix argument."
    (list (read-buffer "Switch to buffer: " (other-buffer)
                       (null current-prefix-arg)))))
 
+(setq auto-save-default nil)
+(setq make-backup-files nil)
+
 ;;}}}
 ;;{{{ Global keybindings
+
+(global-set-key [(home)] #'move-beginning-of-line)
+(global-set-key [(end)] #'move-end-of-line)
 
 (global-set-key [(control c) (F)] 'find-file-at-point)
 
@@ -116,9 +130,9 @@ when called with a prefix argument."
 (global-set-key [(super w)] 'delete-window)
 (global-set-key [(super t)] 'split-window-right)
 
-(global-set-key [(super q)] 'magit-status)
+(global-set-key [(super m)] 'magit-status)
 
-(global-set-key [(super \m)] 'ido-find-file)
+(global-set-key [(super i)] 'ido-find-file)
 
 ;; Break old C-v / M-v habits now that S-v is paste (yank).
 (global-set-key [(control v)] nil)
@@ -131,6 +145,24 @@ when called with a prefix argument."
 (global-set-key [(super k)] #'avy-goto-char-timer)
 
 (global-set-key [(control t)] #'ido-switch-buffer)
+
+(global-set-key [(super up)] #'move-line-up)
+(global-set-key [(super down)] #'move-line-down)
+
+;;}}}
+
+;;{{{ New commands
+
+(defun move-line-up ()
+  (interactive)
+  (transpose-lines 1)
+  (forward-line -2))
+
+(defun move-line-down ()
+  (interactive)
+  (forward-line 1)
+  (transpose-lines 1)
+  (forward-line -1))
 
 ;;}}}
 
@@ -206,6 +238,8 @@ when called with a prefix argument."
 	("s-v" . term-paste)
 	("C-r" . term-send-reverse-search-history)
 	("M-." . comint-dynamic-complete)))
+(setq term-unbind-key-list
+      '("C-z" "C-x" "C-c" "C-h" "C-y" "<ESC>" "C-r" "C-s" "C-t"))
 (multi-term-keystroke-setup)
 
 (add-hook 'term-mode-hook #'eterm-256color-mode)
@@ -288,8 +322,7 @@ when called with a prefix argument."
 ;;; Features
 ;;{{{ aggressive-indent
 
-(add-hook 'prog-mode-hook
-	  #'(lamdba () (aggressive-indent-mode 1)))
+(global-aggressive-indent-mode 1)
 
 ;; Leave electric-indent enabled for modes that don't work well with
 ;; aggressive-indent.
