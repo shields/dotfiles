@@ -78,6 +78,8 @@
 
 (setq kill-whole-line t)
 
+(setq line-move-visual nil)
+
 ;;}}}
 ;;{{{ Mode line
 
