@@ -167,7 +167,6 @@ when called with a prefix argument."
 
 (global-set-key [(super \;)] 'comment-dwim)
 
-(global-set-key [(super w)] 'delete-window)
 (global-set-key [(super t)] 'split-window-right)
 
 (global-set-key [(super m)] 'magit-status)
@@ -190,7 +189,8 @@ when called with a prefix argument."
 (global-set-key [(super up)] #'move-line-up)
 (global-set-key [(super down)] #'move-line-down)
 
-(global-set-key [(control w)] #'er/expand-region)
+(global-set-key [(super w)] #'er/expand-region)
+(global-set-key [(control w)] nil)
 
 ;;}}}
 
