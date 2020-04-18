@@ -106,6 +106,7 @@ when called with a prefix argument."
 
 (setq auto-save-default nil)
 (setq make-backup-files nil)
+(setq create-lockfiles nil)
 
 ;;}}}
 ;;{{{ Global keybindings
