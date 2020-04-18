@@ -305,6 +305,8 @@ when called with a prefix argument."
 ;;	      (error "No such thing as %d%%" arg)))
 ;;	   (t (error "Must use numeric argument")))))
 
+(setq view-read-only t)
+
 ;;}}}
 ;;{{{ XML
 
