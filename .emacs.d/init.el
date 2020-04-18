@@ -69,6 +69,10 @@
 (column-number-mode)
 (setq column-number-indicator-zero-based nil)
 
+;; Enable smartparens.  Note that it requires configuration, and that
+;; a stock configuration is provided by smartparens-config.  If you
+;; just let it autoload, it will work, but not well.
+(require 'smartparens-config)
 (smartparens-global-mode 1)
 (show-smartparens-global-mode 1)
 (setq sp-show-pair-delay 0)
