@@ -228,6 +228,12 @@ Version 2017-07-25"
 (setq c-cleanup-list '(brace-else-brace defun-close-semi))
 
 ;;}}}
+;;{{{ emacs-lisp-mode
+
+(eval-after-load "elisp-mode"
+  '(define-key emacs-lisp-mode-map [(super return)] #'eval-last-sexp))
+
+;;}}}
 ;;{{{ go-mode
 
 (setq godoc-at-point-function #'godoc-gogetdoc)
