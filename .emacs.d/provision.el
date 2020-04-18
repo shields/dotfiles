@@ -9,6 +9,7 @@
 	avy
 	company
 	company-go
+	diff-hl
 	dockerfile-mode
 	doom-modeline
 	eterm-256color

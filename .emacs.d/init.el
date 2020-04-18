@@ -53,6 +53,9 @@
 
 (set-fringe-mode '(nil . 0))		; left-only
 
+(global-diff-hl-mode 1)
+(diff-hl-flydiff-mode 1)
+
 (column-number-mode)
 (setq column-number-indicator-zero-based nil)
 
