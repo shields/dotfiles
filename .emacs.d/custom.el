@@ -28,6 +28,7 @@
  '(lazy-highlight ((t (:inherit match))))
  '(link-visited ((t (:inherit link))))
  '(markdown-header-face ((t (:weight bold))))
+ '(match ((t (:background "yellow1" :foreground "black"))))
  '(minibuffer-prompt ((t (:weight bold))))
  '(mode-line ((t (:background "grey90" :foreground "black" :box (:line-width -1 :style released-button) :family "Avenir Next"))))
  '(mode-line-buffer-id ((t (:weight semi-bold))))
