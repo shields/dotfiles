@@ -14,6 +14,7 @@
 	eterm-256color
 	ethan-wspace
 	exec-path-from-shell
+	expand-region
 	flx-ido
 	flycheck
 	go-eldoc

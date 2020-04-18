@@ -169,6 +169,8 @@ when called with a prefix argument."
 (global-set-key [(super up)] #'move-line-up)
 (global-set-key [(super down)] #'move-line-down)
 
+(global-set-key [(control w)] #'er/expand-region)
+
 ;;}}}
 
 ;;{{{ New commands
