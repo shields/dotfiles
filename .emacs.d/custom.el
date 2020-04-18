@@ -24,6 +24,8 @@
  '(doom-modeline-buffer-path ((t (:inherit mode-line-emphasis))))
  '(doom-modeline-project-dir ((t nil)))
  '(fixed-pitch ((t (:family "Andale Mono"))))
+ '(isearch ((t (:inherit match))))
+ '(lazy-highlight ((t (:inherit match))))
  '(link-visited ((t (:inherit link))))
  '(markdown-header-face ((t (:weight bold))))
  '(minibuffer-prompt ((t (:weight bold))))
