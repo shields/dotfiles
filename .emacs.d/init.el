@@ -150,6 +150,8 @@ when called with a prefix argument."
 
 (global-set-key [(control c) (d)] 'dictionary-search)
 
+(global-set-key [(control h) (a)] 'apropos) ; not apropos-command
+
 ;; The default is just-one-space.
 (global-set-key [(super space)] 'fixup-whitespace)
 
