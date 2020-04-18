@@ -78,6 +78,13 @@
       '(("FIXME" . "#ff0000")
 	("XXX+"  . "#ff0000")))
 
+(eval-after-load "symbol-overlay"
+  '(face-spec-set 'symbol-overlay-default-face
+		  '((t :weight bold :inherit nil))))
+(add-hook 'prog-mode-hook
+	  #'(lambda () (symbol-overlay-mode 1)))
+(setq symbol-overlay-idle-time 0.1)
+
 (setq scroll-error-top-bottom t)
 
 ;;}}}

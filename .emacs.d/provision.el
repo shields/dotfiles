@@ -28,6 +28,7 @@
 	multi-term
 	projectile
 	smartparens
+	symbol-overlay
 	terraform-mode
 	yasnippet))
 (package-install-selected-packages)
