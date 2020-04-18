@@ -76,6 +76,8 @@
 
 (global-ethan-wspace-mode 1)
 
+(setq kill-whole-line t)
+
 ;;}}}
 ;;{{{ Mode line
 
