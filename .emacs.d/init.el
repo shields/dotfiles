@@ -62,7 +62,7 @@
 (global-diff-hl-mode 1)
 (diff-hl-flydiff-mode 1)
 (eval-after-load "magit"
-  '(lambda ()
+  '(progn
      (add-hook 'magit-pre-refresh-hook 'diff-hl-magit-pre-refresh)
      (add-hook 'magit-post-refresh-hook 'diff-hl-magit-post-refresh)))
 
