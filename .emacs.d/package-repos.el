@@ -14,7 +14,8 @@
 
 ;; Some packages are in melpa-stable but only with very old versions.
 (setq package-pinned-packages
-      '((flycheck . "melpa")
+      '((diff-hl . "melpa")
+	(flycheck . "melpa")
 	(smartparens . "melpa")))
 
 (package-initialize)
