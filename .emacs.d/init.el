@@ -470,6 +470,13 @@ In that case, insert the number."
  (number-sequence 1 9))
 
 ;;}}}
+;;{{{ Dired
+
+;; Use GNU ls from Homebrew, not BSD ls.
+(setq insert-directory-program "/usr/local/bin/gls")
+(setq dired-use-ls-dired t)
+
+;;}}}
 ;;{{{ Flycheck
 
 (add-hook 'after-init-hook #'global-flycheck-mode)
