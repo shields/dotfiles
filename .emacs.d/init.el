@@ -405,34 +405,31 @@ In that case, insert the number."
 ;;{{{ Flyspell
 
 (require 'ispell)
-(when (executable-find "aspell")
-  (setq-default ispell-program-name "aspell"))
+(setq-default ispell-program-name "aspell")
 (setq ispell-silently-savep t)
 (setq ispell-extra-args '("-W" "3"))
 
-(when (executable-find ispell-program-name)
+(require 'flyspell)
 
-  (require 'flyspell)
+;; Normally using (flyspell-mode-on) directly is deprecated in favor
+;; of (flyspell-mode 1), which is smart enough not to reinitialize.
+;; However, we actually want to reinitialize.  For example,
+;; message-mode runs text-mode-hook before message-mode-hook; if
+;; flyspell mode is already on, then flyspell-generic-check-word-p
+;; will never get set with its message-mode-specific value.
+(add-hook 'text-mode-hook 'flyspell-mode-on)
+(add-hook 'message-mode-hook 'flyspell-mode-on)
 
-  ;; Normally using (flyspell-mode-on) directly is deprecated in favor
-  ;; of (flyspell-mode 1), which is smart enough not to reinitialize.
-  ;; However, we actually want to reinitialize.  For example,
-  ;; message-mode runs text-mode-hook before message-mode-hook; if
-  ;; flyspell mode is already on, then flyspell-generic-check-word-p
-  ;; will never get set with its message-mode-specific value.
-  (add-hook 'text-mode-hook 'flyspell-mode-on)
-  (add-hook 'message-mode-hook 'flyspell-mode-on)
+;; flyspell-prog-mode depends on font-lock to identify comments and
+;; strings, so it won't work without it anyway.
+(add-hook 'font-lock-mode-hook 'flyspell-prog-mode)
 
-  ;; flyspell-prog-mode depends on font-lock to identify comments and
-  ;; strings, so it won't work without it anyway.
-  (add-hook 'font-lock-mode-hook 'flyspell-prog-mode)
+(setq flyspell-abbrev-p nil)
+(setq flyspell-sort-corrections nil)
 
-  (setq flyspell-abbrev-p nil)
-  (setq flyspell-sort-corrections nil)
+(define-key flyspell-mouse-map [(button3)] #'flyspell-correct-word)
 
-  (define-key flyspell-mouse-map [(button3)] #'flyspell-correct-word)
-
-  (define-key flyspell-mode-map [(super tab)] nil))
+(define-key flyspell-mode-map [(super tab)] nil)
 
 ;;}}}
 ;;{{{ Font-lock
