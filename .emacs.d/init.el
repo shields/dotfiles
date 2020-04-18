@@ -80,6 +80,21 @@
 
 (setq line-move-visual nil)
 
+;; Try to have pointer follow cursor.  This doesn't currently work
+;; (Emacs 26.3, macOS 10.15.4) because (frame-pointer-visible-p) often
+;; returns t even when the pointer is clearly not visible.
+;;
+;; (defun shields/set-hidden-pointer-at-cursor ()
+;;   "Place the pointer at the cursor when it is not being used.
+;;
+;; This commonly happens via `make-pointer-invisible' (t by default)."
+;;   (when (not (frame-pointer-visible-p))
+;;     (let ((pos (mouse-avoidance-point-position)))
+;;       (message "set to " pos)
+;;       (set-mouse-position (car pos) (cadr pos) (cddr pos)))))
+;; (setq shields/set-hidden-pointer-at-cursor-timer
+;;       (run-with-idle-timer 0.1 t #'shields/set-hidden-pointer-at-cursor))
+
 ;;}}}
 ;;{{{ Mode line
 
