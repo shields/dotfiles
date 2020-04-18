@@ -12,6 +12,7 @@
 	dockerfile-mode
 	doom-modeline
 	eterm-256color
+	ethan-wspace
 	exec-path-from-shell
 	flx-ido
 	flycheck

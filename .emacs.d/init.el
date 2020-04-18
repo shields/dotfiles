@@ -74,6 +74,8 @@
 (add-hook 'prog-mode-hook
 	  #'(lambda () (subword-mode 1)))
 
+(global-ethan-wspace-mode 1)
+
 ;;}}}
 ;;{{{ Mode line
 
@@ -91,9 +93,6 @@
 
 ;; Make sure editing a hard-linked file edits all its links.
 (setq backup-by-copying-when-linked t)
-
-;; Ask for confirmation before saving without a newline.
-(setq require-final-newline 'maybe)
 
 ;; From example in advice.el 2.14:
 (defadvice switch-to-buffer (before existing-buffers-only activate)
