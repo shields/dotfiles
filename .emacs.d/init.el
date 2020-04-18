@@ -30,6 +30,12 @@
 
 (setq inhibit-startup-message t)
 
+;; Enable full-screen.
+(if (and (eq window-system 'ns)
+	 (not (memq (frame-parameter nil 'fullscreen)
+		    '(fullscreen fullboth))))
+    (toggle-frame-fullscreen))
+
 ;; Don't close windows because they're too short.  Sometimes a
 ;; single-line (plus mode line) window can be useful.
 (setq window-min-height 2)
