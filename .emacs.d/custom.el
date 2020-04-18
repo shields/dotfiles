@@ -35,4 +35,8 @@
  '(mode-line-inactive ((t (:inherit mode-line :background "grey80" :foreground "grey20" :box (:line-width -1 :color "grey75") :weight light))))
  '(show-paren-match ((t (:foreground "magenta" :weight bold))))
  '(show-paren-match-expression ((t (:background "#f4f4ff"))))
+ '(sp-pair-overlay-face ((t (:inherit sp-show-pair-match-content-face))))
+ '(sp-show-pair-match-content-face ((t (:inherit show-paren-match-expression))))
+ '(sp-show-pair-match-face ((t (:inherit (show-paren-match show-paren-match-expression)))))
+ '(sp-wrap-overlay-opening-pair ((t (:inherit sp-wrap-overlay-face :foreground "magenta"))))
  '(variable-pitch ((t (:height 1.2 :family "Avenir Next")))))

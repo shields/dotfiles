@@ -56,8 +56,9 @@
 (column-number-mode)
 (setq column-number-indicator-zero-based nil)
 
-(show-paren-mode t)
-(setq show-paren-style 'expression)
+(smartparens-global-mode 1)
+(show-smartparens-global-mode 1)
+(setq sp-show-pair-delay 0)
 
 (global-hl-todo-mode 1)
 (setq hl-todo-keyword-faces
@@ -94,6 +95,11 @@
 ;;       (set-mouse-position (car pos) (cadr pos) (cddr pos)))))
 ;; (setq shields/set-hidden-pointer-at-cursor-timer
 ;;       (run-with-idle-timer 0.1 t #'shields/set-hidden-pointer-at-cursor))
+
+(global-aggressive-indent-mode 1)
+;; Leave electric-indent enabled for modes that don't work well with
+;; aggressive-indent.
+(electric-indent-mode 1)
 
 ;;}}}
 ;;{{{ Mode line
@@ -279,6 +285,7 @@ Version 2017-07-25"
 ;;}}}
 ;;{{{ term-mode
 
+;; After changing these, run (multi-term-keystroke-setup).
 (setq term-bind-key-alist
       '(("C-c C-c" . term-interrupt-subjob)
 	("C-c C-e" . term-send-esc)
@@ -288,7 +295,6 @@ Version 2017-07-25"
 	("M-." . comint-dynamic-complete)))
 (setq term-unbind-key-list
       '("C-z" "C-x" "C-c" "C-h" "C-y" "<ESC>" "C-r" "C-s" "C-t"))
-(multi-term-keystroke-setup)
 
 (add-hook 'term-mode-hook #'eterm-256color-mode)
 
@@ -299,7 +305,7 @@ Version 2017-07-25"
 
 ;; terraform-mode doesn't indent quite correctly, and will even undo
 ;; changes made by format-on-save.
-(add-to-list 'aggressive-indent-excluded-modes 'terraform-mode)
+(add-to-list #'aggressive-indent-excluded-modes 'terraform-mode)
 
 ;;}}}
 ;;{{{ text-mode and indented-text-mode
@@ -370,15 +376,6 @@ Version 2017-07-25"
 ;;}}}
 
 ;;; Features
-;;{{{ aggressive-indent
-
-(global-aggressive-indent-mode 1)
-
-;; Leave electric-indent enabled for modes that don't work well with
-;; aggressive-indent.
-(electric-indent-mode 1)
-
-;;}}}
 ;;{{{ Calc
 
 (setq calc-group-char " ")
@@ -418,7 +415,7 @@ Version 2017-07-25"
 ;;}}}
 ;;{{{ Company
 
-(add-hook 'after-init-hook 'global-company-mode)
+(global-company-mode 1)
 
 (setq company-show-numbers t)
 (setq company-minimum-prefix-length 2)
@@ -441,7 +438,7 @@ In that case, insert the number."
 (mapc
  (lambda (x)
    (define-key company-active-map (format "%d" x) #'ora-company-number))
- (number-sequence 0 9))
+ (number-sequence 1 9))
 
 ;;}}}
 ;;{{{ Flycheck
@@ -560,12 +557,6 @@ In that case, insert the number."
 
 ;; "python" on macOS 10.15 is 2.7.
 (setq python-shell-interpreter "python3")
-
-;;}}}
-;;{{{ Smartparens
-
-(require 'smartparens-config)
-(smartparens-global-mode)
 
 ;;}}}
 ;;{{{ TRAMP
