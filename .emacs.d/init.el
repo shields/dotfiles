@@ -180,6 +180,9 @@ when called with a prefix argument."
 
 (global-set-key [(super t)] 'split-window-right)
 
+(global-set-key [(super \')] 'next-multiframe-window)
+(global-set-key [(super \")] 'previous-multiframe-window)
+
 (global-set-key [(super m)] 'magit-status)
 
 (global-set-key [(super i)] 'ido-find-file)
