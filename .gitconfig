@@ -1,6 +1,5 @@
 [user]
 	name = Michael Shields
-	email = michael.shields@freenome.com
 [core]
 	pager = less -R
 [alias]
@@ -8,7 +7,7 @@
 	branch-name = !git rev-parse --abbrev-ref HEAD
 	c = commit
 	ca = commit -a
-	co = checkout 
+	co = checkout
 	cob = checkout -b
 	d = diff
 	p = status
