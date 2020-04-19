@@ -324,6 +324,12 @@ Version 2017-07-25"
 	     (define-key makefile-mode-map "\C-c\C-c" 'compile)))
 
 ;;}}}
+;;{{{ Magit
+
+(magit-wip-mode 1)
+(setq magit-no-confirm '(safe-with-wip))
+
+;;}}}
 ;;{{{ term-mode
 
 ;; After changing these, run (multi-term-keystroke-setup).
