@@ -208,6 +208,7 @@ when called with a prefix argument."
 (global-set-key [(super g)] #'grep)
 
 (global-set-key [(control t)] #'counsel-switch-buffer)
+(global-set-key [(control x) (b)] nil)
 
 (global-set-key [(super up)] #'move-line-up)
 (global-set-key [(super down)] #'move-line-down)
