@@ -19,6 +19,7 @@
  '(doom-modeline-bar ((t nil)))
  '(doom-modeline-bar-inactive ((t nil)))
  '(doom-modeline-buffer-file ((t (:inherit mode-line-buffer-id))))
+ '(doom-modeline-buffer-major-mode ((t nil)))
  '(doom-modeline-buffer-minor-mode ((t (:slant normal))))
  '(doom-modeline-buffer-modified ((t (:inherit doom-modeline-buffer-path :foreground "blue"))))
  '(doom-modeline-buffer-path ((t (:inherit mode-line-emphasis))))
