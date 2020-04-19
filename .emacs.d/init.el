@@ -326,6 +326,9 @@ Version 2017-07-25"
 (eval-after-load "go-mode"
   '(define-key go-mode-map [(super .)] #'godef-jump))
 
+;; go.mod files are not Modula-2.
+(add-to-list 'auto-mode-alist '("/go\\.mod$" . fundamental-mode))
+
 ;;}}}
 ;;{{{ help-mode
 
@@ -369,7 +372,7 @@ Version 2017-07-25"
 
 ;; terraform-mode doesn't indent quite correctly, and will even undo
 ;; changes made by format-on-save.
-(add-to-list #'aggressive-indent-excluded-modes 'terraform-mode)
+(add-to-list 'aggressive-indent-excluded-modes 'terraform-mode)
 
 ;;}}}
 ;;{{{ text-mode and indented-text-mode
