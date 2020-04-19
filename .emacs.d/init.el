@@ -18,9 +18,8 @@
 ;;{{{ Customization of commands
 
 ;; Disabled commands.  Hmmph.
-(put 'eval-expression 'disabled nil)	; C-:
+(put 'eval-expression 'disabled nil)
 (put 'narrow-to-region 'disabled nil)	; C-x n n
-;;(setq disabled-command-hook 'ignore)
 
 ;; Stop saying "You can run the command blah-blah with M-x bl-b".
 (setq extended-command-suggest-shorter nil)
@@ -76,6 +75,7 @@
 (smartparens-global-mode 1)
 (show-smartparens-global-mode 1)
 (setq sp-show-pair-delay 0)
+(setq sp-ignore-modes-list nil)		; Even the minibuffer!
 
 (global-hl-todo-mode 1)
 (setq hl-todo-keyword-faces
@@ -206,6 +206,10 @@ when called with a prefix argument."
 (global-set-key [(super w)] #'er/expand-region)
 (global-set-key [(control w)] nil)
 
+;; Put M-ESC (i.e., ESC ESC) back to the way it was when I learned
+;; Emacs.  Apparently this changed in 1994.
+(global-set-key "\e\e" #'eval-expression)
+
 ;;}}}
 
 ;;{{{ New commands
@@ -284,6 +288,14 @@ Version 2017-07-25"
 
 (eval-after-load "elisp-mode"
   '(define-key emacs-lisp-mode-map [(super return)] #'eval-last-sexp))
+
+(defun shields/eval-expression-minibuffer-setup ()
+  (insert "()")
+  (backward-char)
+  ;; Don't smartparen-pair on '.
+  (sp-update-local-pairs '(:open "'" :close nil :actions nil)))
+(add-hook 'eval-expression-minibuffer-setup-hook
+	  #'shields/eval-expression-minibuffer-setup)
 
 ;;}}}
 ;;{{{ go-mode
