@@ -190,7 +190,7 @@ when called with a prefix argument."
 
 (global-set-key [(super m)] 'magit-status)
 
-(global-set-key [(super i)] 'counsel-find-file)
+(global-set-key [(super h)] 'counsel-find-file)
 
 (global-set-key [(super v)] #'xah-paste-or-paste-previous)
 ;; Break old C-v / M-v habits now that S-v is paste (yank).

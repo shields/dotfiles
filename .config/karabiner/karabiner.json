@@ -328,11 +328,11 @@
                         ]
                     },
 		    {
-			"description": "ErgoEmacs-inspired swaps",
+			"description": "HJKL motion (in QGMLWY)",
 			"manipulators": [
 			    {
 				"from": {
-				    "key_code": "u",
+				    "key_code": "i",
                                     "modifiers": {
                                         "mandatory": [
                                             "command"
@@ -341,7 +341,7 @@
 				},
 				"to": [
 				    {
-					"key_code": "up_arrow"
+					"key_code": "left_arrow"
 				    }
 				],
 				"type": "basic"
@@ -373,7 +373,7 @@
 				},
 				"to": [
 				    {
-					"key_code": "left_arrow"
+					"key_code": "up_arrow"
 				    }
 				],
 				"type": "basic"
@@ -396,7 +396,7 @@
 			    },
 			    {
 				"from": {
-				    "key_code": "u",
+				    "key_code": "i",
                                     "modifiers": {
                                         "mandatory": [
                                             "command",
@@ -406,7 +406,7 @@
 				},
 				"to": [
 				    {
-					"key_code": "page_up"
+					"key_code": "home"
 				    }
 				],
 				"type": "basic"
@@ -440,7 +440,7 @@
 				},
 				"to": [
 				    {
-					"key_code": "home"
+					"key_code": "page_up"
 				    }
 				],
 				"type": "basic"
