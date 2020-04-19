@@ -29,7 +29,6 @@
 	multi-term
 	projectile
 	smartparens
-	swiper
 	symbol-overlay
 	terraform-mode
 	yasnippet))

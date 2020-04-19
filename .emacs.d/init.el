@@ -199,8 +199,6 @@ when called with a prefix argument."
 (global-set-key [(super k)] #'avy-goto-char-timer)
 
 (global-set-key [(super f)] nil)
-(global-set-key [(control s)] #'swiper)
-(global-set-key [(control r)] #'swiper-backward)
 
 (global-set-key [(super g)] #'grep)
 
