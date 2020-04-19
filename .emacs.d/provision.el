@@ -9,6 +9,7 @@
 	avy
 	company
 	company-go
+	counsel
 	diff-hl
 	dockerfile-mode
 	doom-modeline
@@ -16,18 +17,19 @@
 	ethan-wspace
 	exec-path-from-shell
 	expand-region
-	flx-ido
+	flx
 	flycheck
 	go-eldoc
 	go-mode
 	hl-todo
-	ido-vertical-mode
+	ivy
 	magit
 	markdown-mode
 	minions
 	multi-term
 	projectile
 	smartparens
+	swiper
 	symbol-overlay
 	terraform-mode
 	yasnippet))

@@ -167,7 +167,7 @@ when called with a prefix argument."
 
 (global-set-key [(control c) (d)] 'dictionary-search)
 
-(global-set-key [(control h) (a)] 'apropos) ; not apropos-command
+(global-set-key [(control h) (a)] 'counsel-apropos)
 
 ;; The default is just-one-space.
 (global-set-key [(super space)] 'fixup-whitespace)
@@ -185,7 +185,7 @@ when called with a prefix argument."
 
 (global-set-key [(super m)] 'magit-status)
 
-(global-set-key [(super i)] 'ido-find-file)
+(global-set-key [(super i)] 'counsel-find-file)
 
 (global-set-key [(super v)] #'xah-paste-or-paste-previous)
 ;; Break old C-v / M-v habits now that S-v is paste (yank).
@@ -198,7 +198,13 @@ when called with a prefix argument."
 
 (global-set-key [(super k)] #'avy-goto-char-timer)
 
-(global-set-key [(control t)] #'ido-switch-buffer)
+(global-set-key [(super f)] nil)
+(global-set-key [(control s)] #'swiper)
+(global-set-key [(control r)] #'swiper-backward)
+
+(global-set-key [(super g)] #'counsel-rg)
+
+(global-set-key [(control t)] #'counsel-switch-buffer)
 
 (global-set-key [(super up)] #'move-line-up)
 (global-set-key [(super down)] #'move-line-down)
@@ -556,16 +562,18 @@ In that case, insert the number."
 (setq font-lock-maximum-size 2097152)
 
 ;;}}}
-;;{{{ ido
+;;{{{ ivy, counsel, and swiper
 
-(ido-mode 1)
-(ido-everywhere 1)
-(flx-ido-mode 1)
-;; Disable ido faces to see flx highlights.
-(setq ido-enable-flex-matching t)
-(setq ido-use-faces nil)
+(setq ivy-use-virtual-buffers t)
+(setq ivy-count-format "%d/%d ")
 
-(ido-vertical-mode 1)
+(setq ivy-re-builders-alist
+      '((swiper . ivy--regex-plus)
+	(t . ivy--regex-fuzzy)))
+
+(setq ivy-wrap t)
+
+(counsel-mode 1)
 
 ;;}}}
 ;;{{{ Info
@@ -616,6 +624,8 @@ In that case, insert the number."
 	    " Proj"
 	  (format " Proj[%s]"
 		  (projectile-project-name)))))
+
+(setq projectile-completion-system 'ivy)
 
 ;;}}}
 ;;{{{ Python
