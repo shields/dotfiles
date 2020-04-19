@@ -340,7 +340,7 @@
 				},
 				"to": [
 				    {
-					"key_code": "right_arrow"
+					"key_code": "left_arrow"
 				    }
 				],
 				"type": "basic"
@@ -356,7 +356,7 @@
 				},
 				"to": [
 				    {
-					"key_code": "left_arrow"
+					"key_code": "right_arrow"
 				    }
 				],
 				"type": "basic"
@@ -407,7 +407,7 @@
 				},
 				"to": [
 				    {
-					"key_code": "end"
+					"key_code": "home"
 				    }
 				],
 				"type": "basic"
@@ -424,7 +424,7 @@
 				},
 				"to": [
 				    {
-					"key_code": "home"
+					"key_code": "end"
 				    }
 				],
 				"type": "basic"
