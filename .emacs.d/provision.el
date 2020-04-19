@@ -32,6 +32,14 @@
 	symbol-overlay
 	terraform-mode
 	yasnippet))
+
+;; Some packages are in melpa-stable but only with very old versions.
+(setq package-pinned-packages
+      '((diff-hl . "melpa")
+	(flycheck . "melpa")
+	(go-mode . "melpa")
+	(smartparens . "melpa")))
+
 (package-install-selected-packages)
 
 (all-the-icons-install-fonts 1)
