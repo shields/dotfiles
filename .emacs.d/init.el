@@ -99,6 +99,9 @@
 (add-hook 'prog-mode-hook
 	  #'(lambda () (subword-mode 1)))
 
+;; Enable ethan-wspace, which supersedes and warns about
+;; mode-require-final-newline.
+(setq mode-require-final-newline nil)
 (global-ethan-wspace-mode 1)
 
 (setq kill-whole-line t)
@@ -343,7 +346,8 @@ Version 2017-07-25"
 ;;}}}
 ;;{{{ Magit
 
-(magit-wip-mode 1)
+(eval-after-load "magit"
+  '(magit-wip-mode 1))
 (setq magit-no-confirm '(safe-with-wip))
 
 (setq magit-save-repository-buffers 'dontask)
@@ -511,15 +515,17 @@ In that case, insert the number."
 
 (setq compilation-message-face 'default)
 
-(grep-apply-setting 'grep-command
-		    (concat "rg -nH --null --color=always --no-heading "
-			    "--max-columns-preview --max-columns=80 "))
+(eval-after-load "grep"
+  '(progn
+     (grep-apply-setting 'grep-command
+			 (concat "rg -nH --null --color=always --no-heading "
+				 "--max-columns-preview --max-columns=80 "))
 
-;; TODO: Figure out why this has no effect.
-(grep-apply-setting 'grep-highlight-matches 'always)
+     ;; TODO: Figure out why this has no effect.
+     (grep-apply-setting 'grep-highlight-matches 'always)
 
-(grep-apply-setting 'grep-use-null-device nil)
-(grep-apply-setting 'grep-use-null-filename-separator t)
+     (grep-apply-setting 'grep-use-null-device nil)
+     (grep-apply-setting 'grep-use-null-filename-separator t)))
 
 ;;}}}
 ;;{{{ Dired
