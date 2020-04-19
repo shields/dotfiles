@@ -344,6 +344,8 @@ Version 2017-07-25"
 (magit-wip-mode 1)
 (setq magit-no-confirm '(safe-with-wip))
 
+(setq magit-save-repository-buffers 'dontask)
+
 ;;}}}
 ;;{{{ term-mode
 
