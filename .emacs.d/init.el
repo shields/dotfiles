@@ -202,7 +202,7 @@ when called with a prefix argument."
 (global-set-key [(control s)] #'swiper)
 (global-set-key [(control r)] #'swiper-backward)
 
-(global-set-key [(super g)] #'counsel-rg)
+(global-set-key [(super g)] #'grep)
 
 (global-set-key [(control t)] #'counsel-switch-buffer)
 
@@ -503,6 +503,21 @@ In that case, insert the number."
  (lambda (x)
    (define-key company-active-map (format "%d" x) #'ora-company-number))
  (number-sequence 1 9))
+
+;;}}}
+;;{{{ compilation and grep
+
+(setq compilation-message-face 'default)
+
+(grep-apply-setting 'grep-command
+		    (concat "rg -nH --null --color=always --no-heading "
+			    "--max-columns-preview --max-columns=80 "))
+
+;; TODO: Figure out why this has no effect.
+(grep-apply-setting 'grep-highlight-matches 'always)
+
+(grep-apply-setting 'grep-use-null-device nil)
+(grep-apply-setting 'grep-use-null-filename-separator t)
 
 ;;}}}
 ;;{{{ Dired
