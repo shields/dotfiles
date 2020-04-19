@@ -210,6 +210,8 @@ when called with a prefix argument."
 ;; Emacs.  Apparently this changed in 1994.
 (global-set-key "\e\e" #'eval-expression)
 
+(global-set-key [(super s)] #'shields/save-dwim)
+
 ;;}}}
 
 ;;{{{ New commands
@@ -244,6 +246,15 @@ Version 2017-07-25"
       (if (eq real-last-command this-command)
           (yank-pop 1)
         (yank)))))
+
+(defun shields/save-dwim ()
+  "Save the current file, or if saved, call Magit to stage and diff."
+  (interactive)
+  (if (buffer-modified-p)
+      (save-buffer)
+    (when buffer-file-name
+      (magit-stage-file buffer-file-name)
+      (magit-diff-buffer-file))))
 
 ;;}}}
 
