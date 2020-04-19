@@ -748,5 +748,16 @@ This function is useful for binding to a hotkey."
 
 (require 'edebug)
 
+;; Allow Emacs to burn up to 2% of RAM before running GC.  The default
+;; in 26.3 is 800 kB (!).  Prelude sets this to 100 MB.
+(setq gc-cons-threshold
+      (if (eq system-type 'darwin)
+	  (/ (string-to-number
+	      (replace-regexp-in-string
+	       "^hw\\.memsize: \\([0-9]+\\)\n$"
+	       "\\1"
+	       (shell-command-to-string "sysctl hw.memsize")))
+	     50)
+	100000000))
 
 ;;}}}
