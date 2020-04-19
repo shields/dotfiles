@@ -683,6 +683,11 @@ In that case, insert the number."
 (setq w3m-fill-column 70)
 
 ;;}}}
+;;{{{ yasnippet
+
+(add-hook 'prog-mode-hook #'yas-minor-mode-on)
+
+;;}}}
 
 ;;{{{ Unsorted additions
 
