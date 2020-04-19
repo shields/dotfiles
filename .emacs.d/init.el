@@ -275,11 +275,11 @@ Version 2017-07-25"
 ;;; Major modes
 ;;{{{ c-mode
 
-(add-hook 'c-mode-hook '(lambda ()
-			  (c-set-style "k&r")
-			  (setq c-basic-offset 4)))
-(add-hook 'c-mode-hook '(lambda ()
-			  (define-key c-mode-map "\C-c\C-c" 'compile)))
+(defun shields/c-mode-setup ()
+  (c-set-style "k&r")
+  (setq c-basic-offset 4)
+  (define-key c-mode-map "\C-c\C-c" 'compile))
+(add-hook 'c-mode-hook #'shields/c-mode-setup)
 
 (setq c-cleanup-list '(brace-else-brace defun-close-semi))
 
