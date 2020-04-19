@@ -134,6 +134,8 @@
 (setq doom-modeline-major-mode-icon nil)
 (setq doom-modeline-buffer-file-name-style 'relative-from-project)
 (setq doom-modeline-minor-modes t)
+(setq doom-modeline-number-limit 999)
+(setq doom-modeline-vcs-max-length 32)
 
 (minions-mode 1)
 
