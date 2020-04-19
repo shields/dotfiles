@@ -163,7 +163,7 @@ when called with a prefix argument."
 
 (global-set-key [(control c) (F)] 'find-file-at-point)
 
-(global-set-key [(control x) (control n)] 'next-error)
+(global-set-key [(super n)] 'next-error)
 
 (global-set-key [(control c) (d)] 'dictionary-search)
 
