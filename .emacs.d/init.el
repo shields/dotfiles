@@ -516,6 +516,8 @@ In that case, insert the number."
 
 (setq compilation-message-face 'default)
 
+(setq compilation-scroll-output 'first-error)
+
 (eval-after-load "grep"
   '(progn
      (grep-apply-setting 'grep-command
@@ -527,6 +529,16 @@ In that case, insert the number."
 
      (grep-apply-setting 'grep-use-null-device nil)
      (grep-apply-setting 'grep-use-null-filename-separator t)))
+
+;; Enable ANSI colors in compilation buffer.
+;; http://endlessparentheses.com/ansi-colors-in-the-compilation-buffer-output.html
+(defun endless/colorize-compilation ()
+  "Colorize from `compilation-filter-start' to `point'."
+  (let ((inhibit-read-only t))
+    (ansi-color-apply-on-region
+     compilation-filter-start (point))))
+(add-hook 'compilation-filter-hook
+          #'endless/colorize-compilation)
 
 ;;}}}
 ;;{{{ Dired
