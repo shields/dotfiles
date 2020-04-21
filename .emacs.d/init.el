@@ -35,6 +35,9 @@
 		    '(fullscreen fullboth))))
     (toggle-frame-fullscreen))
 
+(setq display-buffer-base-action
+      '(nil (reusable-frames visible)))
+
 ;; Don't close windows because they're too short.  Sometimes a
 ;; single-line (plus mode line) window can be useful.
 (setq window-min-height 2)
