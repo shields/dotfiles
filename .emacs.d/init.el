@@ -529,7 +529,7 @@ stage it and display a diff."
 ;;}}}
 ;;{{{ Company
 
-(global-company-mode 1)
+(add-hook 'prog-mode-hook #'company-mode-on)
 
 (setq company-show-numbers t)
 (setq company-minimum-prefix-length 1)
