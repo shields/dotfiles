@@ -532,7 +532,8 @@ stage it and display a diff."
 (global-company-mode 1)
 
 (setq company-show-numbers t)
-(setq company-minimum-prefix-length 2)
+(setq company-minimum-prefix-length 1)
+(setq company-tooltip-idle-delay 0)
 (setq company-tooltip-align-annotations t)
 (setq company-tooltip-flip-when-above t)
 
@@ -553,6 +554,10 @@ In that case, insert the number."
  (lambda (x)
    (define-key company-active-map (format "%d" x) #'ora-company-number))
  (number-sequence 1 9))
+
+(global-company-fuzzy-mode 1)
+(setq company-fuzzy-sorting-backend 'flx)
+(setq company-require-match nil)	; A bad fit with fuzzy matching.
 
 ;;}}}
 ;;{{{ compilation and grep

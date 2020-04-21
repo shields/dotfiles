@@ -8,6 +8,7 @@
 	anzu
 	avy
 	company
+	company-fuzzy
 	company-go
 	counsel
 	dockerfile-mode
