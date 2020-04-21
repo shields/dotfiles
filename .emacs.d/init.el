@@ -199,6 +199,8 @@ when called with a prefix argument."
 
 (global-set-key [(super \;)] 'comment-dwim)
 
+(global-set-key [(super h)] 'goto-last-change)
+
 (global-set-key [(super t)] 'split-window-right)
 
 (global-set-key [(super \')] 'next-multiframe-window)

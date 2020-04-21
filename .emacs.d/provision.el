@@ -19,7 +19,7 @@
 	expand-region
 	flx
 	go-eldoc
-	go-mode
+	goto-last-change
 	hl-todo
 	ivy
 	magit
@@ -27,7 +27,6 @@
 	minions
 	multi-term
 	projectile
-	smartparens
 	symbol-overlay
 	terraform-mode
 	use-package
