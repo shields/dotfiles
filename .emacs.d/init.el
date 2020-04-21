@@ -103,6 +103,11 @@
 ;; mode-require-final-newline.
 (setq mode-require-final-newline nil)
 (global-ethan-wspace-mode 1)
+;; Disable ethan-wspace "fixup" feature, which modifies the buffer to
+;; re-add new whitespace immediately before the cursor, then falsely
+;; marks the buffer as unmodified.
+;; https://github.com/glasserc/ethan-wspace/issues/21
+(remove-hook 'after-save-hook 'ethan-wspace-clean-after-save-hook)
 
 (setq kill-whole-line t)
 
@@ -160,6 +165,10 @@ when called with a prefix argument."
 (setq make-backup-files nil)
 (setq create-lockfiles nil)
 
+(global-auto-revert-mode 1)
+(setq global-auto-revert-non-file-buffers t)
+(setq auto-revert-verbose nil)
+
 ;;}}}
 ;;{{{ Global keybindings
 
@@ -187,10 +196,9 @@ when called with a prefix argument."
 
 (global-set-key [(super \')] 'next-multiframe-window)
 (global-set-key [(super \")] 'previous-multiframe-window)
+(global-set-key [(control x) (o)] nil)
 
 (global-set-key [(super m)] 'magit-status)
-
-(global-set-key [(super h)] 'counsel-find-file)
 
 (global-set-key [(super v)] #'xah-paste-or-paste-previous)
 ;; Break old C-v / M-v habits now that S-v is paste (yank).
@@ -207,6 +215,8 @@ when called with a prefix argument."
 
 (global-set-key [(super g)] #'grep)
 
+(global-set-key [(super t)] #'previous-buffer)
+(global-set-key [(super T)] #'next-buffer)
 (global-set-key [(control t)] #'counsel-switch-buffer)
 (global-set-key [(control x) (b)] nil)
 
@@ -220,7 +230,16 @@ when called with a prefix argument."
 ;; Emacs.  Apparently this changed in 1994.
 (global-set-key "\e\e" #'eval-expression)
 
+(global-set-key [(super b)] #'shields/open-dwim)
 (global-set-key [(super s)] #'shields/save-dwim)
+
+(global-set-key [(super q)] nil)
+
+(global-set-key [(super r)] #'replace-string)
+
+;; Option-shift-hyphen for em dash, same as macOS ordinary combo.
+(global-set-key [(meta _)]
+		'(lambda () (interactive) (insert "—")))
 
 ;;}}}
 
@@ -257,12 +276,33 @@ Version 2017-07-25"
           (yank-pop 1)
         (yank)))))
 
-(defun shields/save-dwim ()
-  "Save the current file, or if saved, call Magit to stage and diff."
-  (interactive)
+(defun shields/open-dwim (arg)
+  "Open in the current project if in a project, otherwise whatever."
+  (interactive "P")
+  (when (projectile-project-root)
+    (projectile-find-file arg)
+    (counsel-find-file are)))
+
+(defun shields/save-dwim (arg)
+  "Save and do other things.
+
+If the file is being freshly saved, and it is part of a
+Projectile project, also save all other project buffers, then run
+the tests.
+
+If the file was already saved, and it is part of a Magit repo,
+stage it and display a diff."
+  (interactive "P")
   (if (buffer-modified-p)
-      (save-buffer)
-    (when buffer-file-name
+      ;; File is being freshly saved.
+      (progn
+	(save-buffer)
+	(when (projectile-project-root)
+	  (projectile-save-project-buffers)
+	  (let ((compilation-read-command nil))
+	    (projectile-test-project arg))))
+    ;; File was already saved.
+    (when (magit-file-relative-name)
       (magit-stage-file buffer-file-name)
       (magit-diff-buffer-file))))
 
@@ -323,14 +363,15 @@ Version 2017-07-25"
 
 (setq godoc-at-point-function #'godoc-gogetdoc)
 
-(add-hook 'go-mode-hook #'go-eldoc-setup)
+;; LSP setup.  https://github.com/golang/tools/blob/master/gopls/doc/emacs.md
+(defun lsp-go-install-save-hooks ()
+  (add-hook 'before-save-hook #'lsp-format-buffer t t)
+  (add-hook 'before-save-hook #'lsp-organize-imports t t))
+(add-hook 'go-mode-hook #'lsp-go-install-save-hooks)
+(add-hook 'go-mode-hook #'lsp-deferred)
 
-(add-hook 'before-save-hook 'gofmt-before-save)
-
-(setq gofmt-command "goimports")
-
-(eval-after-load "go-mode"
-  '(define-key go-mode-map [(super .)] #'godef-jump))
+;; aggressive-indent-mode interacts badly with LSP's reformatting.
+(add-to-list 'aggressive-indent-excluded-modes 'go-mode)
 
 ;;}}}
 ;;{{{ help-mode
@@ -368,6 +409,8 @@ Version 2017-07-25"
       '("C-z" "C-x" "C-c" "C-h" "C-y" "<ESC>" "C-r" "C-s" "C-t"))
 
 (add-hook 'term-mode-hook #'eterm-256color-mode)
+
+(setq term-suppress-hard-newline t)
 
 ;;}}}
 ;;{{{ Terraform
@@ -516,6 +559,8 @@ In that case, insert the number."
 
 (setq compilation-message-face 'default)
 
+(setq compilation-always-kill t)
+
 (setq compilation-scroll-output 'first-error)
 
 (eval-after-load "grep"
@@ -623,6 +668,21 @@ In that case, insert the number."
 (jka-compr-install)
 
 ;;}}}
+;;{{{ LSP
+
+(lsp-ui-mode 1)
+
+(setq lsp-ui-peek-enable nil)
+
+(setq lsp-ui-doc-position 'bottom)
+;; This doesn't get updated properly.
+;; https://github.com/emacs-lsp/lsp-ui/issues/369
+(face-spec-set 'lsp-ui-doc-background
+	       '((t :background "#eeeeff")))
+
+(company-lsp 1)
+
+;;;}}}
 ;;{{{ Markdown
 
 (add-hook 'markdown-mode-hook
@@ -654,17 +714,15 @@ In that case, insert the number."
 ;;{{{ Projectile
 
 (projectile-global-mode)
-(setq projectile-mode-line
-      '(:eval
-	(if (file-remote-p default-directory)
-	    " Proj"
-	  (format " Proj[%s]"
-		  (projectile-project-name)))))
+
+(define-key projectile-mode-map (kbd "M-p") 'projectile-command-map)
 
 (setq projectile-completion-system 'ivy)
 
 ;;}}}
 ;;{{{ Python
+
+(add-hook 'python-mode-hook #'lsp-deferred)
 
 ;; "python" on macOS 10.15 is 2.7.
 (setq python-shell-interpreter "python3")
@@ -698,7 +756,7 @@ In that case, insert the number."
 ;;}}}
 ;;{{{ yasnippet
 
-(add-hook 'prog-mode-hook #'yas-minor-mode-on)
+;;(add-hook 'prog-mode-hook #'yas-minor-mode-on)
 
 ;;}}}
 
@@ -766,8 +824,10 @@ This function is useful for binding to a hotkey."
 
 (require 'edebug)
 
-;; Allow Emacs to burn up to 2% of RAM before running GC.  The default
-;; in 26.3 is 800 kB (!).  Prelude sets this to 100 MB.
+;; Allow Emacs to burn up to 1% of RAM before running GC.  The default
+;; in 26.3 is 800 kB (!).  Prelude sets this to 100 MB.  If it's set
+;; too low, Emacs will pause often for GC; if it's set too high, the
+;; pauses will be long.
 (setq gc-cons-threshold
       (if (eq system-type 'darwin)
 	  (/ (string-to-number
@@ -775,7 +835,7 @@ This function is useful for binding to a hotkey."
 	       "^hw\\.memsize: \\([0-9]+\\)\n$"
 	       "\\1"
 	       (shell-command-to-string "sysctl hw.memsize")))
-	     50)
+	     100)
 	100000000))
 
 ;;}}}

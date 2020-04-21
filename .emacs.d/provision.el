@@ -10,7 +10,6 @@
 	company
 	company-go
 	counsel
-	diff-hl
 	dockerfile-mode
 	doom-modeline
 	eterm-256color
@@ -18,7 +17,6 @@
 	exec-path-from-shell
 	expand-region
 	flx
-	flycheck
 	go-eldoc
 	go-mode
 	hl-todo
@@ -31,14 +29,27 @@
 	smartparens
 	symbol-overlay
 	terraform-mode
+	use-package
+	yaml-mode
 	yasnippet))
 
-;; Some packages are in melpa-stable but only with very old versions.
+;; Some packages are in melpa-stable but we want a fresher version.
 (setq package-pinned-packages
-      '((diff-hl . "melpa")
-	(flycheck . "melpa")
-	(go-mode . "melpa")
-	(smartparens . "melpa")))
+      (mapcar
+       (lambda (package)
+	 (push package package-selected-packages)
+	 (cons package "melpa"))
+       '(company-lsp
+	 dap-mode
+	 diff-hl
+	 flycheck
+	 go-mode
+	 lsp-mode
+	 lsp-ivy
+	 lsp-treemacs
+	 lsp-ui
+	 smartparens
+	 treemacs)))
 
 (package-install-selected-packages)
 
