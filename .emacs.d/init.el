@@ -635,7 +635,7 @@ In that case, insert the number."
 (setq flyspell-abbrev-p nil)
 (setq flyspell-sort-corrections nil)
 
-(define-key flyspell-mouse-map [(button3)] #'flyspell-correct-word)
+(setq flyspell-persistent-highlight nil)
 
 (define-key flyspell-mode-map [(super tab)] nil)
 
