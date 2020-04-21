@@ -38,10 +38,6 @@
 (setq display-buffer-base-action
       '(nil (reusable-frames visible)))
 
-(customize-set-variable
- 'display-buffer-alist
- '(("\\*Help\\*" display-buffer-same-window)))
-
 ;; Don't close windows because they're too short.  Sometimes a
 ;; single-line (plus mode line) window can be useful.
 (setq window-min-height 2)
@@ -386,6 +382,12 @@ stage it and display a diff."
 ;;{{{ help-mode
 
 (setq help-window-select t)
+
+(customize-set-variable
+ 'display-buffer-alist
+ '(("\\*Help\\*" display-buffer-same-window)))
+
+(define-key help-mode-map [(q)] #'previous-buffer)
 
 ;; }}}
 ;;{{{ makefile-mode
