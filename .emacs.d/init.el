@@ -293,7 +293,7 @@ Version 2017-07-25"
 
 If the file is being freshly saved, and it is part of a
 Projectile project, also save all other project buffers, then run
-the tests.
+the tests, if any.
 
 If the file was already saved, and it is part of a Magit repo,
 stage it and display a diff."
@@ -303,9 +303,12 @@ stage it and display a diff."
       (progn
 	(save-buffer)
 	(when (projectile-project-root)
-	  (projectile-save-project-buffers)
-	  (let ((compilation-read-command nil))
-	    (projectile-test-project arg))))
+	  (let ((inhibit-message t))
+	    (projectile-save-project-buffers))
+	  (let ((compilation-read-command nil)
+		(p-c-d (projectile-compilation-dir)))
+	    (cond ((projectile-test-command p-c-d)
+		   (projectile-test-project arg))))))
     ;; File was already saved.
     (when (magit-file-relative-name)
       (magit-stage-file buffer-file-name)
