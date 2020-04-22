@@ -547,7 +547,7 @@ stage it and display a diff."
 
 (setq company-show-numbers t)
 (setq company-minimum-prefix-length 1)
-(setq company-tooltip-idle-delay 0)
+(setq company-tooltip-idle-delay 0.1)
 (setq company-tooltip-align-annotations t)
 (setq company-tooltip-flip-when-above t)
 
