@@ -566,7 +566,9 @@ In that case, insert the number."
    (define-key company-active-map (format "%d" x) #'ora-company-number))
  (number-sequence 1 9))
 
-(global-company-fuzzy-mode 1)
+;; company-fuzzy.
+(add-hook 'company-mode-hook #'company-fuzzy-turn-on-company-fuzzy-mode)
+(require 'company-fuzzy)		; c-f-t-o-c-f-m isn't autoloaded.
 (setq company-fuzzy-sorting-backend 'flx)
 (setq company-require-match nil)	; A bad fit with fuzzy matching.
 
