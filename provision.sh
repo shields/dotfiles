@@ -1,9 +1,15 @@
-#!/bin/bash
+#!/bin/sh
 
 set -e
 
 tar cf - $(find . -type f | grep -v -e '^\./\.git/' -e '^\./[^.]') \
     | (cd "$HOME" && tar xvf -)
+
+# The interesting part of
+# https://raw.github.com/ohmyzsh/ohmyzsh/master/tools/install.sh
+if [[ ! -d "$HOME/.oh-my-zsh" ]]; then
+    git clone --depth=1 https://github.com/ohmyzsh/ohmyzsh "$HOME/.oh-my-zsh"
+fi
 
 # Is this a Freenome-managed Mac?
 if [[ "$(uname)" == Darwin ]] && \
