@@ -13,6 +13,7 @@
  ;; If there is more than one, they won't work right.
  '(default ((t (:inherit nil :stipple nil :background "White" :foreground "Black" :inverse-video nil :box nil :strike-through nil :overline nil :underline nil :slant normal :weight normal :height 120 :width normal :foundry "nil" :family "Andale Mono"))))
  '(Info-quoted ((t (:inherit fixed-pitch))))
+ '(company-preview ((t (:foreground "gray60"))))
  '(cperl-array-face ((t (:foreground "Blue"))))
  '(cperl-hash-face ((t (:foreground "Red" :weight bold))))
  '(cursor ((t (:background "firebrick"))))
@@ -38,6 +39,7 @@
  '(ivy-minibuffer-match-face-4 ((t (:inherit ivy-minibuffer-match-face-3))))
  '(lazy-highlight ((t (:inherit match))))
  '(link-visited ((t (:inherit link))))
+ '(lsp-face-highlight-textual ((t (:background "#d0ffd0"))))
  '(markdown-header-face ((t (:weight bold))))
  '(match ((t (:background "yellow1" :foreground "black"))))
  '(minibuffer-prompt ((t (:weight bold))))
