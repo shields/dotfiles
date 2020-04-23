@@ -691,6 +691,8 @@ In that case, insert the number."
 ;;}}}
 ;;{{{ LSP
 
+(setq lsp-auto-guess-root t)
+
 (lsp-ui-mode 1)
 
 (setq lsp-ui-peek-enable nil)
