@@ -564,10 +564,11 @@ In that case, insert the number."
                     company-candidates)
         (self-insert-command 1)
       (company-complete-number (string-to-number k)))))
-(mapc
- (lambda (x)
-   (define-key company-active-map (format "%d" x) #'ora-company-number))
- (number-sequence 1 9))
+(eval-after-load "company-mode"
+  '(mapc
+    (lambda (x)
+      (define-key company-active-map (format "%d" x) #'ora-company-number))
+    (number-sequence 1 9)))
 
 ;; company-fuzzy.
 (add-hook 'company-mode-hook #'company-fuzzy-turn-on-company-fuzzy-mode)
