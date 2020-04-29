@@ -575,6 +575,8 @@ In that case, insert the number."
 (setq company-fuzzy-sorting-backend 'flx)
 (setq company-require-match nil)	; A bad fit with fuzzy matching.
 
+(setq company-global-modes '(not markdown-mode))
+
 ;;}}}
 ;;{{{ compilation and grep
 
