@@ -284,9 +284,9 @@ Version 2017-07-25"
 (defun shields/open-dwim (arg)
   "Open in the current project if in a project, otherwise whatever."
   (interactive "P")
-  (when (projectile-project-root)
-    (projectile-find-file arg)
-    (counsel-find-file are)))
+  (if (projectile-project-root)
+      (projectile-find-file arg)
+    (counsel-find-file arg)))
 
 (defun shields/save-dwim (arg)
   "Save and do other things.
