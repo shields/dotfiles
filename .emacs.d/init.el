@@ -240,6 +240,8 @@ when called with a prefix argument."
 
 (global-set-key [(super r)] #'replace-string)
 
+(global-set-key [s-mouse-1] 'ffap-at-mouse)
+
 ;; Option-shift-hyphen for em dash, same as macOS ordinary combo.
 (global-set-key [(meta _)]
 		'(lambda () (interactive) (insert "—")))
@@ -838,8 +840,6 @@ This function is useful for binding to a hotkey."
 (xterm-mouse-mode 1)
 (require 'mwheel)
 (mwheel-install)
-
-(global-set-key [s-mouse-1] 'ffap-at-mouse)
 
 
 (setq try-oblique-before-italic-fonts t)
