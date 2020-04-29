@@ -40,6 +40,7 @@
  '(lazy-highlight ((t (:inherit match))))
  '(link-visited ((t (:inherit link))))
  '(lsp-face-highlight-textual ((t (:background "#d0ffd0"))))
+ '(markdown-code-face ((t (:inherit fixed-pitch :background "#f850f850f850" :height 0.8))))
  '(markdown-header-face ((t (:weight bold))))
  '(match ((t (:background "yellow1" :foreground "black"))))
  '(minibuffer-prompt ((t (:weight bold))))
