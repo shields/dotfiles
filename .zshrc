@@ -95,6 +95,11 @@ source $ZSH/oh-my-zsh.sh
 # alias zshconfig="mate ~/.zshrc"
 # alias ohmyzsh="mate ~/.oh-my-zsh"
 
+alias tf='terraform'
+alias tfa='terraform apply'
+alias tfp='terraform plan -refresh=false'
+alias tfpr='terraform plan -refresh=true'
+
 for f in /usr/local/Caskroom/google-cloud-sdk/latest/google-cloud-sdk/*.zsh.inc(.N); do
     source $f
 done
