@@ -408,6 +408,13 @@ stage it and display a diff."
 
 (setq magit-save-repository-buffers 'dontask)
 
+;; Bind "=" to git diff origin/master.
+(eval-after-load "magit"
+  '(define-key magit-mode-map "="
+     (lambda ()
+       (interactive)
+       (magit-diff-range "origin/master"))))
+
 ;;}}}
 ;;{{{ term-mode
 
