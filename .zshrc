@@ -104,6 +104,8 @@ for f in /usr/local/Caskroom/google-cloud-sdk/latest/google-cloud-sdk/*.zsh.inc(
     source $f
 done
 
+export RIPGREP_CONFIG_PATH="$HOME/.ripgreprc"
+
 # Emacs shell dir tracking; see comments in term.el.
 if [ -n "$INSIDE_EMACS" ]; then
     chpwd() {
