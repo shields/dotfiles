@@ -869,4 +869,6 @@ This function is useful for binding to a hotkey."
 	     100)
 	100000000))
 
+(server-start)
+
 ;;}}}
