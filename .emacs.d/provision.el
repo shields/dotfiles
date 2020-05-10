@@ -1,3 +1,5 @@
+;; /usr/local/bin/emacs -q --script .emacs.d/provision.el
+
 (load "~/.emacs.d/package-repos.el")
 (package-initialize)
 (package-refresh-contents nil)
