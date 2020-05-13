@@ -201,7 +201,7 @@ when called with a prefix argument."
 
 (global-set-key [(super m)] 'magit-status)
 
-(global-set-key [(super v)] #'xah-paste-or-paste-previous)
+(global-set-key [(super v)] #'yank)
 ;; Break old C-v / M-v habits now that S-v is paste (yank).
 (global-set-key [(control v)] nil)
 
@@ -258,26 +258,6 @@ when called with a prefix argument."
   (forward-line 1)
   (transpose-lines 1)
   (forward-line -1))
-
-(defun xah-paste-or-paste-previous ()
-  "Paste. When called repeatedly, paste previous.
-This command calls `yank', and if repeated, call `yank-pop'.
-
-When `universal-argument' is called first with a number arg, paste that many times.
-
-URL `http://ergoemacs.org/emacs/emacs_paste_or_paste_previous.html'
-Version 2017-07-25"
-  (interactive)
-  (progn
-    (when (and delete-selection-mode (region-active-p))
-      (delete-region (region-beginning) (region-end)))
-    (if current-prefix-arg
-        (progn
-          (dotimes ($i (prefix-numeric-value current-prefix-arg))
-            (yank)))
-      (if (eq real-last-command this-command)
-          (yank-pop 1)
-        (yank)))))
 
 (defun shields/open-dwim (arg)
   "Open in the current project if in a project, otherwise whatever."
