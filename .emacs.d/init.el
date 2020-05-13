@@ -834,10 +834,10 @@ This function is useful for binding to a hotkey."
 
 (require 'edebug)
 
-;; Allow Emacs to burn up to 1% of RAM before running GC.  The default
-;; in 26.3 is 800 kB (!).  Prelude sets this to 100 MB.  If it's set
-;; too low, Emacs will pause often for GC; if it's set too high, the
-;; pauses will be long.
+;; Allow Emacs to burn up to 0.5% of RAM before running GC.  The
+;; default in 26.3 is 800 kB (!).  Prelude sets this to 100 MB.  If
+;; it's set too low, Emacs will pause often for GC; if it's set too
+;; high, the pauses will be long.
 (setq gc-cons-threshold
       (if (eq system-type 'darwin)
 	  (/ (string-to-number
@@ -845,7 +845,7 @@ This function is useful for binding to a hotkey."
 	       "^hw\\.memsize: \\([0-9]+\\)\n$"
 	       "\\1"
 	       (shell-command-to-string "sysctl hw.memsize")))
-	     100)
+	     200)
 	100000000))
 
 (server-start)
