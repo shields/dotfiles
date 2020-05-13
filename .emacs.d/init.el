@@ -570,7 +570,8 @@ In that case, insert the number."
 
 (setq compilation-always-kill t)
 
-(setq compilation-scroll-output 'first-error)
+;; 'first-error would be better, but doesn't seem reliable.
+(setq compilation-scroll-output t)
 
 (eval-after-load "grep"
   '(progn
