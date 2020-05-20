@@ -95,6 +95,10 @@ source $ZSH/oh-my-zsh.sh
 # alias zshconfig="mate ~/.zshrc"
 # alias ohmyzsh="mate ~/.oh-my-zsh"
 
+alias gc='gcloud'
+
+alias kc='kubectl'
+
 alias tf='terraform'
 alias tfa='terraform apply'
 alias tfp='terraform plan -refresh=false'
