@@ -95,7 +95,11 @@ source $ZSH/oh-my-zsh.sh
 # alias zshconfig="mate ~/.zshrc"
 # alias ohmyzsh="mate ~/.oh-my-zsh"
 
+alias drit='docker run -it --rm'
+
 alias gc='gcloud'
+
+alias gdi='git diff origin/master'
 
 alias kc='kubectl'
 
