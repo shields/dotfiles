@@ -482,6 +482,31 @@
 				"type": "basic"
 			    }
 			]
+		    },
+		    {
+			"description": "Pause to ⌘-click unless held",
+			"manipulators": [
+			    {
+				"from": {
+				    "key_code": "pause"
+				},
+				"to": [
+				    {
+					"pointing_button": "button1",
+					"modifiers": [
+					    "left_command"
+					]
+				    }
+				],
+                                "to_if_alone": [
+                                    {
+                                        "hold_down_milliseconds": 500,
+                                        "key_code": "pause"
+                                    }
+                                ],
+                                "type": "basic"
+			    }
+			]
 		    }
 		]
 	    },
