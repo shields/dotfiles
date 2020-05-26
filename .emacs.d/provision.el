@@ -15,7 +15,6 @@
 	counsel
 	dockerfile-mode
 	doom-modeline
-	eterm-256color
 	ethan-wspace
 	exec-path-from-shell
 	expand-region
@@ -44,6 +43,7 @@
        '(company-lsp
 	 dap-mode
 	 diff-hl
+	 eterm-256color
 	 flycheck
 	 go-mode
 	 lsp-mode
