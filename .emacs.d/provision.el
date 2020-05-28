@@ -50,6 +50,7 @@
 	 lsp-ivy
 	 lsp-treemacs
 	 lsp-ui
+	 magit-delta
 	 smartparens
 	 treemacs)))
 
