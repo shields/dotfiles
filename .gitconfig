@@ -1,5 +1,7 @@
 [user]
 	name = Michael Shields
+[commit]
+        gpgsign = true
 [core]
 	pager = less -R
 [alias]
