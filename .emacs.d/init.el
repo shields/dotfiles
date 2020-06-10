@@ -415,13 +415,6 @@ stage it and display a diff."
 
 (setq term-suppress-hard-newline t)
 
-;; Don't block Emacs exit because there are terminal subprocesses.
-(defun shields/kill-all-multi-terms ()
-  "Kill all multi-term subprocesses."
-  (dolist (process (mapcar #'get-buffer-process multi-term-buffer-list))
-    (if process (delete-process process))))
-(add-hook 'kill-emacs-hook #'shields/kill-all-multi-terms)
-
 ;;}}}
 ;;{{{ Terraform
 
@@ -860,5 +853,8 @@ This function is useful for binding to a hotkey."
 	100000000))
 
 (server-start)
+
+;; Don't block Emacs exit; that blocks automatic macOS upgrades.
+(setq confirm-kill-processes nil)
 
 ;;}}}
