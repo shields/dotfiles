@@ -11,9 +11,10 @@ export ZSH="$HOME/.oh-my-zsh"
 # to know which specific one was loaded, run: echo $RANDOM_THEME
 # See https://github.com/ohmyzsh/ohmyzsh/wiki/Themes
 ZSH_THEME="spaceship"
-SPACESHIP_PROMPT_ORDER=(user host dir git venv kubectl exec_time line_sep jobs exit_code char)
+SPACESHIP_PROMPT_ORDER=(user host dir git venv kubectl exec_time jobs exit_code char)
 SPACESHIP_RPOMPT_ORDER=()
 SPACESHIP_PROMPT_ADD_NEWLINE=false
+SPACESHIP_PROMPT_PREFIXES_SHOW=false
 SPACESHIP_CHAR_SYMBOL='$'
 SPACESHIP_CHAR_SUFFIX=' '
 SPACESHIP_DIR_COLOR=000000
