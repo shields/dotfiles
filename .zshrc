@@ -10,7 +10,21 @@ export ZSH="$HOME/.oh-my-zsh"
 # load a random theme each time oh-my-zsh is loaded, in which case,
 # to know which specific one was loaded, run: echo $RANDOM_THEME
 # See https://github.com/ohmyzsh/ohmyzsh/wiki/Themes
-ZSH_THEME="simple"
+ZSH_THEME="spaceship"
+SPACESHIP_PROMPT_ORDER=(user host dir git venv kubectl exec_time line_sep jobs exit_code char)
+SPACESHIP_RPOMPT_ORDER=()
+SPACESHIP_CHAR_SYMBOL='$'
+SPACESHIP_CHAR_SUFFIX=' '
+SPACESHIP_DIR_COLOR=000000
+SPACESHIP_DIR_LOCK_SYMBOL=''
+SPACESHIP_DIR_TRUNC=0
+SPACESHIP_DIR_TRUNC_REPO=false
+SPACESHIP_GIT_SYMBOL=''
+SPACESHIP_GIT_BRANCH_PREFIX=''
+SPACESHIP_GIT_STATUS_PREFIX=''
+SPACESHIP_GIT_STATUS_SUFFIX=''
+SPACESHIP_EXIT_CODE_SHOW=true
+SPACESHIP_EXIT_CODE_SYMBOL=''
 
 # Uncomment the following line to use case-sensitive completion.
 CASE_SENSITIVE="true"

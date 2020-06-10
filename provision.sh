@@ -11,6 +11,13 @@ if [[ ! -d "$HOME/.oh-my-zsh" ]]; then
     git clone --depth=1 https://github.com/ohmyzsh/ohmyzsh "$HOME/.oh-my-zsh"
 fi
 
+# Spaceship Prompt
+ZSH_CUSTOM="$HOME/.oh-my-zsh/custom"
+if [[ ! -d "$ZSH_CUSTOM/themes/spaceship-prompt" ]]; then
+    git clone https://github.com/denysdovhan/spaceship-prompt.git "$ZSH_CUSTOM/themes/spaceship-prompt"
+    ln -sf spaceship-prompt/spaceship.zsh-theme "$ZSH_CUSTOM/themes/spaceship.zsh-theme"
+fi
+
 # Is this a Freenome-managed Mac?
 if [[ "$(uname)" == Darwin ]] && \
        system_profiler SPConfigurationProfileDataType | grep -qi freenome; then
