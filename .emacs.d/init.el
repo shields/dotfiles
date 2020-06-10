@@ -536,6 +536,7 @@ stage it and display a diff."
 
 (setq company-show-numbers t)
 (setq company-minimum-prefix-length 1)
+(setq company-idle-delay 0)
 (setq company-tooltip-idle-delay 0.1)
 (setq company-tooltip-align-annotations t)
 (setq company-tooltip-flip-when-above t)
@@ -560,17 +561,20 @@ In that case, insert the number."
     (number-sequence 1 9)))
 
 ;; company-fuzzy.
-(add-hook 'company-mode-hook #'company-fuzzy-turn-on-company-fuzzy-mode)
-(require 'company-fuzzy)		; c-f-t-o-c-f-m isn't autoloaded.
-(setq company-fuzzy-sorting-backend 'flx)
-(setq company-require-match nil)	; A bad fit with fuzzy matching.
+;;(add-hook 'company-mode-hook #'company-fuzzy-turn-on-company-fuzzy-mode)
+;;(require 'company-fuzzy)		; c-f-t-o-c-f-m isn't autoloaded.
+;;(setq company-fuzzy-sorting-backend 'flx)
+;;(setq company-require-match nil)	; A bad fit with fuzzy matching.
 
-(setq company-global-modes '(not markdown-mode))
+(eval-after-load "company"
+  '(progn
+     (setq company-global-modes '(not markdown-mode))
+     (add-to-list 'company-backends #'company-tabnine)))
 
-;;}}}
-;;{{{ compilation and grep
+  ;;}}}
+  ;;{{{ compilation and grep
 
-(setq compilation-message-face 'default)
+  (setq compilation-message-face 'default)
 
 (setq compilation-always-kill t)
 

@@ -10,8 +10,8 @@
 	anzu
 	avy
 	company
-	company-fuzzy
 	company-go
+	company-tabnine
 	counsel
 	dockerfile-mode
 	doom-modeline
@@ -57,3 +57,6 @@
 (package-install-selected-packages)
 
 (all-the-icons-install-fonts 1)
+
+(require 'company-tabnine)
+(company-tabnine-install-binary)
