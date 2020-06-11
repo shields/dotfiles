@@ -128,6 +128,10 @@ for f in /usr/local/Caskroom/google-cloud-sdk/latest/google-cloud-sdk/*.zsh.inc(
     source $f
 done
 
+# Asking about the merge commit message is unnecessary, since in the
+# rare cases where I want to edit it, there is always --amend.
+export GIT_MERGE_AUTOEDIT=no
+
 export RIPGREP_CONFIG_PATH="$HOME/.ripgreprc"
 
 # Emacs shell dir tracking; see comments in term.el.
