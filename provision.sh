@@ -2,7 +2,7 @@
 
 set -e
 
-tar cf - $(find . -type f | grep -v -e '^\./\.git/' -e '^\./[^.]') \
+tar cf - bin $(find . -type f | grep -v -e '^\./\.git/' -e '^\./[^.]' -e '^\./\.mypy_cache') \
     | (cd "$HOME" && tar xvf -)
 
 # The interesting part of
