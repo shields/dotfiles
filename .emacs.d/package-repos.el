@@ -7,7 +7,7 @@
 	("melpa" . "https://melpa.org/packages/")))
 
 (setq package-archive-priorities
-      '(("gnu" . 50)
-	("melpa" . 0)))
+      '(("gnu" . 0)
+	("melpa" . 50)))
 
 (package-initialize)
