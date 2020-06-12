@@ -11,49 +11,42 @@
 	avy
 	company
 	company-go
+	company-lsp
 	company-tabnine
 	counsel
+	dap-mode
+	diff-hl
 	dockerfile-mode
 	doom-modeline
+	eterm-256color
 	ethan-wspace
 	exec-path-from-shell
 	expand-region
 	flx
+	flycheck
 	go-eldoc
+	go-mode
 	goto-last-change
 	hl-todo
 	ivy
 	jsonnet-mode
+	lsp-ivy
+	lsp-mode
+	lsp-treemacs
+	lsp-ui
 	magit
+	magit-delta
 	markdown-mode
 	minions
 	multi-term
 	projectile
+	smartparens
 	symbol-overlay
 	terraform-mode
+	treemacs
 	use-package
 	yaml-mode
 	yasnippet))
-
-;; Some packages are in melpa-stable but we want a fresher version.
-(setq package-pinned-packages
-      (mapcar
-       (lambda (package)
-	 (push package package-selected-packages)
-	 (cons package "melpa"))
-       '(company-lsp
-	 dap-mode
-	 diff-hl
-	 eterm-256color
-	 flycheck
-	 go-mode
-	 lsp-mode
-	 lsp-ivy
-	 lsp-treemacs
-	 lsp-ui
-	 magit-delta
-	 smartparens
-	 treemacs)))
 
 (package-install-selected-packages)
 
