@@ -532,6 +532,7 @@ stage it and display a diff."
 ;;}}}
 ;;{{{ Company
 
+(require 'company)
 (add-hook 'prog-mode-hook #'company-mode-on)
 
 (setq company-show-numbers t)
@@ -566,15 +567,13 @@ In that case, insert the number."
 ;;(setq company-fuzzy-sorting-backend 'flx)
 ;;(setq company-require-match nil)	; A bad fit with fuzzy matching.
 
-(eval-after-load "company"
-  '(progn
-     (setq company-global-modes '(not markdown-mode))
-     (add-to-list 'company-backends #'company-tabnine)))
+(setq company-global-modes '(not markdown-mode))
+(add-to-list 'company-backends #'company-tabnine)
 
-  ;;}}}
-  ;;{{{ compilation and grep
+;;}}}
+;;{{{ compilation and grep
 
-  (setq compilation-message-face 'default)
+(setq compilation-message-face 'default)
 
 (setq compilation-always-kill t)
 
