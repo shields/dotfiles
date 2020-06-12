@@ -13,6 +13,7 @@
 	company-go
 	company-lsp
 	company-tabnine
+	company-terraform
 	counsel
 	dap-mode
 	diff-hl
