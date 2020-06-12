@@ -23,6 +23,7 @@
 	goto-last-change
 	hl-todo
 	ivy
+	jsonnet-mode
 	magit
 	markdown-mode
 	minions
