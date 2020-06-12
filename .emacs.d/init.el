@@ -15,6 +15,12 @@
   (exec-path-from-shell-copy-env "PATH"))
 
 ;;}}}
+;;{{{ Temporary fixes
+
+;; https://github.com/mgyucht/jsonnet-mode/pull/16
+(add-to-list 'auto-mode-alist (cons "\\.libsonnet\\'" 'jsonnet-mode))
+
+;;}}}
 ;;{{{ Customization of commands
 
 ;; Disabled commands.  Hmmph.
