@@ -1,0 +1,6 @@
+#!/bin/sh
+#
+# Allow pasting lines starting with $ directly into a terminal.
+# From an idea by Perry Lorier.
+
+exec "$@"
