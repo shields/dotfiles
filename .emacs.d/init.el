@@ -380,7 +380,15 @@ stage it and display a diff."
 
 (define-key help-mode-map [(q)] #'previous-buffer)
 
-;; }}}
+;;}}}
+;;{{{ jsonnet-mode
+
+(defun shields/jsonnet-install-save-hook ()
+  (add-hook 'before-save-hook #'jsonnet-reformat-buffer t t))
+(eval-after-load "jsonnet"
+  (add-hook 'jsonnet-mode-hook #'shields/jsonnet-install-save-hook))
+
+;;}}}
 ;;{{{ makefile-mode
 
 (add-hook 'makefile-mode-hook
