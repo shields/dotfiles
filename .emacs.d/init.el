@@ -37,6 +37,9 @@
         (when (timerp aggressive-indent--idle-timer)
           (cancel-timer aggressive-indent--idle-timer))))))
 
+;; https://github.com/emacs-lsp/lsp-mode/issues/1778
+(setq lsp-gopls-codelens nil)
+
 ;;}}}
 ;;{{{ Customization of commands
 
@@ -591,7 +594,10 @@ In that case, insert the number."
 ;;(setq company-require-match nil)	; A bad fit with fuzzy matching.
 
 (setq company-global-modes '(not markdown-mode))
+
 (add-to-list 'company-backends #'company-tabnine)
+
+(add-to-list 'company-backends #'company-capf)
 
 ;;}}}
 ;;{{{ compilation and grep
@@ -721,8 +727,6 @@ In that case, insert the number."
 ;; https://github.com/emacs-lsp/lsp-ui/issues/369
 (face-spec-set 'lsp-ui-doc-background
 	       '((t :background "#eeeeff")))
-
-(company-lsp 1)
 
 ;;;}}}
 ;;{{{ Markdown
@@ -877,6 +881,9 @@ This function is useful for binding to a hotkey."
 	       (shell-command-to-string "sysctl hw.memsize")))
 	     200)
 	100000000))
+;; Increase the amount of data read from subprocsses.  Recommended by
+;; https://emacs-lsp.github.io/lsp-mode/page/performance/
+(setq read-process-output-max (* 1024 1024))
 
 (server-start)
 

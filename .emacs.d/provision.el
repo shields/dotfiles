@@ -10,8 +10,6 @@
 	anzu
 	avy
 	company
-	company-go
-	company-lsp
 	company-tabnine
 	company-terraform
 	counsel
@@ -25,15 +23,12 @@
 	expand-region
 	flx
 	flycheck
-	go-eldoc
 	go-mode
 	goto-last-change
 	hl-todo
 	ivy
 	jsonnet-mode
 	lsp-ivy
-	lsp-mode
-	lsp-treemacs
 	lsp-ui
 	magit
 	magit-delta
@@ -44,7 +39,6 @@
 	smartparens
 	symbol-overlay
 	terraform-mode
-	treemacs
 	use-package
 	yaml-mode
 	yasnippet))
