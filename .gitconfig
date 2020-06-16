@@ -14,3 +14,5 @@
 	d = diff
 	p = status
 	por = !git push -u origin $(git branch-name)
+[pull]
+	rebase = true
