@@ -416,6 +416,8 @@ stage it and display a diff."
 
 (setq magit-save-repository-buffers 'dontask)
 
+(setq magit-diff-refine-hunk 'all)
+
 ;; Bind "=" to git diff origin/master.
 (eval-after-load "magit"
   '(define-key magit-mode-map "="
