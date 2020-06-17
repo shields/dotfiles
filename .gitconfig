@@ -15,4 +15,5 @@
 	p = status
 	por = !git push -u origin $(git branch-name)
 [pull]
-	rebase = true
+        # Merge instead of rebasing to be consistent with GitHub web UI.
+	rebase = false
