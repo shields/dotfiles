@@ -46,6 +46,8 @@ if __name__ == "__main__":
     domains.remove("com.apple.systempreferences")  # ironically
     domains.remove("com.apple.xpc.activity2")
     domains.remove("knowledge-agent")
+    # https://bugs.python.org/issue41083
+    domains.remove("com.apple.security.KCN")
 
     defaults = {domain: get_defaults(domain) for domain in domains}
     print("baselined, waiting for diffs")
