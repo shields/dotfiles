@@ -140,7 +140,7 @@ dockutil --add '/Applications/Google Chrome.app'
 dockutil --add '/Applications/iTerm.app'
 dockutil --add /usr/local/Cellar/emacs-plus@27/*/Emacs.app
 
-# Finder preferences 
+# Finder preferences
 defaults write com.apple.finder _FXShowPosixPathInTitle -bool true
 defaults write com.apple.finder DisableAllAnimations -bool true
 defaults write com.apple.finder ShowPathbar -bool true
@@ -178,5 +178,5 @@ killall Finder cfprefsd
 # Bootstrap Emacs packages
 if [ ! -f "$HOME/.emacs.d/.bootstrap-stamp" ]; then
     emacs -q --batch --script .emacs.d/provision.el
-    touch "$HOME/.emacs.d/.bootstrap-stamp" 
+    touch "$HOME/.emacs.d/.bootstrap-stamp"
 fi
