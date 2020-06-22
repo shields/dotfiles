@@ -88,7 +88,9 @@ osascript -e 'tell application "System Preferences" to quit'
 defaults write NSGlobalDomain AppleShowScrollBars -string 'Always'
 defaults write NSGlobalDomain NSScrollAnimationEnabled -bool false
 defaults write NSGlobalDomain NSWindowResizeTime -float 0.001
-defaults write com.apple.universalaccess reduceTransparency -bool true
+if [ ! "$(defaults read com.apple.universalaccess reduceTransparency)" = 1 ]; then
+    defaults write com.apple.universalaccess reduceTransparency -bool true
+fi
 
 # Trackpad tap to click
 defaults write com.apple.driver.AppleBluetoothMultitouch.trackpad Clicking -bool true
@@ -162,10 +164,12 @@ defaults write com.apple.systemuiserver 'NSStatusItem Visible com.apple.menuextr
 
 # iTerm2 writes its prefs to ~/.iTerm2/com.googlecode.iterm2.plist,
 # but doesn't read from there.
-defaults import com.googlecode.iterm2 - < iTerm2.plist
+defaults import com.googlecode.iterm2 - < .iTerm2/com.googlecode.iterm2.plist
 
 # Set NTP server to Google Public NTP for smeared leap seconds.
-sudo systemsetup -setnetworktimeserver time.google.com
+if ! fgrep -q '^server time.google.com$' /etc/ntp.conf; then
+    sudo systemsetup -setnetworktimeserver time.google.com
+fi
 
 # Restart affected processes
 killall Finder cfprefsd
