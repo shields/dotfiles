@@ -87,6 +87,7 @@ osascript -e 'tell application "System Preferences" to quit'
 
 # Visual preferences
 defaults write NSGlobalDomain AppleShowScrollBars -string 'Always'
+defaults write NSGlobalDomain NSAutomaticWindowAnimationsEnabled -bool false
 defaults write NSGlobalDomain NSScrollAnimationEnabled -bool false
 defaults write NSGlobalDomain NSWindowResizeTime -float 0.001
 if [ ! "$(defaults read com.apple.universalaccess reduceTransparency)" = 1 ]; then
