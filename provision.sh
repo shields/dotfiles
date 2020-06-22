@@ -51,6 +51,7 @@ brew install \
     emacs-plus@27 \
     findutils \
     git \
+    golangci/tap/golangci-lint \
     gnu-sed \
     gnupg \
     go \
