@@ -115,7 +115,7 @@ alias drit='docker run -it --rm'
 
 alias gc='gcloud'
 
-alias gdi='git diff origin/master'
+alias gdi='git diff origin/main'
 
 alias kc='kubectl'
 
