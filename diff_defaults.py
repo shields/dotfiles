@@ -5,6 +5,7 @@
 # the commands to create the same changes.
 
 import plistlib
+import shlex
 import subprocess
 import sys
 import time
@@ -26,11 +27,11 @@ def print_diff(domain: str, old, new) -> None:
             elif type(v) == float:
                 value = f"-float {v}"
             else:
-                value = repr(v)
-            print(f"defaults write {domain} {k!r} {value}")
+                value = shlex.quote(v)
+            print(f"defaults write {shlex.quote(domain)} {shlex.quote(k)} {value}")
     for k in old.keys():
         if k not in new:
-            print(f"defaults delete {domain} {k!r}")
+            print(f"defaults delete {shlex.quote(domain)} {shlex.quote(k)}")
 
 
 if __name__ == "__main__":
