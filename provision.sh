@@ -130,8 +130,7 @@ defaults write com.apple.desktopservices DSDontWriteUSBStores -bool true
 
 # Dock preferences
 defaults write com.apple.Dock autohide -bool true
-defaults write com.apple.dock autohide-delay -float 0
-defaults write com.apple.dock autohide-time-modifier -float 0
+defaults write com.apple.dock autohide-delay -float inf
 defaults write com.apple.dock mru-spaces -bool false
 defaults write com.apple.dock show-recents -bool false
 defaults write com.apple.dock showLaunchpadGestureEnabled -int 0
