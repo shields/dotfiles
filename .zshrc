@@ -120,9 +120,9 @@ alias gdi='git diff origin/main'
 alias kc='kubectl'
 
 alias tf='terraform'
-alias tfa='terraform apply'
-alias tfp='terraform plan -refresh=false'
-alias tfpr='terraform plan -refresh=true'
+alias tfa='terraform apply -parallelism=100'
+alias tfp='terraform plan -parallelism=100 -refresh=false'
+alias tfpr='terraform plan -parallelism=100 -refresh=true'
 
 for f in /usr/local/Caskroom/google-cloud-sdk/latest/google-cloud-sdk/*.zsh.inc(.N); do
     source $f
