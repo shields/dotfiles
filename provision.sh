@@ -64,6 +64,7 @@ brew install \
     youtube-dl \
     zsh
 brew cask install \
+    airfoil \
     bettertouchtool \
     docker \
     google-chrome-beta \
