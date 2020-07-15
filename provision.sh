@@ -77,6 +77,9 @@ brew cask install \
     yubico-yubikey-manager
 brew services start d12frosted/emacs-plus/emacs-plus@27
 
+# Install pyls and associated linters.
+pip3 install 'python-language-server[all]'
+
 # Set shell to current zsh installed from Homebrew.
 if [[ "$(dscl . read /Users/$(whoami) UserShell)" == /bin/zsh ]]; then
     sudo dscl . change "/Users/$(whoami)" UserShell /bin/zsh /usr/local/bin/zsh
