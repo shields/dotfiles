@@ -56,7 +56,9 @@ brew install \
     gnupg \
     go \
     mypy \
+    node \
     openssh \
+    pstree \
     python@3.8 \
     ripgrep \
     watch \
