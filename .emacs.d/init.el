@@ -634,6 +634,19 @@ In that case, insert the number."
           #'endless/colorize-compilation)
 
 ;;}}}
+;;{{{ DAP (https://emacs-lsp.github.io/dap-mode/)
+
+(dap-mode 1)
+(dap-ui-mode 1)
+(dap-tooltip-mode 1)
+(tooltip-mode 1)
+(dap-ui-controls-mode 1)
+
+(require 'dap-gdb-lldb)
+(require 'dap-go)
+(require 'dap-python)
+
+;;}}}
 ;;{{{ Dired
 
 ;; Use GNU ls from Homebrew, not BSD ls.

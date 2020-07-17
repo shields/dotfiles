@@ -35,6 +35,7 @@
 	markdown-mode
 	minions
 	multi-term
+	posframe
 	projectile
 	smartparens
 	symbol-overlay
@@ -49,3 +50,9 @@
 
 (require 'company-tabnine)
 (company-tabnine-install-binary)
+
+(require 'dap-gdb-lldb)
+(dap-gdb-lldb-setup)
+
+(require 'dap-go)
+(dap-go-setup)

@@ -77,8 +77,8 @@ brew cask install \
     yubico-yubikey-manager
 brew services start d12frosted/emacs-plus/emacs-plus@27
 
-# Install pyls and associated linters.
-pip3 install 'python-language-server[all]'
+# Install pyls and associated linters and debugging tools.
+pip3 install 'python-language-server[all]' ptvsd
 
 # Set shell to current zsh installed from Homebrew.
 if [[ "$(dscl . read /Users/$(whoami) UserShell)" == /bin/zsh ]]; then
