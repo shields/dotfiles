@@ -142,3 +142,13 @@ if [ -n "$INSIDE_EMACS" ]; then
 	pwd
     }
 fi
+
+# Even in 2020, macOS 10.15.6 doesn't fully support UTF-8 by default.
+# In particular, pbcopy doesn't work correctly.  The fix for this is
+# very obscure.  Because users deserve choice, it can be fixed using a
+# file or using an environment variable, neither of which is a
+# standard macOS preference mechanism.  Let's just do both.
+#
+# https://developer.apple.com/documentation/corefoundation/cfstringbuiltinencodings/utf8
+# https://superuser.com/questions/82123/mac-whats-cfusertextencoding-for
+export __CF_USER_TEXT_ENCODING="$(id -u):134217984:134217984"
