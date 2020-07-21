@@ -96,6 +96,7 @@ defaults write NSGlobalDomain AppleShowScrollBars -string 'Always'
 defaults write NSGlobalDomain NSAutomaticWindowAnimationsEnabled -bool false
 defaults write NSGlobalDomain NSScrollAnimationEnabled -bool false
 defaults write NSGlobalDomain NSWindowResizeTime -float 0.001
+defaults write com.apple.universalaccess mouseDriverCursorSize -float 1.5
 if [ ! "$(defaults read com.apple.universalaccess reduceTransparency)" = 1 ]; then
     defaults write com.apple.universalaccess reduceTransparency -bool true
 fi
