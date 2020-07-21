@@ -46,6 +46,7 @@ brew install \
     aspell \
     autojump \
     black \
+    clang-format \
     coreutils \
     dockutil \
     emacs-plus@27 \
