@@ -4,12 +4,11 @@
 # This allows you to change settings in System Preferences and find
 # the commands to create the same changes.
 
+import datetime
 import plistlib
 import shlex
 import subprocess
-import sys
 import time
-from typing import Any, Dict
 
 
 def get_defaults(domain: str):
@@ -17,21 +16,55 @@ def get_defaults(domain: str):
     return plistlib.loads(plist, fmt=plistlib.FMT_XML)
 
 
+def plist_string(x) -> str:
+    if isinstance(x, bool):
+        return "true" if x else "false"
+    if isinstance(x, bytes):
+        return x.hex()
+    if isinstance(x, datetime.datetime):
+        return x.isoformat(sep=" ")
+    if isinstance(x, int) or isinstance(x, float):
+        return str(x)
+    if isinstance(x, str):
+        return shlex.quote(x)
+
+    if isinstance(x, list) or isinstance(x, tuple):
+        return " ".join(plist_string(elt) for elt in x)
+    if isinstance(x, dict):
+        return " ".join(plist_string(elt) for elt in zip(x.keys(), x.values()))
+
+    raise TypeError(f"Unknown type {type(x)}")
+
+
 def print_diff(domain: str, old, new) -> None:
     for k, v in new.items():
-        if k not in old or old[k] != v:
-            if type(v) == bool:
-                value = "-bool true" if v else "-bool false"
-            elif type(v) == int:
-                value = f"-int {v}"
-            elif type(v) == float:
-                value = f"-float {v}"
-            else:
-                value = shlex.quote(v)
-            print(f"defaults write {shlex.quote(domain)} {shlex.quote(k)} {value}")
+        if k in old and old[k] == v:
+            continue
+
+        if type(v) == bool:
+            value = f"-bool {plist_string(v)}"
+        if type(v) == bytes:
+            value = f"-data {plist_string(v)}"
+        elif type(v) == datetime.datetime:
+            value = f"-date {plist_string(v)}"
+        elif type(v) == dict:
+            value = f"-dict {plist_string(v)}"
+        elif type(v) == float:
+            value = f"-float {plist_string(v)}"
+        elif type(v) == int:
+            value = f"-int {plist_string(v)}"
+        elif type(v) == list:
+            value = f"-array {plist_string(v)}"
+        else:
+            value = plist_string(v)
+
+        print(f"defaults write {shlex.quote(domain)} {shlex.quote(k)} {value}")
+
     for k in old.keys():
-        if k not in new:
-            print(f"defaults delete {shlex.quote(domain)} {shlex.quote(k)}")
+        if k in new:
+            continue
+
+        print(f"defaults delete {shlex.quote(domain)} {shlex.quote(k)}")
 
 
 if __name__ == "__main__":
