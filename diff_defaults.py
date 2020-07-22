@@ -74,12 +74,14 @@ if __name__ == "__main__":
         .split(", ")
     )
     domains.add("NSGlobalDomain")
+
     # Remove some domains that are frequently-updated state, not preferences.
     domains.remove("ContextStoreAgent")
     domains.remove("com.apple.spaces")
     domains.remove("com.apple.systempreferences")  # ironically
     domains.remove("com.apple.xpc.activity2")
     domains.remove("knowledge-agent")
+
     # https://bugs.python.org/issue41083
     domains.remove("com.apple.security.KCN")
 
@@ -90,6 +92,8 @@ if __name__ == "__main__":
     while True:
         time.sleep(1)
         for domain in domains:
+            print("Diffing...", end="", flush=True)
             new = get_defaults(domain)
+            print("\r          \r", end="", flush=True)
             print_diff(domain, defaults[domain], new)
             defaults[domain] = new
