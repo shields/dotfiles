@@ -41,7 +41,7 @@ if __name__ == "__main__":
         .split(", ")
     )
     domains.add("NSGlobalDomain")
-    # Remove some domains that are not preferences but frequently-updated state.
+    # Remove some domains that are frequently-updated state, not preferences.
     domains.remove("ContextStoreAgent")
     domains.remove("com.apple.spaces")
     domains.remove("com.apple.systempreferences")  # ironically
