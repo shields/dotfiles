@@ -50,8 +50,10 @@ if __name__ == "__main__":
     # https://bugs.python.org/issue41083
     domains.remove("com.apple.security.KCN")
 
+    print("Baselining...", end="", flush=True)
     defaults = {domain: get_defaults(domain) for domain in domains}
-    print("baselined, waiting for diffs")
+    print("ready")
+
     while True:
         time.sleep(1)
         for domain in domains:
