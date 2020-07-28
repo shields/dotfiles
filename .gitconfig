@@ -1,5 +1,7 @@
 [user]
 	name = Michael Shields
+[init]
+        defaultBranch = main
 [commit]
         gpgsign = true
 [core]
