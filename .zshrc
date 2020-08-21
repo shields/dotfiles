@@ -120,6 +120,8 @@ alias gdi='git diff origin/main'
 alias kc='kubectl'
 alias kcy='kubectl -o yaml'
 
+alias p='python3'
+
 alias tf='terraform'
 alias tfa='terraform apply -parallelism=100'
 alias tfp='terraform plan -parallelism=100 -refresh=false'
