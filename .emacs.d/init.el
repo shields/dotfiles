@@ -418,12 +418,12 @@ stage it and display a diff."
 
 (setq magit-diff-refine-hunk 'all)
 
-;; Bind "=" to git diff origin/master.
+;; Bind "=" to git diff origin/main.
 (eval-after-load "magit"
   '(define-key magit-mode-map "="
      (lambda ()
        (interactive)
-       (magit-diff-range "origin/master"))))
+       (magit-diff-range "origin/main"))))
 
 ;;}}}
 ;;{{{ term-mode
