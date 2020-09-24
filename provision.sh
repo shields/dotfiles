@@ -136,6 +136,11 @@ defaults write com.apple.commerce AutoUpdateRestartRequired -bool true
 defaults write com.apple.desktopservices DSDontWriteNetworkStores -bool true
 defaults write com.apple.desktopservices DSDontWriteUSBStores -bool true
 
+# Calculator preferences
+defaults write com.apple.calculator RPNDefaultsKey true
+defaults write com.apple.calculator SeparatorsDefaultsKey true
+defaults write com.apple.calculator ViewDefaultsKey Scientific
+
 # Dock preferences
 defaults write com.apple.Dock autohide -bool true
 defaults write com.apple.dock autohide-delay -float 1e9
