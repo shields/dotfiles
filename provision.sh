@@ -50,6 +50,7 @@ brew install \
     coreutils \
     dockutil \
     emacs-plus@27 \
+    fd \
     findutils \
     git \
     golangci/tap/golangci-lint \
@@ -62,6 +63,7 @@ brew install \
     pstree \
     python@3.8 \
     ripgrep \
+    sd \
     watch \
     wget \
     youtube-dl \
