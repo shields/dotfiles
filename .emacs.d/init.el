@@ -72,6 +72,9 @@
 
 (setq blink-matching-delay 0.25)
 
+(menu-bar-mode 0)
+(tool-bar-mode 0)
+
 ;; Enable visual bell.  But on macOS, the visual bell pops up "the
 ;; standard NextStep image 'caution'" (src/nsterm.m).  This is not
 ;; correct.  Better is to set "Flash the screen when an alert sound
