@@ -78,6 +78,7 @@ brew cask install \
     sonos-s1-controller \
     spotify \
     virtualbox \
+    vlc \
     wireshark \
     yubico-yubikey-manager
 brew services start d12frosted/emacs-plus/emacs-plus@27
