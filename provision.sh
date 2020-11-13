@@ -40,11 +40,13 @@ fi
 brew tap d12frosted/emacs-plus
 brew tap homebrew/cask-drivers
 brew tap homebrew/cask-versions
+brew tap osx-cross/avr
 brew update
 brew upgrade
 brew install \
     aspell \
     autojump \
+    avr-gcc \
     black \
     clang-format \
     coreutils \
