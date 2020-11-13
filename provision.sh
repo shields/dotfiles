@@ -66,6 +66,7 @@ brew install \
     python@3.8 \
     ripgrep \
     sd \
+    teensy_loader_cli \
     watch \
     wget \
     youtube-dl \
