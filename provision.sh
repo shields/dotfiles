@@ -70,6 +70,7 @@ brew install \
     watch \
     wget \
     youtube-dl \
+    yq \
     zsh
 brew cask install \
     airfoil \
