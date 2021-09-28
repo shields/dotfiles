@@ -44,21 +44,27 @@ brew tap osx-cross/avr
 brew update
 brew upgrade
 brew install \
+    airfoil \
     aspell \
     autojump \
     avr-gcc \
+    bettertouchtool \
     black \
     clang-format \
     coreutils \
+    docker \
     dockutil \
     emacs-plus@27 \
     fd \
     findutils \
     git \
-    golangci/tap/golangci-lint \
     gnu-sed \
     gnupg \
     go \
+    golangci/tap/golangci-lint \
+    google-chrome-beta \
+    iterm2 \
+    karabiner-elements \
     mypy \
     node \
     openssh \
@@ -66,25 +72,19 @@ brew install \
     python@3.8 \
     ripgrep \
     sd \
-    teensy_loader_cli \
-    watch \
-    wget \
-    youtube-dl \
-    yq \
-    zsh
-brew cask install \
-    airfoil \
-    bettertouchtool \
-    docker \
-    google-chrome-beta \
-    iterm2 \
-    karabiner-elements \
     sonos-s1-controller \
     spotify \
+    teensy_loader_cli \
     virtualbox \
     vlc \
+    watch \
+    wget \
     wireshark \
+    youtube-dl \
+    yq \
     yubico-yubikey-manager
+    zsh
+
 brew services start d12frosted/emacs-plus/emacs-plus@27
 
 # Install pyls and associated linters and debugging tools.
