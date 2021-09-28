@@ -19,3 +19,5 @@
 [pull]
         # Merge instead of rebasing to be consistent with GitHub web UI.
 	rebase = false
+[advice]
+	detachedHead = false
