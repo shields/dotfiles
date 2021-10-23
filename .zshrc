@@ -124,6 +124,7 @@ alias p='python3'
 
 alias tf='terraform'
 alias tfa='terraform apply -parallelism=100'
+alias tfi='terraform init'
 alias tfp='terraform plan -parallelism=100 -refresh=false'
 alias tfpr='terraform plan -parallelism=100 -refresh=true'
 
