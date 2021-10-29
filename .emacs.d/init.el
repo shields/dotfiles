@@ -90,6 +90,9 @@
 
 (set-fringe-mode '(nil . 0))		; left-only
 
+(add-to-list 'default-frame-alist '(height . 999))
+(add-to-list 'default-frame-alist '(width . 132))
+
 ;; Enable color emoji.
 (set-fontset-font
  t 'symbol (font-spec :family "Apple Color Emoji") nil 'prepend)
