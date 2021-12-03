@@ -156,3 +156,6 @@ fi
 # https://developer.apple.com/documentation/corefoundation/cfstringbuiltinencodings/utf8
 # https://superuser.com/questions/82123/mac-whats-cfusertextencoding-for
 export __CF_USER_TEXT_ENCODING="$(id -u):134217984:134217984"
+
+# Needed by Terraform:
+export KUBE_CONFIG_PATH="$HOME/.kube/config"
