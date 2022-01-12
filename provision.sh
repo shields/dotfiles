@@ -196,6 +196,9 @@ defaults write NSGlobalDomain 'com.apple.sound.uiaudio.enabled' -int 0
 defaults write com.apple.systemuiserver 'NSStatusItem Visible com.apple.menuextra.bluetooth' -bool true
 defaults write com.apple.systemuiserver 'NSStatusItem Visible com.apple.menuextra.volume' -bool true
 
+# Lower right hot corner: lock screen.
+defaults write com.apple.dock wvous-br-corner -int 13
+
 # iTerm2 writes its prefs to ~/.iTerm2/com.googlecode.iterm2.plist,
 # but doesn't read from there.
 defaults import com.googlecode.iterm2 - < .iTerm2/com.googlecode.iterm2.plist
