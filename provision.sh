@@ -7,10 +7,20 @@ tar cf - bin $(find . -type f | grep -v -e '^\./\.git/' -e '^\./[^.]' -e '^\./\.
     | (cd "$HOME" && tar xvf -)
 
 # Install Homebrew and Xcode (which will take tens of minutes).
-if [[ ! -d /usr/local/Homebrew ]]; then
+# Use path selection logic from https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh
+UNAME_MACHINE="$(/usr/bin/uname -m)"
+if [[ "${UNAME_MACHINE}" == "arm64" ]]; then
+    HOMEBREW_PREFIX="/opt/homebrew"
+    HOMEBREW_REPOSITORY="${HOMEBREW_PREFIX}"
+else
+    HOMEBREW_PREFIX="/usr/local"
+    HOMEBREW_REPOSITORY="${HOMEBREW_PREFIX}/Homebrew"
+fi
+if [[ ! -d "$HOMEBREW_REPOSITORY" ]]; then
     # CI=1 suppresses confirmation prompts.
     CI=1 /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/master/install.sh)"
 fi
+eval "$($HOMEBREW_PREFIX/bin/brew shellenv)"
 
 # The interesting part of
 # https://raw.github.com/ohmyzsh/ohmyzsh/master/tools/install.sh
@@ -40,6 +50,7 @@ fi
 brew tap d12frosted/emacs-plus
 brew tap homebrew/cask-drivers
 brew tap homebrew/cask-versions
+brew tap microsoft/git
 brew tap osx-cross/avr
 brew update
 brew upgrade
@@ -56,33 +67,37 @@ brew install \
     emacs-plus@27 \
     fd \
     findutils \
+    gh \
     git \
+    git-credential-manager-core \
     gnu-sed \
     gnupg \
     go \
     golangci/tap/golangci-lint \
     google-chrome-beta \
     iterm2 \
+    jq \
     karabiner-elements \
     mypy \
     node \
     openssh \
+    pinentry-mac \
     pstree \
-    python@3.8 \
     ripgrep \
     sd \
-    sonos-s1-controller \
     spotify \
     teensy_loader_cli \
-    virtualbox \
     vlc \
     watch \
     wget \
     wireshark \
     youtube-dl \
     yq \
-    yubico-yubikey-manager
+    yubico-yubikey-manager \
     zsh
+if [[ "${UNAME_MACHINE}" == "x86_64" ]]; then
+    brew install virtualbox
+fi
 
 brew services start d12frosted/emacs-plus/emacs-plus@27
 
@@ -90,8 +105,8 @@ brew services start d12frosted/emacs-plus/emacs-plus@27
 pip3 install 'python-language-server[all]' ptvsd
 
 # Set shell to current zsh installed from Homebrew.
-if [[ "$(dscl . read /Users/$(whoami) UserShell)" == /bin/zsh ]]; then
-    sudo dscl . change "/Users/$(whoami)" UserShell /bin/zsh /usr/local/bin/zsh
+if [[ "$(dscl . read /Users/$(whoami) UserShell)" == "UserShell: /bin/zsh" ]]; then
+    sudo dscl . change "/Users/$(whoami)" UserShell /bin/zsh "$HOMEBREW_PREFIX/bin/zsh"
 fi
 
 # Make sure System Preferences isn't open, since it interferes with other
@@ -103,10 +118,7 @@ defaults write NSGlobalDomain AppleShowScrollBars -string 'Always'
 defaults write NSGlobalDomain NSAutomaticWindowAnimationsEnabled -bool false
 defaults write NSGlobalDomain NSScrollAnimationEnabled -bool false
 defaults write NSGlobalDomain NSWindowResizeTime -float 0.001
-defaults write com.apple.universalaccess mouseDriverCursorSize -float 1.5
-if [ ! "$(defaults read com.apple.universalaccess reduceTransparency)" = 1 ]; then
-    defaults write com.apple.universalaccess reduceTransparency -bool true
-fi
+sudo defaults write com.apple.universalaccess mouseDriverCursorSize -float 1.5
 
 # Trackpad tap to click
 defaults write com.apple.driver.AppleBluetoothMultitouch.trackpad Clicking -bool true
@@ -159,7 +171,7 @@ defaults write com.apple.dock 'tilesize' -float 96.0
 defaults write com.apple.dock persistent-apps -array
 dockutil --add '/Applications/Google Chrome.app'
 dockutil --add '/Applications/iTerm.app'
-dockutil --add /usr/local/Cellar/emacs-plus@27/*/Emacs.app
+dockutil --add "$HOMEBREW_CELLAR"/emacs-plus@27/*/Emacs.app
 
 # Finder preferences
 defaults write com.apple.finder _FXShowPosixPathInTitle -bool true
