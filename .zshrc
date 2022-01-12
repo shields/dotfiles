@@ -123,7 +123,8 @@ alias gdi='git diff origin/main'
 alias kc='kubectl'
 alias kcy='kubectl -o yaml'
 
-alias p='python3'
+# p runs the most current version of Python.
+alias p="$(ls -rd $(brew --prefix)/Cellar/python@3.??/*/bin/python3 | tail -1)"
 
 alias tf='terraform'
 alias tfa='terraform apply -parallelism=100'
