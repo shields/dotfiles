@@ -3,6 +3,9 @@
 
 export PATH=$HOME/bin:$HOME/go/bin:$PATH
 
+[[ -d /opt/homebrew ]] && eval "$(/opt/homebrew/bin/brew shellenv)"
+[[ -x /usr/local/bin/brew ]] && eval "$(/usr/local/bin/brew shellenv)"
+
 # Path to your oh-my-zsh installation.
 export ZSH="$HOME/.oh-my-zsh"
 
