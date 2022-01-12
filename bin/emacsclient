@@ -1,2 +1,0 @@
-#!/bin/sh
-exec /usr/local/Cellar/emacs-plus@27/*/bin/emacsclient "$@"
