@@ -9,14 +9,13 @@
 Additional steps not yet automated:
 
 - Open Karabiner-Elements and grant permissions
-- Open BetterTouchTool and grant permissions
 - Open Chrome and sign in
 - Open System Preferences:
   - General: disable font smoothing
   - Printers & Scanners: add printer
   - Displays: set up Night Shift
   - Date & Time > Clock: add seconds and date
-  - Users & Groups > Login Items: add BetterTouchTool and Karabiner-Elements
+  - Users & Groups > Login Items: add Karabiner-Elements
 
 Many preferences can be translated to `defaults write` settings using
 `diff_defaults.py`.

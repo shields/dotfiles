@@ -48,7 +48,6 @@ brew install \
     aspell \
     autojump \
     avr-gcc \
-    bettertouchtool \
     black \
     clang-format \
     coreutils \
