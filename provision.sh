@@ -193,6 +193,8 @@ defaults write com.apple.SoftwareUpdate ScheduleFrequency -int 1
 defaults write NSGlobalDomain 'AppleKeyboardUIMode' -int 3
 defaults write NSGlobalDomain 'com.apple.sound.beep.feedback' -int 1
 defaults write NSGlobalDomain 'com.apple.sound.uiaudio.enabled' -int 0
+defaults write NSGlobalDomain InitialKeyRepeat -int 68
+defaults write NSGlobalDomain KeyRepeat -int 2
 defaults write com.apple.systemuiserver 'NSStatusItem Visible com.apple.menuextra.bluetooth' -bool true
 defaults write com.apple.systemuiserver 'NSStatusItem Visible com.apple.menuextra.volume' -bool true
 
