@@ -507,6 +507,33 @@
                                 "type": "basic"
                             }
                         ]
+                    },
+                    {
+                        "description": "Zoom toggles",
+                        "manipulators": [
+                            {
+                                "from": {
+                                    "key_code": "f5"
+                                },
+                                "to": [
+                                    {
+                                        "shell_command": "osascript ~/bin/zoom-toggle-audio.applescript"
+                                    }
+                                ],
+				"type": "basic"
+                            },
+                            {
+                                "from": {
+                                    "key_code": "f6"
+                                },
+                                "to": [
+                                    {
+                                        "shell_command": "osascript ~/bin/zoom-toggle-video.applescript"
+                                    }
+                                ],
+				"type": "basic"
+                            }
+                        ]
                     }
                 ]
             },
@@ -987,7 +1014,7 @@
                     },
                     "to": [
                         {
-                            "key_code": "illumination_decrement"
+                            "key_code": "f5"
                         }
                     ]
                 },
@@ -997,7 +1024,7 @@
                     },
                     "to": [
                         {
-                            "key_code": "illumination_increment"
+                            "key_code": "f6"
                         }
                     ]
                 },
