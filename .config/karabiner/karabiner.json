@@ -826,6 +826,16 @@
                         },
                         {
                             "from": {
+                                "key_code": "h"
+                            },
+                            "to": [
+                                {
+                                    "key_code": "i"
+                                }
+                            ]
+                        },
+                        {
+                            "from": {
                                 "key_code": "i"
                             },
                             "to": [
@@ -951,16 +961,6 @@
                             "to": [
                                 {
                                     "key_code": "g"
-                                }
-                            ]
-                        },
-                        {
-                            "from": {
-                                "key_code": "h"
-                            },
-                            "to": [
-                                {
-                                    "key_code": "i"
                                 }
                             ]
                         }
