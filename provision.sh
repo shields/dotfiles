@@ -87,6 +87,7 @@ brew install \
     sd \
     spotify \
     teensy_loader_cli \
+    tmux \
     vlc \
     watch \
     wget \
