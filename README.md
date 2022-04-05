@@ -11,7 +11,6 @@ Additional steps not yet automated:
 - Open Chrome and sign in
 - Open System Preferences:
   - FileVault: enable
-  - Displays: set up Night Shift
   - Date & Time > Clock: add seconds and date
   - Users & Groups > Login Items: add Karabiner-Elements
 
