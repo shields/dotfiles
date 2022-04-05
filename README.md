@@ -1,8 +1,9 @@
 # macOS provisioning
 
 1. Download https://github.com/shields/dotfiles/archive/main.zip
-1. `./provision.sh`
-1. Reboot
+2. `sudo softwareupdate --install-rosetta`
+3. `./provision.sh`
+4. Reboot
 
 Additional steps not yet automated:
 
