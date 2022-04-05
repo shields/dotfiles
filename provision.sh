@@ -63,7 +63,6 @@ brew install \
     clang-format \
     coreutils \
     docker \
-    dockutil \
     emacs-plus@27 \
     fd \
     findutils \
@@ -168,11 +167,6 @@ defaults write com.apple.dock orientation left
 defaults write com.apple.dock show-recents -bool false
 defaults write com.apple.dock showLaunchpadGestureEnabled -int 0
 defaults write com.apple.dock 'tilesize' -float 96.0
-# Clear and reset the persistent apps.
-defaults write com.apple.dock persistent-apps -array
-dockutil --add '/Applications/Google Chrome.app'
-dockutil --add '/Applications/iTerm.app'
-dockutil --add "$HOMEBREW_CELLAR"/emacs-plus@27/*/Emacs.app
 
 # Finder preferences
 defaults write com.apple.finder _FXShowPosixPathInTitle -bool true
@@ -196,8 +190,11 @@ defaults write NSGlobalDomain 'com.apple.sound.beep.feedback' -int 1
 defaults write NSGlobalDomain 'com.apple.sound.uiaudio.enabled' -int 0
 defaults write NSGlobalDomain InitialKeyRepeat -int 68
 defaults write NSGlobalDomain KeyRepeat -int 2
-defaults write com.apple.systemuiserver 'NSStatusItem Visible com.apple.menuextra.bluetooth' -bool true
-defaults write com.apple.systemuiserver 'NSStatusItem Visible com.apple.menuextra.volume' -bool true
+defaults write com.apple.controlcenter 'NSStatusItem Preferred Position Sound' -float 256.0
+defaults write com.apple.controlcenter 'NSStatusItem Visible Item-3' false
+defaults write com.apple.controlcenter 'NSStatusItem Visible Sound' true
+defaults write com.apple.menuextra.clock DateFormat 'EEE MMM d  h:mm:ss a'
+defaults write com.apple.menuextra.clock ShowSeconds true
 
 # Lower right hot corner: lock screen.
 defaults write com.apple.dock wvous-br-corner -int 13
