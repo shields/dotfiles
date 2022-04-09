@@ -85,6 +85,10 @@ if __name__ == "__main__":
     # https://bugs.python.org/issue41083
     domains.remove("com.apple.security.KCN")
 
+    # Sometimes includes "<date>0000-12-30T00:00:00Z</date>" which plistlib
+    # chokes on; also, is unimportant.
+    domains.remove("com.apple.stocks.widget")
+
     print("Baselining...", end="", flush=True)
     defaults = {domain: get_defaults(domain) for domain in domains}
     print("ready")
