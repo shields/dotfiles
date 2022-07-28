@@ -33,7 +33,7 @@
         (save-excursion
           (save-selected-window
             (aggressive-indent--while-no-input
-              (aggressive-indent--proccess-changed-list-and-indent))))
+              (aggressive-indent--process-changed-list-and-indent))))
         (when (timerp aggressive-indent--idle-timer)
           (cancel-timer aggressive-indent--idle-timer))))))
 
