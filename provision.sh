@@ -55,7 +55,6 @@ brew tap osx-cross/avr
 brew update
 brew upgrade
 brew install \
-    airfoil \
     aspell \
     autojump \
     avr-gcc \
