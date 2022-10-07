@@ -4,7 +4,7 @@
  ;; Your init file should contain only one such instance.
  ;; If there is more than one, they won't work right.
  '(package-selected-packages
-   '(idle-highlight eterm-256color minions doom-modeline all-the-icons ergoemacs-status ergoemacs-modeline yasnippet spaceline smartparens projectile multi-term markdown-mode magit go-eldoc flycheck flx-ido exec-path-from-shell company-go aggressive-indent)))
+   '(idle-highlight eterm-256color minions doom-modeline all-the-icons ergoemacs-status ergoemacs-modeline yasnippet spaceline smartparens projectile multi-term markdown-mode magit go-eldoc flycheck flx-ido company-go aggressive-indent)))
 (custom-set-faces
  ;; custom-set-faces was added by Custom.
  ;; If you edit it by hand, you could mess it up, so be careful.

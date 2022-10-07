@@ -10,10 +10,6 @@
 
 (load "~/.emacs.d/package-repos.el")
 
-;; Native macOS Emacs isn't invoked from a shell.
-(when (eq window-system 'ns)
-  (exec-path-from-shell-copy-env "PATH"))
-
 ;;}}}
 ;;{{{ Temporary fixes
 

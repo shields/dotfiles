@@ -63,7 +63,7 @@ brew install \
     coreutils \
     diffutils \
     docker \
-    emacs-plus@27 \
+    emacs-plus@28 \
     fd \
     findutils \
     gh \
