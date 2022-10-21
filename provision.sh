@@ -74,6 +74,7 @@ brew install \
     go \
     golangci/tap/golangci-lint \
     google-chrome-beta \
+    gopls \
     iterm2 \
     jq \
     karabiner-elements \
