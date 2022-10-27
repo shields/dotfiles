@@ -100,7 +100,7 @@ if [[ "${UNAME_MACHINE}" == "x86_64" ]]; then
     brew install virtualbox
 fi
 
-brew services start d12frosted/emacs-plus/emacs-plus@27
+brew services start d12frosted/emacs-plus/emacs-plus@28
 
 # Install pyls and associated linters and debugging tools.
 pip3 install 'python-language-server[all]' ptvsd
