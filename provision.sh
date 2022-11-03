@@ -102,8 +102,9 @@ fi
 
 brew services start d12frosted/emacs-plus/emacs-plus@28
 
-# Install pyls and associated linters and debugging tools.
-pip3 install 'python-language-server[all]' ptvsd
+# Install pylsp and associated linters and debugging tools.
+# TODO: consider pyright as an alternative Python LSP server
+pip3 install 'python-lsp-server[all]' ptvsd
 
 # Set shell to current zsh installed from Homebrew.
 if [[ "$(dscl . read /Users/$(whoami) UserShell)" == "UserShell: /bin/zsh" ]]; then
