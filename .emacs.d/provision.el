@@ -4,6 +4,7 @@
 (package-initialize)
 (package-refresh-contents nil)
 
+;; TODO: use use-package instead
 (setq package-selected-packages
       '(aggressive-indent
 	all-the-icons
@@ -55,3 +56,11 @@
 
 (require 'dap-go)
 (dap-go-setup)
+
+(require 'use-package-ensure)
+(setq use-package-always-ensure t)
+
+(use-package python-black
+  :demand t
+  :after python
+  :hook (python-mode . python-black-on-save-mode-enable-dwim))
