@@ -652,7 +652,7 @@ In that case, insert the number."
 ;;{{{ Dired
 
 ;; Use GNU ls from Homebrew, not BSD ls.
-(setq insert-directory-program "/usr/local/bin/gls")
+(setq insert-directory-program "/opt/homebrew/bin/gls")
 (setq dired-use-ls-dired t)
 
 ;;}}}

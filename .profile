@@ -18,17 +18,12 @@ HOSTFILE=/etc/hosts; export HOSTFILE
 #}}}
 #{{{ *PATH
 
-NEWPATH="$HOME/bin:$HOME/go/bin:/usr/local/sbin:/usr/local/bin:/sbin:/bin:/usr/sbin:/usr/bin"
-MANPATH="$HOME/man:/usr/local/man:/usr/man"
+NEWPATH="$HOME/bin:$HOME/go/bin:/opt/homebrew/bin:/usr/local/bin:/bin:/usr:/usr/bin"
+MANPATH="$HOME/man:/opt/homebrew/man:/usr/local/man:/usr/man"
 INFOPATH="$HOME/info:/usr/local/info"
 
 test -d /usr/share/man && MANPATH="$MANPATH:/usr/share/man"
 test -d /usr/local/share/man && MANPATH="$MANPATH:/usr/local/share/man"
-
-test -d /usr/X/bin && NEWPATH="$NEWPATH:/usr/X/bin"
-test -d /usr/X/man && MANPATH="$MANPATH:/usr/X/man"
-
-test -d /usr/games && NEWPATH="$NEWPATH:/usr/games"
 
 test -d "$HOME/google-cloud-sdk/bin" && NEWPATH="$NEWPATH:$HOME/google-cloud-sdk/bin"
 

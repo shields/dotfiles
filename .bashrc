@@ -72,7 +72,7 @@ zdate() {
 # For Linux:
 test -r /etc/bash_completion && . /etc/bash_completion
 # For macOS Homebrew:
-test -r /usr/local/etc/profile.d/bash_completion.sh && . /usr/local/etc/profile.d/bash_completion.sh
+test -r /opt/homebrew/etc/profile.d/bash_completion.sh && . /opt/homebrew/etc/profile.d/bash_completion.sh
 
 export NVM_DIR="$HOME/.nvm"
 [ -s "/usr/local/opt/nvm/nvm.sh" ] && . "/usr/local/opt/nvm/nvm.sh"

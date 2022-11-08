@@ -1,4 +1,4 @@
-;; /usr/local/bin/emacs -q --script .emacs.d/provision.el
+;; emacs -q --script .emacs.d/provision.el
 
 (load "~/.emacs.d/package-repos.el")
 (package-initialize)

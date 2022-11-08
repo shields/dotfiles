@@ -1,8 +1,3 @@
-# If you come from bash you might have to change your $PATH.
-# export PATH=$HOME/bin:/usr/local/bin:$PATH
-
-export PATH=$HOME/bin:$HOME/go/bin:$PATH
-
 [[ -d /opt/homebrew ]] && eval "$(/opt/homebrew/bin/brew shellenv)"
 [[ -x /usr/local/bin/brew ]] && eval "$(/usr/local/bin/brew shellenv)"
 
