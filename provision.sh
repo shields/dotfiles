@@ -21,6 +21,7 @@ if [[ ! -d "$HOMEBREW_REPOSITORY" ]]; then
     CI=1 /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/master/install.sh)"
 fi
 eval "$($HOMEBREW_PREFIX/bin/brew shellenv)"
+brew analytics off
 
 # The interesting part of
 # https://raw.github.com/ohmyzsh/ohmyzsh/master/tools/install.sh
