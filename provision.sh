@@ -128,6 +128,8 @@ defaults write com.apple.driver.AppleBluetoothMultitouch.trackpad Clicking -bool
 defaults -currentHost write NSGlobalDomain com.apple.mouse.tapBehavior -int 1
 defaults write NSGlobalDomain com.apple.mouse.tapBehavior -int 1
 defaults write com.apple.AppleMultitouchTrackpad 'ActuationStrength' -int 0
+defaults write com.apple.AppleMultitouchTrackpad FirstClickThreshold -int 0
+defaults write com.apple.AppleMultitouchTrackpad SecondClickThreshold -int 0
 # Disable dictionary lookups
 defaults write NSGlobalDomain 'com.apple.trackpad.forceClick' -bool false
 # Scroll down using the flexors of the fingers, which are stronger
