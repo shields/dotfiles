@@ -123,6 +123,7 @@ defaults write NSGlobalDomain NSAutomaticWindowAnimationsEnabled -bool false
 defaults write NSGlobalDomain NSScrollAnimationEnabled -bool false
 defaults write NSGlobalDomain NSWindowResizeTime -float 0.001
 sudo defaults write com.apple.universalaccess mouseDriverCursorSize -float 1.5
+sudo defaults write com.apple.universalaccess reduceTransparency true
 
 # Trackpad tap to click
 defaults write com.apple.driver.AppleBluetoothMultitouch.trackpad Clicking -bool true
