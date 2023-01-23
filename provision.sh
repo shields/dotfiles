@@ -176,6 +176,7 @@ defaults write com.apple.dock showLaunchpadGestureEnabled -int 0
 defaults write com.apple.dock 'tilesize' -float 96.0
 
 # Finder preferences
+defaults write com.apple.finder FXRemoveOldTrashItems true
 defaults write com.apple.finder _FXShowPosixPathInTitle -bool true
 defaults write com.apple.finder DisableAllAnimations -bool true
 defaults write com.apple.finder ShowPathbar -bool true
