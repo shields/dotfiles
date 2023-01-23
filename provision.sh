@@ -117,6 +117,7 @@ fi
 osascript -e 'tell application "System Preferences" to quit'
 
 # Visual preferences
+defaults write NSGlobalDomain AppleReduceDesktopTinting true
 defaults write NSGlobalDomain AppleShowScrollBars -string 'Always'
 defaults write NSGlobalDomain NSAutomaticWindowAnimationsEnabled -bool false
 defaults write NSGlobalDomain NSScrollAnimationEnabled -bool false
