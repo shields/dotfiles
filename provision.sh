@@ -196,6 +196,7 @@ defaults write com.apple.SoftwareUpdate ScheduleFrequency -int 1
 defaults write NSGlobalDomain 'AppleKeyboardUIMode' -int 3
 defaults write NSGlobalDomain 'com.apple.sound.beep.feedback' -int 1
 defaults write NSGlobalDomain 'com.apple.sound.uiaudio.enabled' -int 0
+defaults write NSGlobalDomain AppleICUDateFormatStrings -dict 1 y-MM-dd
 defaults write NSGlobalDomain InitialKeyRepeat -int 68
 defaults write NSGlobalDomain KeyRepeat -int 2
 defaults write com.apple.controlcenter 'NSStatusItem Preferred Position Sound' -float 256.0
