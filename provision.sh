@@ -129,8 +129,10 @@ sudo defaults write com.apple.universalaccess reduceTransparency true
 defaults write com.apple.driver.AppleBluetoothMultitouch.trackpad Clicking -bool true
 defaults -currentHost write NSGlobalDomain com.apple.mouse.tapBehavior -int 1
 defaults write NSGlobalDomain com.apple.mouse.tapBehavior -int 1
-defaults write com.apple.AppleMultitouchTrackpad 'ActuationStrength' -int 0
+defaults write com.apple.AppleMultitouchTrackpad ActuateDetents -int 0
+defaults write com.apple.AppleMultitouchTrackpad ActuationStrength -int 0
 defaults write com.apple.AppleMultitouchTrackpad FirstClickThreshold -int 0
+defaults write com.apple.AppleMultitouchTrackpad ForceSuppressed true
 defaults write com.apple.AppleMultitouchTrackpad SecondClickThreshold -int 0
 # Disable dictionary lookups
 defaults write NSGlobalDomain 'com.apple.trackpad.forceClick' -bool false
