@@ -85,6 +85,7 @@ brew install \
     pinentry-mac \
     pstree \
     ripgrep \
+    ruff \
     sd \
     spotify \
     teensy_loader_cli \
@@ -101,7 +102,8 @@ if [[ "${UNAME_MACHINE}" == "x86_64" ]]; then
     brew install virtualbox
 fi
 
-brew services start d12frosted/emacs-plus/emacs-plus@28
+# Not working as of April 2023:
+#brew services start d12frosted/emacs-plus/emacs-plus@28
 
 # Install pylsp and associated linters and debugging tools.
 # TODO: consider pyright as an alternative Python LSP server

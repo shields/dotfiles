@@ -790,6 +790,10 @@ In that case, insert the number."
 ;; "python" on macOS 10.15 is 2.7.
 (setq python-shell-interpreter "python3")
 
+;; https://beta.ruff.rs/docs/editor-integrations/#emacs-unofficial
+(require 'flymake-ruff)
+(add-hook 'python-mode-hook #'flymake-ruff-load)
+
 ;;}}}
 ;;{{{ TRAMP
 ;; http://tramp.sourceforge.net

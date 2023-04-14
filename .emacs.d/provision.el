@@ -23,6 +23,7 @@
 	expand-region
 	flx
 	flycheck
+	flymake-ruff
 	go-mode
 	goto-last-change
 	hl-todo
