@@ -41,6 +41,9 @@ def print_diff(domain: str, old, new) -> None:
         if k in old and old[k] == v:
             continue
 
+        if k == "CloudKitAccountInfoCache":
+            continue
+
         if type(v) == bool:
             value = f"-bool {plist_string(v)}"
         if type(v) == bytes:
