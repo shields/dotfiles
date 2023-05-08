@@ -94,8 +94,8 @@ brew install \
     watch \
     wget \
     wireshark \
-    youtube-dl \
     yq \
+    yt-dlp \
     yubico-yubikey-manager \
     zsh
 if [[ "${UNAME_MACHINE}" == "x86_64" ]]; then
