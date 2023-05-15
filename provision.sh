@@ -86,6 +86,8 @@ brew install \
     pstree \
     ripgrep \
     ruff \
+    rust \
+    rust-analyzer \
     sd \
     spotify \
     teensy_loader_cli \
