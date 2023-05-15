@@ -88,6 +88,7 @@ brew install \
     ruff \
     rust \
     rust-analyzer \
+    rustfmt \
     sd \
     spotify \
     teensy_loader_cli \
