@@ -645,7 +645,11 @@ In that case, insert the number."
 (dap-ui-controls-mode 1)
 
 (require 'dap-gdb-lldb)
+(dap-gdb-lldb-setup)
+
 (require 'dap-go)
+(dap-go-setup)
+
 (require 'dap-python)
 
 ;;}}}
@@ -793,6 +797,54 @@ In that case, insert the number."
 ;; https://beta.ruff.rs/docs/editor-integrations/#emacs-unofficial
 (require 'flymake-ruff)
 (add-hook 'python-mode-hook #'flymake-ruff-load)
+
+(use-package python-black
+  :demand t
+  :after python
+  :hook (python-mode . python-black-on-save-mode-enable-dwim))
+
+;;}}}
+;;{{{ Rust
+
+
+;; https://robert.kra.hn/posts/rust-emacs-setup/
+(use-package rustic
+  :ensure
+  :bind (:map rustic-mode-map
+              ("M-j" . lsp-ui-imenu)
+              ("M-?" . lsp-find-references)
+              ("C-c C-c l" . flycheck-list-errors)
+              ("C-c C-c a" . lsp-execute-code-action)
+              ("C-c C-c r" . lsp-rename)
+              ("C-c C-c q" . lsp-workspace-restart)
+              ("C-c C-c Q" . lsp-workspace-shutdown)
+              ("C-c C-c s" . lsp-rust-analyzer-status))
+  :config
+  (setq rustic-format-on-save t))
+(use-package lsp-mode
+  :ensure
+  :commands lsp
+  :custom
+  (lsp-rust-analyzer-cargo-watch-command "clippy")
+  (lsp-eldoc-render-all t)
+  (lsp-idle-delay 0.6)
+  (lsp-rust-analyzer-server-display-inlay-hints t)
+  (lsp-rust-analyzer-display-lifetime-elision-hints-enable "skip_trivial")
+  (lsp-rust-analyzer-display-chaining-hints t)
+  (lsp-rust-analyzer-display-lifetime-elision-hints-use-parameter-names nil)
+  (lsp-rust-analyzer-display-closure-return-type-hints t)
+  (lsp-rust-analyzer-display-parameter-hints nil)
+  (lsp-rust-analyzer-display-reborrow-hints nil)
+  :config
+  (add-hook 'lsp-mode-hook 'lsp-ui-mode))
+(use-package lsp-ui
+  :ensure
+  :commands lsp-ui-mode
+  :custom
+  (lsp-ui-peek-always-show t)
+  (lsp-ui-sideline-show-hover t)
+  (lsp-ui-doc-enable nil))
+
 
 ;;}}}
 ;;{{{ TRAMP
