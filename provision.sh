@@ -3,7 +3,7 @@
 set -eu
 
 # Copy these files.
-tar cf - bin $(find . -type f | grep -v -e '^\./\.git/' -e '^\./[^.]' -e '^\./\.mypy_cache') \
+tar cf - bin $(find . -type f | grep -v -e '^\./\.git/' -e '^\./[^.]' -e '^\./\.[a-z]\+_cache') \
     | (cd "$HOME" && tar xvf -)
 
 # Install Homebrew and Xcode (which will take tens of minutes).
