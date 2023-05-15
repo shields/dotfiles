@@ -86,6 +86,7 @@ brew install \
     pstree \
     ripgrep \
     ruff \
+    rust-analyzer \
     rustup-init \
     sd \
     spotify \
