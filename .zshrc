@@ -158,3 +158,7 @@ export __CF_USER_TEXT_ENCODING="$(id -u):134217984:134217984"
 
 # Needed by Terraform:
 export KUBE_CONFIG_PATH="$HOME/.kube/config"
+
+if [ -d "$HOME/.cargo" ]; then
+    PATH="$PATH:$HOME/.cargo/bin"
+fi

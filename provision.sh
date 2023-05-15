@@ -86,9 +86,7 @@ brew install \
     pstree \
     ripgrep \
     ruff \
-    rust \
-    rust-analyzer \
-    rustfmt \
+    rustup-init \
     sd \
     spotify \
     teensy_loader_cli \
@@ -232,3 +230,6 @@ if [ ! -f "$HOME/.emacs.d/.bootstrap-stamp" ]; then
     emacs -q --batch --script .emacs.d/provision.el
     touch "$HOME/.emacs.d/.bootstrap-stamp"
 fi
+
+# rustup
+rustup-init --no-modify-path -y
