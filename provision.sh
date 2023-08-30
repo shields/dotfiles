@@ -92,6 +92,7 @@ brew install \
     spotify \
     teensy_loader_cli \
     tmux \
+    utm \
     vlc \
     watch \
     wget \
