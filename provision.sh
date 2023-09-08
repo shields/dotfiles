@@ -49,7 +49,6 @@ fi
 
 # Pull things in from Homebrew.
 brew tap d12frosted/emacs-plus
-brew tap homebrew/cask-drivers
 brew tap homebrew/cask-versions
 brew tap microsoft/git
 brew tap osx-cross/avr
