@@ -63,7 +63,7 @@ brew install \
     coreutils \
     diffutils \
     docker \
-    emacs-plus@28 \
+    emacs-plus@29 \
     fd \
     findutils \
     gh \
@@ -103,6 +103,8 @@ brew install \
 if [[ "${UNAME_MACHINE}" == "x86_64" ]]; then
     brew install virtualbox
 fi
+
+brew link --overwrite emacs-plus@29
 
 # Not working as of April 2023:
 #brew services start d12frosted/emacs-plus/emacs-plus@28
