@@ -236,3 +236,14 @@ fi
 
 # rustup
 rustup-init --no-modify-path -y
+
+# Bootstrap TLS trust to GitHub SSH trust.
+if [ ! -f "$HOME/.ssh/known_hosts" ] || ! grep -q '^github\.com ' "$HOME/.ssh/known_hosts"; then
+    mkdir -p "$HOME/.ssh"
+    curl -s -L \
+	-H "Accept: application/vnd.github+json" \
+	-H "X-GitHub-Api-Version: 2022-11-28" \
+	https://api.github.com/meta | \
+	jq -r '.ssh_keys[]' | \
+	sed -e 's/^/github.com /' >> "$HOME/.ssh/known_hosts"
+fi
