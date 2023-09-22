@@ -221,7 +221,7 @@ defaults write com.apple.dock wvous-br-corner -int 13
 defaults import com.googlecode.iterm2 - < .iTerm2/com.googlecode.iterm2.plist
 
 # Set NTP server to Google Public NTP for smeared leap seconds.
-if ! fgrep -q '^server time.google.com$' /etc/ntp.conf; then
+if ! grep -q '^server time\.google\.com$' /etc/ntp.conf; then
     sudo systemsetup -setnetworktimeserver time.google.com
 fi
 
