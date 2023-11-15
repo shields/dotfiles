@@ -1,6 +1,8 @@
 [[ -d /opt/homebrew ]] && eval "$(/opt/homebrew/bin/brew shellenv)"
 [[ -x /usr/local/bin/brew ]] && eval "$(/usr/local/bin/brew shellenv)"
 
+export PATH="$HOME/bin:$PATH"
+
 # Path to your oh-my-zsh installation.
 export ZSH="$HOME/.oh-my-zsh"
 
@@ -79,7 +81,7 @@ HIST_STAMPS="yyyy-mm-dd"
 # Custom plugins may be added to ~/.oh-my-zsh/custom/plugins/
 # Example format: plugins=(rails git textmate ruby lighthouse)
 # Add wisely, as too many plugins slow down shell startup.
-plugins=(autojump docker emacs git kubectl pip python terraform)
+plugins=(autojump docker emacs git kubectl pip python)
 
 source $ZSH/oh-my-zsh.sh
 
@@ -121,12 +123,12 @@ alias kcy='kubectl -o yaml'
 # p runs the most current version of Python.
 alias p="$(ls -rd $(brew --prefix)/Cellar/python@3.??/*/bin/python3 | tail -1)"
 
-alias tf='terraform'
-alias tfa='terraform apply -parallelism=100'
-alias tfi='terraform init'
+whence tf > /dev/null || alias tf='terraform'
+alias tfa='tf apply -parallelism=100'
+alias tfi='tf init'
 alias tfia='tfi && tfa'
-alias tfp='terraform plan -parallelism=100 -refresh=false'
-alias tfpr='terraform plan -parallelism=100 -refresh=true'
+alias tfp='tf plan -parallelism=100 -refresh=false'
+alias tfpr='tf plan -parallelism=100 -refresh=true'
 
 for f in /usr/local/Caskroom/google-cloud-sdk/latest/google-cloud-sdk/*.zsh.inc(.N); do
     source $f
@@ -158,8 +160,6 @@ export __CF_USER_TEXT_ENCODING="$(id -u):134217984:134217984"
 
 # Needed by Terraform:
 export KUBE_CONFIG_PATH="$HOME/.kube/config"
-
-export PATH="$HOME/bin:$PATH"
 
 if [ -d "$HOME/.cargo" ]; then
     PATH="$PATH:$HOME/.cargo/bin"
