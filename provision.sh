@@ -89,6 +89,7 @@ brew install \
     rust-analyzer \
     rustup-init \
     sd \
+    signal \
     spotify \
     teensy_loader_cli \
     tmux \
