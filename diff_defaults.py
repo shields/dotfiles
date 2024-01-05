@@ -90,6 +90,7 @@ if __name__ == "__main__":
 
     # Sometimes includes "<date>0000-12-30T00:00:00Z</date>" which plistlib
     # chokes on; also, is unimportant.
+    domains.remove("com.apple.stocks.detailintents")
     domains.remove("com.apple.stocks.widget")
 
     print("Baselining...", end="", flush=True)
