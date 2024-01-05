@@ -91,6 +91,7 @@ brew install \
     sd \
     signal \
     spotify \
+    stats \
     teensy_loader_cli \
     tmux \
     utm \
@@ -210,6 +211,7 @@ defaults write NSGlobalDomain AppleICUDateFormatStrings -dict 1 y-MM-dd
 defaults write NSGlobalDomain InitialKeyRepeat -int 68
 defaults write NSGlobalDomain KeyRepeat -int 2
 defaults write com.apple.controlcenter 'NSStatusItem Preferred Position Sound' -float 256.0
+defaults write com.apple.controlcenter 'NSStatusItem Visible Battery' false  # Use Stats instead
 defaults write com.apple.controlcenter 'NSStatusItem Visible Item-3' false
 defaults write com.apple.controlcenter 'NSStatusItem Visible Sound' true
 defaults write com.apple.menuextra.clock DateFormat 'EEE MMM d  h:mm:ss a'
