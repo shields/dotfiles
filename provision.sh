@@ -79,7 +79,6 @@ brew install \
     iterm2 \
     jq \
     karabiner-elements \
-    mas \
     mypy \
     node \
     openssh \
@@ -112,8 +111,6 @@ brew link --overwrite emacs-plus@29
 
 # Not working as of April 2023:
 #brew services start d12frosted/emacs-plus/emacs-plus@28
-
-mas install 1586435171  # Actions
 
 # Install pylsp and associated linters and debugging tools.
 # TODO: consider pyright as an alternative Python LSP server
