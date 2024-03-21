@@ -84,7 +84,7 @@ test "$LOGNAME" = shields && IRCNICK=Shields
 export IRCNICK
 
 # less.
-LESS='-eMX'
+LESS='-eFiMX -j.382 --incsearch --mouse --use-color'
 export LESS
 
 # PGP.

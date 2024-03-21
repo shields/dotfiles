@@ -5,7 +5,8 @@
 [commit]
         gpgsign = true
 [core]
-	pager = less -R
+	# less -FRX is the git default, but only if you have not set $LESS.
+	pager = less -FRX
 [alias]
 	br = branch
 	branch-name = !git rev-parse --abbrev-ref HEAD
