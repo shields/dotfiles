@@ -61,6 +61,7 @@ brew install \
     black \
     clang-format \
     coreutils \
+    difftastic \
     diffutils \
     docker \
     emacs-plus@29 \
