@@ -216,6 +216,8 @@
 				<key>Red Component</key>
 				<real>0.0</real>
 			</dict>
+			<key>Brighten Bold Text</key>
+			<false/>
 			<key>Character Encoding</key>
 			<integer>4</integer>
 			<key>Close Sessions On End</key>
