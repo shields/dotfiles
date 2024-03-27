@@ -70,6 +70,7 @@ brew install \
     gh \
     git \
     git-credential-manager-core \
+    gitleaks \
     gnu-sed \
     gnupg \
     go \
@@ -84,6 +85,7 @@ brew install \
     node \
     openssh \
     pinentry-mac \
+    prettier \
     pstree \
     python-lsp-server \
     ripgrep \
