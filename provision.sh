@@ -88,6 +88,7 @@ brew install \
     prettier \
     pstree \
     python-lsp-server \
+    rclone \
     ripgrep \
     ruff \
     rust-analyzer \
