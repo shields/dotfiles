@@ -162,6 +162,7 @@ defaults write NSGlobalDomain 'com.apple.trackpad.scaling' -float 0.875
 # Use standard units
 defaults write NSGlobalDomain AppleMeasurementUnits -string 'Centimeters'
 defaults write NSGlobalDomain AppleMetricUnits -bool true
+defaults write NSGlobalDomain AppleTemperatureUnit -string 'Celsius'
 
 # App Store preferences
 defaults write com.apple.appstore ShowDebugMenu -bool true
