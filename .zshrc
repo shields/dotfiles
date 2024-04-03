@@ -164,3 +164,8 @@ export KUBE_CONFIG_PATH="$HOME/.kube/config"
 if [ -d "$HOME/.cargo" ]; then
     PATH="$PATH:$HOME/.cargo/bin"
 fi
+
+if [ -x /usr/bin/pbcopy ]; then
+    alias pc=pbcopy
+    alias pv=pbpaste
+fi
