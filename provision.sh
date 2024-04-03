@@ -193,9 +193,6 @@ defaults write com.apple.finder DisableAllAnimations -bool true
 defaults write com.apple.finder ShowPathbar -bool true
 defaults write com.apple.finder QuitMenuItem -bool true
 
-# Safari preferences
-defaults write com.apple.Safari SendDoNotTrackHTTPHeader -bool true
-
 # Software Update preferences
 defaults write com.apple.SoftwareUpdate AutomaticCheckEnabled -bool true
 defaults write com.apple.SoftwareUpdate AutomaticDownload -int 1
