@@ -2,8 +2,6 @@
 --glob=!**/.git/**
 --smart-case
 
-# This is the color iTerm2 uses by default to render bright-green
-# background used by less, SGR 92. ripgrep doesn't support the bright
-# versions of colors.
+# Highlight match text with pure yellow, the macOS findHighlightColor.
 --colors=match:none
---colors=match:bg:95,249,103
+--colors=match:bg:255,255,0

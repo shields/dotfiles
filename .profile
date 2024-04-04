@@ -83,8 +83,8 @@ export GOPATH="$HOME/go"
 test "$LOGNAME" = shields && IRCNICK=Shields
 export IRCNICK
 
-# less.
-LESS='-eFiMX -j.382 --incsearch --mouse --use-color'
+# less. 0.382 ≈ 1/φ. kY matches the macOS findHighlightColor.
+LESS='-eFiMX -j.382 --incsearch --mouse --use-color --color=SkY'
 export LESS
 
 # PGP.
