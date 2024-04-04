@@ -195,6 +195,20 @@ defaults write com.apple.finder DisableAllAnimations -bool true
 defaults write com.apple.finder ShowPathbar -bool true
 defaults write com.apple.finder QuitMenuItem -bool true
 
+# Menu bar clock preferences; see https://github.com/tech-otaku/menu-bar-clock
+#
+# The format string here is not used literally, and only certain complete
+# strings are valid. You might expect "d MMM" to display "4 Apr", but in a US
+# locale it gets regionalized to "Apr 4". "MMM d" is not accepted.
+defaults write NSGlobalDomain AppleICUForce12HourTime -bool true
+defaults write com.apple.menuextra.clock.plist DateFormat -string 'EEE d MMM h:mm:ss a'
+defaults write com.apple.menuextra.clock.plist IsAnalog -bool false
+defaults write com.apple.menuextra.clock.plist Show24Hour -bool false
+defaults write com.apple.menuextra.clock.plist ShowAMPM -bool true
+defaults write com.apple.menuextra.clock.plist ShowDate -int 1
+defaults write com.apple.menuextra.clock.plist ShowDayOfWeek -bool true
+defaults write com.apple.menuextra.clock.plist ShowSeconds -bool true
+
 # Software Update preferences
 defaults write com.apple.SoftwareUpdate AutomaticCheckEnabled -bool true
 defaults write com.apple.SoftwareUpdate AutomaticDownload -int 1
@@ -213,8 +227,6 @@ defaults write com.apple.controlcenter 'NSStatusItem Preferred Position Sound' -
 defaults write com.apple.controlcenter 'NSStatusItem Visible Battery' false  # Use Stats instead
 defaults write com.apple.controlcenter 'NSStatusItem Visible Item-3' false
 defaults write com.apple.controlcenter 'NSStatusItem Visible Sound' true
-defaults write com.apple.menuextra.clock DateFormat 'EEE MMM d  h:mm:ss a'
-defaults write com.apple.menuextra.clock ShowSeconds true
 
 # Lower right hot corner: lock screen.
 defaults write com.apple.dock wvous-br-corner -int 13
@@ -229,7 +241,7 @@ if ! grep -q '^server time\.google\.com$' /etc/ntp.conf; then
 fi
 
 # Restart affected processes
-killall Finder cfprefsd
+killall ControlCenter Finder cfprefsd
 
 # Bootstrap Emacs packages
 if [ ! -f "$HOME/.emacs.d/.bootstrap-stamp" ]; then
