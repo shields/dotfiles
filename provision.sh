@@ -88,6 +88,7 @@ brew install \
     iterm2 \
     jq \
     karabiner-elements \
+    mas \
     mypy \
     node \
     openssh \
@@ -125,6 +126,9 @@ brew link --overwrite emacs-plus@29
 if [[ "$(dscl . read /Users/$(whoami) UserShell)" == "UserShell: /bin/zsh" ]]; then
     sudo dscl . change "/Users/$(whoami)" UserShell /bin/zsh "$HOMEBREW_PREFIX/bin/zsh"
 fi
+
+# Now that mas is installed, we can cause App Store upgrades to happen.
+mas upgrade
 
 # Make sure System Preferences isn't open, since it interferes with other
 # processes writing to defaults.
