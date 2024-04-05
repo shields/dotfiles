@@ -108,9 +108,6 @@ brew install \
     yt-dlp \
     yubico-yubikey-manager \
     zsh
-if [[ "${UNAME_MACHINE}" == "x86_64" ]]; then
-    brew install virtualbox
-fi
 
 brew link --overwrite emacs-plus@29
 
