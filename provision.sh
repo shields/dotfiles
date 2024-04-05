@@ -23,6 +23,13 @@ fi
 eval "$($HOMEBREW_PREFIX/bin/brew shellenv)"
 brew analytics off
 
+softwareupdate --install --recommended
+
+# Install Rosetta if it's not already working.
+if ! arch -x86_64 /usr/bin/true 2> /dev/null; then
+    softwareupdate --install-rosetta --agree-to-license
+fi
+
 # The interesting part of
 # https://raw.github.com/ohmyzsh/ohmyzsh/master/tools/install.sh
 if [[ ! -d "$HOME/.oh-my-zsh" ]]; then
