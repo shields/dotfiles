@@ -88,6 +88,7 @@ brew install \
     iterm2 \
     jq \
     karabiner-elements \
+    llm \
     mas \
     mypy \
     node \
