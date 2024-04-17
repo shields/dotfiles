@@ -1,0 +1,15 @@
+airfoil
+git-credential-manager-core
+google-chrome-beta
+google-cloud-sdk
+hiddenbar
+inkscape
+iterm2
+karabiner-elements
+orbstack
+spotify
+stats
+utm
+vlc
+wireshark
+yubico-yubikey-manager

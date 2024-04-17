@@ -1,6 +1,6 @@
-#!/bin/sh
+#!/bin/bash
 
-set -eu
+set -euo pipefail
 
 # Copy these files.
 tar cf - bin $(find . -type f | grep -v -e '^\./\.git/' -e '^\./[^.]' -e '^\./\.[a-z]\+_cache') \
@@ -20,7 +20,9 @@ if [[ ! -d "$HOMEBREW_REPOSITORY" ]]; then
     # CI=1 suppresses confirmation prompts.
     CI=1 /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/master/install.sh)"
 fi
+
 eval "$($HOMEBREW_PREFIX/bin/brew shellenv)"
+
 brew analytics off
 
 softwareupdate --install --recommended
@@ -55,69 +57,30 @@ if [[ "$(whoami)" == shields || "$(whoami)" == michaelshields ]]; then
 fi
 
 # Pull things in from Homebrew.
-brew tap d12frosted/emacs-plus
-brew tap homebrew/cask-versions
-brew tap microsoft/git
-brew tap osx-cross/avr
 brew update
 brew upgrade
-brew install \
-    aspell \
-    autojump \
-    avr-gcc \
-    black \
-    clang-format \
-    coreutils \
-    difftastic \
-    diffutils \
-    docker \
-    emacs-plus@29 \
-    fd \
-    findutils \
-    gh \
-    git \
-    git-credential-manager-core \
-    gitleaks \
-    gnu-sed \
-    gnupg \
-    go \
-    golangci/tap/golangci-lint \
-    google-chrome-beta \
-    gopls \
-    hiddenbar \
-    iterm2 \
-    jq \
-    karabiner-elements \
-    llm \
-    mas \
-    mypy \
-    node \
-    openssh \
-    pinentry-mac \
-    prettier \
-    pstree \
-    python-lsp-server \
-    rclone \
-    ripgrep \
-    ruff \
-    rust-analyzer \
-    rustup-init \
-    sd \
-    spotify \
-    stats \
-    teensy_loader_cli \
-    tmux \
-    utm \
-    vlc \
-    watch \
-    wget \
-    wireshark \
-    yq \
-    yt-dlp \
-    yubico-yubikey-manager \
-    zsh
 
-brew link --overwrite emacs-plus@29
+for formula in $(comm -23 <(brew leaves --installed-on-request) <(sort brew-formulae.txt)); do
+    brew uninstall "$formula"
+done
+for formula in $(comm -13 <(brew leaves --installed-on-request) <(sort brew-formulae.txt)); do
+    brew install "$formula"
+done
+if ! diff --color=always <(brew leaves --installed-on-request) <(sort brew-formulae.txt); then
+    echo 'Failed to sync Homebrew formulae' 1>&2
+    exit 1
+fi
+
+for cask in $(comm -23 <(brew ls --cask) <(sort brew-casks.txt)); do
+    brew uninstall --cask "$cask"
+done
+for cask in $(comm -13 <(brew ls --cask) <(sort brew-casks.txt)); do
+    brew install --cask "$cask"
+done
+if ! diff --color=always <(brew ls --cask) <(sort brew-casks.txt); then
+    echo 'Failed to sync Homebrew casks' 1>&2
+    exit 1
+fi
 
 brew autoremove
 brew cleanup --prune=all
