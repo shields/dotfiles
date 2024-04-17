@@ -119,6 +119,9 @@ brew install \
 
 brew link --overwrite emacs-plus@29
 
+brew autoremove
+brew cleanup --prune=all
+
 # Not working as of April 2023:
 #brew services start d12frosted/emacs-plus/emacs-plus@28
 
