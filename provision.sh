@@ -103,7 +103,6 @@ brew install \
     rust-analyzer \
     rustup-init \
     sd \
-    signal \
     spotify \
     stats \
     teensy_loader_cli \
