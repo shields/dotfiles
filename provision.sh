@@ -32,11 +32,12 @@ if ! arch -x86_64 /usr/bin/true 2> /dev/null; then
     softwareupdate --install-rosetta --agree-to-license
 fi
 
-# The interesting part of
+# Oh My Zsh installation. This is the interesting part of
 # https://raw.github.com/ohmyzsh/ohmyzsh/master/tools/install.sh
 if [[ ! -d "$HOME/.oh-my-zsh" ]]; then
     git clone --depth=1 https://github.com/ohmyzsh/ohmyzsh "$HOME/.oh-my-zsh"
 fi
+"$HOME/.oh-my-zsh/tools/upgrade.sh" -v minimal
 
 # Spaceship Prompt
 ZSH_CUSTOM="$HOME/.oh-my-zsh/custom"
