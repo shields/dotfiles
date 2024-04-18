@@ -1,7 +1,6 @@
 aspell
 autojump
 black
-clang-format
 coreutils
 d12frosted/emacs-plus/emacs-plus@29
 difftastic
@@ -18,6 +17,7 @@ git-sizer
 gitleaks
 glab
 gnu-sed
+gnupg
 go
 golangci/tap/golangci-lint
 gopls
@@ -40,7 +40,9 @@ pstree
 pulumi
 pyright
 python-lsp-server
+qmk/qmk/qmk
 rclone
+rename
 ripgrep
 ruff
 rust-analyzer
@@ -52,7 +54,6 @@ skaffold
 snyk/tap/snyk
 sourcegraph/src-cli/src-cli
 syft
-teensy_loader_cli
 tfenv
 tmux
 watch

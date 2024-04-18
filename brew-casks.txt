@@ -1,4 +1,6 @@
 airfoil
+anki
+discord
 git-credential-manager-core
 google-chrome-beta
 google-cloud-sdk
