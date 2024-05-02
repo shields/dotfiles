@@ -14,4 +14,5 @@ stats
 utm
 vlc
 wireshark
+xscreensaver
 yubico-yubikey-manager
