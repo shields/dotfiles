@@ -47,14 +47,8 @@ if [[ ! -d "$ZSH_CUSTOM/themes/spaceship-prompt" ]]; then
 fi
 
 # Set email address in .gitconfig.
-if [[ "$(whoami)" == shields || "$(whoami)" == michaelshields ]]; then
-    # Is this a Freenome-managed Mac?
-    if [[ "$(uname)" == Darwin ]] && \
-	   system_profiler SPConfigurationProfileDataType | grep -qi freenome; then
-	git config --global user.email michael.shields@freenome.com
-    else
-	git config --global user.email shields@msrl.com
-    fi
+if [[ "$(whoami)" == shields ]]; then
+    git config --global user.email shields@msrl.com
 fi
 
 # Pull things in from Homebrew.

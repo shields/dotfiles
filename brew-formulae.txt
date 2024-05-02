@@ -56,7 +56,6 @@ skaffold
 snyk/tap/snyk
 sourcegraph/src-cli/src-cli
 syft
-tfenv
 tmux
 watch
 wdiff
