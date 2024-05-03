@@ -4,6 +4,7 @@ black
 chroma
 coreutils
 d12frosted/emacs-plus/emacs-plus@29
+datasette
 difftastic
 diffutils
 dive
@@ -55,6 +56,8 @@ shfmt
 skaffold
 snyk/tap/snyk
 sourcegraph/src-cli/src-cli
+spatialite-tools
+sqlite-utils
 syft
 tmux
 watch
