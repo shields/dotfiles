@@ -101,14 +101,17 @@ defaults write NSGlobalDomain AppleShowScrollBars -string 'Always'
 defaults write NSGlobalDomain NSAutomaticWindowAnimationsEnabled -bool false
 defaults write NSGlobalDomain NSScrollAnimationEnabled -bool false
 defaults write NSGlobalDomain NSWindowResizeTime -float 0.001
-# Avoid having to sudo by checking these values before writing them. For some
+# Avoid having to sudo by checking this value before writing it. For some
 # reason, 1.5 is stored as 1.496458570615034, so compare it as a number.
 if [[ $(bc -e "abs($(defaults read com.apple.universalaccess mouseDriverCursorSize) - 1.5) < 0.01") != 1 ]]; then
     sudo defaults write com.apple.universalaccess mouseDriverCursorSize -float 1.5
 fi
-if [[ $(defaults read com.apple.universalaccess reduceTransparency) != 1 ]]; then
-    sudo defaults write com.apple.universalaccess reduceTransparency true
-fi
+
+# Attempt to have the menu bar transparent, but not other things. This
+# doesn't entirely take effect immediately.
+defaults write com.apple.universalaccess reduceTransparency true
+defaults write com.apple.Accessibility EnhancedBackgroundContrastEnabled -int 1
+defaults write NSGlobalDomain AppleEnableMenuBarTransparency -bool true
 
 # Trackpad tap to click
 defaults write com.apple.driver.AppleBluetoothMultitouch.trackpad Clicking -bool true
