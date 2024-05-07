@@ -1,5 +1,6 @@
 airfoil
 anki
+calibre
 discord
 git-credential-manager-core
 google-chrome-beta
