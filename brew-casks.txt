@@ -1,5 +1,6 @@
 airfoil
 anki
+blender
 calibre
 discord
 git-credential-manager-core
