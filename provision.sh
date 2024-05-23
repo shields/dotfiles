@@ -127,12 +127,14 @@ defaults write NSGlobalDomain 'com.apple.trackpad.forceClick' -bool false
 # Scroll down using the flexors of the fingers, which are stronger
 # than the extensors.
 defaults write NSGlobalDomain com.apple.swipescrolldirection -bool false
-# Three-finger forward/back navigation.
+# Three-finger forward/back navigation and dragging.
 defaults write NSGlobalDomain AppleEnableSwipeNavigateWithScrolls false
-defaults write com.apple.AppleMultitouchTrackpad TrackpadThreeFingerDrag false
+defaults write com.apple.AppleMultitouchTrackpad Dragging false
+defaults write com.apple.AppleMultitouchTrackpad TrackpadThreeFingerDrag true
 defaults write com.apple.AppleMultitouchTrackpad TrackpadThreeFingerHorizSwipeGesture -int 1
 defaults write com.apple.AppleMultitouchTrackpad TrackpadThreeFingerVertSwipeGesture -int 1
-defaults write com.apple.driver.AppleBluetoothMultitouch.trackpad TrackpadThreeFingerDrag false
+defaults write com.apple.driver.AppleBluetoothMultitouch.trackpad Dragging false
+defaults write com.apple.driver.AppleBluetoothMultitouch.trackpad TrackpadThreeFingerDrag true
 defaults write com.apple.driver.AppleBluetoothMultitouch.trackpad TrackpadThreeFingerHorizSwipeGesture -int 1
 defaults write com.apple.driver.AppleBluetoothMultitouch.trackpad TrackpadThreeFingerVertSwipeGesture -int 1
 # Four-finger swipe between fullscreen apps.
