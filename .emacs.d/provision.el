@@ -19,7 +19,6 @@
 	dockerfile-mode
 	doom-modeline
 	eterm-256color
-	ethan-wspace
 	expand-region
 	flx
 	flycheck

@@ -36,7 +36,7 @@
 
 ;; Disabled commands.  Hmmph.
 (put 'eval-expression 'disabled nil)
-(put 'narrow-to-region 'disabled nil)	; C-x n n
+(put 'narrow-to-region 'disabled nil)   ; C-x n n
 
 ;; Stop saying "You can run the command blah-blah with M-x bl-b".
 (setq extended-command-suggest-shorter nil)
@@ -48,13 +48,20 @@
 
 ;; Enable full-screen.
 (if (and (eq window-system 'ns)
-	 (not (memq (frame-parameter nil 'fullscreen)
-		    '(fullscreen fullboth))))
+         (not (memq (frame-parameter nil 'fullscreen)
+                    '(fullscreen fullboth))))
     (toggle-frame-fullscreen))
 
 ;; Don't close windows because they're too short.  Sometimes a
 ;; single-line (plus mode line) window can be useful.
 (setq window-min-height 2)
+
+;; Highlight tabs and trailing spaces.
+(setq-default whitespace-style
+              '(face
+                tabs trailing space-before-tab space-after-tab tab-mark
+                missing-newline-at-eof))
+(global-whitespace-mode 1)
 
 (blink-cursor-mode 0)
 
@@ -76,7 +83,7 @@
       (t
        (setq visible-bell t)))
 
-(set-fringe-mode '(nil . 0))		; left-only
+(set-fringe-mode '(nil . 0))            ; left-only
 
 (add-to-list 'default-frame-alist '(height . 999))
 (add-to-list 'default-frame-alist '(width . 132))
@@ -100,18 +107,18 @@
 (smartparens-global-mode 1)
 (show-smartparens-global-mode 1)
 (setq sp-show-pair-delay 0)
-(setq sp-ignore-modes-list nil)		; Even the minibuffer!
+(setq sp-ignore-modes-list nil)                 ; Even the minibuffer!
 
 (global-hl-todo-mode 1)
 (setq hl-todo-keyword-faces
       '(("FIXME" . "#ff0000")
-	("XXX+"  . "#ff0000")))
+        ("XXX+"  . "#ff0000")))
 
 (eval-after-load "symbol-overlay"
   '(face-spec-set 'symbol-overlay-default-face
-		  '((t :weight bold :inherit nil))))
+                  '((t :weight bold :inherit nil))))
 (add-hook 'prog-mode-hook
-	  #'(lambda () (symbol-overlay-mode 1)))
+          #'(lambda () (symbol-overlay-mode 1)))
 (setq symbol-overlay-idle-time 0.1)
 
 (setq scroll-error-top-bottom t)
@@ -122,19 +129,9 @@
 (delete-selection-mode 1)
 
 (add-hook 'prog-mode-hook
-	  #'(lambda () (subword-mode 1)))
+          #'(lambda () (subword-mode 1)))
 
-;; Enable ethan-wspace, which supersedes and warns about
-;; mode-require-final-newline.
-(setq mode-require-final-newline nil)
-(global-ethan-wspace-mode 1)
-;; Disable ethan-wspace "fixup" feature, which modifies the buffer to
-;; re-add new whitespace immediately before the cursor, then falsely
-;; marks the buffer as unmodified.
-;; https://github.com/glasserc/ethan-wspace/issues/21
-(remove-hook 'after-save-hook 'ethan-wspace-clean-after-save-hook)
-
-(setq kill-whole-line t)
+(setq-default indent-tabs-mode nil)
 
 (setq line-move-visual nil)
 
@@ -280,7 +277,7 @@ when called with a prefix argument."
 
 ;; Option-shift-hyphen for em dash, same as macOS ordinary combo.
 (global-set-key [(meta _)]
-		'(lambda () (interactive) (insert "—")))
+                '(lambda () (interactive) (insert "—")))
 
 (global-set-key [(control c) (d)] #'crux-duplicate-current-line-or-region)
 
@@ -321,14 +318,14 @@ stage it and display a diff."
   (if (buffer-modified-p)
       ;; File is being freshly saved.
       (progn
-	(save-buffer)
-	(when (projectile-project-root)
-	  (let ((inhibit-message t))
-	    (projectile-save-project-buffers))
-	  (let ((compilation-read-command nil)
-		(p-c-d (projectile-compilation-dir)))
-	    (cond ((projectile-test-command p-c-d)
-		   (projectile-test-project arg))))))
+        (save-buffer)
+        (when (projectile-project-root)
+          (let ((inhibit-message t))
+            (projectile-save-project-buffers))
+          (let ((compilation-read-command nil)
+                (p-c-d (projectile-compilation-dir)))
+            (cond ((projectile-test-command p-c-d)
+                   (projectile-test-project arg))))))
     ;; File was already saved.
     (when (magit-file-relative-name)
       (magit-stage-file buffer-file-name)
@@ -384,7 +381,7 @@ stage it and display a diff."
   ;; Don't smartparen-pair on '.
   (sp-update-local-pairs '(:open "'" :close nil :actions nil)))
 (add-hook 'eval-expression-minibuffer-setup-hook
-	  #'shields/eval-expression-minibuffer-setup)
+          #'shields/eval-expression-minibuffer-setup)
 
 ;;}}}
 ;;{{{ go-mode
@@ -415,8 +412,8 @@ stage it and display a diff."
 ;;{{{ makefile-mode
 
 (add-hook 'makefile-mode-hook
-	  '(lambda ()
-	     (define-key makefile-mode-map "\C-c\C-c" 'compile)))
+          '(lambda ()
+             (define-key makefile-mode-map "\C-c\C-c" 'compile)))
 
 ;;}}}
 ;;{{{ Magit
@@ -432,9 +429,9 @@ stage it and display a diff."
 ;; Bind "=" to git diff origin/main.
 (eval-after-load "magit"
   '(define-key magit-mode-map "="
-	       (lambda ()
-		 (interactive)
-		 (magit-diff-range "origin/main"))))
+               (lambda ()
+                 (interactive)
+                 (magit-diff-range "origin/main"))))
 
 ;;}}}
 ;;{{{ term-mode
@@ -442,11 +439,11 @@ stage it and display a diff."
 ;; After changing these, run (multi-term-keystroke-setup).
 (setq term-bind-key-alist
       '(("C-c C-c" . term-interrupt-subjob)
-	("C-c C-e" . term-send-esc)
-	("C-m" . term-send-return)
-	("s-v" . term-paste)
-	("C-r" . term-send-reverse-search-history)
-	("M-." . comint-dynamic-complete)))
+        ("C-c C-e" . term-send-esc)
+        ("C-m" . term-send-return)
+        ("s-v" . term-paste)
+        ("C-r" . term-send-reverse-search-history)
+        ("M-." . comint-dynamic-complete)))
 (setq term-unbind-key-list
       '("C-z" "C-x" "C-c" "C-h" "C-y" "<ESC>" "C-r" "C-s" "C-t"))
 
@@ -468,17 +465,17 @@ stage it and display a diff."
 
 ;; Enable auto-fill.
 (add-hook 'text-mode-hook
-	  (function (lambda ()
-		      (turn-on-auto-fill))))
+          (function (lambda ()
+                      (turn-on-auto-fill))))
 (add-hook 'indented-text-mode-hook
-	  (function (lambda ()
-		      (turn-on-auto-fill))))
+          (function (lambda ()
+                      (turn-on-auto-fill))))
 (add-hook 'message-mode-hook
-	  (function (lambda ()
-		      (turn-on-auto-fill))))
+          (function (lambda ()
+                      (turn-on-auto-fill))))
 (add-hook 'xml-mode-hook
-	  (function (lambda ()
-		      (turn-on-auto-fill))))
+          (function (lambda ()
+                      (turn-on-auto-fill))))
 
 ;; Perl extension glues.  Not really like C; more like a Makefile.
 (or (assoc "\\.xs$" auto-mode-alist)
@@ -488,31 +485,31 @@ stage it and display a diff."
 ;;{{{ view-mode
 
 (add-hook 'view-mode-hook
-	  (function (lambda ()
-		      ;; Bind a few view-mode keys to vi/less-like
-		      ;; bindings.  Maybe these should be integrated
-		      ;; into view.el?
-		      (define-key view-mode-map "j" 'next-line)
-		      (define-key view-mode-map "k" 'previous-line)
-		      (define-key view-mode-map "^" 'beginning-of-line)
-		      (define-key view-mode-map "$" 'end-of-line)
-		      (define-key view-mode-map "G"
-				  '(lambda (arg)
-				     (interactive "P")
-				     (cond ((null arg) (goto-char (point-max)))
-					   ((numberp arg) (goto-line arg))
-					   (t (error
-					       "Must use numeric or no argument"))))))))
+          (function (lambda ()
+                      ;; Bind a few view-mode keys to vi/less-like
+                      ;; bindings.  Maybe these should be integrated
+                      ;; into view.el?
+                      (define-key view-mode-map "j" 'next-line)
+                      (define-key view-mode-map "k" 'previous-line)
+                      (define-key view-mode-map "^" 'beginning-of-line)
+                      (define-key view-mode-map "$" 'end-of-line)
+                      (define-key view-mode-map "G"
+                                  '(lambda (arg)
+                                     (interactive "P")
+                                     (cond ((null arg) (goto-char (point-max)))
+                                           ((numberp arg) (goto-line arg))
+                                           (t (error
+                                               "Must use numeric or no argument"))))))))
 ;; Hmm... worked in Emacs 18.
 ;;(define-key view-mode-map "%"
 ;;  '(lambda (arg)
 ;;     (interactive "P")
 ;;     (cond ((numberp arg)
-;;	    (if (and (>= arg 0) (<= arg 100))
-;;		 (goto-char (+ (point-min)
-;;			       (/ (* (- (point-max) (point-min)) arg) 100))))
-;;	      (error "No such thing as %d%%" arg)))
-;;	   (t (error "Must use numeric argument")))))
+;;          (if (and (>= arg 0) (<= arg 100))
+;;               (goto-char (+ (point-min)
+;;                             (/ (* (- (point-max) (point-min)) arg) 100))))
+;;            (error "No such thing as %d%%" arg)))
+;;         (t (error "Must use numeric argument")))))
 
 (setq view-read-only t)
 
@@ -523,11 +520,11 @@ stage it and display a diff."
 
 (eval-after-load "psgml-mode"
   '(add-hook 'xml-mode-hook
-	     (function (lambda ()
-			 (define-key xml-mode-map "'"
-				     '(lambda ()
-					(interactive)
-					(insert-string "&#8217;")))))))
+             (function (lambda ()
+                         (define-key xml-mode-map "'"
+                                     '(lambda ()
+                                        (interactive)
+                                        (insert-string "&#8217;")))))))
 
 ;;}}}
 
@@ -540,8 +537,8 @@ stage it and display a diff."
 
 (setq math-additional-units
       '((fathom "6 * ft" "Fathom")
-	(furlong "mi / 8" "Furlong")
-	(fortnight "14 * day" "Fourteen nights")))
+        (furlong "mi / 8" "Furlong")
+        (fortnight "14 * day" "Fourteen nights")))
 
 ;;}}}
 ;;{{{ Calendar and friends
@@ -561,10 +558,10 @@ stage it and display a diff."
 (setq calendar-week-start-day 1)
 
 (setq calendar-date-display-form '(year "-" (format "%02d-%02d"
-						    (string-to-number month)
-						    (string-to-number day))))
+                                                    (string-to-number month)
+                                                    (string-to-number day))))
 (setq calendar-time-display-form '(24-hours ":" minutes
-					    (if time-zone" ") time-zone))
+                                            (if time-zone" ") time-zone))
 
 (add-hook 'initial-calendar-window-hook 'mark-calendar-holidays)
 
@@ -575,7 +572,7 @@ stage it and display a diff."
 (use-package codeium
   :init
   (add-hook 'prog-mode-hook
-	    (lambda ()
+            (lambda ()
               (setq-local completion-at-point-functions '(codeium-completion-at-point))))
 
   :config
@@ -607,8 +604,8 @@ stage it and display a diff."
 (eval-after-load "grep"
   '(progn
      (grep-apply-setting 'grep-command
-			 (concat "rg -nH --null --color=always --no-heading "
-				 "--max-columns-preview --max-columns=80 "))
+                         (concat "rg -nH --null --color=always --no-heading "
+                                 "--max-columns-preview --max-columns=80 "))
 
      ;; TODO: Figure out why this has no effect.
      (grep-apply-setting 'grep-highlight-matches 'always)
@@ -695,12 +692,12 @@ stage it and display a diff."
 (require 'font-lock)
 (setq font-lock-face-attributes
       '((font-lock-comment-face "MidnightBlue")
-	(font-lock-string-face "dark green")
-	(font-lock-keyword-face "Purple")
-	(font-lock-function-name-face "Blue")
-	(font-lock-variable-name-face "Firebrick")
-	(font-lock-type-face "DarkOliveGreen")
-	(font-lock-reference-face "OrangeRed")))
+        (font-lock-string-face "dark green")
+        (font-lock-keyword-face "Purple")
+        (font-lock-function-name-face "Blue")
+        (font-lock-variable-name-face "Firebrick")
+        (font-lock-type-face "DarkOliveGreen")
+        (font-lock-reference-face "OrangeRed")))
 
 (setq font-lock-maximum-size 2097152)
 
@@ -719,7 +716,7 @@ stage it and display a diff."
 
 (setq ivy-re-builders-alist
       '((swiper . ivy--regex-plus)
-	(t . ivy--regex-fuzzy)))
+        (t . ivy--regex-fuzzy)))
 
 (setq ivy-wrap t)
 
@@ -729,7 +726,7 @@ stage it and display a diff."
 ;;{{{ Info
 
 (add-hook 'Info-mode-hook
-	  #'(lambda () (variable-pitch-mode 1)))
+          #'(lambda () (variable-pitch-mode 1)))
 
 ;;}}}
 ;;{{{ jka-compr
@@ -739,7 +736,7 @@ stage it and display a diff."
 ;;}}}
 ;;{{{ LSP
 
-(setq lsp-completion-enable nil)	; Using Codeium instead.
+(setq lsp-completion-enable nil)        ; Using Codeium instead.
 
 (setq lsp-auto-guess-root t)
 
@@ -751,13 +748,13 @@ stage it and display a diff."
 ;; This doesn't get updated properly.
 ;; https://github.com/emacs-lsp/lsp-ui/issues/369
 (face-spec-set 'lsp-ui-doc-background
-	       '((t :background "#eeeeff")))
+               '((t :background "#eeeeff")))
 
 ;;;}}}
 ;;{{{ Markdown
 
 (add-hook 'markdown-mode-hook
-	  #'(lambda () (variable-pitch-mode 1)))
+          #'(lambda () (variable-pitch-mode 1)))
 
 ;;}}}
 ;;{{{ Perl modes
@@ -772,11 +769,11 @@ stage it and display a diff."
 
 (eval-after-load "perl-mode"
   '(add-hook 'perl-mode-hook
-	     (function (lambda ()
-			 (define-key perl-mode-map "\M-oq"
-				     'describe-perl-symbol)
-			 (define-key perl-mode-map "\M-od"
-				     'switch-to-perl-doc-buffer)))))
+             (function (lambda ()
+                         (define-key perl-mode-map "\M-oq"
+                                     'describe-perl-symbol)
+                         (define-key perl-mode-map "\M-od"
+                                     'switch-to-perl-doc-buffer)))))
 
 (eval-after-load "cperl-mode"
   '(cperl-set-style "PerlStyle"))
@@ -898,14 +895,14 @@ The new frame has properties determined by calc-pop-up-frame-properties.
 This function is useful for binding to a hotkey."
        (interactive)
        (let ((frame (make-frame calc-pop-up-frame-properties))
-	     (buf (generate-new-buffer " pop-up-calc")))
-	 (select-frame frame)
-	 (focus-frame frame)
-	 (setq calc-transient-frames (cons frame calc-transient-frames))
-	 ;; If Calc starts up in its own buffer, it quits.  Hack around.
-	 (set-buffer buf)
-	 (full-calc)
-	 (kill-buffer buf)))
+             (buf (generate-new-buffer " pop-up-calc")))
+         (select-frame frame)
+         (focus-frame frame)
+         (setq calc-transient-frames (cons frame calc-transient-frames))
+         ;; If Calc starts up in its own buffer, it quits.  Hack around.
+         (set-buffer buf)
+         (full-calc)
+         (kill-buffer buf)))
      (defvar calc-pop-up-frame-properties '(height 30 width 60)
        "Frame properties for frames created by \\[pop-up-calc].")
      (defvar calc-transient-frames ()
@@ -914,10 +911,10 @@ This function is useful for binding to a hotkey."
        "Deletes the current frame if it is a member of calc-transient-frames; otherwise, calc-quit."
        (interactive)
        (if (not (member (selected-frame) calc-transient-frames))
-	   (calc-quit non-fatal)
-	 (setq calc-transient-frames
-	       (delete (selected-frame) calc-transient-frames))
-	 (delete-frame)))
+           (calc-quit non-fatal)
+         (setq calc-transient-frames
+               (delete (selected-frame) calc-transient-frames))
+         (delete-frame)))
      (define-key calc-mode-map "q" 'calc-quit-or-delete-transient-frame)))
 
 
@@ -938,13 +935,13 @@ This function is useful for binding to a hotkey."
 ;; high, the pauses will be long.
 (setq gc-cons-threshold
       (if (eq system-type 'darwin)
-	  (/ (string-to-number
-	      (replace-regexp-in-string
-	       "^hw\\.memsize: \\([0-9]+\\)\n$"
-	       "\\1"
-	       (shell-command-to-string "sysctl hw.memsize")))
-	     200)
-	100000000))
+          (/ (string-to-number
+              (replace-regexp-in-string
+               "^hw\\.memsize: \\([0-9]+\\)\n$"
+               "\\1"
+               (shell-command-to-string "sysctl hw.memsize")))
+             200)
+        100000000))
 ;; Increase the amount of data read from subprocsses.  Recommended by
 ;; https://emacs-lsp.github.io/lsp-mode/page/performance/
 (setq read-process-output-max (* 1024 1024))
