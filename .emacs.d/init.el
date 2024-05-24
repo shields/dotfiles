@@ -587,9 +587,11 @@ stage it and display a diff."
 (load-file "~/.emacs.d/codeium.el")
 (use-package codeium
   :init
+  (defun codium-and-lsp-completion-at-point ()
+    (cape-wrap-super #'codium-completion-at-point #'lsp-completion-at-point))
   (add-hook 'prog-mode-hook
             (lambda ()
-              (setq-local completion-at-point-functions '(codeium-completion-at-point))))
+              (setq-local completion-at-point-functions '(codium-and-lsp-completion-at-point))))
 
   :config
   (setq codeium-api-enabled

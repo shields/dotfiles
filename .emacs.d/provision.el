@@ -10,6 +10,7 @@
 	anzu
 	apheleia
 	avy
+	cape
 	company
 	company-terraform
 	counsel
