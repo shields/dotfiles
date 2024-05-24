@@ -351,6 +351,7 @@ stage it and display a diff."
     (when (magit-file-relative-name)
       (magit-stage-file buffer-file-name)
       (magit-diff-buffer-file))))
+(autoload 'magit-file-relative-name "magit")
 
 ;;}}}
 
