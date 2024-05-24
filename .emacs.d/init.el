@@ -780,6 +780,8 @@ stage it and display a diff."
 (add-hook 'markdown-mode-hook
           #'(lambda () (variable-pitch-mode 1)))
 
+(add-hook 'markdown-mode-hook #'typo-mode)
+
 ;;}}}
 ;;{{{ Perl modes
 
@@ -1006,7 +1008,7 @@ This function is useful for binding to a hotkey."
  '(markdown-header-face ((t (:weight bold))))
  '(match ((t (:background "yellow1" :foreground "black"))))
  '(minibuffer-prompt ((t (:weight bold))))
- '(mode-line ((t (:background "grey90" :foreground "black" :box (:line-width -1 :style released-button) :family "Avenir Next"))))
+ '(mode-line ((t (:background "grey90" :foreground "black" :box (:line-width -1 :style released-button) :family "Verdana"))))
  '(mode-line-buffer-id ((t (:weight semi-bold))))
  '(mode-line-emphasis ((t (:weight semi-bold))))
  '(mode-line-inactive ((t (:inherit mode-line :background "grey80" :foreground "grey20" :box (:line-width -1 :color "grey75") :weight light))))
@@ -1017,7 +1019,7 @@ This function is useful for binding to a hotkey."
  '(sp-show-pair-match-face ((t (:inherit (show-paren-match show-paren-match-expression)))))
  '(sp-wrap-overlay-opening-pair ((t (:inherit sp-wrap-overlay-face :foreground "magenta"))))
  '(swiper-match-face-4 ((t (:inherit match))))
- '(variable-pitch ((t (:height 1.2 :family "Avenir Next"))))
+ '(variable-pitch ((t (:height 1.2 :family "Georgia"))))
  '(vhl/default-face ((t (:background "DarkSeaGreen1")))))
 
 ;;}}}
