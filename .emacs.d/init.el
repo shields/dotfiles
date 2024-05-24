@@ -727,7 +727,8 @@ stage it and display a diff."
 
 (use-package gptel
   :config
-  (setq gptel-model "gpt-4o"))
+  (setq gptel-model "gpt-4o")
+  (add-hook 'gptel-post-stream-hook #'gptel-auto-scroll))
 
 ;;}}}
 ;;{{{ ivy, counsel, and swiper
