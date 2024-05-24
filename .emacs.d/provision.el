@@ -38,6 +38,7 @@
 	multi-term
 	posframe
 	projectile
+	ruff-format
 	rustic
 	smartparens
 	symbol-overlay

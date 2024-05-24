@@ -785,10 +785,8 @@ stage it and display a diff."
 (require 'flymake-ruff)
 (add-hook 'python-mode-hook #'flymake-ruff-load)
 
-(use-package python-black
-  :demand t
-  :after python
-  :hook (python-mode . python-black-on-save-mode-enable-dwim))
+(require 'ruff-format)
+(add-hook 'python-mode-hook #'ruff-format-on-save-mode)
 
 ;;}}}
 ;;{{{ Rust
