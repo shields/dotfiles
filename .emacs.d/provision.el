@@ -22,6 +22,7 @@
 	editorconfig
 	eterm-256color
 	expand-region
+	fancy-compilation
 	flx
 	flycheck
 	flymake-ruff

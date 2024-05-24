@@ -616,8 +616,7 @@ stage it and display a diff."
 
 (setq compilation-always-kill t)
 
-;; 'first-error would be better, but doesn't seem reliable.
-(setq compilation-scroll-output t)
+(setq compilation-scroll-output 'first-error)
 
 (eval-after-load "grep"
   '(progn
@@ -631,15 +630,11 @@ stage it and display a diff."
      (grep-apply-setting 'grep-use-null-device nil)
      (grep-apply-setting 'grep-use-null-filename-separator t)))
 
-;; Enable ANSI colors in compilation buffer.
-;; http://endlessparentheses.com/ansi-colors-in-the-compilation-buffer-output.html
-(defun endless/colorize-compilation ()
-  "Colorize from `compilation-filter-start' to `point'."
-  (let ((inhibit-read-only t))
-    (ansi-color-apply-on-region
-     compilation-filter-start (point))))
-(add-hook 'compilation-filter-hook
-          #'endless/colorize-compilation)
+(use-package fancy-compilation
+  :commands (fancy-compilation-mode))
+
+(with-eval-after-load 'compile
+  (fancy-compilation-mode))
 
 ;;}}}
 ;;{{{ DAP (https://emacs-lsp.github.io/dap-mode/)
