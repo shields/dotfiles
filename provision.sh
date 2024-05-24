@@ -80,8 +80,7 @@ fi
 brew autoremove
 brew cleanup --prune=all
 
-# Not working as of April 2023:
-#brew services start d12frosted/emacs-plus/emacs-plus@28
+brew services start emacs-plus
 
 # Set shell to current zsh installed from Homebrew.
 if [[ "$(dscl . read /Users/$(whoami) UserShell)" == "UserShell: /bin/zsh" ]]; then
