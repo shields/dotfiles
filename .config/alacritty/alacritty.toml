@@ -1,0 +1,17 @@
+[window]
+dimensions = { columns = 132, lines = 100 }
+
+[font]
+# This is too bold for some reason.
+normal = { family = "Andale Mono", style = "Regular" }
+size = 12
+
+[colors]
+cursor = { text = "#ffffff", cursor = "#b22222" }  # firebrick
+
+[colors.primary]
+foreground = "#000000"
+background = "#ffffff"
+
+[bell]
+duration = 250
