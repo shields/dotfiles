@@ -76,7 +76,9 @@
 (defun macos-system-alert ()
   "Make the systemwide alert event (sound or screen flash)."
   (do-applescript "tell application \"System Events\" to beep"))
-(cond ((eq window-system 'ns)
+;; This needs to check system-type and not window-system because an Emacs daemon
+;; started as a macOS login item is headless.
+(cond ((eq system-type 'darwin)
        (setq visible-bell nil)
        (setq ring-bell-function 'macos-system-alert))
       (t
