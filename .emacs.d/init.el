@@ -97,9 +97,6 @@
 (eval-after-load "magit"
   '(add-hook 'magit-post-refresh-hook 'diff-hl-magit-post-refresh))
 
-(column-number-mode)
-(setq column-number-indicator-zero-based nil)
-
 ;; Enable smartparens.  Note that it requires configuration, and that
 ;; a stock configuration is provided by smartparens-config.  If you
 ;; just let it autoload, it will work, but not well.
