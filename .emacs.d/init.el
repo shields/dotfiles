@@ -167,6 +167,9 @@
   :config
   (editorconfig-mode 1))
 
+(use-package expand-region
+  :bind ("C-=" . er/expand-region))
+
 ;;}}}
 ;;{{{ Mode line
 
@@ -264,7 +267,6 @@ when called with a prefix argument."
 (global-set-key [(super up)] #'move-line-up)
 (global-set-key [(super down)] #'move-line-down)
 
-(global-set-key [(super w)] #'er/expand-region)
 (global-set-key [(control w)] nil)
 
 ;; Put M-ESC (i.e., ESC ESC) back to the way it was when I learned
