@@ -162,6 +162,11 @@
   (when (eq (cdr el) 'black)
     (setf (cdr el) 'ruff)))
 
+(use-package editorconfig
+  :ensure t
+  :config
+  (editorconfig-mode 1))
+
 ;;}}}
 ;;{{{ Mode line
 

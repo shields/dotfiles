@@ -18,6 +18,7 @@
 	diff-hl
 	dockerfile-mode
 	doom-modeline
+	editorconfig
 	eterm-256color
 	expand-region
 	flx
