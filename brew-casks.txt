@@ -3,6 +3,7 @@ alt-tab
 anki
 blender
 calibre
+dash
 discord
 git-credential-manager-core
 google-chrome-beta

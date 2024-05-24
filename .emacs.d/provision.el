@@ -16,6 +16,7 @@
 	counsel
 	crux
 	dap-mode
+	dash-at-point
 	diff-hl
 	dockerfile-mode
 	doom-modeline

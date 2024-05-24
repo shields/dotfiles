@@ -263,6 +263,7 @@ when called with a prefix argument."
 ;; Break old C-v / M-v habits now that S-v is paste (yank).
 (global-set-key [(control v)] nil)
 
+(global-set-key [(meta .)] #'dash-at-point)
 (global-set-key [(super .)] #'xref-find-definitions)
 (global-set-key [(super \,)] #'xref-pop-marker-stack)
 
