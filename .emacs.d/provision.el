@@ -13,6 +13,7 @@
 	company
 	company-terraform
 	counsel
+	crux
 	dap-mode
 	diff-hl
 	dockerfile-mode

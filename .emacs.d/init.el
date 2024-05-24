@@ -221,7 +221,11 @@ when called with a prefix argument."
 ;; The default is just-one-space.
 (global-set-key [(super space)] 'fixup-whitespace)
 
+(global-set-key [(control k)] #'crux-smart-kill-line)
+
 (global-set-key [(control backspace)] 'join-line)
+
+(global-set-key [(super o)] #'crux-smart-open-line)
 
 (global-set-key [(super p)] 'multi-term-next)
 
@@ -277,6 +281,10 @@ when called with a prefix argument."
 ;; Option-shift-hyphen for em dash, same as macOS ordinary combo.
 (global-set-key [(meta _)]
 		'(lambda () (interactive) (insert "—")))
+
+(global-set-key [(control c) (d)] #'crux-duplicate-current-line-or-region)
+
+(global-set-key [(control c) (e)] #'crux-eval-and-replace)
 
 ;;}}}
 
