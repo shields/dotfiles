@@ -46,6 +46,8 @@
 
 (setq inhibit-startup-message t)
 
+(setq initial-scratch-message nil)
+
 ;; Enable full-screen.
 (if (and (eq window-system 'ns)
          (not (memq (frame-parameter nil 'fullscreen)
@@ -120,6 +122,12 @@
 
 (setq scroll-error-top-bottom t)
 
+(setq-default truncate-lines t)
+
+;; Enable horizontal trackpad scrolling.
+(setq mouse-wheel-tilt-scroll t
+      mouse-wheel-flip-direction t)
+
 ;;}}}
 ;;{{{ Editing behavior
 
@@ -166,6 +174,8 @@
 
 (use-package expand-region
   :bind ("C-=" . er/expand-region))
+
+(setq save-interprogram-paste-before-kill t)
 
 ;;}}}
 ;;{{{ Mode line
@@ -466,6 +476,8 @@ stage it and display a diff."
 ;;{{{ text-mode and indented-text-mode
 
 (setq-default fill-column 80)
+
+(setq sentence-end-double-space nil)
 
 ;; Enable auto-fill.
 (add-hook 'text-mode-hook
