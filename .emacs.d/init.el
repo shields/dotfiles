@@ -165,10 +165,12 @@
 
 (require 'apheleia)
 (apheleia-global-mode 1)
-;; Replace black with ruff.
+;; Replace black with ruff, and gofmt with goimports.
 (dolist (el apheleia-mode-alist)
   (when (eq (cdr el) 'black)
-    (setf (cdr el) 'ruff)))
+    (setf (cdr el) 'ruff))
+  (when (eq (cdr el) 'gofmt)
+    (setf (cdr el) 'goimports)))
 
 (use-package editorconfig
   :ensure t
@@ -412,10 +414,7 @@ stage it and display a diff."
 
 (setq godoc-at-point-function #'godoc-gogetdoc)
 
-;; LSP setup.  https://github.com/golang/tools/blob/master/gopls/doc/emacs.md
-(defun lsp-go-install-save-hooks ()
-  (add-hook 'before-save-hook #'lsp-organize-imports t t))
-(add-hook 'go-mode-hook #'lsp-go-install-save-hooks)
+;; LSP setup. https://github.com/golang/tools/blob/master/gopls/doc/emacs.md
 (add-hook 'go-mode-hook #'lsp-deferred)
 
 ;; aggressive-indent-mode interacts badly with LSP's reformatting.
