@@ -7,7 +7,6 @@
 ;; TODO: use use-package instead
 (setq package-selected-packages
       '(aggressive-indent
-	all-the-icons
 	anzu
 	avy
 	company
@@ -49,7 +48,7 @@
 
 (package-install-selected-packages)
 
-(all-the-icons-install-fonts 1)
+(nerd-icons-install-fonts 1)
 
 (load-file "codeium.el")
 (codeium-install nil t)
