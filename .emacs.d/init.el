@@ -688,6 +688,13 @@ stage it and display a diff."
 (setq font-lock-maximum-size 2097152)
 
 ;;}}}
+;;{{{ gptel
+
+(use-package gptel
+  :config
+  (setq gptel-model "gpt-4o"))
+
+;;}}}
 ;;{{{ ivy, counsel, and swiper
 
 (setq ivy-use-virtual-buffers t)

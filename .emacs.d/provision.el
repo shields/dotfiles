@@ -25,6 +25,7 @@
 	flymake-ruff
 	go-mode
 	goto-last-change
+	gptel
 	hl-todo
 	ivy
 	jsonnet-mode
