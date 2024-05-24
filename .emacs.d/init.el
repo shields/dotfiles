@@ -5,6 +5,7 @@
 ;;; Globals
 ;;{{{ Preliminaries
 
+;; Write customizations to a separate file instead of appending here.
 (setq custom-file "~/.emacs.d/custom.el")
 (load custom-file)
 
@@ -12,9 +13,6 @@
 
 ;;}}}
 ;;{{{ Temporary fixes
-
-;; https://github.com/mgyucht/jsonnet-mode/pull/16
-(add-to-list 'auto-mode-alist (cons "\\.libsonnet\\'" 'jsonnet-mode))
 
 ;; https://github.com/Malabarba/aggressive-indent-mode/issues/137
 ;; Closed 2020-05-12 but not fixed as requested.
@@ -32,9 +30,6 @@
               (aggressive-indent--process-changed-list-and-indent))))
         (when (timerp aggressive-indent--idle-timer)
           (cancel-timer aggressive-indent--idle-timer))))))
-
-;; https://github.com/emacs-lsp/lsp-mode/issues/1778
-(setq lsp-gopls-codelens nil)
 
 ;;}}}
 ;;{{{ Customization of commands
@@ -457,6 +452,8 @@ stage it and display a diff."
 ;;}}}
 ;;{{{ text-mode and indented-text-mode
 
+(setq-default fill-column 80)
+
 ;; Enable auto-fill.
 (add-hook 'text-mode-hook
 	  (function (lambda ()
@@ -656,7 +653,9 @@ In that case, insert the number."
 ;;{{{ Dired
 
 ;; Use GNU ls from Homebrew, not BSD ls.
-(setq insert-directory-program "/opt/homebrew/bin/gls")
+(when (file-executable-p "/opt/homebrew/bin/gls")
+  (setq insert-directory-program "/opt/homebrew/bin/gls"))
+
 (setq dired-use-ls-dired t)
 
 ;;}}}
@@ -866,11 +865,6 @@ In that case, insert the number."
 ;;{{{ W3
 
 (setq url-keep-history nil)
-
-;;}}}
-;;{{{ W3M
-
-(setq w3m-fill-column 70)
 
 ;;}}}
 ;;{{{ yasnippet
