@@ -11,7 +11,6 @@
 	anzu
 	avy
 	company
-	company-tabnine
 	company-terraform
 	counsel
 	dap-mode
@@ -51,5 +50,5 @@
 
 (all-the-icons-install-fonts 1)
 
-(require 'company-tabnine)
-(company-tabnine-install-binary)
+(load-file "codeium.el")
+(codeium-install nil t)

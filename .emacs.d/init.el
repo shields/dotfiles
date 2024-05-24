@@ -557,48 +557,30 @@ stage it and display a diff."
 (add-hook 'initial-calendar-window-hook 'mark-calendar-holidays)
 
 ;;}}}
-;;{{{ Company
+;;{{{ Company and Codeium
 
-(require 'company)
-(add-hook 'prog-mode-hook #'company-mode-on)
+(load-file "~/.emacs.d/codeium.el")
+(use-package codeium
+  :init
+  (add-hook 'prog-mode-hook
+	    (lambda ()
+              (setq-local completion-at-point-functions '(codeium-completion-at-point))))
 
-(setq company-show-numbers t)
-(setq company-minimum-prefix-length 1)
-(setq company-idle-delay 0)
-(setq company-tooltip-idle-delay 0.1)
-(setq company-tooltip-align-annotations t)
-(setq company-tooltip-flip-when-above t)
+  :config
+  (setq codeium-api-enabled
+        (lambda (api)
+          (memq api '(GetCompletions Heartbeat CancelRequest GetAuthToken RegisterUser auth-redirect AcceptCompletion)))))
 
-;; https://oremacs.com/2017/12/27/company-numbers/
-(defun ora-company-number ()
-  "Forward to `company-complete-number'.
+(use-package company
+  :defer 0.1
+  :config
+  (global-company-mode t)
+  (setq-default
+   company-idle-delay 0.05
+   company-require-match nil
+   company-minimum-prefix-length 0
 
-Unless the number is potentially part of the candidate.
-In that case, insert the number."
-  (interactive)
-  (let* ((k (this-command-keys))
-         (re (concat "^" company-prefix k)))
-    (if (cl-find-if (lambda (s) (string-match re s))
-                    company-candidates)
-        (self-insert-command 1)
-      (company-complete-number (string-to-number k)))))
-(eval-after-load "company-mode"
-  '(mapc
-    (lambda (x)
-      (define-key company-active-map (format "%d" x) #'ora-company-number))
-    (number-sequence 1 9)))
-
-;; company-fuzzy.
-;;(add-hook 'company-mode-hook #'company-fuzzy-turn-on-company-fuzzy-mode)
-;;(require 'company-fuzzy)		; c-f-t-o-c-f-m isn't autoloaded.
-;;(setq company-fuzzy-sorting-backend 'flx)
-;;(setq company-require-match nil)	; A bad fit with fuzzy matching.
-
-(setq company-global-modes '(not markdown-mode))
-
-(add-to-list 'company-backends #'company-tabnine)
-
-(add-to-list 'company-backends #'company-capf)
+   company-frontends '(company-preview-frontend)))
 
 ;;}}}
 ;;{{{ compilation and grep
@@ -735,6 +717,8 @@ In that case, insert the number."
 
 ;;}}}
 ;;{{{ LSP
+
+(setq lsp-completion-enable nil)	; Using Codeium instead.
 
 (setq lsp-auto-guess-root t)
 
