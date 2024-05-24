@@ -47,7 +47,7 @@
 	yaml-mode
 	yasnippet))
 
-(package-install-selected-packages)
+(package-install-selected-packages t)
 
 (nerd-icons-install-fonts 1)
 
