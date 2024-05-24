@@ -5,6 +5,9 @@
 ;;; Globals
 ;;{{{ Preliminaries
 
+(when (eq system-type 'darwin)
+  (exec-path-from-shell-initialize))
+
 ;; Write customizations to a separate file instead of appending here.
 (setq custom-file "~/.emacs.d/custom.el")
 (load custom-file)

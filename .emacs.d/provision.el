@@ -21,6 +21,7 @@
 	doom-modeline
 	editorconfig
 	eterm-256color
+	exec-path-from-shell
 	expand-region
 	fancy-compilation
 	flx
