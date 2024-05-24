@@ -12,6 +12,7 @@ inkscape
 iterm2
 karabiner-elements
 orbstack
+rectangle-pro
 spotify
 stats
 utm
