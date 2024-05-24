@@ -176,6 +176,9 @@
 (setq doom-modeline-minor-modes t)
 (setq doom-modeline-number-limit 999)
 (setq doom-modeline-vcs-max-length 32)
+(setq doom-modeline-column-zero-based nil)
+(setq doom-modeline-total-line-number t)
+(setq doom-modeline-position-column-line-format '("c%c %l"))
 
 (minions-mode 1)
 
@@ -646,6 +649,8 @@ stage it and display a diff."
 
 (add-hook 'after-init-hook #'global-flycheck-mode)
 
+(setq-default flycheck-indication-mode nil)
+
 ;; }}}
 ;;{{{ Flyspell
 
@@ -958,9 +963,6 @@ This function is useful for binding to a hotkey."
  '(doom-modeline-info ((t nil)))
  '(doom-modeline-project-dir ((t nil)))
  '(fixed-pitch ((t (:family "Andale Mono"))))
- '(flycheck-error ((t (:inherit error))))
- '(flycheck-info ((t (:foreground "ForestGreen"))))
- '(flycheck-warning ((t (:underline "DarkOrange"))))
  '(highlight ((t (:background "darkseagreen1"))))
  '(isearch ((t (:inherit match))))
  '(ivy-current-match ((t (:background "thistle1" :weight bold))))
