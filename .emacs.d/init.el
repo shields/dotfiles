@@ -598,18 +598,16 @@ stage it and display a diff."
 ;;{{{ Company and Codeium
 
 (load-file "~/.emacs.d/codeium.el")
-(use-package codeium
-  :init
-  (defun codium-and-lsp-completion-at-point ()
-    (cape-wrap-super #'codium-completion-at-point #'lsp-completion-at-point))
-  (add-hook 'prog-mode-hook
-            (lambda ()
-              (setq-local completion-at-point-functions '(codium-and-lsp-completion-at-point))))
 
-  :config
-  (setq codeium-api-enabled
-        (lambda (api)
-          (memq api '(GetCompletions Heartbeat CancelRequest GetAuthToken RegisterUser auth-redirect AcceptCompletion)))))
+(defun shields/prog-capf ()
+  (cape-wrap-super #'codeium-completion-at-point #'lsp-completion-at-point))
+(add-hook 'prog-mode-hook
+          (lambda ()
+            (setq-local completion-at-point-functions '(shields/prog-capf))))
+
+(setq codeium-api-enabled
+      (lambda (api)
+        (memq api '(GetCompletions Heartbeat CancelRequest GetAuthToken RegisterUser auth-redirect AcceptCompletion))))
 
 (use-package company
   :defer 0.1
