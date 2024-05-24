@@ -128,6 +128,10 @@
 (setq mouse-wheel-tilt-scroll t
       mouse-wheel-flip-direction t)
 
+;; Enable sub-line scrolling.
+(pixel-scroll-precision-mode t)
+(setq pixel-scroll-precision-use-momentum t)
+
 ;;}}}
 ;;{{{ Editing behavior
 
