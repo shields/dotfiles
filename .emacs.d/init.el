@@ -61,6 +61,8 @@
                 tabs trailing space-before-tab space-after-tab tab-mark
                 missing-newline-at-eof))
 (global-whitespace-mode 1)
+(defun shields/suppress-whitespace-mode ()
+  (setq-local whitespace-style nil))
 
 (blink-cursor-mode 0)
 
@@ -419,6 +421,8 @@ stage it and display a diff."
 
 ;; aggressive-indent-mode interacts badly with LSP's reformatting.
 (add-to-list 'aggressive-indent-excluded-modes 'go-mode)
+
+(add-hook 'go-mode-hook #'shields/suppress-whitespace-mode)
 
 ;;}}}
 ;;{{{ help-mode
