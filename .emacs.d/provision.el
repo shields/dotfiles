@@ -8,6 +8,7 @@
 (setq package-selected-packages
       '(aggressive-indent
 	anzu
+	apheleia
 	avy
 	company
 	company-terraform

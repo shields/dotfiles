@@ -158,6 +158,13 @@
 ;; aggressive-indent.
 (electric-indent-mode 1)
 
+(require 'apheleia)
+(apheleia-global-mode 1)
+;; Replace black with ruff.
+(dolist (el apheleia-mode-alist)
+  (when (eq (cdr el) 'black)
+    (setf (cdr el) 'ruff)))
+
 ;;}}}
 ;;{{{ Mode line
 
@@ -375,7 +382,6 @@ stage it and display a diff."
 
 ;; LSP setup.  https://github.com/golang/tools/blob/master/gopls/doc/emacs.md
 (defun lsp-go-install-save-hooks ()
-  (add-hook 'before-save-hook #'lsp-format-buffer t t)
   (add-hook 'before-save-hook #'lsp-organize-imports t t))
 (add-hook 'go-mode-hook #'lsp-go-install-save-hooks)
 (add-hook 'go-mode-hook #'lsp-deferred)
@@ -415,9 +421,9 @@ stage it and display a diff."
 ;; Bind "=" to git diff origin/main.
 (eval-after-load "magit"
   '(define-key magit-mode-map "="
-     (lambda ()
-       (interactive)
-       (magit-diff-range "origin/main"))))
+	       (lambda ()
+		 (interactive)
+		 (magit-diff-range "origin/main"))))
 
 ;;}}}
 ;;{{{ term-mode
@@ -439,8 +445,6 @@ stage it and display a diff."
 
 ;;}}}
 ;;{{{ Terraform
-
-(add-hook 'terraform-mode-hook #'terraform-format-on-save-mode)
 
 ;; terraform-mode doesn't indent quite correctly, and will even undo
 ;; changes made by format-on-save.
@@ -482,12 +486,12 @@ stage it and display a diff."
 		      (define-key view-mode-map "^" 'beginning-of-line)
 		      (define-key view-mode-map "$" 'end-of-line)
 		      (define-key view-mode-map "G"
-			'(lambda (arg)
-			   (interactive "P")
-			   (cond ((null arg) (goto-char (point-max)))
-				 ((numberp arg) (goto-line arg))
-				 (t (error
-				     "Must use numeric or no argument"))))))))
+				  '(lambda (arg)
+				     (interactive "P")
+				     (cond ((null arg) (goto-char (point-max)))
+					   ((numberp arg) (goto-line arg))
+					   (t (error
+					       "Must use numeric or no argument"))))))))
 ;; Hmm... worked in Emacs 18.
 ;;(define-key view-mode-map "%"
 ;;  '(lambda (arg)
@@ -510,9 +514,9 @@ stage it and display a diff."
   '(add-hook 'xml-mode-hook
 	     (function (lambda ()
 			 (define-key xml-mode-map "'"
-			   '(lambda ()
-			      (interactive)
-			      (insert-string "&#8217;")))))))
+				     '(lambda ()
+					(interactive)
+					(insert-string "&#8217;")))))))
 
 ;;}}}
 
@@ -757,9 +761,9 @@ stage it and display a diff."
   '(add-hook 'perl-mode-hook
 	     (function (lambda ()
 			 (define-key perl-mode-map "\M-oq"
-			   'describe-perl-symbol)
+				     'describe-perl-symbol)
 			 (define-key perl-mode-map "\M-od"
-			   'switch-to-perl-doc-buffer)))))
+				     'switch-to-perl-doc-buffer)))))
 
 (eval-after-load "cperl-mode"
   '(cperl-set-style "PerlStyle"))
@@ -785,12 +789,8 @@ stage it and display a diff."
 (require 'flymake-ruff)
 (add-hook 'python-mode-hook #'flymake-ruff-load)
 
-(require 'ruff-format)
-(add-hook 'python-mode-hook #'ruff-format-on-save-mode)
-
 ;;}}}
 ;;{{{ Rust
-
 
 ;; https://robert.kra.hn/posts/rust-emacs-setup/
 (use-package rustic
@@ -803,9 +803,7 @@ stage it and display a diff."
               ("C-c C-c r" . lsp-rename)
               ("C-c C-c q" . lsp-workspace-restart)
               ("C-c C-c Q" . lsp-workspace-shutdown)
-              ("C-c C-c s" . lsp-rust-analyzer-status))
-  :config
-  (setq rustic-format-on-save t))
+              ("C-c C-c s" . lsp-rust-analyzer-status)))
 (use-package lsp-mode
   :ensure
   :commands lsp
