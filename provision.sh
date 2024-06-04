@@ -8,6 +8,7 @@ tar cf - bin $(find . -type f | grep -v -e '^\./\.git/' -e '^\./[^.]' -e '^\./\.
 
 # Install Homebrew and Xcode (which will take tens of minutes).
 # Use path selection logic from https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh
+# We will install full Xcode later from the Mac App Store.
 UNAME_MACHINE="$(/usr/bin/uname -m)"
 if [[ "${UNAME_MACHINE}" == "arm64" ]]; then
     HOMEBREW_PREFIX="/opt/homebrew"
@@ -80,15 +81,27 @@ fi
 brew autoremove
 brew cleanup --prune=all
 
+# Install Xcode, then configure to use it instead of the command-line tools
+# subset that Homebrew installed.
+mas install 497799835           # Find this id with "mas search xcode".
+if ! xcrun --find xcodebuild 2> /dev/null; then
+    sudo xcode-select --reset
+fi
+if ! xcodebuild -checkFirstLaunchStatus; then
+    sudo xcodebuild -license accept
+    sudo xcodebuild -runFirstLaunch
+fi
+
+xcodebuild -downloadPlatform iOS
+
+mas upgrade
+
 brew services start emacs-plus
 
 # Set shell to current zsh installed from Homebrew.
 if [[ "$(dscl . read /Users/$(whoami) UserShell)" == "UserShell: /bin/zsh" ]]; then
     sudo dscl . change "/Users/$(whoami)" UserShell /bin/zsh "$HOMEBREW_PREFIX/bin/zsh"
 fi
-
-# Now that mas is installed, we can cause App Store upgrades to happen.
-mas upgrade
 
 # Make sure System Preferences isn't open, since it interferes with other
 # processes writing to defaults.
