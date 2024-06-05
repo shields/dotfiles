@@ -1,5 +1,7 @@
 aspell
 autojump
+aws-shell
+awscli
 black
 chroma
 coreutils
