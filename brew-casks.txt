@@ -1,7 +1,6 @@
 airfoil
 alt-tab
 anki
-bettertouchtool
 blender
 calibre
 dash
