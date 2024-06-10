@@ -34,7 +34,6 @@ mas
 mtr
 mypy
 ninja
-openai-whisper
 openssh
 parallel
 pinentry-mac
@@ -65,6 +64,7 @@ tmux
 watch
 wdiff
 wget
+whisperkit-cli
 yq
 yt-dlp
 zsh
