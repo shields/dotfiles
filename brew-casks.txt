@@ -16,6 +16,7 @@ orbstack
 rectangle-pro
 spotify
 stats
+tailscale
 utm
 vlc
 wireshark
