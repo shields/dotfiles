@@ -33,6 +33,7 @@ jq
 llm
 mas
 mtr
+pnpm
 mypy
 ninja
 openssh
