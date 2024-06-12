@@ -2,6 +2,7 @@ aspell
 autojump
 aws-shell
 awscli
+azure-cli
 black
 chroma
 coreutils
