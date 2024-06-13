@@ -254,4 +254,4 @@ if [ ! -f "$HOME/.ssh/known_hosts" ] || ! grep -q '^github\.com ' "$HOME/.ssh/kn
 fi
 
 # Install goimports.
-go install golang.org/x/tools/cmd/goimports@latest
+GOBIN="$HOME/bin" go install golang.org/x/tools/cmd/goimports@latest
