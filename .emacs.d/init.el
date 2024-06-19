@@ -12,6 +12,9 @@
 (setq custom-file "~/.emacs.d/custom.el")
 (load custom-file)
 
+(require 'use-package-ensure)
+(setq use-package-always-ensure t)
+
 (load "~/.emacs.d/package-repos.el")
 
 ;;}}}
@@ -186,6 +189,13 @@
 
 (use-package tree-sitter
   :config (global-tree-sitter-mode))
+
+(use-package treesit-auto
+  :custom
+  (treesit-auto-install t)
+  :config
+  (treesit-auto-add-to-auto-mode-alist 'all)
+  (global-treesit-auto-mode))
 
 (use-package tree-sitter-langs)
 
