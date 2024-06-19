@@ -87,6 +87,7 @@ plugins=(
     autojump
     aws
     colorize
+    direnv
     docker
     emacs
     git
