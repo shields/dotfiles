@@ -50,7 +50,6 @@
 	symbol-overlay
 	terraform-mode
 	tree-sitter
-	tree-sitter-langs
 	typo
 	use-package
 	yaml-mode
