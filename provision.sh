@@ -96,7 +96,7 @@ xcodebuild -downloadPlatform iOS
 
 mas upgrade
 
-brew services start emacs-plus
+brew services start emacs
 
 # Set shell to current zsh installed from Homebrew.
 if [[ "$(dscl . read /Users/$(whoami) UserShell)" == "UserShell: /bin/zsh" ]]; then
