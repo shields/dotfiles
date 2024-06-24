@@ -3,7 +3,7 @@
 set -euo pipefail
 
 # Copy these files.
-tar cf - bin $(find . -type f | grep -v -e '^\./\.git/' -e '^\./[^.]' -e '^\./\.[a-z]\+_cache') \
+tar cf - bin Library $(find . -type f | grep -v -e '^\./\.git/' -e '^\./[^.]' -e '^\./\.[a-z]\+_cache') \
     | (cd "$HOME" && tar xvf -)
 
 # Install Homebrew and Xcode (which will take tens of minutes).
@@ -95,8 +95,6 @@ fi
 xcodebuild -downloadPlatform iOS
 
 mas upgrade
-
-brew services start emacs
 
 # Set shell to current zsh installed from Homebrew.
 if [[ "$(dscl . read /Users/$(whoami) UserShell)" == "UserShell: /bin/zsh" ]]; then
@@ -255,3 +253,6 @@ fi
 
 # Install goimports.
 GOBIN="$HOME/bin" go install golang.org/x/tools/cmd/goimports@latest
+
+# Reload launchd config.
+launchctl bootstrap gui/$UID
