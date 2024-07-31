@@ -52,7 +52,7 @@ rename
 ripgrep
 ruff
 rust-analyzer
-rustup-init
+rustup
 sd
 shellcheck
 shfmt
