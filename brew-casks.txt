@@ -6,6 +6,7 @@ calibre
 dash
 discord
 emacs
+git-credential-manager
 git-credential-manager-core
 google-chrome-beta
 google-cloud-sdk
