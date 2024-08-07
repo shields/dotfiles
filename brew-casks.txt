@@ -8,7 +8,7 @@ discord
 emacs
 git-credential-manager
 git-credential-manager-core
-google-chrome-beta
+google-chrome
 google-cloud-sdk
 hiddenbar
 inkscape
