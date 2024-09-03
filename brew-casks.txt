@@ -1,6 +1,7 @@
 airfoil
 alt-tab
 anki
+autodesk-fusion
 blender
 calibre
 dash
@@ -20,6 +21,7 @@ spotify
 stats
 tailscale
 utm
+visual-studio-code
 vlc
 wireshark
 xscreensaver
