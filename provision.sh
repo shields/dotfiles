@@ -54,7 +54,7 @@ fi
 
 # Pull things in from Homebrew.
 brew update
-brew upgrade
+brew upgrade --greedy-auto-updates
 
 # Install before uninstall, to avoid breaking packages that change names.
 for formula in $(comm -13 <(brew leaves --installed-on-request) <(sort brew-formulae.txt)); do
