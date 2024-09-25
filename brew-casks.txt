@@ -5,6 +5,7 @@ autodesk-fusion
 blender
 calibre
 dash
+deepnest
 discord
 emacs
 git-credential-manager
