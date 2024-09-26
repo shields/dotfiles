@@ -63,6 +63,7 @@ spatialite-tools
 sqlite-utils
 syft
 tmux
+uv
 watch
 wdiff
 wget
