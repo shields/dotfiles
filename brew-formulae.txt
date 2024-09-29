@@ -26,6 +26,7 @@ gnupg
 go
 golangci/tap/golangci-lint
 gopls
+graphviz
 grpcui
 helm
 imagemagick
