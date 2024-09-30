@@ -213,6 +213,7 @@ defaults write NSGlobalDomain AppleICUDateFormatStrings -dict 1 y-MM-dd
 defaults write NSGlobalDomain InitialKeyRepeat -int 68
 defaults write NSGlobalDomain KeyRepeat -int 2
 defaults write com.apple.WindowManager EnableTiledWindowMargins false
+defaults write com.apple.WindowManager EnableTilingByEdgeDrag false
 defaults write com.apple.controlcenter 'NSStatusItem Preferred Position Sound' -float 256.0
 defaults write com.apple.controlcenter 'NSStatusItem Visible Battery' false  # Use Stats instead
 defaults write com.apple.controlcenter 'NSStatusItem Visible Item-3' false
