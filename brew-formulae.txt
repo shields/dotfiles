@@ -37,6 +37,7 @@ mtr
 mypy
 ninja
 openssh
+pandoc
 parallel
 pinentry-mac
 pnpm
