@@ -57,13 +57,13 @@ brew update
 brew upgrade --greedy-auto-updates
 
 # Install before uninstall, to avoid breaking packages that change names.
-for formula in $(comm -13 <(brew leaves --installed-on-request) <(sort brew-formulae.txt)); do
+for formula in $(comm -13 <(brew leaves --installed-on-request | sed -e 's/@.*//' | sort) <(sort brew-formulae.txt)); do
     brew install "$formula"
 done
-for formula in $(comm -23 <(brew leaves --installed-on-request) <(sort brew-formulae.txt)); do
+for formula in $(comm -23 <(brew leaves --installed-on-request | sed -e 's/@.*//' | sort) <(sort brew-formulae.txt)); do
     brew uninstall "$formula"
 done
-if ! diff --color=always <(brew leaves --installed-on-request) <(sort brew-formulae.txt); then
+if ! diff --color=always <(brew leaves --installed-on-request | sed -e 's/@.*//' | sort) <(sort brew-formulae.txt); then
     echo 'Failed to sync Homebrew formulae' 1>&2
     exit 1
 fi

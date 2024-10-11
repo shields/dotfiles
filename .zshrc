@@ -131,8 +131,8 @@ alias gdi='git diff origin/main'
 alias kc='kubectl'
 alias kcy='kubectl -o yaml'
 
-# p runs the most current version of Python.
-alias p="$(ls -rd $(brew --prefix)/Cellar/python@3.??/*/bin/python3 | tail -1)"
+# https://docs.brew.sh/Homebrew-and-Python
+alias p="$(brew --prefix python)/libexec/bin/python"
 
 whence tf > /dev/null || alias tf='terraform'
 alias tfa='tf apply -parallelism=100'

@@ -45,6 +45,7 @@ prettier
 pstree
 pulumi
 pyright
+python
 python-lsp-server
 qmk/qmk/qmk
 qrencode
