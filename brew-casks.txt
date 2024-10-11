@@ -16,6 +16,7 @@ hiddenbar
 inkscape
 iterm2
 karabiner-elements
+obsidian
 orbstack
 rectangle-pro
 spotify
