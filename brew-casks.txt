@@ -28,3 +28,4 @@ vlc
 wireshark
 xscreensaver
 yubico-yubikey-manager
+zotero
