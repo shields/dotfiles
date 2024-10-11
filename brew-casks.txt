@@ -17,6 +17,7 @@ inkscape
 iterm2
 karabiner-elements
 obsidian
+ollama
 orbstack
 rectangle-pro
 spotify
