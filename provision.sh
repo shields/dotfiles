@@ -102,6 +102,9 @@ if [[ "$(dscl . read /Users/$(whoami) UserShell)" == "UserShell: /bin/zsh" ]]; t
     sudo dscl . change "/Users/$(whoami)" UserShell /bin/zsh "$HOMEBREW_PREFIX/bin/zsh"
 fi
 
+# Plugins!
+llm install --upgrade llm-{ollama,gemini,claude-3,perplexity} | grep -v 'Requirement already satisfied:'
+
 # Make sure System Preferences isn't open, since it interferes with other
 # processes writing to defaults.
 osascript -e 'tell application "System Preferences" to quit'
