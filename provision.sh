@@ -257,7 +257,8 @@ if [ ! -f "$HOME/.ssh/known_hosts" ] || ! grep -q '^github\.com ' "$HOME/.ssh/kn
         sed -e 's/^/github.com /' >> "$HOME/.ssh/known_hosts"
 fi
 
-# Install goimports.
+# Go setup
+go telemetry on
 GOBIN="$HOME/bin" go install golang.org/x/tools/cmd/goimports@latest
 
 # Reload launchd config.
