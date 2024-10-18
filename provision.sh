@@ -3,8 +3,8 @@
 set -euo pipefail
 
 # Copy these files.
-tar cf - bin Library $(find . -type f | grep -v -e '^\./\.git/' -e '^\./[^.]' -e '^\./\.[a-z]\+_cache') \
-    | (cd "$HOME" && tar xvf -)
+tar cf - bin Library $(find . -type f | grep -v -e '^\./\.git/' -e '^\./[^.]' -e '^\./\.[a-z]\+_cache') |
+    (cd "$HOME" && tar xvf -)
 
 # Install Homebrew and Xcode (which will take tens of minutes).
 # Use path selection logic from https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh
@@ -29,7 +29,7 @@ brew analytics off
 softwareupdate --install --recommended
 
 # Install Rosetta if it's not already working.
-if ! arch -x86_64 /usr/bin/true 2> /dev/null; then
+if ! arch -x86_64 /usr/bin/true 2>/dev/null; then
     softwareupdate --install-rosetta --agree-to-license
 fi
 
@@ -57,24 +57,39 @@ brew update
 brew upgrade --greedy-auto-updates
 
 # Install before uninstall, to avoid breaking packages that change names.
-for formula in $(comm -13 <(brew leaves --installed-on-request | sed -e 's/@.*//' | sort) <(sort brew-formulae.txt)); do
+for formula in $(comm -13 <(brew ls --installed-on-request | sed -e 's/@.*//' | sort -u) <(sort brew-formulae.txt)); do
+    echo "Installing Homebrew formula $formula"
     brew install "$formula"
 done
-for formula in $(comm -23 <(brew leaves --installed-on-request | sed -e 's/@.*//' | sort) <(sort brew-formulae.txt)); do
-    brew uninstall "$formula"
+for formula in $(
+    comm -23 \
+        <(brew ls --installed-on-request | sed -e 's/@.*//' | sort -u) \
+        <(sed -e 's,.*/,,' <brew-formulae.txt | sort)
+); do
+    # If something was originally installed on request, Homebrew considers that
+    # to be its state forever, even if it also can't now remove it because it's
+    # a dependency of some other package. Let's check that explicitly. Note we
+    # aren't doing a full graph prune here because doing that in shell would be
+    # ridiculous.
+    deps="$(brew info --formula --json=v2 $(brew ls --formulae) |
+        jq -r "[.formulae.[] | select(.dependencies | any(.[]; . == \"$formula\")) | .name] | join(\", \")")"
+    if [[ -n "$deps" ]]; then
+        echo "Not uninstalling Homebrew formula $formula because it is a dependency of $deps"
+    else
+        echo "Uninstalling Homebrew formula $formula"
+        brew uninstall "$formula"
+    fi
 done
-if ! diff --color=always <(brew leaves --installed-on-request | sed -e 's/@.*//' | sort) <(sort brew-formulae.txt); then
-    echo 'Failed to sync Homebrew formulae' 1>&2
-    exit 1
-fi
 
-for cask in $(comm -23 <(brew ls --cask) <(sort brew-casks.txt)); do
-    brew uninstall --cask "$cask"
-done
-for cask in $(comm -13 <(brew ls --cask) <(sort brew-casks.txt)); do
+for cask in $(comm -13 <(brew ls --casks) <(sort brew-casks.txt)); do
+    echo "Installing Homebrew cask $cask"
     brew install --cask "$cask"
 done
-if ! diff --color=always <(brew ls --cask) <(sort brew-casks.txt); then
+for cask in $(comm -23 <(brew ls --casks) <(sort brew-casks.txt)); do
+    echo "Uninstalling Homebrew cask $cask"
+    brew uninstall --cask "$cask"
+done
+if ! diff --color=always <(brew ls --casks) <(sort brew-casks.txt); then
     echo 'Failed to sync Homebrew casks' 1>&2
     exit 1
 fi
@@ -84,8 +99,8 @@ brew cleanup --prune=all
 
 # Install Xcode, then configure to use it instead of the command-line tools
 # subset that Homebrew installed.
-mas install 497799835           # Find this id with "mas search xcode".
-if ! xcrun --find xcodebuild 2> /dev/null; then
+mas install 497799835 # Find this id with "mas search xcode".
+if ! xcrun --find xcodebuild 2>/dev/null; then
     sudo xcode-select --reset
 fi
 if ! xcodebuild -checkFirstLaunchStatus; then
@@ -218,7 +233,7 @@ defaults write NSGlobalDomain KeyRepeat -int 2
 defaults write com.apple.WindowManager EnableTiledWindowMargins false
 defaults write com.apple.WindowManager EnableTilingByEdgeDrag false
 defaults write com.apple.controlcenter 'NSStatusItem Preferred Position Sound' -float 256.0
-defaults write com.apple.controlcenter 'NSStatusItem Visible Battery' false  # Use Stats instead
+defaults write com.apple.controlcenter 'NSStatusItem Visible Battery' false # Use Stats instead
 defaults write com.apple.controlcenter 'NSStatusItem Visible Item-3' false
 defaults write com.apple.controlcenter 'NSStatusItem Visible Sound' true
 
@@ -227,7 +242,7 @@ defaults write com.apple.dock wvous-br-corner -int 13
 
 # iTerm2 writes its prefs to ~/.iTerm2/com.googlecode.iterm2.plist,
 # but doesn't read from there.
-defaults import com.googlecode.iterm2 - < .iTerm2/com.googlecode.iterm2.plist
+defaults import com.googlecode.iterm2 - <.iTerm2/com.googlecode.iterm2.plist
 
 # Set NTP server to Google Public NTP for smeared leap seconds.
 if ! grep -q '^server time\.google\.com$' /etc/ntp.conf; then
@@ -250,11 +265,11 @@ rustup-init --no-modify-path -y
 if [ ! -f "$HOME/.ssh/known_hosts" ] || ! grep -q '^github\.com ' "$HOME/.ssh/known_hosts"; then
     mkdir -p "$HOME/.ssh"
     curl -s -L \
-         -H "Accept: application/vnd.github+json" \
-         -H "X-GitHub-Api-Version: 2022-11-28" \
-         https://api.github.com/meta | \
-        jq -r '.ssh_keys[]' | \
-        sed -e 's/^/github.com /' >> "$HOME/.ssh/known_hosts"
+        -H "Accept: application/vnd.github+json" \
+        -H "X-GitHub-Api-Version: 2022-11-28" \
+        https://api.github.com/meta |
+        jq -r '.ssh_keys[]' |
+        sed -e 's/^/github.com /' >>"$HOME/.ssh/known_hosts"
 fi
 
 # Go setup
