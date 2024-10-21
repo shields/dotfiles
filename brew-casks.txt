@@ -1,5 +1,4 @@
 airfoil
-alt-tab
 anki
 autodesk-fusion
 blender
