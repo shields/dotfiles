@@ -24,6 +24,8 @@
 	<integer>4</integer>
 	<key>IndicateBellsInDockBadgeLabel</key>
 	<false/>
+	<key>NeverBlockSystemShutdown</key>
+	<true/>
 	<key>NeverWarnAboutShortLivedSessions_5CBA9F8C-00B3-4AF8-858F-F738A5FB87D4</key>
 	<true/>
 	<key>NeverWarnAboutShortLivedSessions_5CBA9F8C-00B3-4AF8-858F-F738A5FB87D4_selection</key>
