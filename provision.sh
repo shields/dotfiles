@@ -3,8 +3,7 @@
 set -euo pipefail
 
 # Copy these files.
-tar cf - bin Library $(find . -type f | grep -v -e '^\./\.git/' -e '^\./[^.]' -e '^\./\.[a-z]\+_cache') |
-    (cd "$HOME" && tar xvf -)
+tar cf - bin Library $(git ls-files | grep '^\.') | (cd "$HOME" && tar xvf -)
 
 # Install Homebrew and Xcode (which will take tens of minutes).
 # Use path selection logic from https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh
