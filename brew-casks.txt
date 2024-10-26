@@ -23,6 +23,7 @@ rectangle-pro
 spotify
 stats
 tailscale
+transmission
 utm
 visual-studio-code
 vlc
