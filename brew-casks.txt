@@ -5,6 +5,7 @@ blender
 calibre
 dash
 deepnest
+desktoppr
 discord
 emacs
 git-credential-manager

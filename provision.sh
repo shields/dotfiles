@@ -252,6 +252,31 @@ fi
 # Restart affected processes
 killall ControlCenter Finder cfprefsd
 
+# Set background to navy blue.
+#
+# The color we want is the actual US Navy's navy blue ("America's Navy Licensing
+# Guide", Feb 2024, pages 34J and 35), which claims the hex code should be
+# 022a3a.
+#
+# We get a different result by using the eyedropper from those pages -- 0e2938
+# from the PDF viewed in Preview 11.0, or 0f2938 from the same PDF viewed in
+# Chrome 130.0.6723.70.
+#
+# The color picker doesn't mention this, but it's actually using a
+# display-specific color space, similar but not identical to P3. Using the color
+# calculator tool in ColorSync, we can map from sRGB (2, 42, 58) to the Studio
+# Display (14, 51, 56) = 0e2938, matching what we get from Preview. Display P3
+# would be (14, 41, 56).
+#
+# You can also confirm that using `desktoppr color 0e2938` gives a lighter color
+# than intended on the wallpaper. The eyedropper reports it as 1a3647.
+#
+# So that's all a mess, and basically means that `deskttoppr color` doesn't
+# work. Instead, we create a PNG with an embedded sRGB colorspace and every
+# pixel at 022a3a, and use that as the wallpaper. That gives us a desktop that
+# the eyedropper reports as 0e2836. Almost correct, good enough for now.
+desktoppr navy_blue.png
+
 # Bootstrap Emacs packages
 if [ ! -f "$HOME/.emacs.d/.bootstrap-stamp" ]; then
     emacs -q --batch --script .emacs.d/provision.el
