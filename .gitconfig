@@ -24,5 +24,3 @@
 	rebase = false
 [advice]
 	detachedHead = false
-[diff]
-	external = difft --display inline --syntax-highlight off

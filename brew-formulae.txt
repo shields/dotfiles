@@ -7,7 +7,6 @@ black
 chroma
 coreutils
 datasette
-difftastic
 diffutils
 direnv
 dive
