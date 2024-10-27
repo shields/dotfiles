@@ -141,6 +141,9 @@ defaults write com.apple.universalaccess reduceTransparency true
 defaults write com.apple.Accessibility EnhancedBackgroundContrastEnabled -int 1
 defaults write NSGlobalDomain AppleEnableMenuBarTransparency -bool true
 
+# Keyboard
+defaults write com.apple.HIToolbox AppleCurrentKeyboardLayoutInputSourceID org.unknown.keylayout.Shields
+
 # Trackpad tap to click
 defaults write com.apple.driver.AppleBluetoothMultitouch.trackpad Clicking -bool true
 defaults -currentHost write NSGlobalDomain com.apple.mouse.tapBehavior -int 1

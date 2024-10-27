@@ -24,6 +24,7 @@ spotify
 stats
 tailscale
 transmission
+ukelele
 utm
 visual-studio-code
 vlc
