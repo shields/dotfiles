@@ -416,7 +416,7 @@ with a more useful symbol layer.
             <key code="28" output="•"/>
             <key code="29" output="º"/>
             <key code="30" output="‘"/>
-            <key code="31" output="˚"/>
+            <key code="31" output="°"/>
             <key code="32" action="a3"/>
             <key code="33" output="“"/>
             <key code="34" action="a2"/>
