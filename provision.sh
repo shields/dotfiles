@@ -109,6 +109,9 @@ fi
 
 xcodebuild -downloadPlatform iOS
 
+# Install UTC Time
+mas install 1538245904
+
 mas upgrade
 
 # Set shell to current zsh installed from Homebrew.
