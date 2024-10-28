@@ -14,7 +14,7 @@
                                         "optional": []
                                     }
                                 },
-                                "to": [{ "shell_command": "open -u 'https://calendar.google.com/calendar/u/0/r/week'" }],
+                                "to": [{ "shell_command": "open -na 'Google Chrome' --args --new-window 'https://calendar.google.com/calendar/u/0/r/week'" }],
                                 "type": "basic"
                             },
                             {
@@ -25,7 +25,7 @@
                                         "optional": []
                                     }
                                 },
-                                "to": [{ "shell_command": "open -u 'https://mail.google.com/mail/u/0/#inbox'" }],
+                                "to": [{ "shell_command": "open -na 'Google Chrome' --args --new-window 'https://mail.google.com/mail/u/0/#inbox'" }],
                                 "type": "basic"
                             },
                             {
@@ -36,7 +36,7 @@
                                         "optional": []
                                     }
                                 },
-                                "to": [{ "software_function": { "open_application": { "bundle_identifier": "com.googlecode.iterm2" } } }],
+                                "to": [{ "shell_command": "osascript -e 'tell application \"iTerm2\" to create window with default profile'" }],
                                 "type": "basic"
                             }
                         ]
