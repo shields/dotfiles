@@ -624,10 +624,10 @@ stage it and display a diff."
   :config
   (global-company-mode t)
   (setq-default
-   company-idle-delay 0.05
+   company-idle-delay 0.1
    company-require-match nil
-   company-minimum-prefix-length 0
-
+   company-minimum-prefix-length 2
+   company-tooltip-align-annotations t
    company-frontends '(company-preview-frontend)))
 
 ;;}}}
@@ -976,22 +976,24 @@ This function is useful for binding to a hotkey."
 
 (require 'edebug)
 
-;; Allow Emacs to burn up to 0.5% of RAM before running GC.  The
-;; default in 26.3 is 800 kB (!).  Prelude sets this to 100 MB.  If
-;; it's set too low, Emacs will pause often for GC; if it's set too
-;; high, the pauses will be long.
-(setq gc-cons-threshold
-      (if (eq system-type 'darwin)
-          (/ (string-to-number
-              (replace-regexp-in-string
-               "^hw\\.memsize: \\([0-9]+\\)\n$"
-               "\\1"
-               (shell-command-to-string "sysctl hw.memsize")))
-             200)
-        100000000))
-;; Increase the amount of data read from subprocsses.  Recommended by
-;; https://emacs-lsp.github.io/lsp-mode/page/performance/
-(setq read-process-output-max (* 1024 1024))
+;; Garbage Collection strategy
+(setq gc-cons-threshold (* 100 1024 1024)) ; 100MB
+(setq gc-cons-percentage 0.6)
+
+;; Only GC when idle
+(add-hook 'after-init-hook
+          (lambda ()
+            (run-with-idle-timer 5 t #'garbage-collect)))
+
+;; Increase data read from processes
+(setq read-process-output-max (* 4 1024 1024)) ; 4MB
+
+;; File-name-handler-alist caching
+(defvar default-file-name-handler-alist file-name-handler-alist)
+(setq file-name-handler-alist nil)
+(add-hook 'emacs-startup-hook
+          (lambda ()
+            (setq file-name-handler-alist default-file-name-handler-alist)))
 
 (server-start)
 
