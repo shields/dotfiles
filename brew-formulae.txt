@@ -1,3 +1,4 @@
+aider
 aspell
 autojump
 aws-shell

@@ -605,7 +605,9 @@ stage it and display a diff."
 ;;}}}
 ;;{{{ Company and Codeium
 
-(load-file "~/.emacs.d/codeium.el")
+(straight-use-package '(codeium :type git :host github :repo "Exafunction/codeium.el"))
+(unless (file-exists-p (codeium-get-config 'codeium-command-executable nil nil))
+  (codeium-install nil t))
 
 (defun shields/prog-capf ()
   (cape-wrap-super #'codeium-completion-at-point #'lsp-completion-at-point))
@@ -899,6 +901,16 @@ stage it and display a diff."
 ;;{{{ yasnippet
 
 ;;(add-hook 'prog-mode-hook #'yas-minor-mode-on)
+
+;;}}}
+
+;;{{{ Aider
+
+(use-package aider
+  :straight (:host github :repo "tninja/aider.el" :files ("aider.el"))
+  :config
+  (setq aider-args nil)
+  (global-set-key (kbd "C-c a") 'aider-transient-menu))
 
 ;;}}}
 
