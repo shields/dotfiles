@@ -120,7 +120,11 @@ if [[ "$(dscl . read /Users/$(whoami) UserShell)" == "UserShell: /bin/zsh" ]]; t
 fi
 
 # Plugins!
-llm install --upgrade llm-{ollama,gemini,claude-3,perplexity,cmd}
+llm install --upgrade llm-{ollama,gemini,perplexity,cmd}
+# Temporary workaround for https://github.com/simonw/llm-claude-3/issues/16,
+# old version of pyo3 doesn't support Python 3.13:
+llm install https://github.com/simonw/anthropic-sdk-python/archive/9c13bb441ee4eb88a100ed363fc431ec8fd30c43.zip
+llm install llm-claude-3
 
 # Make sure System Preferences isn't open, since it interferes with other
 # processes writing to defaults.
