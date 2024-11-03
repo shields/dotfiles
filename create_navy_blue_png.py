@@ -30,5 +30,6 @@ img_with_profile = embed_icc_profile(img, srgb_profile)
 
 # Save the image as a PNG file with the embedded profile
 img_with_profile.save(
-    "navy_blue.png", icc_profile=img_with_profile.info.get("icc_profile")
+    "Library/Application Support/desktoppr/navy_blue.png",
+    icc_profile=img_with_profile.info.get("icc_profile"),
 )

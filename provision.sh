@@ -281,7 +281,10 @@ killall ControlCenter Finder cfprefsd
 # work. Instead, we create a PNG with an embedded sRGB colorspace and every
 # pixel at 022a3a, and use that as the wallpaper. That gives us a desktop that
 # the eyedropper reports as 0e2836. Almost correct, good enough for now.
-desktoppr navy_blue.png
+#
+# This directory is where desktoppr stores images that it downloads. We copy the
+# image directly there, so it doesn't reference this source directory.
+desktoppr "$HOME/Library/Application Support/desktoppr/navy_blue.png"
 
 # Bootstrap Emacs packages
 if [ ! -f "$HOME/.emacs.d/.bootstrap-stamp" ]; then
