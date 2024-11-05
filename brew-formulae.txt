@@ -38,6 +38,7 @@ mtr
 mypy
 ninja
 openssh
+osx-cross/avr/avr-gcc
 pandoc
 parallel
 pinentry-mac
