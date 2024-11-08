@@ -36,12 +36,18 @@ def plist_string(x) -> str:
     raise TypeError(f"Unknown type {type(x)}")
 
 
+def is_boring_domain(domain: str) -> bool:
+    if "Cache" in domain:
+        return True
+    return False
+
+
 def print_diff(domain: str, old, new) -> None:
     for k, v in new.items():
         if k in old and old[k] == v:
             continue
 
-        if "Cache" in k:
+        if is_boring_domain(k):
             continue
 
         if type(v) == bool:
@@ -65,6 +71,9 @@ def print_diff(domain: str, old, new) -> None:
 
     for k in old.keys():
         if k in new:
+            continue
+
+        if is_boring_domain(k):
             continue
 
         print(f"defaults delete {shlex.quote(domain)} {shlex.quote(k)}")
