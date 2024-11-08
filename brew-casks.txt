@@ -3,6 +3,7 @@ anki
 autodesk-fusion
 blender
 calibre
+cursorcerer
 dash
 deepnest
 desktoppr
