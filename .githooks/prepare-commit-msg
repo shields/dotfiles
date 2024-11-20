@@ -21,6 +21,9 @@ EOF
 )
 
 if [ -z "$COMMIT_TYPE" ] || [ "$COMMIT_TYPE" = "message" ] || [ "$COMMIT_TYPE" = "template" ]; then
-    echo -e "\n# ✨ Generated draft commit message ✨" >> "$MSG_FILE"
-    git diff --cached | llm -s "$PROMPT" | fmt -w 72 >> "$MSG_FILE"
+    # Check if file contains any non-blank, non-comment lines
+    if ! grep -v '^#' "$MSG_FILE" | grep -q '[^[:space:]]'; then
+        echo -e "\n# ✨ Generated draft commit message ✨" >> "$MSG_FILE"
+        git diff --cached | llm -s "$PROMPT" | fmt -w 72 >> "$MSG_FILE"
+    fi
 fi
