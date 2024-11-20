@@ -142,8 +142,6 @@ cask "yubico-yubikey-manager"
 cask "zotero"
 mas "Actions", id: 1586435171
 mas "CrystalFetch", id: 6454431289
-mas "GarageBand", id: 682658836
-mas "iMovie", id: 408981434
 mas "Keynote", id: 409183694
 mas "Numbers", id: 409203825
 mas "Pages", id: 409201541
