@@ -47,7 +47,7 @@ if [[ ! -d "$ZSH_CUSTOM/themes/spaceship-prompt" ]]; then
 fi
 
 # Set email address in .gitconfig.
-if [[ "$(whoami)" == shields ]]; then
+if [[ "$(whoami)" == shields ]] && ! (profiles status -type enrollment | grep -q ': Yes'); then
     git config --global user.email shields@msrl.com
 fi
 
