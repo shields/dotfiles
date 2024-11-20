@@ -52,53 +52,12 @@ if [[ "$(whoami)" == shields ]]; then
 fi
 
 # Pull things in from Homebrew.
-brew update
+brew bundle --no-lock
 brew upgrade --greedy-auto-updates
-
-# Install before uninstall, to avoid breaking packages that change names.
-for formula in $(comm -13 <(brew ls --installed-on-request | sed -e 's/@.*//' | sort -u) <(sort brew-formulae.txt)); do
-    echo "Installing Homebrew formula $formula"
-    brew install "$formula"
-done
-for formula in $(
-    comm -23 \
-        <(brew ls --installed-on-request | sed -e 's/@.*//' | sort -u) \
-        <(sed -e 's,.*/,,' <brew-formulae.txt | sort)
-); do
-    # If something was originally installed on request, Homebrew considers that
-    # to be its state forever, even if it also can't now remove it because it's
-    # a dependency of some other package. Let's check that explicitly. Note we
-    # aren't doing a full graph prune here because doing that in shell would be
-    # ridiculous.
-    deps="$(brew info --formula --json=v2 $(brew ls --formulae) |
-        jq -r "[.formulae.[] | select(.dependencies | any(.[]; . == \"$formula\")) | .name] | join(\", \")")"
-    if [[ -n "$deps" ]]; then
-        echo "Not uninstalling Homebrew formula $formula because it is a dependency of $deps"
-    else
-        echo "Uninstalling Homebrew formula $formula"
-        brew uninstall "$formula"
-    fi
-done
-
-for cask in $(comm -13 <(brew ls --casks) <(sort brew-casks.txt)); do
-    echo "Installing Homebrew cask $cask"
-    brew install --cask "$cask"
-done
-for cask in $(comm -23 <(brew ls --casks) <(sort brew-casks.txt)); do
-    echo "Uninstalling Homebrew cask $cask"
-    brew uninstall --cask "$cask"
-done
-if ! diff --color=always <(brew ls --casks) <(sort brew-casks.txt); then
-    echo 'Failed to sync Homebrew casks' 1>&2
-    exit 1
-fi
-
 brew autoremove
 brew cleanup --prune=all
 
-# Install Xcode, then configure to use it instead of the command-line tools
-# subset that Homebrew installed.
-mas install 497799835 # Find this id with "mas search xcode".
+# Be sure we're using full Xcode instead of the CLI-tools-only subset.
 if ! xcrun --find xcodebuild 2>/dev/null; then
     sudo xcode-select --reset
 fi
@@ -108,11 +67,6 @@ if ! xcodebuild -checkFirstLaunchStatus; then
 fi
 
 xcodebuild -downloadPlatform iOS
-
-# Install UTC Time
-mas install 1538245904
-
-mas upgrade
 
 # Set shell to current zsh installed from Homebrew.
 if [[ "$(dscl . read /Users/$(whoami) UserShell)" == "UserShell: /bin/zsh" ]]; then
