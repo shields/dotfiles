@@ -127,6 +127,7 @@ defaults write com.apple.driver.AppleBluetoothMultitouch.trackpad 'TrackpadFourF
 defaults write NSGlobalDomain 'com.apple.trackpad.scaling' -float 0.875
 
 # Use standard units
+defaults write NSGlobalDomain AppleICUDateFormatStrings -dict 1 y-MM-dd
 defaults write NSGlobalDomain AppleMeasurementUnits -string 'Centimeters'
 defaults write NSGlobalDomain AppleMetricUnits -bool true
 defaults write NSGlobalDomain AppleTemperatureUnit -string 'Celsius'
@@ -184,12 +185,12 @@ defaults write com.apple.SoftwareUpdate CriticalUpdateInstall -int 1
 defaults write com.apple.SoftwareUpdate ScheduleFrequency -int 1
 
 # System UI preferences
-defaults write NSGlobalDomain 'AppleKeyboardUIMode' -int 3
-defaults write NSGlobalDomain 'com.apple.sound.beep.feedback' -int 0
-defaults write NSGlobalDomain 'com.apple.sound.uiaudio.enabled' -int 0
-defaults write NSGlobalDomain AppleICUDateFormatStrings -dict 1 y-MM-dd
+defaults write NSGlobalDomain AppleKeyboardUIMode -int 3
+defaults write NSGlobalDomain AppleSpacesSwitchOnActivate false
 defaults write NSGlobalDomain InitialKeyRepeat -int 68
 defaults write NSGlobalDomain KeyRepeat -int 2
+defaults write NSGlobalDomain com.apple.sound.beep.feedback -int 0
+defaults write NSGlobalDomain com.apple.sound.uiaudio.enabled -int 0
 defaults write com.apple.WindowManager EnableTiledWindowMargins false
 defaults write com.apple.WindowManager EnableTilingByEdgeDrag false
 defaults write com.apple.controlcenter 'NSStatusItem Preferred Position Sound' -float 256.0
