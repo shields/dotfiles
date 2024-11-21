@@ -1,0 +1,5 @@
+# Not ideal, but the best of the default themes.
+--theme=Coldark-Cold
+
+# Syntax highlighting only
+--style=plain
