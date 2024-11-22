@@ -16,7 +16,9 @@
 (use-package marginalia
   :ensure t
   :init
-  (marginalia-mode))
+  (marginalia-mode)
+  :custom
+  (marginalia-max-relative-age 86400)) ; 24 hours in seconds
 
 (use-package corfu
   :ensure t
