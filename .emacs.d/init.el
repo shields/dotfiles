@@ -18,26 +18,31 @@
 (load "~/.emacs.d/package-repos.el")
 
 ;;}}}
-;;{{{ Temporary fixes
+;; Bootstrap straight.el
+(defvar bootstrap-version)
+(let ((bootstrap-file
+       (expand-file-name "straight/repos/straight.el/bootstrap.el" user-emacs-directory))
+      (bootstrap-version 6))
+  (unless (file-exists-p bootstrap-file)
+    (with-current-buffer
+        (url-retrieve-synchronously
+         "https://raw.githubusercontent.com/radian-software/straight.el/develop/install.el"
+         'silent 'inhibit-cookies)
+      (goto-char (point-max))
+      (eval-print-last-sexp)))
+  (load bootstrap-file nil 'nomessage))
 
-;; https://github.com/Malabarba/aggressive-indent-mode/issues/137
-;; Closed 2020-05-12 but not fixed as requested.
-(require 'aggressive-indent)
-(defun aggressive-indent--indent-if-changed (buffer)
-  "Indent any region that changed in BUFFER in the last command loop."
-  (if (not (buffer-live-p buffer))
-      (and aggressive-indent--idle-timer
-           (cancel-timer aggressive-indent--idle-timer))
-    (with-current-buffer buffer
-      (when (and aggressive-indent-mode aggressive-indent--changed-list)
-        (save-excursion
-          (save-selected-window
-            (aggressive-indent--while-no-input
-              (aggressive-indent--process-changed-list-and-indent))))
-        (when (timerp aggressive-indent--idle-timer)
-          (cancel-timer aggressive-indent--idle-timer))))))
+;; Configure use-package to use straight.el
+(straight-use-package 'use-package)
+(use-package straight
+  :custom
+  (straight-use-package-by-default t))
 
-;;}}}
+;; Modern aggressive-indent setup
+(use-package aggressive-indent
+  :hook (prog-mode . aggressive-indent-mode)
+  :config
+  (global-aggressive-indent-mode 1))
 ;;{{{ Customization of commands
 
 ;; Disabled commands.  Hmmph.
@@ -757,19 +762,20 @@ stage it and display a diff."
 ;;}}}
 ;;{{{ LSP
 
-(setq lsp-completion-enable nil)        ; Using Codeium instead.
+(use-package lsp-mode
+  :custom
+  (lsp-completion-provider :none) ;; we use Corfu!
+  (lsp-auto-guess-root t)
+  :init
+  (setq lsp-keymap-prefix "C-c l")
+  :hook
+  (lsp-mode . lsp-enable-which-key-integration))
 
-(setq lsp-auto-guess-root t)
-
-(lsp-ui-mode 1)
-
-(setq lsp-ui-peek-enable nil)
-
-(setq lsp-ui-doc-position 'bottom)
-;; This doesn't get updated properly.
-;; https://github.com/emacs-lsp/lsp-ui/issues/369
-(face-spec-set 'lsp-ui-doc-background
-               '((t :background "#eeeeff")))
+(use-package lsp-ui
+  :custom
+  (lsp-ui-peek-always-show t)
+  (lsp-ui-sideline-show-hover t)
+  (lsp-ui-doc-enable nil))
 
 ;;;}}}
 ;;{{{ Markdown
@@ -836,30 +842,16 @@ stage it and display a diff."
               ("C-c C-c r" . lsp-rename)
               ("C-c C-c q" . lsp-workspace-restart)
               ("C-c C-c Q" . lsp-workspace-shutdown)
-              ("C-c C-c s" . lsp-rust-analyzer-status)))
-(use-package lsp-mode
-  :ensure
-  :commands lsp
+              ("C-c C-c s" . lsp-rust-analyzer-status))
   :custom
   (lsp-rust-analyzer-cargo-watch-command "clippy")
-  (lsp-eldoc-render-all t)
-  (lsp-idle-delay 0.6)
   (lsp-rust-analyzer-server-display-inlay-hints t)
   (lsp-rust-analyzer-display-lifetime-elision-hints-enable "skip_trivial")
   (lsp-rust-analyzer-display-chaining-hints t)
   (lsp-rust-analyzer-display-lifetime-elision-hints-use-parameter-names nil)
   (lsp-rust-analyzer-display-closure-return-type-hints t)
   (lsp-rust-analyzer-display-parameter-hints nil)
-  (lsp-rust-analyzer-display-reborrow-hints nil)
-  :config
-  (add-hook 'lsp-mode-hook 'lsp-ui-mode))
-(use-package lsp-ui
-  :ensure
-  :commands lsp-ui-mode
-  :custom
-  (lsp-ui-peek-always-show t)
-  (lsp-ui-sideline-show-hover t)
-  (lsp-ui-doc-enable nil))
+  (lsp-rust-analyzer-display-reborrow-hints nil))
 
 
 ;;}}}
@@ -962,23 +954,20 @@ This function is useful for binding to a hotkey."
 
 (require 'edebug)
 
-;; Garbage Collection strategy
+;; Modern performance optimizations
+(use-package gcmh
+  :demand t
+  :config
+  (gcmh-mode 1))
+
 ;; Native compilation settings
 (when (featurep 'native-compile)
-  (setq native-comp-async-report-warnings-errors nil)
-  (setq native-comp-deferred-compilation t)
+  (setq native-comp-async-report-warnings-errors 'silent)
+  (setq native-comp-jit-compilation t)
   (add-to-list 'native-comp-eln-load-path (expand-file-name "eln-cache/" user-emacs-directory)))
 
-(setq gc-cons-threshold (* 100 1024 1024)) ; 100MB
-(setq gc-cons-percentage 0.6)
-
-;; Only GC when idle
-(add-hook 'after-init-hook
-          (lambda ()
-            (run-with-idle-timer 5 t #'garbage-collect)))
-
-;; Increase data read from processes
-(setq read-process-output-max (* 4 1024 1024)) ; 4MB
+;; Increase process data chunks for better performance
+(setq read-process-output-max (* 4 1024 1024)) ; 4MiB
 
 ;; File-name-handler-alist caching
 (defvar default-file-name-handler-alist file-name-handler-alist)
