@@ -184,6 +184,9 @@ defaults write com.apple.SoftwareUpdate ConfigDataInstall -int 1
 defaults write com.apple.SoftwareUpdate CriticalUpdateInstall -int 1
 defaults write com.apple.SoftwareUpdate ScheduleFrequency -int 1
 
+# Spotlight
+defaults write com.apple.assistant.support 'Search Queries Data Sharing Status' -int 2 # off
+
 # System UI preferences
 defaults write NSGlobalDomain AppleKeyboardUIMode -int 3
 defaults write NSGlobalDomain AppleSpacesSwitchOnActivate false
