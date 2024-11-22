@@ -989,6 +989,7 @@ This function is useful for binding to a hotkey."
 (custom-set-faces
  '(default ((t (:inherit nil :extend nil :stipple nil :background "White" :foreground "Black" :inverse-video nil :box nil :strike-through nil :overline nil :underline nil :slant normal :weight normal :height 120 :width normal :foundry "nil" :family "Andale Mono"))))
  '(Info-quoted ((t (:inherit fixed-pitch))))
+ '(completions-annotations ((t (:inherit shadow))))
  '(corfu-preview ((t (:foreground "gray60"))))
  '(cperl-array-face ((t (:foreground "Blue"))))
  '(cperl-hash-face ((t (:foreground "Red" :weight bold))))
