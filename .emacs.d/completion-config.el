@@ -9,7 +9,9 @@
   :ensure t
   :custom
   (completion-styles '(orderless basic))
-  (completion-category-overrides '((file (styles basic partial-completion)))))
+  (completion-category-overrides '((file (styles basic partial-completion))))
+  :config
+  (setq orderless-matching-styles '(orderless-flex orderless-literal orderless-regexp)))
 
 (use-package marginalia
   :ensure t
@@ -26,6 +28,7 @@
   (corfu-quit-at-boundary 'separator)
   (corfu-quit-no-match t)
   (corfu-echo-documentation 0.25)
+  (corfu-cycle t)
   :init
   (global-corfu-mode))
 
