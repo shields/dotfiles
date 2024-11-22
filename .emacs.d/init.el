@@ -981,6 +981,11 @@ This function is useful for binding to a hotkey."
           (lambda ()
             (setq file-name-handler-alist default-file-name-handler-alist)))
 
+;; Persist history over Emacs restarts
+(use-package savehist
+  :init
+  (savehist-mode))
+
 (server-start)
 
 ;; Don't block Emacs exit; that blocks automatic macOS upgrades.
