@@ -963,6 +963,12 @@ This function is useful for binding to a hotkey."
 (require 'edebug)
 
 ;; Garbage Collection strategy
+;; Native compilation settings
+(when (featurep 'native-compile)
+  (setq native-comp-async-report-warnings-errors nil)
+  (setq native-comp-deferred-compilation t)
+  (add-to-list 'native-comp-eln-load-path (expand-file-name "eln-cache/" user-emacs-directory)))
+
 (setq gc-cons-threshold (* 100 1024 1024)) ; 100MB
 (setq gc-cons-percentage 0.6)
 
