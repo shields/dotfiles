@@ -11,9 +11,6 @@
         apheleia
         avy
         cape
-        company
-        company-terraform
-        counsel
         crux
         dap-mode
         dash-at-point
@@ -32,9 +29,7 @@
         goto-last-change
         gptel
         hl-todo
-        ivy
         jsonnet-mode
-        lsp-ivy
         lsp-mode
         lsp-ui
         magit
@@ -59,3 +54,6 @@
 (package-install-selected-packages t)
 
 (nerd-icons-install-fonts 1)
+
+(unless (file-exists-p (codeium-get-config 'codeium-command-executable nil nil))
+  (codeium-install nil t))

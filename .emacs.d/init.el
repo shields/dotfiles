@@ -279,7 +279,7 @@ when called with a prefix argument."
 (global-set-key [(super .)] #'xref-find-definitions)
 (global-set-key [(super \,)] #'xref-pop-marker-stack)
 
-(global-set-key [(super /)] 'company-complete)
+(global-set-key [(super /)] 'completion-at-point)
 
 (global-set-key [(super k)] #'avy-goto-char-timer)
 
@@ -289,7 +289,7 @@ when called with a prefix argument."
 
 (global-set-key [(super t)] #'previous-buffer)
 (global-set-key [(super T)] #'next-buffer)
-(global-set-key [(control t)] #'counsel-switch-buffer)
+(global-set-key [(control t)] #'switch-to-buffer)
 (global-set-key [(control x) (b)] nil)
 
 (global-set-key [(super up)] #'move-line-up)
@@ -603,32 +603,27 @@ stage it and display a diff."
 (add-hook 'initial-calendar-window-hook 'mark-calendar-holidays)
 
 ;;}}}
-;;{{{ Company and Codeium
+;;{{{ Codeium
 
-(straight-use-package '(codeium :type git :host github :repo "Exafunction/codeium.el"))
-(unless (file-exists-p (codeium-get-config 'codeium-command-executable nil nil))
-  (codeium-install nil t))
+(use-package codeium
+  :straight (:type git :host github :repo "Exafunction/codeium.el")
+  :init
+  (add-to-list 'completion-at-point-functions #'codeium-completion-at-point)
+  :config
+  (setq codeium-api-enabled
+        (lambda (api)
+          (memq api '(GetCompletions Heartbeat CancelRequest GetAuthToken RegisterUser auth-redirect AcceptCompletion)))))
 
 (defun shields/prog-capf ()
   (cape-wrap-super #'codeium-completion-at-point #'lsp-completion-at-point))
 (add-hook 'prog-mode-hook
           (lambda ()
-            (setq-local completion-at-point-functions '(shields/prog-capf))))
+            (setq-local completion-at-point-functions
+                        (list #'shields/prog-capf
+                              #'cape-file
+                              #'cape-dabbrev))))
 
-(setq codeium-api-enabled
-      (lambda (api)
-        (memq api '(GetCompletions Heartbeat CancelRequest GetAuthToken RegisterUser auth-redirect AcceptCompletion))))
 
-(use-package company
-  :defer 0.1
-  :config
-  (global-company-mode t)
-  (setq-default
-   company-idle-delay 0.1
-   company-require-match nil
-   company-minimum-prefix-length 2
-   company-tooltip-align-annotations t
-   company-frontends '(company-preview-frontend)))
 
 ;;}}}
 ;;{{{ compilation and grep
@@ -744,18 +739,9 @@ stage it and display a diff."
   (add-hook 'gptel-post-stream-hook #'gptel-auto-scroll))
 
 ;;}}}
-;;{{{ ivy, counsel, and swiper
+;;{{{ Completion
 
-(setq ivy-use-virtual-buffers t)
-(setq ivy-count-format "%d/%d ")
-
-(setq ivy-re-builders-alist
-      '((swiper . ivy--regex-plus)
-        (t . ivy--regex-fuzzy)))
-
-(setq ivy-wrap t)
-
-(counsel-mode 1)
+(load "~/.emacs.d/completion-config.el")
 
 ;;}}}
 ;;{{{ Info
@@ -822,7 +808,7 @@ stage it and display a diff."
 
 (define-key projectile-mode-map (kbd "M-p") 'projectile-command-map)
 
-(setq projectile-completion-system 'ivy)
+(setq projectile-completion-system 'default)
 
 ;;}}}
 ;;{{{ Python
@@ -1003,7 +989,7 @@ This function is useful for binding to a hotkey."
 (custom-set-faces
  '(default ((t (:inherit nil :extend nil :stipple nil :background "White" :foreground "Black" :inverse-video nil :box nil :strike-through nil :overline nil :underline nil :slant normal :weight normal :height 120 :width normal :foundry "nil" :family "Andale Mono"))))
  '(Info-quoted ((t (:inherit fixed-pitch))))
- '(company-preview ((t (:foreground "gray60"))))
+ '(corfu-preview ((t (:foreground "gray60"))))
  '(cperl-array-face ((t (:foreground "Blue"))))
  '(cperl-hash-face ((t (:foreground "Red" :weight bold))))
  '(cursor ((t (:background "firebrick"))))
@@ -1019,8 +1005,6 @@ This function is useful for binding to a hotkey."
  '(fixed-pitch ((t (:family "Andale Mono"))))
  '(highlight ((t (:background "darkseagreen1"))))
  '(isearch ((t (:inherit match))))
- '(ivy-current-match ((t (:background "thistle1" :weight bold))))
- '(ivy-highlight-face ((t (:weight bold))))
  '(ivy-minibuffer-match-face-2 ((t (:foreground "dark magenta" :weight bold))))
  '(ivy-minibuffer-match-face-3 ((t (:inherit ivy-minibuffer-match-face-2))))
  '(ivy-minibuffer-match-face-4 ((t (:inherit ivy-minibuffer-match-face-3))))
@@ -1043,6 +1027,8 @@ This function is useful for binding to a hotkey."
  '(sp-wrap-overlay-opening-pair ((t (:inherit sp-wrap-overlay-face :foreground "magenta"))))
  '(swiper-match-face-4 ((t (:inherit match))))
  '(variable-pitch ((t (:height 1.2 :family "Georgia"))))
+ '(vertico-current ((t (:background "thistle1" :weight bold))))
+ '(vertico-group-title ((t (:weight bold))))
  '(vhl/default-face ((t (:background "DarkSeaGreen1")))))
 
 ;;}}}
