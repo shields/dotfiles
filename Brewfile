@@ -103,7 +103,7 @@ brew "whisperkit-cli"
 brew "yq"
 brew "yt-dlp"
 brew "zsh"
-brew "d12frosted/emacs-plus/emacs-plus@29", args: ["with-native-comp"]
+brew "d12frosted/emacs-plus/emacs-plus@29", args: ["with-native-comp", "with-no-frame-refocus"]
 brew "gabrie30/utils/ghorg"
 brew "golangci/tap/golangci-lint"
 brew "osx-cross/avr/avr-gcc@9"

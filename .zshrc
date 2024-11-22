@@ -96,31 +96,24 @@ plugins=(
 
 source $ZSH/oh-my-zsh.sh
 
-# User configuration
-
-# export MANPATH="/usr/local/man:$MANPATH"
-
-# You may need to manually set your language environment
-# export LANG=en_US.UTF-8
-
-# Preferred editor for local and remote sessions
-# if [[ -n $SSH_CONNECTION ]]; then
-#   export EDITOR='vim'
-# else
-#   export EDITOR='mvim'
-# fi
-
-# Compilation flags
-# export ARCHFLAGS="-arch x86_64"
-
-# Set personal aliases, overriding those provided by oh-my-zsh libs,
-# plugins, and themes. Aliases can be placed here, though oh-my-zsh
-# users are encouraged to define aliases within the ZSH_CUSTOM folder.
-# For a full list of active aliases, run `alias`.
+# On macOS, always create a new Emacs frame when running emacsclient. Otherwise,
+# we might reuse a frame from another workspace, causing an undesired workspace
+# switch.
 #
-# Example aliases
-# alias zshconfig="mate ~/.zshrc"
-# alias ohmyzsh="mate ~/.oh-my-zsh"
+# The oh-my-zsh emacsclient wrapper tries to look for "suitable" frames, but
+# Emacs does not seem to have any awareness of workspaces -- or at least, that
+# isn't exposed as a frame properties. In particular, unminimized frames on
+# other workspaces have (visibility . t).
+#
+# This does correctly count the Emacs frames in the current workspace:
+#
+#     osascript -e 'tell application "System Events" to count (every window of process "Emacs")')
+#
+# but it requires granting accessibility permissions to osascript, which seems
+# risky.
+if [[ "$(uname)" == "Darwin" ]]; then
+    export EDITOR="$ZSH/plugins/emacs/emacsclient.sh --create-frame"
+fi
 
 alias drit='docker run -it --rm'
 
