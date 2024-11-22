@@ -38,6 +38,17 @@
                                 },
                                 "to": [{ "shell_command": "osascript -e 'tell application \"iTerm2\" to create window with default profile'" }],
                                 "type": "basic"
+                            },
+                            {
+                                "from": {
+                                    "key_code": "4",
+                                    "modifiers": {
+                                        "mandatory": ["command", "option"],
+                                        "optional": []
+                                    }
+                                },
+                                "to": [{ "shell_command": "/opt/homebrew/bin/emacsclient --create-frame --alternate-editor ''" }],
+                                "type": "basic"
                             }
                         ]
                     },
