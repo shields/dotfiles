@@ -502,17 +502,17 @@ stage it and display a diff."
 
 ;; Enable auto-fill.
 (add-hook 'text-mode-hook
-          (function (lambda ()
-                      (turn-on-auto-fill))))
+          #'(lambda ()
+              (turn-on-auto-fill)))
 (add-hook 'indented-text-mode-hook
-          (function (lambda ()
-                      (turn-on-auto-fill))))
+          #'(lambda ()
+              (turn-on-auto-fill)))
 (add-hook 'message-mode-hook
-          (function (lambda ()
-                      (turn-on-auto-fill))))
+          #'(lambda ()
+              (turn-on-auto-fill)))
 (add-hook 'xml-mode-hook
-          (function (lambda ()
-                      (turn-on-auto-fill))))
+          #'(lambda ()
+              (turn-on-auto-fill)))
 
 ;; Perl extension glues.  Not really like C; more like a Makefile.
 (or (assoc "\\.xs$" auto-mode-alist)
