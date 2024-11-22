@@ -651,6 +651,11 @@ stage it and display a diff."
      (grep-apply-setting 'grep-use-null-device nil)
      (grep-apply-setting 'grep-use-null-filename-separator t)))
 
+;; Enable editing grep results
+(use-package wgrep
+  :custom
+  (wgrep-auto-save-buffer t))
+
 (use-package fancy-compilation
   :commands (fancy-compilation-mode))
 
