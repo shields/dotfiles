@@ -209,6 +209,9 @@ defaults write com.apple.controlcenter 'NSStatusItem Visible Sound' true
 # Lower right hot corner: lock screen.
 defaults write com.apple.dock wvous-br-corner -int 13
 
+# Hide pointer after ten seconds
+defaults write com.doomlaser.cursorcerer idleHide -float 10.0
+
 # iTerm2 writes its prefs to ~/.iTerm2/com.googlecode.iterm2.plist,
 # but doesn't read from there.
 defaults import com.googlecode.iterm2 - <.iTerm2/com.googlecode.iterm2.plist
