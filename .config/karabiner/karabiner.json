@@ -542,6 +542,15 @@
                             "to": [{ "key_code": "g" }]
                         }
                     ]
+                },
+                {
+                    "identifiers": {
+                        "is_keyboard": true,
+                        "is_pointing_device": true,
+                        "product_id": 16,
+                        "vendor_id": 13807
+                    },
+                    "ignore": false
                 }
             ],
             "fn_function_keys": [
