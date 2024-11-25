@@ -11,6 +11,7 @@
         apheleia
         avy
         cape
+        chatgpt-shell
         crux
         dap-mode
         dash-at-point

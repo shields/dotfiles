@@ -79,6 +79,9 @@
 (menu-bar-mode 0)
 (tool-bar-mode 0)
 
+(setq tab-bar-show 1)
+(setq tab-bar-close-last-tab-choice 'delete-frame)
+
 ;; Enable visual bell.  But on macOS, the visual bell pops up "the
 ;; standard NextStep image 'caution'" (src/nsterm.m).  This is not
 ;; correct.  Better is to set "Flash the screen when an alert sound
@@ -244,18 +247,41 @@ when called with a prefix argument."
 ;;}}}
 ;;{{{ Global keybindings
 
+;; Option (or Alt) ⌥: ignore so as to allow system-wide symbol input mechanism.
+(setq ns-alternate-modifier nil)
+(setq ns-right-alternate-modifier nil)
+;; Command (or Cmd) ⌘
+(setq ns-command-modifier 'meta)
+(setq ns-right-command-modifier 'meta)
+;; macOS only supports four modifiers, but we use Karabiner elements to map two
+;; additional keys to F24, then set them to a non-repeating `C-x @ s', in Emacs
+;; only, to emulate Super.
+;;
+;; Align with other standard macOS shortcuts.
+;; https://support.apple.com/en-us/102650
+(global-set-key [(meta x)] #'kill-region) ; !
+(global-set-key [(super x)] #'execute-extended-command)
+(global-set-key [(meta c)] #'copy-region-as-kill)
+(global-set-key [(meta v)] #'yank)
+(global-set-key [(meta z)] #'undo)
+(global-set-key [(meta a)] #'mark-whole-buffer)
+(global-set-key [(meta f)] #'isearch-forward)
+(global-set-key [(meta o)] #'find-file)
+(global-set-key [(meta t)] #'tab-bar-new-tab)
+(global-set-key [(meta w)] #'tab-bar-close-tab)
+
 (global-set-key [(home)] #'move-beginning-of-line)
 (global-set-key [(end)] #'move-end-of-line)
 
 (global-set-key [(control c) (F)] 'find-file-at-point)
 
-(global-set-key [(super n)] 'next-error)
+(global-set-key [(meta n)] 'next-error)
 
 (global-set-key [(control c) (d)] 'dictionary-search)
 
 (global-set-key [(control h) (a)] 'counsel-apropos)
 
-;; The default is just-one-space.
+;; Not M-SPC because that's Spotlight or Alfred.
 (global-set-key [(super space)] 'fixup-whitespace)
 
 (global-set-key [(control k)] #'crux-smart-kill-line)
@@ -264,41 +290,42 @@ when called with a prefix argument."
 
 (global-set-key [(super o)] #'crux-smart-open-line)
 
-(global-set-key [(super p)] 'multi-term-next)
+(global-set-key [(meta p)] 'multi-term-next)
 
-(global-set-key [(super \;)] 'comment-dwim)
+(global-set-key [(meta \;)] 'comment-dwim)
 
-(global-set-key [(super h)] 'goto-last-change)
+(global-set-key [(meta h)] 'goto-last-change)
 
-(global-set-key [(super \')] 'next-multiframe-window)
-(global-set-key [(super \")] 'previous-multiframe-window)
+(global-set-key [(meta \')] 'next-multiframe-window)
+(global-set-key [(meta \")] 'previous-multiframe-window)
 (global-set-key [(control x) (o)] nil)
 
-(global-set-key [(super m)] 'magit-status)
+(global-set-key [(meta m)] 'magit-status)
 
-(global-set-key [(super v)] #'yank)
-;; Break old C-v / M-v habits now that S-v is paste (yank).
+(global-set-key [(meta v)] #'yank)
+;; Break old C-v habits now that M-v is paste (yank).
 (global-set-key [(control v)] nil)
 
-(global-set-key [(meta .)] #'dash-at-point)
-(global-set-key [(super .)] #'xref-find-definitions)
-(global-set-key [(super \,)] #'xref-pop-marker-stack)
+(global-set-key [(super .)] #'dash-at-point)
+(global-set-key [(meta .)] #'xref-find-definitions)
+(global-set-key [(meta \,)] #'xref-pop-marker-stack)
 
-(global-set-key [(super /)] 'completion-at-point)
+(global-set-key [(meta /)] 'completion-at-point)
 
-(global-set-key [(super k)] #'avy-goto-char-timer)
+(global-set-key [(meta k)] #'avy-goto-char-timer)
 
-(global-set-key [(super f)] nil)
+(global-set-key [(meta f)] nil)
 
-(global-set-key [(super g)] #'grep)
+(global-set-key [(meta g)] #'grep)
 
-(global-set-key [(super t)] #'previous-buffer)
-(global-set-key [(super T)] #'next-buffer)
+(global-set-key [(meta t)] #'previous-buffer)
+(global-set-key [(meta T)] #'next-buffer)
 (global-set-key [(control t)] #'switch-to-buffer)
 (global-set-key [(control x) (b)] nil)
 
-(global-set-key [(super up)] #'move-line-up)
-(global-set-key [(super down)] #'move-line-down)
+;; Only useful on keyboards with arrow keys:
+(global-set-key [(meta up)] #'move-line-up)
+(global-set-key [(meta down)] #'move-line-down)
 
 (global-set-key [(control w)] nil)
 
@@ -306,18 +333,15 @@ when called with a prefix argument."
 ;; Emacs.  Apparently this changed in 1994.
 (global-set-key "\e\e" #'eval-expression)
 
-(global-set-key [(super b)] #'shields/open-dwim)
-(global-set-key [(super s)] #'shields/save-dwim)
+(global-set-key [(meta b)] #'shields/open-dwim)
 
-(global-set-key [(super q)] nil)
+(global-set-key [(meta s)] #'shields/save-dwim)
 
-(global-set-key [(super r)] #'replace-string)
+(global-set-key [(meta q)] nil)
+
+(global-set-key [(meta r)] #'replace-string)
 
 (global-set-key [s-mouse-1] 'ffap-at-mouse)
-
-;; Option-shift-hyphen for em dash, same as macOS ordinary combo.
-(global-set-key [(meta _)]
-                '(lambda () (interactive) (insert "—")))
 
 (global-set-key [(control c) (d)] #'crux-duplicate-current-line-or-region)
 
@@ -414,7 +438,7 @@ stage it and display a diff."
 ;;{{{ emacs-lisp-mode
 
 (eval-after-load "elisp-mode"
-  '(define-key emacs-lisp-mode-map [(super return)] #'eval-last-sexp))
+  '(define-key emacs-lisp-mode-map [(meta return)] #'eval-last-sexp))
 
 (defun shields/eval-expression-minibuffer-setup ()
   (insert "()")
@@ -723,7 +747,7 @@ stage it and display a diff."
 
 (setq flyspell-persistent-highlight nil)
 
-(define-key flyspell-mode-map [(super tab)] nil)
+(define-key flyspell-mode-map [(meta tab)] nil)
 
 ;;}}}
 ;;{{{ Font-lock
@@ -741,12 +765,17 @@ stage it and display a diff."
 (setq font-lock-maximum-size 2097152)
 
 ;;}}}
-;;{{{ gptel
+;;{{{ LLMs
 
 (use-package gptel
   :config
   (setq gptel-model "gpt-4o")
   (add-hook 'gptel-post-stream-hook #'gptel-auto-scroll))
+
+(use-package chatgpt-shell
+  :config
+  (setq chatgpt-shell-anthropic-key (auth-source-pick-first-password :host "api.anthropic.com"))
+  (setq chatgpt-shell-openai-key (auth-source-pick-first-password :host "api.openai.com")))
 
 ;;}}}
 ;;{{{ Completion
