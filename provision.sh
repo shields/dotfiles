@@ -102,6 +102,9 @@ defaults write NSGlobalDomain AppleEnableMenuBarTransparency -bool true
 # Keyboard
 defaults write com.apple.HIToolbox AppleCurrentKeyboardLayoutInputSourceID org.unknown.keylayout.Shields
 defaults write NSGlobalDomain com.apple.keyboard.fnState true
+defaults write com.apple.universalaccess stickyKey false
+defaults write com.apple.universalaccess stickyKeyBeepOnModifier false
+defaults write com.apple.universalaccess stickyKeysLocation -int 1
 
 # Trackpad tap to click
 defaults write com.apple.driver.AppleBluetoothMultitouch.trackpad Clicking -bool true
