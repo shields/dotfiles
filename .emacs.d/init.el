@@ -636,8 +636,6 @@ stage it and display a diff."
 
 (use-package codeium
   :straight (:type git :host github :repo "Exafunction/codeium.el")
-  :init
-  (add-to-list 'completion-at-point-functions #'codeium-completion-at-point)
   :config
   (setq codeium-api-enabled
         (lambda (api)
