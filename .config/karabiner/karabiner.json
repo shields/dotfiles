@@ -5,6 +5,29 @@
             "complex_modifications": {
                 "rules": [
                     {
+                        "conditions": [
+                            {
+                                "bundle_identifiers": [
+                                    "^com\\.google\\.Chrome$"
+                                ],
+                                "type": "frontmost_application_unless"
+                            }
+                        ],
+                        "description": "F22 to ⌘-click in Chrome",
+                        "manipulators": [
+                            {
+                                "from": { "key_code": "f22" },
+                                "to": [
+                                    {
+                                        "modifiers": ["command"],
+                                        "pointing_button": "button1"
+                                    }
+                                ],
+                                "type": "basic"
+                            }
+                        ]
+                    },
+                    {
                         "description": "Exchange semicolon and colon",
                         "manipulators": [
                             {
@@ -34,8 +57,34 @@
                         ]
                     },
                     {
-                        "description": "F24 to ersatz Super in Emacs",
+                        "description": "F23/F24 to ersatz Super in Emacs",
                         "manipulators": [
+                            {
+                                "conditions": [
+                                    {
+                                        "bundle_identifiers": [
+                                            "^org\\.gnu\\.Emacs$"
+                                        ],
+                                        "type": "frontmost_application_if"
+                                    }
+                                ],
+                                "from": { "key_code": "f23" },
+                                "to": [
+                                    {
+                                        "key_code": "x",
+                                        "modifiers": ["control"]
+                                    },
+                                    {
+                                        "key_code": "2",
+                                        "modifiers": ["shift"]
+                                    },
+                                    {
+                                        "key_code": "s",
+                                        "repeat": false
+                                    }
+                                ],
+                                "type": "basic"
+                            },
                             {
                                 "conditions": [
                                     {
@@ -65,7 +114,7 @@
                         ]
                     },
                     {
-                        "description": "CapsLock turned off automagically by space, enter, down arrow, tab, quote and =.,/",
+                        "description": "Caps Word",
                         "manipulators": [
                             {
                                 "conditions": [
@@ -340,6 +389,33 @@
                                         }
                                     },
                                     { "key_code": "quote" }
+                                ],
+                                "type": "basic"
+                            },
+                            {
+                                "conditions": [
+                                    {
+                                        "name": "caps_lock_state",
+                                        "type": "variable_if",
+                                        "value": 1
+                                    }
+                                ],
+                                "from": {
+                                    "modifiers": { "optional": ["caps_lock", "left_shift"] },
+                                    "pointing_button": "button1"
+                                },
+                                "to": [
+                                    {
+                                        "key_code": "caps_lock",
+                                        "lazy": false
+                                    },
+                                    {
+                                        "set_variable": {
+                                            "name": "caps_lock_state",
+                                            "value": 0
+                                        }
+                                    },
+                                    { "pointing_button": "button1" }
                                 ],
                                 "type": "basic"
                             },
@@ -960,6 +1036,14 @@
                         "vendor_id": 13807
                     },
                     "ignore": false
+                },
+                {
+                    "identifiers": {
+                        "is_pointing_device": true,
+                        "product_id": 50801,
+                        "vendor_id": 9583
+                    },
+                    "ignore": false
                 }
             ],
             "fn_function_keys": [
@@ -984,17 +1068,17 @@
             "selected": true,
             "simple_modifications": [
                 {
+                    "from": { "key_code": "left_command" },
+                    "to": [
+                        { "sticky_modifier": { "left_command": "toggle" } },
+                        { "key_code": "left_command" }
+                    ]
+                },
+                {
                     "from": { "key_code": "left_control" },
                     "to": [
                         { "sticky_modifier": { "left_control": "toggle" } },
                         { "key_code": "left_control" }
-                    ]
-                },
-                {
-                    "from": { "key_code": "right_control" },
-                    "to": [
-                        { "sticky_modifier": { "right_control": "toggle" } },
-                        { "key_code": "right_control" }
                     ]
                 },
                 {
@@ -1005,30 +1089,29 @@
                     ]
                 },
                 {
-                    "from": { "key_code": "right_option" },
-                    "to": [
-                        { "sticky_modifier": { "right_option": "toggle" } },
-                        { "key_code": "right_option" }
-                    ]
-                },
-                {
-                    "from": { "key_code": "left_command" },
-                    "to": [
-                        { "sticky_modifier": { "left_command": "toggle" } },
-                        { "key_code": "left_command" }
-                    ]
-                },
-                {
                     "from": { "key_code": "right_command" },
                     "to": [
                         { "sticky_modifier": { "right_command": "toggle" } },
                         { "key_code": "right_command" }
                     ]
+                },
+                {
+                    "from": { "key_code": "right_control" },
+                    "to": [
+                        { "sticky_modifier": { "right_control": "toggle" } },
+                        { "key_code": "right_control" }
+                    ]
+                },
+                {
+                    "from": { "key_code": "right_option" },
+                    "to": [
+                        { "sticky_modifier": { "right_option": "toggle" } },
+                        { "key_code": "right_option" }
+                    ]
                 }
             ],
             "virtual_hid_keyboard": {
                 "country_code": 0,
-                "indicate_sticky_modifier_keys_state": false,
                 "keyboard_type_v2": "ansi"
             }
         }
