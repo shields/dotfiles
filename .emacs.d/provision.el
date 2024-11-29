@@ -32,6 +32,7 @@
         hl-todo
         jsonnet-mode
         lsp-mode
+        lsp-sourcekit
         lsp-ui
         magit
         magit-delta
@@ -44,6 +45,7 @@
         rustic
         smartparens
         straight
+        swift-mode
         symbol-overlay
         terraform-mode
         tree-sitter

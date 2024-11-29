@@ -887,7 +887,15 @@ stage it and display a diff."
 
 
 ;;}}}
+::{{{ Swift
+
+(use-package swift-mode)
+
+(use-package lsp-sourcekit
+  :after lsp-mode)
+
 ;;{{{ TRAMP
+::}}}
 ;; http://tramp.sourceforge.net
 
 (require 'tramp)
