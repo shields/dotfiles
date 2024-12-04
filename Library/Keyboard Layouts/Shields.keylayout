@@ -87,8 +87,8 @@ with a more useful symbol layer.
             <key code="38" action="a21"/>
             <key code="39" output="&#x0027;"/>
             <key code="40" output="k"/>
-            <key code="41" output=";"/>
-            <key code="42" output="\"/>
+            <key code="41" output=":"/>
+            <key code="42" output="_"/>
             <key code="43" output=","/>
             <key code="44" output="/"/>
             <key code="45" action="a17"/>
@@ -186,11 +186,11 @@ with a more useful symbol layer.
             <key code="22" output="^"/>
             <key code="23" output="%"/>
             <key code="24" output="+"/>
-            <key code="25" output="("/>
+            <key code="25" output="&#x003C;"/>
             <key code="26" output="&#x0026;"/>
-            <key code="27" output="_"/>
+            <key code="27" output="\"/>
             <key code="28" output="*"/>
-            <key code="29" output=")"/>
+            <key code="29" output="&#x003E;"/>
             <key code="30" output="}"/>
             <key code="31" action="a10"/>
             <key code="32" action="a11"/>
@@ -202,13 +202,13 @@ with a more useful symbol layer.
             <key code="38" action="a13"/>
             <key code="39" output="&#x0022;"/>
             <key code="40" output="K"/>
-            <key code="41" output=":"/>
+            <key code="41" output=";"/>
             <key code="42" output="|"/>
-            <key code="43" output="&#x003C;"/>
+            <key code="43" output="("/>
             <key code="44" output="?"/>
             <key code="45" action="a9"/>
             <key code="46" output="M"/>
-            <key code="47" output="&#x003E;"/>
+            <key code="47" output=")"/>
             <key code="48" output="&#x0009;"/>
             <key code="49" action="a5"/>
             <key code="50" output="~"/>
