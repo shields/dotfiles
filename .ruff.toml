@@ -1,3 +1,4 @@
+[lint]
 # https://beta.ruff.rs/docs/rules/
 select = ["E", "F", "B", "I", "N", "UP", "YTT", "C4", "DTZ", "ICN", "PT", "SIM", "PTH", "PD", "PLE", "NPY"]
 
