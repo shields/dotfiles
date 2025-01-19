@@ -74,6 +74,7 @@ if [[ "$(dscl . read /Users/$(whoami) UserShell)" == "UserShell: /bin/zsh" ]]; t
 fi
 
 # Plugins!
+datasette install --upgrade datasette-cluster-map
 llm install --upgrade llm-{gemini,claude-3,perplexity,cmd}
 
 # Make sure System Preferences isn't open, since it interferes with other
