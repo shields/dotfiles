@@ -6,3 +6,12 @@ auto-commits: false
 
 # Use global ~/.config/git/ignore instead of updating every repo.
 gitignore: false
+
+lint-cmd:
+  - "python: ruff check --fix && ruff format"
+
+auto-lint: true
+
+test-cmd: "uv run pytest -vv"
+
+auto-test: true
