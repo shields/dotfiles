@@ -261,9 +261,9 @@ killall ControlCenter Finder cfprefsd
 desktoppr "$HOME/Library/Application Support/desktoppr/navy_blue.png"
 
 # Bootstrap Emacs packages
-if [ ! -f "$HOME/.emacs.d/.bootstrap-stamp" ]; then
+if ! cmp --silent "$HOME/.emacs.d/.bootstrap-stamp" <(emacs --version); then
     emacs -q --batch --script .emacs.d/provision.el
-    touch "$HOME/.emacs.d/.bootstrap-stamp"
+    emacs --version >> "$HOME/.emacs.d/.bootstrap-stamp"
 fi
 
 # rustup
