@@ -58,5 +58,6 @@
 
 (nerd-icons-install-fonts 1)
 
-(unless (file-exists-p (codeium-get-config 'codeium-command-executable nil nil))
-  (codeium-install nil t))
+(when (fboundp 'codeium-get-config)
+  (unless (file-exists-p (codeium-get-config 'codeium-command-executable nil nil))
+    (codeium-install nil t)))
