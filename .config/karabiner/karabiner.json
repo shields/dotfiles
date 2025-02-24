@@ -1066,17 +1066,17 @@
             "selected": true,
             "simple_modifications": [
                 {
+                    "from": { "key_code": "left_command" },
+                    "to": [
+                        { "sticky_modifier": { "left_command": "toggle" } },
+                        { "key_code": "left_command" }
+                    ]
+                },
+                {
                     "from": { "key_code": "left_control" },
                     "to": [
                         { "sticky_modifier": { "left_control": "toggle" } },
                         { "key_code": "left_control" }
-                    ]
-                },
-                {
-                    "from": { "key_code": "left_shift" },
-                    "to": [
-                        { "sticky_modifier": { "left_shift": "toggle" } },
-                        { "key_code": "left_shift" }
                     ]
                 },
                 {
@@ -1087,10 +1087,17 @@
                     ]
                 },
                 {
-                    "from": { "key_code": "left_command" },
+                    "from": { "key_code": "left_shift" },
                     "to": [
-                        { "sticky_modifier": { "left_command": "toggle" } },
-                        { "key_code": "left_command" }
+                        { "sticky_modifier": { "left_shift": "toggle" } },
+                        { "key_code": "left_shift" }
+                    ]
+                },
+                {
+                    "from": { "key_code": "right_command" },
+                    "to": [
+                        { "sticky_modifier": { "right_command": "toggle" } },
+                        { "key_code": "right_command" }
                     ]
                 },
                 {
@@ -1101,13 +1108,6 @@
                     ]
                 },
                 {
-                    "from": { "key_code": "right_shift" },
-                    "to": [
-                        { "sticky_modifier": { "right_shift": "toggle" } },
-                        { "key_code": "right_shift" }
-                    ]
-                },
-                {
                     "from": { "key_code": "right_option" },
                     "to": [
                         { "sticky_modifier": { "right_option": "toggle" } },
@@ -1115,10 +1115,10 @@
                     ]
                 },
                 {
-                    "from": { "key_code": "right_command" },
+                    "from": { "key_code": "right_shift" },
                     "to": [
-                        { "sticky_modifier": { "right_command": "toggle" } },
-                        { "key_code": "right_command" }
+                        { "sticky_modifier": { "right_shift": "toggle" } },
+                        { "key_code": "right_shift" }
                     ]
                 }
             ],
