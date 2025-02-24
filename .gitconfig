@@ -1,7 +1,7 @@
 [user]
 	name = Michael Shields
 [init]
-        defaultBranch = main
+	defaultBranch = main
 [core]
 	# less -FRX is the git default, but only if you have not set $LESS.
 	pager = less -FRX
@@ -18,7 +18,23 @@
 	p = status
 	por = !git push -u origin $(git branch-name)
 [pull]
-        # Merge instead of rebasing to be consistent with GitHub web UI.
+	# Merge instead of rebasing to be consistent with GitHub web UI.
 	rebase = false
 [advice]
 	detachedHead = false
+[column]
+	ui = auto
+[branch]
+	sort = -committerdate
+[tag]
+	sort = version:refname
+[diff]
+	algorithm = histogram
+	colorMoved = plain
+	mnemonicPrefix = true
+	renames = true
+[push]
+	autoSetupRemote = true
+[rerere]
+	enabled = true
+	autoupdate = true
