@@ -2,8 +2,6 @@
 	name = Michael Shields
 [init]
         defaultBranch = main
-[commit]
-        gpgsign = true
 [core]
 	# less -FRX is the git default, but only if you have not set $LESS.
 	pager = less -FRX
