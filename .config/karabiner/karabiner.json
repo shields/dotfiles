@@ -5,17 +5,17 @@
             "complex_modifications": {
                 "rules": [
                     {
-                        "conditions": [
-                            {
-                                "bundle_identifiers": [
-                                    "^com\\.googlecode\\.iterm2$"
-                                ],
-                                "type": "frontmost_application_unless"
-                            }
-                        ],
                         "description": "F22 to up-arrow in iTerm2",
                         "manipulators": [
                             {
+                                "conditions": [
+                                    {
+                                        "bundle_identifiers": [
+                                            "^com\\.googlecode\\.iterm2$"
+                                        ],
+                                        "type": "frontmost_application_if"
+                                    }
+                                ],
                                 "from": { "key_code": "f22" },
                                 "to": [{ "key_code": "up_arrow" }],
                                 "type": "basic"
@@ -23,17 +23,17 @@
                         ]
                     },
                     {
-                        "conditions": [
-                            {
-                                "bundle_identifiers": [
-                                    "^com\\.google\\.Chrome$"
-                                ],
-                                "type": "frontmost_application_unless"
-                            }
-                        ],
                         "description": "F22 to ⌘-click in Chrome",
                         "manipulators": [
                             {
+                                "conditions": [
+                                    {
+                                        "bundle_identifiers": [
+                                            "^com\\.google\\.Chrome$"
+                                        ],
+                                        "type": "frontmost_application_if"
+                                    }
+                                ],
                                 "from": { "key_code": "f22" },
                                 "to": [
                                     {
