@@ -56,7 +56,7 @@ brew bundle --no-lock
 # Homebrew upgrades. Run formulas and casks separately to prevent whiny messages.
 brew upgrade --formula
 # Suppress upgrade of Chrome since it doesn't like to be upgraded while running.
-brew outdated --greedy-auto-updates --cask --quiet | grep -v '^google-chrome' | xargs brew upgrade --cask
+brew outdated --greedy-auto-updates --cask --quiet | (grep -v '^google-chrome' || true) | xargs brew upgrade --cask
 brew autoremove
 brew cleanup --prune=all
 
