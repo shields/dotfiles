@@ -78,7 +78,7 @@ fi
 
 # Plugins!
 datasette install --upgrade datasette-cluster-map
-llm install --upgrade llm-{gemini,claude-3,perplexity,cmd}
+llm install --upgrade llm-{gemini,anthropic,perplexity,cmd}
 
 # Make sure System Preferences isn't open, since it interferes with other
 # processes writing to defaults.
