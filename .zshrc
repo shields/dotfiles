@@ -78,24 +78,6 @@ HIST_STAMPS="yyyy-mm-dd"
 # Would you like to use another custom folder than $ZSH/custom?
 # ZSH_CUSTOM=/path/to/new-custom-folder
 
-# Which plugins would you like to load?
-# Standard plugins can be found in ~/.oh-my-zsh/plugins/*
-# Custom plugins may be added to ~/.oh-my-zsh/custom/plugins/
-# Example format: plugins=(rails git textmate ruby lighthouse)
-# Add wisely, as too many plugins slow down shell startup.
-plugins=(
-    autojump
-    aws
-    colorize
-    direnv
-    docker
-    emacs
-    git
-    kubectl
-)
-
-source $ZSH/oh-my-zsh.sh
-
 # On macOS, always create a new Emacs frame when running emacsclient. Otherwise,
 # we might reuse a frame from another workspace, causing an undesired workspace
 # switch.
@@ -173,3 +155,24 @@ if [ -x /usr/bin/pbcopy ]; then
     alias pc=pbcopy
     alias pv=pbpaste
 fi
+
+export FZF_DEFAULT_OPTS="--color hl:red,hl:bold,selected-hl:red,selected-hl:bold,current-hl:red,current-hl:bold"
+
+export FZF_ALT_C_COMMAND=""
+export FZF_CTRL_T_COMMAND="fd --type f --hidden --exclude .git"
+
+export FZF_CTRL_R_OPTS="--height 16 --layout reverse --border none --color bg:#eeeeee"
+export FZF_CTRL_T_OPTS="$FZF_CTRL_R_OPTS"
+
+plugins=(
+    autojump
+    aws
+    colorize
+    direnv
+    docker
+    emacs
+    fzf
+    git
+    kubectl
+)
+source $ZSH/oh-my-zsh.sh
