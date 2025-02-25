@@ -1,3 +1,5 @@
+(global-completion-preview-mode 1)
+
 (use-package vertico
   :ensure t
   :init
@@ -19,20 +21,6 @@
   (marginalia-mode)
   :custom
   (marginalia-max-relative-age 86400)) ; 24 hours in seconds
-
-(use-package corfu
-  :ensure t
-  :custom
-  (corfu-auto t)
-  (corfu-auto-delay 0.1)
-  (corfu-auto-prefix 2)
-  (corfu-preview-current nil)
-  (corfu-quit-at-boundary 'separator)
-  (corfu-quit-no-match t)
-  (corfu-echo-documentation 0.25)
-  (corfu-cycle t)
-  :init
-  (global-corfu-mode))
 
 (use-package kind-icon
   :ensure t

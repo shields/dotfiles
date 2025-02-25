@@ -176,6 +176,8 @@
 ;; aggressive-indent.
 (electric-indent-mode 1)
 
+(kill-ring-deindent-mode t)
+
 (require 'apheleia)
 (apheleia-global-mode 1)
 ;; Replace black with ruff, and gofmt with goimports.
@@ -204,6 +206,11 @@
   :config
   (treesit-auto-add-to-auto-mode-alist 'all)
   (global-treesit-auto-mode))
+
+(setq flymake-show-diagnostics-at-end-of-line t)
+
+(which-key-mode 1)
+(which-key-setup-minibuffer)
 
 ;;}}}
 ;;{{{ Mode line
@@ -365,36 +372,33 @@ when called with a prefix argument."
 (defun shields/open-dwim (arg)
   "Open in the current project if in a project, otherwise whatever."
   (interactive "P")
-  (if (projectile-project-root)
-      (projectile-find-file arg)
+  (if (project-current)
+      (project-find-file)
     (counsel-find-file arg)))
 
 (defun shields/save-dwim (arg)
   "Save and do other things.
 
-If the file is being freshly saved, and it is part of a
-Projectile project, also save all other project buffers, then run
-the tests, if any.
+If the file is being freshly saved and it is part of a project,
+also save all other project buffers.
 
-If the file was already saved, and it is part of a Magit repo,
+If the file was already saved and it is part of a Magit repo,
 stage it and display a diff."
   (interactive "P")
   (if (buffer-modified-p)
       ;; File is being freshly saved.
       (progn
         (save-buffer)
-        (when (projectile-project-root)
+        (when-let* ((proj (project-current)))
           (let ((inhibit-message t))
-            (projectile-save-project-buffers))
-          (let ((compilation-read-command nil)
-                (p-c-d (projectile-compilation-dir)))
-            (cond ((projectile-test-command p-c-d)
-                   (projectile-test-project arg))))))
+            (dolist (buf (project-buffers proj))
+              (with-current-buffer buf
+                (when (buffer-file-name)
+                  (save-buffer)))))))
     ;; File was already saved.
     (when (magit-file-relative-name)
       (magit-stage-file buffer-file-name)
       (magit-diff-buffer-file))))
-(autoload 'magit-file-relative-name "magit")
 
 ;;}}}
 
@@ -796,7 +800,6 @@ stage it and display a diff."
 
 (use-package lsp-mode
   :custom
-  (lsp-completion-provider :none) ;; we use Corfu!
   (lsp-auto-guess-root t)
   :init
   (setq lsp-keymap-prefix "C-c l")
@@ -840,13 +843,9 @@ stage it and display a diff."
   '(cperl-set-style "PerlStyle"))
 
 ;;}}}
-;;{{{ Projectile
+;;{{{ Project
 
-(projectile-global-mode)
-
-(define-key projectile-mode-map (kbd "M-p") 'projectile-command-map)
-
-(setq projectile-completion-system 'default)
+(setq project-mode-line t)
 
 ;;}}}
 ;;{{{ Python
@@ -885,22 +884,18 @@ stage it and display a diff."
   (lsp-rust-analyzer-display-parameter-hints nil)
   (lsp-rust-analyzer-display-reborrow-hints nil))
 
-
 ;;}}}
-::{{{ Swift
+;;{{{ Swift
 
 (use-package swift-mode)
 
 (use-package lsp-sourcekit
   :after lsp-mode)
 
+;;}}}
 ;;{{{ TRAMP
-::}}}
-;; http://tramp.sourceforge.net
 
 (require 'tramp)
-
-(setq tramp-default-method "rsync")
 
 ;;}}}
 ;;{{{ Version control
@@ -985,12 +980,8 @@ This function is useful for binding to a hotkey."
 
 ;; Enable the mouse.
 (xterm-mouse-mode 1)
-(require 'mwheel)
-(mwheel-install)
-
 
 (setq try-oblique-before-italic-fonts t)
-
 
 (require 'edebug)
 
