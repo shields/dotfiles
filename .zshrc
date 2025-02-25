@@ -109,6 +109,8 @@ alias kcy='kubectl -o yaml'
 # https://docs.brew.sh/Homebrew-and-Python
 alias p="$(brew --prefix python)/libexec/bin/python"
 
+alias s='less'
+
 whence tf > /dev/null || alias tf='terraform'
 alias tfa='tf apply -parallelism=100'
 alias tfi='tf init'
