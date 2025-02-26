@@ -1,9 +1,5 @@
 model: sonnet
 
-# Disable commits pending support for signatures.
-# https://github.com/Aider-AI/aider/issues/1600
-auto-commits: false
-
 # Use global ~/.config/git/ignore instead of updating every repo.
 gitignore: false
 
