@@ -3,7 +3,8 @@
 MSG_FILE="$1"
 COMMIT_TYPE="$2"
 
-PROMPT=$(cat <<EOF
+PROMPT=$(
+    cat << EOF
 Write a Git commit message.
 
 The first line should be no more than about 50 characters, and does

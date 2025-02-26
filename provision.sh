@@ -9,14 +9,14 @@ tar cf - bin Library $(git ls-files | grep '^\.' | grep -v '^\.git') | (cd "$HOM
 # Use path selection logic from https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh
 # We will install full Xcode later from the Mac App Store.
 UNAME_MACHINE="$(/usr/bin/uname -m)"
-if [[ "${UNAME_MACHINE}" == "arm64" ]]; then
+if [[ ${UNAME_MACHINE} == "arm64" ]]; then
     HOMEBREW_PREFIX="/opt/homebrew"
     HOMEBREW_REPOSITORY="${HOMEBREW_PREFIX}"
 else
     HOMEBREW_PREFIX="/usr/local"
     HOMEBREW_REPOSITORY="${HOMEBREW_PREFIX}/Homebrew"
 fi
-if [[ ! -d "$HOMEBREW_REPOSITORY" ]]; then
+if [[ ! -d $HOMEBREW_REPOSITORY ]]; then
     # CI=1 suppresses confirmation prompts.
     CI=1 /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/master/install.sh)"
 fi
@@ -28,7 +28,7 @@ brew analytics off
 softwareupdate --install --recommended
 
 # Install Rosetta if it's not already working.
-if ! arch -x86_64 /usr/bin/true 2>/dev/null; then
+if ! arch -x86_64 /usr/bin/true 2> /dev/null; then
     softwareupdate --install-rosetta --agree-to-license
 fi
 
@@ -61,7 +61,7 @@ brew autoremove
 brew cleanup --prune=all
 
 # Be sure we're using full Xcode instead of the CLI-tools-only subset.
-if ! xcrun --find xcodebuild 2>/dev/null; then
+if ! xcrun --find xcodebuild 2> /dev/null; then
     sudo xcode-select --reset
 fi
 if ! xcodebuild -checkFirstLaunchStatus; then
@@ -222,7 +222,7 @@ defaults write com.doomlaser.cursorcerer idleHide -float 10.0
 
 # iTerm2 writes its prefs to ~/.iTerm2/com.googlecode.iterm2.plist,
 # but doesn't read from there.
-defaults import com.googlecode.iterm2 - <.iTerm2/com.googlecode.iterm2.plist
+defaults import com.googlecode.iterm2 - < .iTerm2/com.googlecode.iterm2.plist
 
 # Set NTP server to Google Public NTP for smeared leap seconds.
 if ! grep -q '^server time\.google\.com$' /etc/ntp.conf; then
@@ -277,7 +277,7 @@ if [ ! -f "$HOME/.ssh/known_hosts" ] || ! grep -q '^github\.com ' "$HOME/.ssh/kn
         -H "X-GitHub-Api-Version: 2022-11-28" \
         https://api.github.com/meta |
         jq -r '.ssh_keys[]' |
-        sed -e 's/^/github.com /' >>"$HOME/.ssh/known_hosts"
+        sed -e 's/^/github.com /' >> "$HOME/.ssh/known_hosts"
 fi
 
 # Go setup
