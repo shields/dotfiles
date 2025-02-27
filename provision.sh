@@ -79,6 +79,7 @@ fi
 # NPM-installed tools
 npm install -g @anthropic-ai/claude-code
 npm upgrade -g
+claude config set -g theme light
 
 # Plugins!
 datasette install --upgrade datasette-cluster-map
