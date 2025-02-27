@@ -76,6 +76,10 @@ if [[ "$(dscl . read /Users/$(whoami) UserShell)" == "UserShell: /bin/zsh" ]]; t
     sudo dscl . change "/Users/$(whoami)" UserShell /bin/zsh "$HOMEBREW_PREFIX/bin/zsh"
 fi
 
+# NPM-installed tools
+npm install -g @anthropic-ai/claude-code
+npm upgrade -g
+
 # Plugins!
 datasette install --upgrade datasette-cluster-map
 llm install --upgrade llm-{gemini,anthropic,perplexity,cmd}
