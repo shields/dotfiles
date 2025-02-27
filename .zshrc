@@ -1,3 +1,6 @@
+#!/bin/zsh
+# The previous line is for the benefit of shfmt.
+
 [[ -d /opt/homebrew ]] && eval "$(/opt/homebrew/bin/brew shellenv)"
 [[ -x /usr/local/bin/brew ]] && eval "$(/usr/local/bin/brew shellenv)"
 
@@ -125,8 +128,6 @@ done
 # Asking about the merge commit message is unnecessary, since in the
 # rare cases where I want to edit it, there is always --amend.
 export GIT_MERGE_AUTOEDIT=no
-
-export RIPGREP_CONFIG_PATH="$HOME/.ripgreprc"
 
 # Emacs shell dir tracking; see comments in term.el.
 if [ -n "$INSIDE_EMACS" ]; then

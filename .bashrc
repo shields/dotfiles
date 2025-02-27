@@ -9,19 +9,19 @@
 test -z "$PS1" && return
 
 if [ "$TERM" = xterm-debian -a ! -e /etc/terminfo/x/xterm-debian \
-     -a ! -e /usr/share/terminfo/x/xterm-debian ]; then
+    -a ! -e /usr/share/terminfo/x/xterm-debian ]; then
     TERM=xterm
 fi
 
-trimmed_hostname="`hostname | sed -e 's/\.msrl\.com$//' \
-				  -e 's/\.above\.net$//' \
-				  -e 's/\.mfnx\.net$//'`"
+trimmed_hostname="$(hostname | sed -e 's/\.msrl\.com$//' \
+    -e 's/\.above\.net$//' \
+    -e 's/\.mfnx\.net$//')"
 if [ "$TERM" = xterm -o "$TERM" = xterm-debian -o "$TERM" = xterm-256color ]; then
     PS1="\\[\\033]0;\\u@$trimmed_hostname\\007\\]\\w\\$ "
     # On iTerm2, display git branch name on the touch bar.  For
     # safety, limit characters allowed.
     if [ -x ~/.iterm2/it2check ] && ~/.iterm2/it2check; then
-	PS1='\[$(~/.iterm2/it2setkeylabel set status $((git branch-name 2>/dev/null || echo ∅) | tr -Cd ∅A-Za-z0-9_-/))\]'"$PS1"
+        PS1='\[$(~/.iterm2/it2setkeylabel set status $((git branch-name 2>/dev/null || echo ∅) | tr -Cd ∅A-Za-z0-9_-/))\]'"$PS1"
     fi
 else
     PS1="\\u@$trimmed_hostname:\\w\\$ "
@@ -35,20 +35,20 @@ alias gdi='git diff origin/master'
 
 gc() {
     gcloud config get-value project
-    [[ "$#" = 0 ]] && return
+    [[ $# == 0 ]] && return
     gcloud "$@"
 }
 kc() {
     kubectl config current-context
-    [[ "$#" = 0 ]] && return
+    [[ $# == 0 ]] && return
     kubectl "$@"
 }
 
 hpr() {
     # Verify that the working directory is clean.
     if [ -n "$(git status --porcelain=v1 2>&1)" ]; then
-	git status --short 1>&2
-	return 1
+        git status --short 1>&2
+        return 1
     fi
     hub pull-request --no-edit -p "$@"
 }
@@ -85,7 +85,7 @@ if [ -d "$HOME/google-cloud-sdk" ]; then
 fi
 
 # pyenv
-if command -v pyenv 1>/dev/null 2>&1; then
+if command -v pyenv 1> /dev/null 2>&1; then
     eval "$(pyenv init -)"
 fi
 
