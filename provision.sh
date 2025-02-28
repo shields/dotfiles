@@ -39,13 +39,6 @@ if [[ ! -d "$HOME/.oh-my-zsh" ]]; then
 fi
 "$HOME/.oh-my-zsh/tools/upgrade.sh" -v minimal
 
-# Spaceship Prompt
-ZSH_CUSTOM="$HOME/.oh-my-zsh/custom"
-if [[ ! -d "$ZSH_CUSTOM/themes/spaceship-prompt" ]]; then
-    git clone https://github.com/denysdovhan/spaceship-prompt.git "$ZSH_CUSTOM/themes/spaceship-prompt"
-    ln -sf spaceship-prompt/spaceship.zsh-theme "$ZSH_CUSTOM/themes/spaceship.zsh-theme"
-fi
-
 # Set email address in .gitconfig.
 if [[ "$(whoami)" == shields ]] && ! (profiles status -type enrollment | grep -q ': Yes'); then
     git config --global user.email shields@msrl.com
