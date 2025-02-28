@@ -52,7 +52,7 @@ if [[ "$(whoami)" == shields ]] && ! (profiles status -type enrollment | grep -q
 fi
 
 # Pull things in from Homebrew.
-brew bundle --no-lock
+brew bundle --no-lock | (grep -v '^Using ' || true)
 # Homebrew upgrades. Run formulas and casks separately to prevent whiny messages.
 brew upgrade --formula
 # Suppress upgrade of Chrome since it doesn't like to be upgraded while running.
@@ -82,8 +82,8 @@ npm upgrade -g
 claude config set -g theme light
 
 # Plugins!
-datasette install --upgrade datasette-cluster-map
-llm install --upgrade llm-{gemini,anthropic,perplexity,cmd}
+datasette install --upgrade datasette-cluster-map | (grep -v '^Requirement already satisfied:' || true)
+llm install --upgrade llm-{gemini,anthropic,perplexity,cmd} | (grep -v '^Requirement already satisfied:' || true)
 
 # Make sure System Preferences isn't open, since it interferes with other
 # processes writing to defaults.
@@ -272,7 +272,7 @@ if ! cmp --silent "$HOME/.emacs.d/.bootstrap-stamp" <(emacs --version); then
 fi
 
 # rustup
-rustup-init --no-modify-path -y
+rustup-init --no-modify-path -y > /dev/null
 
 # Bootstrap TLS trust to GitHub SSH trust.
 if [ ! -f "$HOME/.ssh/known_hosts" ] || ! grep -q '^github\.com ' "$HOME/.ssh/known_hosts"; then
