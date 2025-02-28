@@ -25,6 +25,7 @@ format = '([$all_status$ahead_behind]($style) )'
 
 [python]
 format = '[${symbol}${pyenv_prefix}(${version})(\($virtualenv\))]($style) '
+detect_files = []
 detect_extensions = []
 
 [kubernetes]
