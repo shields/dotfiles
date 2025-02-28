@@ -1,5 +1,5 @@
-source .profile
-source .bashrc
+source "$HOME/.profile"
+source "$HOME/.bashrc"
 
 export notify=glorf
 export HISTCONTROL=ignoredups
