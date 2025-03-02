@@ -76,6 +76,7 @@ npm upgrade -g
 claude config set -g theme light
 
 # Plugins!
+export PIP_DISABLE_PIP_VERSION_CHECK=1
 datasette install --upgrade datasette-cluster-map | (grep -v '^Requirement already satisfied:' || true)
 llm install --upgrade llm-{gemini,anthropic,perplexity,cmd} | (grep -v '^Requirement already satisfied:' || true)
 
