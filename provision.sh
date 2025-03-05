@@ -44,8 +44,8 @@ if [[ "$(whoami)" == shields ]] && ! (profiles status -type enrollment | grep -q
     git config --global user.email shields@msrl.com
 fi
 
-# Homebrew bundle sync. Update using `brew bundle dump -f --no-lock`.
-brew bundle --no-lock | (grep -v '^Using ' || true)
+# Homebrew bundle sync. Update using `brew bundle dump -f`.
+brew bundle | (grep -v '^Using ' || true)
 brew bundle cleanup --force
 # Homebrew upgrades. Run formulas and casks separately to prevent whiny messages.
 brew upgrade --formula
