@@ -299,7 +299,7 @@ when called with a prefix argument."
 
 (global-set-key [(meta p)] 'multi-term-next)
 
-(global-set-key [(meta \;)] 'comment-dwim)
+(global-set-key [(meta \:)] 'comment-dwim)
 
 (global-set-key [(meta h)] 'goto-last-change)
 
