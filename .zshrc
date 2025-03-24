@@ -92,7 +92,13 @@ alias kc='kubectl'
 alias kcy='kubectl -o yaml'
 
 # https://docs.brew.sh/Homebrew-and-Python
-alias p="$(brew --prefix python)/libexec/bin/python"
+p() {
+  if [ -n "$VIRTUAL_ENV" ]; then
+    "$VIRTUAL_ENV/bin/python" "$@"
+  else
+    "$(brew --prefix python)/libexec/bin/python" "$@"
+  fi
+}
 
 alias s='less'
 
