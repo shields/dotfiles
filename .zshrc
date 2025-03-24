@@ -162,5 +162,10 @@ plugins=(
 )
 source $ZSH/oh-my-zsh.sh
 
+unalias md  # from oh-my-zsh lib/directories.zsh
+md() {
+    mkdir -p "$1" && cd "$1"
+}
+
 # Initialize Starship prompt
 eval "$(starship init zsh)"
