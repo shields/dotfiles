@@ -84,7 +84,6 @@ brew "prettier"
 brew "pstree"
 brew "pulumi"
 brew "pyright"
-brew "python-lsp-server", link: false
 brew "python@3.11"
 brew "qrencode"
 brew "rclone"

@@ -18,6 +18,7 @@
         diff-hl
         dockerfile-mode
         doom-modeline
+        eglot
         editorconfig
         eterm-256color
         exec-path-from-shell
@@ -25,15 +26,11 @@
         fancy-compilation
         flx
         flycheck
-        flymake-ruff
         go-mode
         goto-last-change
         gptel
         hl-todo
         jsonnet-mode
-        lsp-mode
-        lsp-sourcekit
-        lsp-ui
         magit
         magit-delta
         markdown-mode
@@ -54,6 +51,8 @@
         yasnippet))
 
 (package-install-selected-packages t)
+
+(straight-pull-all)
 
 (nerd-icons-install-fonts 1)
 

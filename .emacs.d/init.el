@@ -18,6 +18,7 @@
 (load "~/.emacs.d/package-repos.el")
 
 ;;}}}
+
 ;; Bootstrap straight.el
 (defvar bootstrap-version)
 (let ((bootstrap-file
@@ -38,11 +39,10 @@
   :custom
   (straight-use-package-by-default t))
 
-;; Modern aggressive-indent setup
-(use-package aggressive-indent
-  :hook (prog-mode . aggressive-indent-mode)
-  :config
-  (global-aggressive-indent-mode 1))
+;; Work around https://github.com/joaotavora/eglot/discussions/1436
+(straight-use-package 'project)
+(require 'project)
+
 ;;{{{ Customization of commands
 
 ;; Disabled commands.  Hmmph.
@@ -171,7 +171,12 @@
 ;; (setq shields/set-hidden-pointer-at-cursor-timer
 ;;       (run-with-idle-timer 0.1 t #'shields/set-hidden-pointer-at-cursor))
 
-(global-aggressive-indent-mode 1)
+(use-package aggressive-indent
+  :hook (prog-mode . aggressive-indent-mode)
+  :config
+  (setq aggressive-indent-excluded-modes '(go-mode terraform-mode))
+  (global-aggressive-indent-mode 1))
+
 ;; Leave electric-indent enabled for modes that don't work well with
 ;; aggressive-indent.
 (electric-indent-mode 1)
@@ -457,11 +462,10 @@ stage it and display a diff."
 
 (setq godoc-at-point-function #'godoc-gogetdoc)
 
-;; LSP setup. https://github.com/golang/tools/blob/master/gopls/doc/emacs.md
-(add-hook 'go-mode-hook #'lsp-deferred)
+;; Eglot setup for Go
+(add-hook 'go-mode-hook #'eglot-ensure)
 
-;; aggressive-indent-mode interacts badly with LSP's reformatting.
-(add-to-list 'aggressive-indent-excluded-modes 'go-mode)
+;; Note: go-mode is excluded from aggressive-indent-mode in its configuration
 
 (add-hook 'go-mode-hook #'shields/suppress-whitespace-mode)
 
@@ -522,9 +526,7 @@ stage it and display a diff."
 ;;}}}
 ;;{{{ Terraform
 
-;; terraform-mode doesn't indent quite correctly, and will even undo
-;; changes made by format-on-save.
-(add-to-list 'aggressive-indent-excluded-modes 'terraform-mode)
+;; Note: terraform-mode is excluded from aggressive-indent-mode in its configuration
 
 ;;}}}
 ;;{{{ text-mode and indented-text-mode
@@ -639,7 +641,7 @@ stage it and display a diff."
 ;;{{{ Completion in code
 
 (defun shields/prog-capf ()
-  (cape-wrap-super #'lsp-completion-at-point))
+  (cape-wrap-super #'eglot-completion-at-point))
 (add-hook 'prog-mode-hook
           (lambda ()
             (setq-local completion-at-point-functions
@@ -711,8 +713,6 @@ stage it and display a diff."
 ;;{{{ Flycheck
 
 (add-hook 'after-init-hook #'global-flycheck-mode)
-
-(setq-default flycheck-indication-mode nil)
 
 ;; }}}
 ;;{{{ Flyspell
@@ -789,21 +789,19 @@ stage it and display a diff."
 (jka-compr-install)
 
 ;;}}}
-;;{{{ LSP
+;;{{{ Eglot
 
-(use-package lsp-mode
+(use-package eglot
   :custom
-  (lsp-auto-guess-root t)
-  :init
-  (setq lsp-keymap-prefix "C-c l")
-  :hook
-  (lsp-mode . lsp-enable-which-key-integration))
-
-(use-package lsp-ui
-  :custom
-  (lsp-ui-peek-always-show t)
-  (lsp-ui-sideline-show-hover t)
-  (lsp-ui-doc-enable nil))
+  (eglot-autoshutdown t)
+  (eglot-confirm-server-initiated-edits nil)
+  :config
+  ;; Set up key bindings
+  (define-key eglot-mode-map (kbd "C-c l r") #'eglot-rename)
+  (define-key eglot-mode-map (kbd "C-c l a") #'eglot-code-actions)
+  (define-key eglot-mode-map (kbd "C-c l f") #'eglot-format)
+  (define-key eglot-mode-map (kbd "C-c l d") #'eldoc)
+  (define-key eglot-mode-map (kbd "C-c l h") #'eglot-help-at-point))
 
 ;;;}}}
 ;;{{{ Markdown
@@ -843,47 +841,36 @@ stage it and display a diff."
 ;;}}}
 ;;{{{ Python
 
-(add-hook 'python-mode-hook #'lsp-deferred)
+;; Set up ruff server as the Python LSP
+(add-hook 'python-mode-hook #'eglot-ensure)
+(with-eval-after-load 'eglot
+  (add-to-list 'eglot-server-programs '(python-mode . ("ruff" "server"))))
 
 ;; "python" on macOS 10.15 is 2.7.
 (setq python-shell-interpreter "python3")
 
-;; https://beta.ruff.rs/docs/editor-integrations/#emacs-unofficial
-(require 'flymake-ruff)
-(add-hook 'python-mode-hook #'flymake-ruff-load)
-
 ;;}}}
 ;;{{{ Rust
 
-;; https://robert.kra.hn/posts/rust-emacs-setup/
 (use-package rustic
   :ensure
   :bind (:map rustic-mode-map
-              ("M-j" . lsp-ui-imenu)
-              ("M-?" . lsp-find-references)
+              ("M-?" . xref-find-references)
               ("C-c C-c l" . flycheck-list-errors)
-              ("C-c C-c a" . lsp-execute-code-action)
-              ("C-c C-c r" . lsp-rename)
-              ("C-c C-c q" . lsp-workspace-restart)
-              ("C-c C-c Q" . lsp-workspace-shutdown)
-              ("C-c C-c s" . lsp-rust-analyzer-status))
+              ("C-c C-c r" . eglot-rename)
+              ("C-c C-c a" . eglot-code-actions))
+  :config
+  (add-hook 'rustic-mode-hook #'eglot-ensure)
   :custom
-  (lsp-rust-analyzer-cargo-watch-command "clippy")
-  (lsp-rust-analyzer-server-display-inlay-hints t)
-  (lsp-rust-analyzer-display-lifetime-elision-hints-enable "skip_trivial")
-  (lsp-rust-analyzer-display-chaining-hints t)
-  (lsp-rust-analyzer-display-lifetime-elision-hints-use-parameter-names nil)
-  (lsp-rust-analyzer-display-closure-return-type-hints t)
-  (lsp-rust-analyzer-display-parameter-hints nil)
-  (lsp-rust-analyzer-display-reborrow-hints nil))
+  (rustic-analyzer-command '("rust-analyzer"))
+  (eglot-ignored-server-capabilities '(:inlayHintProvider)))
 
 ;;}}}
 ;;{{{ Swift
 
-(use-package swift-mode)
-
-(use-package lsp-sourcekit
-  :after lsp-mode)
+(use-package swift-mode
+  :config
+  (add-hook 'swift-mode-hook #'eglot-ensure))
 
 ;;}}}
 ;;{{{ TRAMP
@@ -1035,7 +1022,7 @@ This function is useful for binding to a hotkey."
  '(ivy-minibuffer-match-face-4 ((t (:inherit ivy-minibuffer-match-face-3))))
  '(lazy-highlight ((t (:inherit match))))
  '(link-visited ((t (:inherit link))))
- '(lsp-face-highlight-textual ((t (:background "#d0ffd0"))))
+ '(eglot-highlight-symbol-face ((t (:background "#d0ffd0"))))
  '(markdown-code-face ((t (:inherit fixed-pitch :background "#f850f850f850" :height 0.8))))
  '(markdown-header-face ((t (:weight bold))))
  '(match ((t (:background "yellow1" :foreground "black"))))
