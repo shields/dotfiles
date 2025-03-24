@@ -636,17 +636,10 @@ stage it and display a diff."
 (add-hook 'initial-calendar-window-hook 'mark-calendar-holidays)
 
 ;;}}}
-;;{{{ Codeium
-
-(use-package codeium
-  :straight (:type git :host github :repo "Exafunction/codeium.el")
-  :config
-  (setq codeium-api-enabled
-        (lambda (api)
-          (memq api '(GetCompletions Heartbeat CancelRequest GetAuthToken RegisterUser auth-redirect AcceptCompletion)))))
+;;{{{ Completion in code
 
 (defun shields/prog-capf ()
-  (cape-wrap-super #'codeium-completion-at-point #'lsp-completion-at-point))
+  (cape-wrap-super #'lsp-completion-at-point))
 (add-hook 'prog-mode-hook
           (lambda ()
             (setq-local completion-at-point-functions
