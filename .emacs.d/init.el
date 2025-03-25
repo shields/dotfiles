@@ -795,7 +795,16 @@ stage it and display a diff."
   :custom
   (eglot-autoshutdown t)
   (eglot-confirm-server-initiated-edits nil)
+  (eldoc-echo-area-use-multiline-p nil)
+  (eldoc-display-functions '(eldoc-display-in-buffer))
+  (eldoc-idle-delay 0.1)
   :config
+  ;; Configure eldoc to display in side window
+  (add-to-list 'display-buffer-alist
+               '("^\\*eldoc\\*"
+                 (display-buffer-in-side-window)
+                 (side . bottom)
+                 (window-height . 0.3)))
   ;; Set up key bindings
   (define-key eglot-mode-map (kbd "C-c l r") #'eglot-rename)
   (define-key eglot-mode-map (kbd "C-c l a") #'eglot-code-actions)
@@ -844,7 +853,8 @@ stage it and display a diff."
 ;; Set up ruff server as the Python LSP
 (add-hook 'python-mode-hook #'eglot-ensure)
 (with-eval-after-load 'eglot
-  (add-to-list 'eglot-server-programs '(python-mode . ("ruff" "server"))))
+  (add-to-list 'eglot-server-programs
+               '(python-mode . ("basedpyright-langserver" "--stdio"))))
 
 ;; "python" on macOS 10.15 is 2.7.
 (setq python-shell-interpreter "python3")
