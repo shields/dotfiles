@@ -794,7 +794,7 @@ stage it and display a diff."
 (use-package eglot
   :custom
   (eglot-autoshutdown t)
-  (eglot-confirm-server-initiated-edits nil)
+  (eglot-confirm-server-edits nil)
   (eldoc-echo-area-use-multiline-p nil)
   (eldoc-display-functions '(eldoc-display-in-buffer))
   (eldoc-idle-delay 0.1)
