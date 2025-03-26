@@ -850,11 +850,16 @@ stage it and display a diff."
 ;;}}}
 ;;{{{ Python
 
-;; Set up ruff server as the Python LSP
 (add-hook 'python-mode-hook #'eglot-ensure)
 (with-eval-after-load 'eglot
   (add-to-list 'eglot-server-programs
                '(python-mode . ("basedpyright-langserver" "--stdio"))))
+
+;; Enable Ruff as an additional source of warnings. This calls
+;; flymake-ruff-load for every Eglot mode, but it is a no-op for
+;; non-Python modes.
+(use-package flymake-ruff
+  :hook (eglot-managed-mode . flymake-ruff-load))
 
 ;; "python" on macOS 10.15 is 2.7.
 (setq python-shell-interpreter "python3")
