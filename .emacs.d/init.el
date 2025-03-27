@@ -715,6 +715,45 @@ stage it and display a diff."
 (add-hook 'after-init-hook #'global-flycheck-mode)
 
 ;; }}}
+;;{{{ Flymake
+
+(defun shields/clean-flymake-diagnostic-message (message)
+  (cond
+   ((string-match "^\\(?:based\\)?pyright \\[[^]]+\\]: \\(.*\\)" message)
+    (match-string 1 message))
+   ((string-match "^Ruff: [A-Z0-9]+ \\(.*\\)" message)
+    (match-string 1 message))
+   (t message)))
+
+(defun shields/flymake-make-diagnostic-advice (args)
+  (let* ((locus (nth 0 args))
+         (beg (nth 1 args))
+         (end (nth 2 args))
+         (type (nth 3 args))
+         (text (nth 4 args))
+         (data (nth 5 args))
+         (overlay-properties (nth 6 args))
+         (cleaned-text (shields/clean-flymake-diagnostic-message text)))
+    (list locus beg end type cleaned-text data overlay-properties)))
+
+(ert-deftest shields/test-clean-flymake-diagnostic-message ()
+  (should (string=
+           (shields/clean-flymake-diagnostic-message "pyright [reportUnknownVariableType]: Type of \"i\" is unknown")
+           "Type of \"i\" is unknown"))
+  (should (string=
+           (shields/clean-flymake-diagnostic-message "basedpyright [reportUnknownVariableType]: Type of \"j\" is unknown")
+           "Type of \"j\" is unknown"))
+  (should (string=
+           (shields/clean-flymake-diagnostic-message "Ruff: F821 Undefined name `y`")
+           "Undefined name `y`"))
+  (should (string=
+           (shields/clean-flymake-diagnostic-message "This is a normal message")
+           "This is a normal message")))
+
+(with-eval-after-load 'flymake
+  (advice-add 'flymake-make-diagnostic :filter-args #'shields/flymake-make-diagnostic-advice))
+
+;;}}}
 ;;{{{ Flyspell
 
 (require 'ispell)
