@@ -42,5 +42,5 @@ symbol = ""
 disabled = false
 
 [character]
-success_symbol = "[\\$](bold green)"
+success_symbol = "[\\$](bold #006400)"
 error_symbol = "[\\$](bold red)"
