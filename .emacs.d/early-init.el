@@ -1,17 +1,3 @@
-(require 'package)
-
-;; Set exactly this instead of using add-to-list, because the default
-;; recklessly uses HTTP/80.
-(setq package-archives
-      '(("gnu" . "https://elpa.gnu.org/packages/")
-	("melpa" . "https://melpa.org/packages/")))
-
-(setq package-archive-priorities
-      '(("gnu" . 0)
-	("melpa" . 50)))
-
-(package-initialize)
-
 ;; Straight bootstrap, pasted from its README.md.
 (defvar bootstrap-version)
 (let ((bootstrap-file
@@ -28,3 +14,16 @@
       (goto-char (point-max))
       (eval-print-last-sexp)))
   (load bootstrap-file nil 'nomessage))
+
+(setq package-enable-at-startup nil)
+
+;; Configure use-package to use straight.el
+(use-package straight
+  :custom
+  (straight-use-package-by-default t))
+
+;; Work around https://github.com/joaotavora/eglot/discussions/1436
+(straight-use-package 'project)
+(require 'project)
+(straight-use-package 'flymake)
+(require 'flymake)

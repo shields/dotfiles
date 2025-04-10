@@ -6,42 +6,44 @@
 ;;{{{ Preliminaries
 
 (when (eq system-type 'darwin)
+  (use-package exec-path-from-shell)
   (exec-path-from-shell-initialize))
 
 ;; Write customizations to a separate file instead of appending here.
 (setq custom-file "~/.emacs.d/custom.el")
 (load custom-file)
 
-(require 'use-package-ensure)
-(setq use-package-always-ensure t)
-
-(load "~/.emacs.d/package-repos.el")
-
 ;;}}}
 
-;; Bootstrap straight.el
-(defvar bootstrap-version)
-(let ((bootstrap-file
-       (expand-file-name "straight/repos/straight.el/bootstrap.el" user-emacs-directory))
-      (bootstrap-version 6))
-  (unless (file-exists-p bootstrap-file)
-    (with-current-buffer
-        (url-retrieve-synchronously
-         "https://raw.githubusercontent.com/radian-software/straight.el/develop/install.el"
-         'silent 'inhibit-cookies)
-      (goto-char (point-max))
-      (eval-print-last-sexp)))
-  (load bootstrap-file nil 'nomessage))
-
-;; Configure use-package to use straight.el
-(straight-use-package 'use-package)
-(use-package straight
-  :custom
-  (straight-use-package-by-default t))
-
-;; Work around https://github.com/joaotavora/eglot/discussions/1436
-(straight-use-package 'project)
-(require 'project)
+;; TODO: Organize these legacy imports
+(use-package anzu)
+(use-package apheleia)
+(use-package avy)
+(use-package cape)
+(use-package crux)
+(use-package dap-mode)
+(use-package dash-at-point)
+(use-package dockerfile-mode)
+(use-package doom-modeline)
+(use-package eterm-256color)
+(use-package flx)
+(use-package go-mode)
+(use-package goto-last-change)
+(use-package hl-todo)
+(use-package jsonnet-mode)
+(use-package magit)
+(use-package magit-delta)
+(use-package markdown-mode)
+(use-package minions)
+(use-package multi-term)
+(use-package posframe)
+(use-package ruff-format)
+(use-package smartparens)
+(use-package symbol-overlay)
+(use-package terraform-mode)
+(use-package typo)
+(use-package yaml-mode)
+(use-package yasnippet)
 
 ;;{{{ Customization of commands
 
@@ -106,8 +108,10 @@
 (set-fontset-font
  t 'symbol (font-spec :family "Apple Color Emoji") nil 'prepend)
 
-(global-diff-hl-mode 1)
-(diff-hl-flydiff-mode 1)
+(use-package diff-hl
+  :config
+  (global-diff-hl-mode 1)
+  (diff-hl-flydiff-mode 1))
 (eval-after-load "magit"
   '(add-hook 'magit-post-refresh-hook 'diff-hl-magit-post-refresh))
 
@@ -710,11 +714,6 @@ stage it and display a diff."
 (setq dired-use-ls-dired t)
 
 ;;}}}
-;;{{{ Flycheck
-
-(add-hook 'after-init-hook #'global-flycheck-mode)
-
-;; }}}
 ;;{{{ Flymake
 
 (defun shields/clean-flymake-diagnostic-message (message)
@@ -889,7 +888,7 @@ stage it and display a diff."
 ;;}}}
 ;;{{{ Python
 
-(add-hook 'python-mode-hook #'eglot-ensure)
+(add-hook 'python-ts-mode-hook #'eglot-ensure)
 (with-eval-after-load 'eglot
   (add-to-list 'eglot-server-programs
                '(python-mode . ("basedpyright-langserver" "--stdio"))))
@@ -954,7 +953,7 @@ stage it and display a diff."
 ;;{{{ Aider
 
 (use-package aider
-  :straight (:host github :repo "tninja/aider.el" :files ("aider.el"))
+  :straight (:host github :repo "tninja/aider.el")
   :config
   (setq aider-args nil)
   (global-set-key (kbd "C-c a") 'aider-transient-menu))

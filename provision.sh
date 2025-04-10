@@ -260,11 +260,7 @@ killall ControlCenter Finder cfprefsd
 # image directly there, so it doesn't reference this source directory.
 desktoppr "$HOME/Library/Application Support/desktoppr/navy_blue.png"
 
-# Bootstrap Emacs packages
-if ! cmp --silent "$HOME/.emacs.d/.bootstrap-stamp" <(emacs --version); then
-    emacs -q --batch --script .emacs.d/provision.el
-    emacs --version >> "$HOME/.emacs.d/.bootstrap-stamp"
-fi
+emacs --batch --script .emacs.d/provision.el
 
 # rustup
 rustup-init --no-modify-path -y > /dev/null
