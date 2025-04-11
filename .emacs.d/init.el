@@ -15,35 +15,6 @@
 
 ;;}}}
 
-;; TODO: Organize these legacy imports
-(use-package anzu)
-(use-package apheleia)
-(use-package avy)
-(use-package cape)
-(use-package crux)
-(use-package dap-mode)
-(use-package dash-at-point)
-(use-package dockerfile-mode)
-(use-package doom-modeline)
-(use-package eterm-256color)
-(use-package flx)
-(use-package go-mode)
-(use-package goto-last-change)
-(use-package hl-todo)
-(use-package jsonnet-mode)
-(use-package magit)
-(use-package magit-delta)
-(use-package markdown-mode)
-(use-package minions)
-(use-package multi-term)
-(use-package posframe)
-(use-package ruff-format)
-(use-package smartparens)
-(use-package symbol-overlay)
-(use-package terraform-mode)
-(use-package typo)
-(use-package yaml-mode)
-(use-package yasnippet)
 
 ;;{{{ Customization of commands
 
@@ -57,6 +28,8 @@
 ;;}}}
 ;;{{{ Display
 
+(use-package hl-todo)
+(use-package symbol-overlay)
 (setq inhibit-startup-message t)
 
 (setq initial-scratch-message nil)
@@ -118,6 +91,7 @@
 ;; Enable smartparens.  Note that it requires configuration, and that
 ;; a stock configuration is provided by smartparens-config.  If you
 ;; just let it autoload, it will work, but not well.
+(use-package smartparens)
 (require 'smartparens-config)
 (smartparens-global-mode 1)
 (show-smartparens-global-mode 1)
@@ -151,6 +125,10 @@
 ;;}}}
 ;;{{{ Editing behavior
 
+(use-package cape)
+(use-package crux)
+(use-package goto-last-change)
+(use-package posframe)
 (delete-selection-mode 1)
 
 (add-hook 'prog-mode-hook
@@ -187,7 +165,7 @@
 
 (kill-ring-deindent-mode t)
 
-(require 'apheleia)
+(use-package apheleia)
 (apheleia-global-mode 1)
 ;; Replace black with ruff, and gofmt with goimports.
 (dolist (el apheleia-mode-alist)
@@ -233,6 +211,8 @@
 ;;}}}
 ;;{{{ Mode line
 
+(use-package doom-modeline)
+(use-package minions)
 (doom-modeline-mode 1)
 
 (setq doom-modeline-buffer-encoding nil)
@@ -423,11 +403,13 @@ stage it and display a diff."
 ;; Minor modes
 ;;{{{ anzu
 
+(use-package anzu)
 (global-anzu-mode 1)
 
 ;;}}}
 ;;{{{ avy
 
+(use-package avy)
 ;; QGMLWY home row, ordered by finger strength, starting with left
 ;; because S-k is on the right.
 (setq avy-keys '(?n ?a ?t ?e ?s ?o ?d ?h ?r ?i)) ; QGMLWY home row
@@ -457,6 +439,11 @@ stage it and display a diff."
 (setq c-cleanup-list '(brace-else-brace defun-close-semi))
 
 ;;}}}
+;;{{{ dockerfile-mode
+
+(use-package dockerfile-mode)
+
+;;}}}
 ;;{{{ emacs-lisp-mode
 
 (eval-after-load "elisp-mode"
@@ -473,6 +460,7 @@ stage it and display a diff."
 ;;}}}
 ;;{{{ go-mode
 
+(use-package go-mode)
 (setq godoc-at-point-function #'godoc-gogetdoc)
 
 ;; Eglot setup for Go
@@ -494,6 +482,11 @@ stage it and display a diff."
 (define-key help-mode-map [(q)] #'previous-buffer)
 
 ;;}}}
+;;{{{ jsonnet-mode
+
+(use-package jsonnet-mode)
+
+;;}}}
 ;;{{{ makefile-mode
 
 (add-hook 'makefile-mode-hook
@@ -503,6 +496,8 @@ stage it and display a diff."
 ;;}}}
 ;;{{{ Magit
 
+(use-package magit)
+(use-package magit-delta)
 (eval-after-load "magit"
   '(magit-wip-mode 1))
 (setq magit-no-confirm '(safe-with-wip))
@@ -526,6 +521,8 @@ stage it and display a diff."
 ;;}}}
 ;;{{{ term-mode
 
+(use-package eterm-256color)
+(use-package multi-term)
 ;; After changing these, run (multi-term-keystroke-setup).
 (setq term-bind-key-alist
       '(("C-c C-c" . term-interrupt-subjob)
@@ -544,6 +541,7 @@ stage it and display a diff."
 ;;}}}
 ;;{{{ Terraform
 
+(use-package terraform-mode)
 ;; Note: terraform-mode is excluded from aggressive-indent-mode in its configuration
 
 ;;}}}
@@ -617,7 +615,11 @@ stage it and display a diff."
                                         (insert-string "&#8217;")))))))
 
 ;;}}}
+;;{{{ yaml-mode
 
+(use-package yaml-mode)
+
+;;}}}
 ;;; Features
 ;;{{{ Calc
 
@@ -658,6 +660,7 @@ stage it and display a diff."
 ;;}}}
 ;;{{{ Completion in code
 
+(use-package flx)
 (defun shields/prog-capf ()
   (cape-wrap-super #'eglot-completion-at-point))
 (add-hook 'prog-mode-hook
@@ -672,6 +675,7 @@ stage it and display a diff."
 ;;}}}
 ;;{{{ compilation and grep
 
+(use-package dash-at-point)
 (setq compilation-message-face 'default)
 
 (setq compilation-always-kill t)
@@ -704,6 +708,7 @@ stage it and display a diff."
 ;;}}}
 ;;{{{ DAP (https://emacs-lsp.github.io/dap-mode/)
 
+(use-package dap-mode)
 (dap-mode 1)
 (dap-ui-mode 1)
 (dap-tooltip-mode 1)
@@ -867,6 +872,8 @@ stage it and display a diff."
 ;;;}}}
 ;;{{{ Markdown
 
+(use-package markdown-mode)
+(use-package typo)
 (add-hook 'markdown-mode-hook
           #'(lambda () (variable-pitch-mode 1)))
 
@@ -902,6 +909,7 @@ stage it and display a diff."
 ;;}}}
 ;;{{{ Python
 
+(use-package ruff-format)
 (add-hook 'python-ts-mode-hook #'eglot-ensure)
 (with-eval-after-load 'eglot
   (add-to-list 'eglot-server-programs
@@ -959,6 +967,7 @@ stage it and display a diff."
 ;;}}}
 ;;{{{ yasnippet
 
+(use-package yasnippet)
 ;;(add-hook 'prog-mode-hook #'yas-minor-mode-on)
 
 ;;}}}
