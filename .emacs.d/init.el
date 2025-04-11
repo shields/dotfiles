@@ -163,7 +163,7 @@
 (use-package aggressive-indent
   :hook (prog-mode . aggressive-indent-mode)
   :config
-  (setq aggressive-indent-excluded-modes '(go-mode terraform-mode))
+  (setq aggressive-indent-excluded-modes '(go-mode go-ts-mode terraform-mode))
   (global-aggressive-indent-mode 1))
 
 ;; Leave electric-indent enabled for modes that don't work well with
@@ -436,16 +436,17 @@ stage it and display a diff."
           #'shields/eval-expression-minibuffer-setup)
 
 ;;}}}
-;;{{{ go-mode
+;;{{{ Go
 
-(use-package go-mode
+(use-package go-ts-mode
   :custom
   (godoc-at-point-function #'godoc-gogetdoc)
   :hook
-  (go-mode . eglot-ensure)
-  (go-mode . shields/suppress-whitespace-mode)
-  ;; Note: go-mode is excluded from aggressive-indent-mode in its configuration
-  )
+  (go-ts-mode . eglot-ensure)
+  (go-ts-mode . shields/suppress-whitespace-mode)
+  (go-mod-ts-mode . shields/suppress-whitespace-mod)
+  :config
+  (setf (alist-get 'go-dot-mod-mode major-mode-remap-alist) #'go-mod-ts-mode))
 
 ;;}}}
 ;;{{{ help-mode
