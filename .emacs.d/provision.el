@@ -5,4 +5,6 @@
 
 (straight-pull-all)
 
+(straight-remove-unused-repos t)
+
 (nerd-icons-install-fonts 1)
