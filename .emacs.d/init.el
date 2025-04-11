@@ -197,7 +197,6 @@
     (setf (cdr el) 'goimports)))
 
 (use-package editorconfig
-  :ensure t
   :config
   (editorconfig-mode 1))
 
@@ -916,7 +915,6 @@ stage it and display a diff."
 ;;{{{ Rust
 
 (use-package rustic
-  :ensure
   :bind (:map rustic-mode-map
               ("M-?" . xref-find-references)
               ("C-c C-c l" . flycheck-list-errors)

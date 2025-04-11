@@ -27,3 +27,5 @@
 (require 'project)
 (straight-use-package 'flymake)
 (require 'flymake)
+
+(setq use-package-always-ensure t)
