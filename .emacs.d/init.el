@@ -28,17 +28,34 @@
 ;;}}}
 ;;{{{ Display
 
-(use-package hl-todo)
-(use-package symbol-overlay)
-(setq inhibit-startup-message t)
+(use-package hl-todo
+  :config
+  (global-hl-todo-mode 1)
+  (setq hl-todo-keyword-faces
+        '(("FIXME" . "#ff0000")
+          ("XXX+"  . "#ff0000"))))
 
-(setq initial-scratch-message nil)
+(use-package symbol-overlay
+  :hook (prog-mode . symbol-overlay-mode)
+  :config
+  (face-spec-set 'symbol-overlay-default-face
+                 '((t :weight bold :inherit nil)))
+  (setq symbol-overlay-idle-time 0.1))
 
-;; Don't close windows because they're too short.  Sometimes a
-;; single-line (plus mode line) window can be useful.
-(setq window-min-height 2)
+;; Basic interface settings
+(setq inhibit-startup-message t
+      initial-scratch-message nil
+      window-min-height 2
+      blink-matching-delay 0.25
+      tab-bar-show 1
+      tab-bar-close-last-tab-choice 'delete-frame)
 
-;; Highlight tabs and trailing spaces.
+;; Disable various visual elements
+(blink-cursor-mode 0)
+(menu-bar-mode 0)
+(tool-bar-mode 0)
+
+;; Highlight tabs and trailing spaces
 (setq-default whitespace-style
               '(face
                 tabs trailing space-before-tab space-after-tab tab-mark
@@ -46,16 +63,6 @@
 (global-whitespace-mode 1)
 (defun shields/suppress-whitespace-mode ()
   (setq-local whitespace-style nil))
-
-(blink-cursor-mode 0)
-
-(setq blink-matching-delay 0.25)
-
-(menu-bar-mode 0)
-(tool-bar-mode 0)
-
-(setq tab-bar-show 1)
-(setq tab-bar-close-last-tab-choice 'delete-frame)
 
 ;; Enable visual bell.  But on macOS, the visual bell pops up "the
 ;; standard NextStep image 'caution'" (src/nsterm.m).  This is not
@@ -84,31 +91,23 @@
 (use-package diff-hl
   :config
   (global-diff-hl-mode 1)
-  (diff-hl-flydiff-mode 1))
-(eval-after-load "magit"
-  '(add-hook 'magit-post-refresh-hook 'diff-hl-magit-post-refresh))
+  (diff-hl-flydiff-mode 1)
+  :hook
+  (magit-post-refresh . diff-hl-magit-post-refresh))
 
 ;; Enable smartparens.  Note that it requires configuration, and that
 ;; a stock configuration is provided by smartparens-config.  If you
 ;; just let it autoload, it will work, but not well.
-(use-package smartparens)
-(require 'smartparens-config)
-(smartparens-global-mode 1)
-(show-smartparens-global-mode 1)
-(setq sp-show-pair-delay 0)
-(setq sp-ignore-modes-list nil)                 ; Even the minibuffer!
+(use-package smartparens
+  :demand t
+  :config
+  (require 'smartparens-config)
+  (smartparens-global-mode 1)
+  (show-smartparens-global-mode 1)
+  (setq sp-show-pair-delay 0
+        sp-ignore-modes-list nil))              ; Even the minibuffer!
 
-(global-hl-todo-mode 1)
-(setq hl-todo-keyword-faces
-      '(("FIXME" . "#ff0000")
-        ("XXX+"  . "#ff0000")))
-
-(eval-after-load "symbol-overlay"
-  '(face-spec-set 'symbol-overlay-default-face
-                  '((t :weight bold :inherit nil))))
-(add-hook 'prog-mode-hook
-          #'(lambda () (symbol-overlay-mode 1)))
-(setq symbol-overlay-idle-time 0.1)
+;; These settings are now in the use-package declarations above
 
 (setq scroll-error-top-bottom t)
 
@@ -126,17 +125,25 @@
 ;;{{{ Editing behavior
 
 (use-package cape)
-(use-package crux)
-(use-package goto-last-change)
+
+(use-package crux
+  :bind (("C-k" . crux-smart-kill-line)
+         ("s-o" . crux-smart-open-line)
+         ("C-c d" . crux-duplicate-current-line-or-region)
+         ("C-c e" . crux-eval-and-replace)))
+
+(use-package goto-last-change
+  :bind ("M-h" . goto-last-change))
+
 (use-package posframe)
+
+;; Basic editing settings
 (delete-selection-mode 1)
-
-(add-hook 'prog-mode-hook
-          #'(lambda () (subword-mode 1)))
-
 (setq-default indent-tabs-mode nil)
-
 (setq line-move-visual nil)
+
+;; Enable subword-mode in programming modes
+(add-hook 'prog-mode-hook #'subword-mode)
 
 ;; Try to have pointer follow cursor.  This doesn't currently work
 ;; (Emacs 26.3, macOS 10.15.4) because (frame-pointer-visible-p) often
@@ -252,19 +259,20 @@ when called with a prefix argument."
 ;;}}}
 ;;{{{ Global keybindings
 
-;; Option (or Alt) ⌥: ignore so as to allow system-wide symbol input mechanism.
+;; macOS modifier key setup
+;; Option (or Alt) ⌥: ignore so as to allow system-wide symbol input mechanism
 (setq ns-alternate-modifier nil)
 (setq ns-right-alternate-modifier nil)
 ;; Command (or Cmd) ⌘
 (setq ns-command-modifier 'meta)
 (setq ns-right-command-modifier 'meta)
+
 ;; macOS only supports four modifiers, but we use Karabiner elements to map two
 ;; additional keys to F24, then set them to a non-repeating `C-x @ s', in Emacs
 ;; only, to emulate Super.
-;;
-;; Align with other standard macOS shortcuts.
-;; https://support.apple.com/en-us/102650
-(global-set-key [(meta x)] #'kill-region) ; !
+
+;; Standard macOS shortcuts - https://support.apple.com/en-us/102650
+(global-set-key [(meta x)] #'kill-region)
 (global-set-key [(super x)] #'execute-extended-command)
 (global-set-key [(meta c)] #'copy-region-as-kill)
 (global-set-key [(meta v)] #'yank)
@@ -272,87 +280,48 @@ when called with a prefix argument."
 (global-set-key [(meta a)] #'mark-whole-buffer)
 (global-set-key [(meta f)] #'isearch-forward)
 (global-set-key [(meta o)] #'find-file)
-(global-set-key [(meta t)] #'tab-bar-new-tab)
-(global-set-key [(meta w)] #'tab-bar-close-tab)
 
+;; Navigation
 (global-set-key [(home)] #'move-beginning-of-line)
 (global-set-key [(end)] #'move-end-of-line)
-
-(global-set-key [(control c) (F)] 'find-file-at-point)
-
-(global-set-key [(meta n)] 'next-error)
-
-(global-set-key [(control c) (d)] 'dictionary-search)
-
-(global-set-key [(control h) (a)] 'counsel-apropos)
-
-;; Not M-SPC because that's Spotlight or Alfred.
-(global-set-key [(super space)] 'fixup-whitespace)
-
-(global-set-key [(control k)] #'crux-smart-kill-line)
-
-(global-set-key [(control backspace)] 'join-line)
-
-(global-set-key [(super o)] #'crux-smart-open-line)
-
-(global-set-key [(meta p)] 'multi-term-next)
-
-(global-set-key [(meta \:)] 'comment-dwim)
-
-(global-set-key [(meta h)] 'goto-last-change)
-
-(global-set-key [(meta \')] 'next-multiframe-window)
-(global-set-key [(meta \")] 'previous-multiframe-window)
-(global-set-key [(control x) (o)] nil)
-
-(global-set-key [(meta m)] 'magit-status)
-
-(global-set-key [(meta v)] #'yank)
-;; Break old C-v habits now that M-v is paste (yank).
-(global-set-key [(control v)] nil)
-
-(global-set-key [(super .)] #'dash-at-point)
-(global-set-key [(meta .)] #'xref-find-definitions)
-(global-set-key [(meta \,)] #'xref-pop-marker-stack)
-
-(global-set-key [(meta /)] 'completion-at-point)
-
-(global-set-key [(meta k)] #'avy-goto-char-timer)
-
-(global-set-key [(meta f)] nil)
-
-(global-set-key [(meta g)] #'grep)
-
+(global-set-key [(meta \')] #'next-multiframe-window)
+(global-set-key [(meta \")] #'previous-multiframe-window)
+(global-set-key [(meta n)] #'next-error)
 (global-set-key [(meta t)] #'previous-buffer)
 (global-set-key [(meta T)] #'next-buffer)
 (global-set-key [(control t)] #'switch-to-buffer)
-(global-set-key [(control x) (b)] nil)
-
-;; Only useful on keyboards with arrow keys:
 (global-set-key [(meta up)] #'move-line-up)
 (global-set-key [(meta down)] #'move-line-down)
 
-(global-set-key [(control w)] nil)
+;; Coding
+(global-set-key [(meta /)] #'completion-at-point)
+(global-set-key [(meta \:)] #'comment-dwim)
+(global-set-key [(control c) (F)] #'find-file-at-point)
+(global-set-key [(super space)] #'fixup-whitespace)
+(global-set-key [(control backspace)] #'join-line)
+(global-set-key [(meta g)] #'grep)
+(global-set-key [(meta r)] #'replace-string)
+(global-set-key [s-mouse-1] #'ffap-at-mouse)
 
 ;; Put M-ESC (i.e., ESC ESC) back to the way it was when I learned
 ;; Emacs.  Apparently this changed in 1994.
 (global-set-key "\e\e" #'eval-expression)
 
-(global-set-key [(meta b)] #'shields/open-dwim)
-
-(global-set-key [(meta s)] #'shields/save-dwim)
-
+;; Disable some keys
+(global-set-key [(control x) (o)] nil)
+(global-set-key [(control x) (b)] nil)
+(global-set-key [(control v)] nil)
+(global-set-key [(control w)] nil)
+(global-set-key [(meta f)] nil)
 (global-set-key [(meta q)] nil)
 
-(global-set-key [(meta r)] #'replace-string)
-
-(global-set-key [s-mouse-1] 'ffap-at-mouse)
-
-(global-set-key [(control c) (d)] #'crux-duplicate-current-line-or-region)
-
-(global-set-key [(control c) (e)] #'crux-eval-and-replace)
+;; Other keybindings are organized with their respective packages using :bind
 
 ;;}}}
+
+(use-package xref
+  :bind (("M-." . xref-find-definitions)
+         ("M-," . xref-pop-marker-stack)))
 
 ;;{{{ New commands
 
@@ -366,6 +335,11 @@ when called with a prefix argument."
   (forward-line 1)
   (transpose-lines 1)
   (forward-line -1))
+
+(use-package project
+  :bind ("M-b" . shields/open-dwim)
+  :custom
+  (project-mode-line t))
 
 (defun shields/open-dwim (arg)
   "Open in the current project if in a project, otherwise whatever."
@@ -409,7 +383,8 @@ stage it and display a diff."
 ;;}}}
 ;;{{{ avy
 
-(use-package avy)
+(use-package avy
+  :bind ("M-k" . avy-goto-char-timer))
 ;; QGMLWY home row, ordered by finger strength, starting with left
 ;; because S-k is on the right.
 (setq avy-keys '(?n ?a ?t ?e ?s ?o ?d ?h ?r ?i)) ; QGMLWY home row
@@ -430,13 +405,14 @@ stage it and display a diff."
 ;;; Major modes
 ;;{{{ c-mode
 
-(defun shields/c-mode-setup ()
-  (c-set-style "k&r")
-  (setq c-basic-offset 4)
-  (define-key c-mode-map "\C-c\C-c" 'compile))
-(add-hook 'c-mode-hook #'shields/c-mode-setup)
-
+;; C mode configuration
 (setq c-cleanup-list '(brace-else-brace defun-close-semi))
+
+(add-hook 'c-mode-hook
+          (lambda ()
+            (c-set-style "k&r")
+            (setq c-basic-offset 4)
+            (local-set-key "\C-c\C-c" #'compile)))
 
 ;;}}}
 ;;{{{ dockerfile-mode
@@ -446,40 +422,43 @@ stage it and display a diff."
 ;;}}}
 ;;{{{ emacs-lisp-mode
 
-(eval-after-load "elisp-mode"
-  '(define-key emacs-lisp-mode-map [(meta return)] #'eval-last-sexp))
+;; Emacs Lisp mode configuration
+(with-eval-after-load 'elisp-mode
+  (define-key emacs-lisp-mode-map [(meta return)] #'eval-last-sexp))
 
 (defun shields/eval-expression-minibuffer-setup ()
   (insert "()")
   (backward-char)
   ;; Don't smartparen-pair on '.
   (sp-update-local-pairs '(:open "'" :close nil :actions nil)))
+
 (add-hook 'eval-expression-minibuffer-setup-hook
           #'shields/eval-expression-minibuffer-setup)
 
 ;;}}}
 ;;{{{ go-mode
 
-(use-package go-mode)
-(setq godoc-at-point-function #'godoc-gogetdoc)
-
-;; Eglot setup for Go
-(add-hook 'go-mode-hook #'eglot-ensure)
-
-;; Note: go-mode is excluded from aggressive-indent-mode in its configuration
-
-(add-hook 'go-mode-hook #'shields/suppress-whitespace-mode)
+(use-package go-mode
+  :custom
+  (godoc-at-point-function #'godoc-gogetdoc)
+  :hook
+  (go-mode . eglot-ensure)
+  (go-mode . shields/suppress-whitespace-mode)
+  ;; Note: go-mode is excluded from aggressive-indent-mode in its configuration
+  )
 
 ;;}}}
 ;;{{{ help-mode
 
+;; Help mode configuration
 (setq help-window-select t)
 
 (customize-set-variable
  'display-buffer-alist
  '(("\\*Help\\*" display-buffer-same-window)))
 
-(define-key help-mode-map [(q)] #'previous-buffer)
+(with-eval-after-load 'help-mode
+  (define-key help-mode-map [(q)] #'previous-buffer))
 
 ;;}}}
 ;;{{{ jsonnet-mode
@@ -489,29 +468,29 @@ stage it and display a diff."
 ;;}}}
 ;;{{{ makefile-mode
 
+;; Make-mode configuration
 (add-hook 'makefile-mode-hook
-          '(lambda ()
-             (define-key makefile-mode-map "\C-c\C-c" 'compile)))
+          (lambda ()
+            (local-set-key "\C-c\C-c" #'compile)))
 
 ;;}}}
 ;;{{{ Magit
 
-(use-package magit)
+(use-package magit
+  :bind (("M-m" . magit-status)
+         ("M-s" . shields/save-dwim)
+         :map magit-mode-map
+         ("=" . (lambda ()
+                  (interactive)
+                  (magit-diff-range "origin/main"))))
+  :custom
+  (magit-no-confirm '(safe-with-wip))
+  (magit-save-repository-buffers 'dontask)
+  (magit-diff-refine-hunk 'all)
+  :config
+  (magit-wip-mode 1))
+
 (use-package magit-delta)
-(eval-after-load "magit"
-  '(magit-wip-mode 1))
-(setq magit-no-confirm '(safe-with-wip))
-
-(setq magit-save-repository-buffers 'dontask)
-
-(setq magit-diff-refine-hunk 'all)
-
-;; Bind "=" to git diff origin/main.
-(eval-after-load "magit"
-  '(define-key magit-mode-map "="
-               (lambda ()
-                 (interactive)
-                 (magit-diff-range "origin/main"))))
 
 ;;}}}
 ;;{{{ shell-mode
@@ -521,22 +500,22 @@ stage it and display a diff."
 ;;}}}
 ;;{{{ term-mode
 
-(use-package eterm-256color)
-(use-package multi-term)
-;; After changing these, run (multi-term-keystroke-setup).
-(setq term-bind-key-alist
-      '(("C-c C-c" . term-interrupt-subjob)
-        ("C-c C-e" . term-send-esc)
-        ("C-m" . term-send-return)
-        ("s-v" . term-paste)
-        ("C-r" . term-send-reverse-search-history)
-        ("M-." . comint-dynamic-complete)))
-(setq term-unbind-key-list
-      '("C-z" "C-x" "C-c" "C-h" "C-y" "<ESC>" "C-r" "C-s" "C-t"))
+(use-package eterm-256color
+  :hook (term-mode . eterm-256color-mode))
 
-(add-hook 'term-mode-hook #'eterm-256color-mode)
-
-(setq term-suppress-hard-newline t)
+(use-package multi-term
+  :bind ("M-p" . multi-term-next)
+  :custom
+  (term-bind-key-alist
+   '(("C-c C-c" . term-interrupt-subjob)
+     ("C-c C-e" . term-send-esc)
+     ("C-m" . term-send-return)
+     ("s-v" . term-paste)
+     ("C-r" . term-send-reverse-search-history)
+     ("M-." . comint-dynamic-complete)))
+  (term-unbind-key-list
+   '("C-z" "C-x" "C-c" "C-h" "C-y" "<ESC>" "C-r" "C-s" "C-t"))
+  (term-suppress-hard-newline t))
 
 ;;}}}
 ;;{{{ Terraform
@@ -551,19 +530,11 @@ stage it and display a diff."
 
 (setq sentence-end-double-space nil)
 
-;; Enable auto-fill.
-(add-hook 'text-mode-hook
-          #'(lambda ()
-              (turn-on-auto-fill)))
-(add-hook 'indented-text-mode-hook
-          #'(lambda ()
-              (turn-on-auto-fill)))
-(add-hook 'message-mode-hook
-          #'(lambda ()
-              (turn-on-auto-fill)))
-(add-hook 'xml-mode-hook
-          #'(lambda ()
-              (turn-on-auto-fill)))
+;; Enable auto-fill in various modes
+(add-hook 'text-mode-hook #'turn-on-auto-fill)
+(add-hook 'indented-text-mode-hook #'turn-on-auto-fill)
+(add-hook 'message-mode-hook #'turn-on-auto-fill)
+(add-hook 'xml-mode-hook #'turn-on-auto-fill)
 
 ;; Perl extension glues.  Not really like C; more like a Makefile.
 (or (assoc "\\.xs$" auto-mode-alist)
@@ -572,22 +543,22 @@ stage it and display a diff."
 ;;}}}
 ;;{{{ view-mode
 
+(setq view-read-only t)
+
 (add-hook 'view-mode-hook
-          (function (lambda ()
-                      ;; Bind a few view-mode keys to vi/less-like
-                      ;; bindings.  Maybe these should be integrated
-                      ;; into view.el?
-                      (define-key view-mode-map "j" 'next-line)
-                      (define-key view-mode-map "k" 'previous-line)
-                      (define-key view-mode-map "^" 'beginning-of-line)
-                      (define-key view-mode-map "$" 'end-of-line)
-                      (define-key view-mode-map "G"
-                                  '(lambda (arg)
-                                     (interactive "P")
-                                     (cond ((null arg) (goto-char (point-max)))
-                                           ((numberp arg) (goto-line arg))
-                                           (t (error
-                                               "Must use numeric or no argument"))))))))
+          (lambda ()
+            ;; Bind a few view-mode keys to vi/less-like bindings
+            (define-key view-mode-map "j" #'next-line)
+            (define-key view-mode-map "k" #'previous-line)
+            (define-key view-mode-map "^" #'beginning-of-line)
+            (define-key view-mode-map "$" #'end-of-line)
+            (define-key view-mode-map "G"
+                        (lambda (arg)
+                          (interactive "P")
+                          (cond ((null arg) (goto-char (point-max)))
+                                ((numberp arg) (goto-line arg))
+                                (t (error "Must use numeric or no argument")))))))
+
 ;; Hmm... worked in Emacs 18.
 ;;(define-key view-mode-map "%"
 ;;  '(lambda (arg)
@@ -599,20 +570,18 @@ stage it and display a diff."
 ;;            (error "No such thing as %d%%" arg)))
 ;;         (t (error "Must use numeric argument")))))
 
-(setq view-read-only t)
-
 ;;}}}
 ;;{{{ XML
 
+;; XML mode configuration
 (add-to-list 'auto-mode-alist '("\\.html$" . xml-mode))
 
-(eval-after-load "psgml-mode"
-  '(add-hook 'xml-mode-hook
-             (function (lambda ()
-                         (define-key xml-mode-map "'"
-                                     '(lambda ()
-                                        (interactive)
-                                        (insert-string "&#8217;")))))))
+(add-hook 'xml-mode-hook
+          (lambda ()
+            (define-key xml-mode-map "'"
+                        (lambda ()
+                          (interactive)
+                          (insert-string "&#8217;")))))
 
 ;;}}}
 ;;{{{ yaml-mode
@@ -661,8 +630,8 @@ stage it and display a diff."
 ;;{{{ Completion in code
 
 (use-package flx)
-(defun shields/prog-capf ()
-  (cape-wrap-super #'eglot-completion-at-point))
+
+;; Programming mode configuration
 (add-hook 'prog-mode-hook
           (lambda ()
             (setq-local completion-at-point-functions
@@ -670,67 +639,74 @@ stage it and display a diff."
                               #'cape-file
                               #'cape-dabbrev))))
 
+(defun shields/prog-capf ()
+  (cape-wrap-super #'eglot-completion-at-point))
+
 
 
 ;;}}}
 ;;{{{ compilation and grep
 
-(use-package dash-at-point)
+(use-package dash-at-point
+  :bind ("s-." . dash-at-point))
+
+;; Compilation mode settings
 (setq compilation-message-face 'default)
-
 (setq compilation-always-kill t)
-
 (setq compilation-scroll-output 'first-error)
 
-(eval-after-load "grep"
-  '(progn
-     (grep-apply-setting 'grep-command
-                         (concat "rg -nH --null --color=always --no-heading "
-                                 "--max-columns-preview --max-columns=80 "))
+;; Grep configuration
+(with-eval-after-load 'grep
+  (grep-apply-setting 'grep-command
+                      (concat "rg -nH --null --color=always --no-heading "
+                              "--max-columns-preview --max-columns=80 "))
 
-     ;; TODO: Figure out why this has no effect.
-     (grep-apply-setting 'grep-highlight-matches 'always)
+  ;; TODO: Figure out why this has no effect.
+  (grep-apply-setting 'grep-highlight-matches 'always)
 
-     (grep-apply-setting 'grep-use-null-device nil)
-     (grep-apply-setting 'grep-use-null-filename-separator t)))
+  (grep-apply-setting 'grep-use-null-device nil)
+  (grep-apply-setting 'grep-use-null-filename-separator t))
 
 ;; Enable editing grep results
 (use-package wgrep
+  :after grep
   :custom
   (wgrep-auto-save-buffer t))
 
 (use-package fancy-compilation
   :commands (fancy-compilation-mode))
 
-(with-eval-after-load 'compile
+(use-package compile
+  :config
   (fancy-compilation-mode))
 
 ;;}}}
 ;;{{{ DAP (https://emacs-lsp.github.io/dap-mode/)
 
-(use-package dap-mode)
-(dap-mode 1)
-(dap-ui-mode 1)
-(dap-tooltip-mode 1)
-(tooltip-mode 1)
-(dap-ui-controls-mode 1)
+(use-package dap-mode
+  :config
+  (dap-mode 1)
+  (dap-ui-mode 1)
+  (dap-tooltip-mode 1)
+  (tooltip-mode 1)
+  (dap-ui-controls-mode 1)
 
-(require 'dap-gdb-lldb)
-(dap-gdb-lldb-setup)
+  (require 'dap-gdb-lldb)
+  (dap-gdb-lldb-setup)
 
-(require 'dap-go)
-(dap-go-setup)
+  (require 'dap-go)
+  (dap-go-setup)
 
-(require 'dap-python)
+  (require 'dap-python))
 
 ;;}}}
 ;;{{{ Dired
 
+(setq dired-use-ls-dired t)
+
 ;; Use GNU ls from Homebrew, not BSD ls.
 (when (file-executable-p "/opt/homebrew/bin/gls")
   (setq insert-directory-program "/opt/homebrew/bin/gls"))
-
-(setq dired-use-ls-dired t)
 
 ;;}}}
 ;;{{{ Flymake
@@ -768,43 +744,42 @@ stage it and display a diff."
            (shields/clean-flymake-diagnostic-message "This is a normal message")
            "This is a normal message")))
 
-(with-eval-after-load 'flymake
+(use-package flymake
+  :config
   (advice-add 'flymake-make-diagnostic :filter-args #'shields/flymake-make-diagnostic-advice))
 
 ;;}}}
 ;;{{{ Flyspell
 
-(require 'ispell)
-(setq-default ispell-program-name "aspell")
-(setq ispell-silently-savep t)
-(setq ispell-extra-args '("-W" "3"))
+(use-package ispell
+  :custom
+  (ispell-program-name "aspell")
+  (ispell-silently-savep t)
+  (ispell-extra-args '("-W" "3")))
 
-(require 'flyspell)
-
-;; Normally using (flyspell-mode-on) directly is deprecated in favor
-;; of (flyspell-mode 1), which is smart enough not to reinitialize.
-;; However, we actually want to reinitialize.  For example,
-;; message-mode runs text-mode-hook before message-mode-hook; if
-;; flyspell mode is already on, then flyspell-generic-check-word-p
-;; will never get set with its message-mode-specific value.
-(add-hook 'text-mode-hook 'flyspell-mode-on)
-(add-hook 'message-mode-hook 'flyspell-mode-on)
-
-;; flyspell-prog-mode depends on font-lock to identify comments and
-;; strings, so it won't work without it anyway.
-(add-hook 'font-lock-mode-hook 'flyspell-prog-mode)
-
-(setq flyspell-abbrev-p nil)
-(setq flyspell-sort-corrections nil)
-
-(setq flyspell-persistent-highlight nil)
-
-(define-key flyspell-mode-map [(meta tab)] nil)
+(use-package flyspell
+  :custom
+  (flyspell-abbrev-p nil)
+  (flyspell-sort-corrections nil)
+  (flyspell-persistent-highlight nil)
+  :bind (:map flyspell-mode-map
+              ([(meta tab)] . nil))
+  :hook
+  ;; Normally using (flyspell-mode-on) directly is deprecated in favor
+  ;; of (flyspell-mode 1), which is smart enough not to reinitialize.
+  ;; However, we actually want to reinitialize. For example,
+  ;; message-mode runs text-mode-hook before message-mode-hook; if
+  ;; flyspell mode is already on, then flyspell-generic-check-word-p
+  ;; will never get set with its message-mode-specific value.
+  (text-mode . flyspell-mode-on)
+  (message-mode . flyspell-mode-on)
+  ;; flyspell-prog-mode depends on font-lock to identify comments and
+  ;; strings, so it won't work without it anyway.
+  (font-lock-mode . flyspell-prog-mode))
 
 ;;}}}
 ;;{{{ Font-lock
 
-(require 'font-lock)
 (setq font-lock-face-attributes
       '((font-lock-comment-face "MidnightBlue")
         (font-lock-string-face "dark green")
@@ -837,25 +812,27 @@ stage it and display a diff."
 ;;}}}
 ;;{{{ Info
 
-(add-hook 'Info-mode-hook
-          #'(lambda () (variable-pitch-mode 1)))
+(use-package info
+  :hook (Info-mode . variable-pitch-mode))
 
 ;;}}}
 ;;{{{ jka-compr
 
-(jka-compr-install)
+(use-package jka-compr
+  :config
+  (jka-compr-install))
 
 ;;}}}
 ;;{{{ Eglot
 
-(use-package eglot
-  :custom
-  (eglot-autoshutdown t)
-  (eglot-confirm-server-edits nil)
-  (eldoc-echo-area-use-multiline-p nil)
-  (eldoc-display-functions '(eldoc-display-in-buffer))
-  (eldoc-idle-delay 0.1)
-  :config
+;; Eglot configuration
+(setq eglot-autoshutdown t)
+(setq eglot-confirm-server-edits nil)
+(setq eldoc-echo-area-use-multiline-p nil)
+(setq eldoc-display-functions '(eldoc-display-in-buffer))
+(setq eldoc-idle-delay 0.1)
+
+(with-eval-after-load 'eglot
   ;; Configure eldoc to display in side window
   (add-to-list 'display-buffer-alist
                '("^\\*eldoc\\*"
@@ -872,12 +849,12 @@ stage it and display a diff."
 ;;;}}}
 ;;{{{ Markdown
 
-(use-package markdown-mode)
-(use-package typo)
-(add-hook 'markdown-mode-hook
-          #'(lambda () (variable-pitch-mode 1)))
+(use-package markdown-mode
+  :hook
+  (markdown-mode . variable-pitch-mode)
+  (markdown-mode . typo-mode))
 
-(add-hook 'markdown-mode-hook #'typo-mode)
+(use-package typo)
 
 ;;}}}
 ;;{{{ Perl modes
@@ -904,13 +881,21 @@ stage it and display a diff."
 ;;}}}
 ;;{{{ Project
 
-(setq project-mode-line t)
+;; This setting is now in the project use-package declaration
 
 ;;}}}
 ;;{{{ Python
 
 (use-package ruff-format)
+
+;; Python configuration
+;; "python" on macOS 10.15 is 2.7.
+(setq python-shell-interpreter "python3")
+
+;; Python tree-sitter mode
 (add-hook 'python-ts-mode-hook #'eglot-ensure)
+
+;; Eglot configuration for Python
 (with-eval-after-load 'eglot
   (add-to-list 'eglot-server-programs
                '(python-mode . ("basedpyright-langserver" "--stdio"))))
@@ -921,9 +906,6 @@ stage it and display a diff."
 (use-package flymake-ruff
   :hook (eglot-managed-mode . flymake-ruff-load))
 
-;; "python" on macOS 10.15 is 2.7.
-(setq python-shell-interpreter "python3")
-
 ;;}}}
 ;;{{{ Rust
 
@@ -933,42 +915,38 @@ stage it and display a diff."
               ("C-c C-c l" . flycheck-list-errors)
               ("C-c C-c r" . eglot-rename)
               ("C-c C-c a" . eglot-code-actions))
-  :config
-  (add-hook 'rustic-mode-hook #'eglot-ensure)
   :custom
   (rustic-analyzer-command '("rust-analyzer"))
-  (eglot-ignored-server-capabilities '(:inlayHintProvider)))
+  (eglot-ignored-server-capabilities '(:inlayHintProvider))
+  :hook
+  (rustic-mode . eglot-ensure))
 
 ;;}}}
 ;;{{{ Swift
 
 (use-package swift-mode
-  :config
-  (add-hook 'swift-mode-hook #'eglot-ensure))
-
-;;}}}
-;;{{{ TRAMP
-
-(require 'tramp)
+  :hook (swift-mode . eglot-ensure))
 
 ;;}}}
 ;;{{{ Version control
 
-(require 'vc)
-
-;; Default is "-c".
-(setq diff-switches "-u")
+(use-package vc
+  :custom
+  (diff-switches "-u"))  ; Default is "-c"
 
 ;;}}}
 ;;{{{ W3
 
-(setq url-keep-history nil)
+(use-package url
+  :custom
+  (url-keep-history nil))
 
 ;;}}}
 ;;{{{ yasnippet
 
-(use-package yasnippet)
-;;(add-hook 'prog-mode-hook #'yas-minor-mode-on)
+(use-package yasnippet
+  ;; :hook (prog-mode . yas-minor-mode-on)
+  )
 
 ;;}}}
 
