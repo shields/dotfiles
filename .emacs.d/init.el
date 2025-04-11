@@ -519,6 +519,11 @@ stage it and display a diff."
                  (magit-diff-range "origin/main"))))
 
 ;;}}}
+;;{{{ shell-mode
+
+(setf (alist-get 'sh-mode major-mode-remap-alist) #'bash-ts-mode)
+
+;;}}}
 ;;{{{ term-mode
 
 ;; After changing these, run (multi-term-keystroke-setup).
@@ -1047,6 +1052,20 @@ This function is useful for binding to a hotkey."
 (add-hook 'emacs-startup-hook
           (lambda ()
             (setq file-name-handler-alist default-file-name-handler-alist)))
+
+;; Tree-sitter mode remapping. This should run after all other packages have
+;; been loaded, or else we might not know about the modes.
+(defun shields/remap-to-tree-sitter-modes ()
+  "Find all major modes ending with -ts-mode and create remappings from their non-ts versions."
+  (interactive)
+  (let ((ts-modes (apropos-internal "-ts-mode$" 'commandp)))
+    (dolist (ts-mode ts-modes)
+      (let* ((ts-mode-name (symbol-name ts-mode))
+             (base-mode-name (replace-regexp-in-string "-ts-mode$" "-mode" ts-mode-name))
+             (base-mode (intern base-mode-name)))
+        (when (fboundp base-mode)
+          (setf (alist-get base-mode major-mode-remap-alist) ts-mode))))))
+(shields/remap-to-tree-sitter-modes)
 
 ;; Persist history over Emacs restarts
 (use-package savehist
