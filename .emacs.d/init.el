@@ -240,13 +240,16 @@
 ;; Make sure editing a hard-linked file edits all its links.
 (setq backup-by-copying-when-linked t)
 
-;; From example in advice.el 2.14:
-(defadvice switch-to-buffer (before existing-buffers-only activate)
+;; Only switch to existing buffers interactively
+(defun shields/switch-to-buffer-existing-only (orig-fun &rest args)
   "When called interactively switch to existing buffers only, unless
 when called with a prefix argument."
   (interactive
    (list (read-buffer "Switch to buffer: " (other-buffer)
-                      (null current-prefix-arg)))))
+                      (null current-prefix-arg))))
+  (apply orig-fun args))
+
+(advice-add 'switch-to-buffer :around #'shields/switch-to-buffer-existing-only)
 
 (setq auto-save-default nil)
 (setq make-backup-files nil)
