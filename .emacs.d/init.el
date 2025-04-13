@@ -172,14 +172,15 @@
 
 (kill-ring-deindent-mode t)
 
-(use-package apheleia)
-(apheleia-global-mode 1)
-;; Replace black with ruff, and gofmt with goimports.
-(dolist (el apheleia-mode-alist)
-  (when (eq (cdr el) 'black)
-    (setf (cdr el) 'ruff))
-  (when (eq (cdr el) 'gofmt)
-    (setf (cdr el) 'goimports)))
+(use-package apheleia
+  :config
+  (apheleia-global-mode 1)
+  ;; Replace black with ruff, and gofmt with goimports.
+  (dolist (el apheleia-mode-alist)
+    (when (eq (cdr el) 'black)
+      (setf (cdr el) 'ruff))
+    (when (eq (cdr el) 'gofmt)
+      (setf (cdr el) 'goimports))))
 
 (use-package editorconfig
   :config
