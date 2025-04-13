@@ -1,4 +1,4 @@
-;;; .emacs.d/init.el --- Shields's Emacs initialization file
+;;; .emacs.d/init.el --- Shields's Emacs initialization file  -*- lexical-binding: t -*-
 
 ;; Author: Michael Shields <shields@msrl.com>
 
@@ -10,7 +10,7 @@
   (exec-path-from-shell-initialize))
 
 ;; Write customizations to a separate file instead of appending here.
-(setq custom-file "~/.emacs.d/custom.el")
+(setq custom-file (locate-user-emacs-file "custom.el"))
 (load custom-file)
 
 ;;}}}
@@ -141,6 +141,9 @@
 (delete-selection-mode 1)
 (setq-default indent-tabs-mode nil)
 (setq line-move-visual nil)
+(setq shift-select-mode nil)
+
+(add-hook 'prog-mode-hook #'kill-ring-deindent-mode)
 
 ;; Enable subword-mode in programming modes
 (add-hook 'prog-mode-hook #'subword-mode)
@@ -163,7 +166,7 @@
 (use-package aggressive-indent
   :hook (prog-mode . aggressive-indent-mode)
   :config
-  (setq aggressive-indent-excluded-modes '(go-mode go-ts-mode terraform-mode))
+  (setq aggressive-indent-excluded-modes '(go-ts-mode terraform-mode))
   (global-aggressive-indent-mode 1))
 
 ;; Leave electric-indent enabled for modes that don't work well with
@@ -294,8 +297,6 @@ when called with a prefix argument."
 (global-set-key [(meta t)] #'previous-buffer)
 (global-set-key [(meta T)] #'next-buffer)
 (global-set-key [(control t)] #'switch-to-buffer)
-(global-set-key [(meta up)] #'move-line-up)
-(global-set-key [(meta down)] #'move-line-down)
 
 ;; Coding
 (global-set-key [(meta /)] #'completion-at-point)
@@ -312,14 +313,11 @@ when called with a prefix argument."
 (global-set-key "\e\e" #'eval-expression)
 
 ;; Disable some keys
-(global-set-key [(control x) (o)] nil)
-(global-set-key [(control x) (b)] nil)
-(global-set-key [(control v)] nil)
-(global-set-key [(control w)] nil)
-(global-set-key [(meta f)] nil)
+(global-set-key [(control x) (o)] nil)  ; other-window
+(global-set-key [(control x) (b)] nil)  ; switch-to-buffer
+(global-set-key [(control v)] nil)      ; scroll-up-command
+(global-set-key [(control w)] nil)      ; kill-region
 (global-set-key [(meta q)] nil)
-
-;; Other keybindings are organized with their respective packages using :bind
 
 ;;}}}
 
@@ -333,12 +331,13 @@ when called with a prefix argument."
   (interactive)
   (transpose-lines 1)
   (forward-line -2))
-
 (defun move-line-down ()
   (interactive)
   (forward-line 1)
   (transpose-lines 1)
   (forward-line -1))
+(global-set-key [(meta up)] #'move-line-up)
+(global-set-key [(meta down)] #'move-line-down)
 
 (use-package project
   :bind ("M-b" . shields/open-dwim)
@@ -426,9 +425,7 @@ stage it and display a diff."
 ;;}}}
 ;;{{{ emacs-lisp-mode
 
-;; Emacs Lisp mode configuration
-(with-eval-after-load 'elisp-mode
-  (define-key emacs-lisp-mode-map [(meta return)] #'eval-last-sexp))
+(define-key emacs-lisp-mode-map [(meta return)] #'eval-last-sexp)
 
 (defun shields/eval-expression-minibuffer-setup ()
   (insert "()")
@@ -438,6 +435,13 @@ stage it and display a diff."
 
 (add-hook 'eval-expression-minibuffer-setup-hook
           #'shields/eval-expression-minibuffer-setup)
+
+(defun shields/elisp-eldoc-with-value ()
+  (remove-hook 'eldoc-documentation-functions
+               #'elisp-eldoc-var-docstring t)
+  (add-hook 'eldoc-documentation-functions
+            #'elisp-eldoc-var-docstring-with-value nil t))
+(add-hook 'emacs-lisp-mode-hook #'shields/elisp-eldoc-with-value)
 
 ;;}}}
 ;;{{{ Go
@@ -462,8 +466,7 @@ stage it and display a diff."
  'display-buffer-alist
  '(("\\*Help\\*" display-buffer-same-window)))
 
-(with-eval-after-load 'help-mode
-  (define-key help-mode-map [(q)] #'previous-buffer))
+(define-key help-mode-map [(q)] #'previous-buffer)
 
 ;;}}}
 ;;{{{ jsonnet-mode
@@ -578,9 +581,6 @@ stage it and display a diff."
 ;;}}}
 ;;{{{ XML
 
-;; XML mode configuration
-(setf (alist-get "\\.html$" auto-mode-alist nil nil #'string-match-p) 'xml-mode)
-
 (add-hook 'xml-mode-hook
           (lambda ()
             (define-key xml-mode-map "'"
@@ -660,15 +660,11 @@ stage it and display a diff."
 (setq compilation-always-kill t)
 (setq compilation-scroll-output 'first-error)
 
-;; Grep configuration
-(with-eval-after-load 'grep
+(use-package grep
+  :config
   (grep-apply-setting 'grep-command
                       (concat "rg -nH --null --color=always --no-heading "
-                              "--max-columns-preview --max-columns=80 "))
-
-  ;; TODO: Figure out why this has no effect.
-  (grep-apply-setting 'grep-highlight-matches 'always)
-
+                              "--max-columns-preview --max-columns=132 "))
   (grep-apply-setting 'grep-use-null-device nil)
   (grep-apply-setting 'grep-use-null-filename-separator t))
 
@@ -678,8 +674,7 @@ stage it and display a diff."
   :custom
   (wgrep-auto-save-buffer t))
 
-(use-package fancy-compilation
-  :commands (fancy-compilation-mode))
+(use-package fancy-compilation)
 
 (use-package compile
   :config
@@ -828,27 +823,33 @@ stage it and display a diff."
   (jka-compr-install))
 
 ;;}}}
-;;{{{ Eglot
+;;{{{ Eldoc
 
-;; Eglot configuration
-(setq eglot-autoshutdown t)
-(setq eglot-confirm-server-edits nil)
-(setq eldoc-echo-area-use-multiline-p nil)
-(setq eldoc-display-functions '(eldoc-display-in-buffer))
 (setq eldoc-idle-delay 0.1)
 
-(with-eval-after-load 'eglot
-  ;; Configure eldoc to display in side window
-  (setf (alist-get "^\\*eldoc\\*" display-buffer-alist nil nil #'equal)
-        '((display-buffer-in-side-window)
-          (side . bottom)
-          (window-height . 0.3))))
-  ;; Set up key bindings
-  (define-key eglot-mode-map (kbd "C-c l r") #'eglot-rename)
-  (define-key eglot-mode-map (kbd "C-c l a") #'eglot-code-actions)
-  (define-key eglot-mode-map (kbd "C-c l f") #'eglot-format)
-  (define-key eglot-mode-map (kbd "C-c l d") #'eldoc)
-  (define-key eglot-mode-map (kbd "C-c l h") #'eglot-help-at-point))
+;; Enable multiple documentation sources.
+(setq eldoc-documentation-strategy #'eldoc-documentation-compose-eagerly)
+
+;; Display in a "side" window at the bottom.
+(setq eldoc-display-functions '(eldoc-display-in-buffer))
+(setf (alist-get "^\\*eldoc" display-buffer-alist)
+      '((display-buffer-in-side-window)
+        (side . bottom)
+        (window-height . 0.25)))
+
+;;}}}
+;;{{{ Eglot
+
+(use-package eglot
+  :config
+  (setq eglot-autoshutdown t)
+  (setq eglot-confirm-server-edits nil)
+  :bind (:map eglot-mode-map
+              ("C-c l r" . eglot-rename)
+              ("C-c l a" . eglot-code-actions)
+              ("C-c l f" . eglot-format)
+              ("C-c l d" . eldoc)
+              ("C-c l h" . eglot-help-at-point)))
 
 ;;;}}}
 ;;{{{ Markdown
@@ -881,11 +882,6 @@ stage it and display a diff."
 
 (eval-after-load "cperl-mode"
   '(cperl-set-style "PerlStyle"))
-
-;;}}}
-;;{{{ Project
-
-;; This setting is now in the project use-package declaration
 
 ;;}}}
 ;;{{{ Python

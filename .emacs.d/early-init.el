@@ -1,3 +1,5 @@
+;;; -*- lexical-binding: t -*-
+
 ;; Straight bootstrap, pasted from its README.md.
 (defvar bootstrap-version)
 (let ((bootstrap-file

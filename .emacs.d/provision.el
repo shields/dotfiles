@@ -1,3 +1,5 @@
+;;; -*- lexical-binding: t -*-
+;;
 ;; emacs --batch --script .emacs.d/provision.el
 
 (load-file ".emacs.d/early-init.el")
