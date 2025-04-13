@@ -214,6 +214,8 @@
   (shields/symlink-tree-sitter-langs-grammars)
   (add-to-list 'treesit-extra-load-path shields/tree-sitter-langs-path))
 
+(setopt treesit-font-lock-level 4)
+
 (setopt flymake-show-diagnostics-at-end-of-line t)
 
 (which-key-mode 1)
@@ -778,18 +780,6 @@ stage it and display a diff."
   (font-lock-mode . flyspell-prog-mode))
 
 ;;}}}
-;;{{{ Font-lock
-
-(setq font-lock-face-attributes
-      '((font-lock-comment-face "MidnightBlue")
-        (font-lock-string-face "dark green")
-        (font-lock-keyword-face "Purple")
-        (font-lock-function-name-face "Blue")
-        (font-lock-variable-name-face "Firebrick")
-        (font-lock-type-face "DarkOliveGreen")
-        (font-lock-reference-face "OrangeRed")))
-
-;;}}}
 ;;{{{ LLMs
 
 (use-package gptel
@@ -1088,6 +1078,13 @@ stage it and display a diff."
  '(flymake-error-echo-at-eol ((t (:inherit (flymake-end-of-line-diagnostics-face compilation-error) :weight normal))))
  '(flymake-note-echo-at-eol ((t (:inherit (flymake-end-of-line-diagnostics-face compilation-info) :weight normal))))
  '(flymake-warning-echo-at-eol ((t (:inherit (flymake-end-of-line-diagnostics-face compilation-warning) :weight normal))))
+ '(font-lock-comment-face ((t (:foreground "MidnightBlue"))))
+ '(font-lock-function-name-face ((t (:foreground "Blue"))))
+ '(font-lock-keyword-face ((t (:foreground "gray50"))))
+ '(font-lock-reference-face ((t (:foreground "OrangeRed"))))
+ '(font-lock-string-face ((t (:foreground "dark green"))))
+ '(font-lock-type-face ((t (:foreground "DarkOliveGreen"))))
+ '(font-lock-variable-name-face ((t (:foreground "Firebrick"))))
  '(highlight ((t (:background "darkseagreen1"))))
  '(isearch ((t (:inherit match))))
  '(ivy-current-match ((t (:background "thistle1" :weight bold))))
