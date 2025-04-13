@@ -10,7 +10,7 @@
   (exec-path-from-shell-initialize))
 
 ;; Write customizations to a separate file instead of appending here.
-(setq custom-file (locate-user-emacs-file "custom.el"))
+(setopt custom-file (locate-user-emacs-file "custom.el"))
 (load custom-file)
 
 ;;}}}
@@ -23,7 +23,7 @@
 (put 'narrow-to-region 'disabled nil)   ; C-x n n
 
 ;; Stop saying "You can run the command blah-blah with M-x bl-b".
-(setq extended-command-suggest-shorter nil)
+(setopt extended-command-suggest-shorter nil)
 
 ;;}}}
 ;;{{{ Display
@@ -31,24 +31,24 @@
 (use-package hl-todo
   :config
   (global-hl-todo-mode 1)
-  (setq hl-todo-keyword-faces
-        '(("FIXME" . "#ff0000")
-          ("XXX+"  . "#ff0000"))))
+  (setopt hl-todo-keyword-faces
+          '(("FIXME" . "#ff0000")
+            ("XXX+"  . "#ff0000"))))
 
 (use-package symbol-overlay
   :hook (prog-mode . symbol-overlay-mode)
   :config
   (face-spec-set 'symbol-overlay-default-face
                  '((t :weight bold :inherit nil)))
-  (setq symbol-overlay-idle-time 0.1))
+  (setopt symbol-overlay-idle-time 0.1))
 
 ;; Basic interface settings
-(setq inhibit-startup-message t
-      initial-scratch-message nil
-      window-min-height 2
-      blink-matching-delay 0.25
-      tab-bar-show 1
-      tab-bar-close-last-tab-choice 'delete-frame)
+(setopt inhibit-startup-message t
+        initial-scratch-message nil
+        window-min-height 2
+        blink-matching-delay 0.25
+        tab-bar-show 1
+        tab-bar-close-last-tab-choice 'delete-frame)
 
 ;; Disable various visual elements
 (blink-cursor-mode 0)
@@ -74,10 +74,10 @@
 ;; This needs to check system-type and not window-system because an Emacs daemon
 ;; started as a macOS login item is headless.
 (cond ((eq system-type 'darwin)
-       (setq visible-bell nil)
-       (setq ring-bell-function 'macos-system-alert))
+       (setopt visible-bell nil)
+       (setopt ring-bell-function 'macos-system-alert))
       (t
-       (setq visible-bell t)))
+       (setopt visible-bell t)))
 
 (set-fringe-mode '(nil . 0))            ; left-only
 
@@ -104,22 +104,22 @@
   (require 'smartparens-config)
   (smartparens-global-mode 1)
   (show-smartparens-global-mode 1)
-  (setq sp-show-pair-delay 0
-        sp-ignore-modes-list nil))              ; Even the minibuffer!
+  (setopt sp-show-pair-delay 0
+          sp-ignore-modes-list nil))              ; Even the minibuffer!
 
 ;; These settings are now in the use-package declarations above
 
-(setq scroll-error-top-bottom t)
+(setopt scroll-error-top-bottom t)
 
 (setq-default truncate-lines t)
 
 ;; Enable horizontal trackpad scrolling.
-(setq mouse-wheel-tilt-scroll t
-      mouse-wheel-flip-direction t)
+(setopt mouse-wheel-tilt-scroll t
+        mouse-wheel-flip-direction t)
 
 ;; Enable sub-line scrolling.
 (pixel-scroll-precision-mode t)
-(setq pixel-scroll-precision-use-momentum t)
+(setopt pixel-scroll-precision-use-momentum t)
 
 ;;}}}
 ;;{{{ Editing behavior
@@ -140,8 +140,8 @@
 ;; Basic editing settings
 (delete-selection-mode 1)
 (setq-default indent-tabs-mode nil)
-(setq line-move-visual nil)
-(setq shift-select-mode nil)
+(setopt line-move-visual nil)
+(setopt shift-select-mode nil)
 
 (add-hook 'prog-mode-hook #'kill-ring-deindent-mode)
 
@@ -166,7 +166,7 @@
 (use-package aggressive-indent
   :hook (prog-mode . aggressive-indent-mode)
   :config
-  (setq aggressive-indent-excluded-modes '(go-ts-mode terraform-mode))
+  (setopt aggressive-indent-excluded-modes '(go-ts-mode terraform-mode))
   (global-aggressive-indent-mode 1))
 
 ;; Leave electric-indent enabled for modes that don't work well with
@@ -192,7 +192,7 @@
 (use-package expand-region
   :bind ("C-=" . er/expand-region))
 
-(setq save-interprogram-paste-before-kill t)
+(setopt save-interprogram-paste-before-kill t)
 
 (use-package tree-sitter)
 
@@ -214,7 +214,7 @@
   (shields/symlink-tree-sitter-langs-grammars)
   (add-to-list 'treesit-extra-load-path shields/tree-sitter-langs-path))
 
-(setq flymake-show-diagnostics-at-end-of-line t)
+(setopt flymake-show-diagnostics-at-end-of-line t)
 
 (which-key-mode 1)
 (which-key-setup-minibuffer)
@@ -226,15 +226,15 @@
 (use-package minions)
 (doom-modeline-mode 1)
 
-(setq doom-modeline-buffer-encoding nil)
-(setq doom-modeline-major-mode-icon nil)
-(setq doom-modeline-buffer-file-name-style 'relative-from-project)
-(setq doom-modeline-minor-modes t)
-(setq doom-modeline-number-limit 999)
-(setq doom-modeline-vcs-max-length 32)
-(setq doom-modeline-column-zero-based nil)
-(setq doom-modeline-total-line-number t)
-(setq doom-modeline-position-column-line-format '("c%c %l"))
+(setopt doom-modeline-buffer-encoding nil)
+(setopt doom-modeline-major-mode-icon nil)
+(setopt doom-modeline-buffer-file-name-style 'relative-from-project)
+(setopt doom-modeline-minor-modes t)
+(setopt doom-modeline-number-limit 999)
+(setopt doom-modeline-vcs-max-length 32)
+(setopt doom-modeline-column-zero-based nil)
+(setopt doom-modeline-total-line-number t)
+(setopt doom-modeline-position-column-line-format '("c%c %l"))
 
 (minions-mode 1)
 
@@ -242,7 +242,7 @@
 ;;{{{ Files and buffers
 
 ;; Make sure editing a hard-linked file edits all its links.
-(setq backup-by-copying-when-linked t)
+(setopt backup-by-copying-when-linked t)
 
 ;; Only switch to existing buffers interactively
 (defun shields/switch-to-buffer-existing-only (orig-fun &rest args)
@@ -255,24 +255,24 @@ when called with a prefix argument."
 
 (advice-add 'switch-to-buffer :around #'shields/switch-to-buffer-existing-only)
 
-(setq auto-save-default nil)
-(setq make-backup-files nil)
-(setq create-lockfiles nil)
+(setopt auto-save-default nil)
+(setopt make-backup-files nil)
+(setopt create-lockfiles nil)
 
 (global-auto-revert-mode 1)
-(setq global-auto-revert-non-file-buffers t)
-(setq auto-revert-verbose nil)
+(setopt global-auto-revert-non-file-buffers t)
+(setopt auto-revert-verbose nil)
 
 ;;}}}
 ;;{{{ Global keybindings
 
 ;; macOS modifier key setup
 ;; Option (or Alt) ⌥: ignore so as to allow system-wide symbol input mechanism
-(setq ns-alternate-modifier nil)
-(setq ns-right-alternate-modifier nil)
+(setopt ns-alternate-modifier nil)
+(setopt ns-right-alternate-modifier nil)
 ;; Command (or Cmd) ⌘
-(setq ns-command-modifier 'meta)
-(setq ns-right-command-modifier 'meta)
+(setopt ns-command-modifier 'meta)
+(setopt ns-right-command-modifier 'meta)
 
 ;; macOS only supports four modifiers, but we use Karabiner elements to map two
 ;; additional keys to F24, then set them to a non-repeating `C-x @ s', in Emacs
@@ -390,18 +390,18 @@ stage it and display a diff."
   :bind ("M-k" . avy-goto-char-timer))
 ;; QGMLWY home row, ordered by finger strength, starting with left
 ;; because S-k is on the right.
-(setq avy-keys '(?n ?a ?t ?e ?s ?o ?d ?h ?r ?i)) ; QGMLWY home row
+(setopt avy-keys '(?n ?a ?t ?e ?s ?o ?d ?h ?r ?i)) ; QGMLWY home row
 
-(setq avy-background t)
+(setopt avy-background t)
 
-(setq avy-lead-faces '(error error error error error error))
+(setopt avy-lead-faces '(error error error error error error))
 
 (defun shields/avy-handler (char)
   "Terminate avy on RET."
   (if (eq char ?\C-m)
       (throw 'done 'exit)
     (avy-handler-default char)))
-(setq avy-handler-function #'shields/avy-handler)
+(setopt avy-handler-function #'shields/avy-handler)
 
 ;;}}}
 
@@ -409,7 +409,7 @@ stage it and display a diff."
 ;;{{{ c-mode
 
 ;; C mode configuration
-(setq c-cleanup-list '(brace-else-brace defun-close-semi))
+(setopt c-cleanup-list '(brace-else-brace defun-close-semi))
 
 (add-hook 'c-mode-hook
           (lambda ()
@@ -460,7 +460,7 @@ stage it and display a diff."
 ;;{{{ help-mode
 
 ;; Help mode configuration
-(setq help-window-select t)
+(setopt help-window-select t)
 
 (customize-set-variable
  'display-buffer-alist
@@ -534,9 +534,9 @@ stage it and display a diff."
 ;;}}}
 ;;{{{ text-mode and indented-text-mode
 
-(setq-default fill-column 80)
+(setopt fill-column 80)
 
-(setq sentence-end-double-space nil)
+(setopt sentence-end-double-space nil)
 
 ;; Enable auto-fill in various modes
 (add-hook 'text-mode-hook #'turn-on-auto-fill)
@@ -551,7 +551,7 @@ stage it and display a diff."
 ;;}}}
 ;;{{{ view-mode
 
-(setq view-read-only t)
+(setopt view-read-only t)
 
 (add-hook 'view-mode-hook
           (lambda ()
@@ -597,9 +597,9 @@ stage it and display a diff."
 ;;; Features
 ;;{{{ Calc
 
-(setq calc-group-char " ")
-(setq calc-date-format '(YYY "-" MM "-" DD (" " hh ":" mm ":" ss)))
-(setq calc-display-trail nil)
+(setopt calc-group-char " ")
+(setopt calc-date-format '(YYY "-" MM "-" DD (" " hh ":" mm ":" ss)))
+(setopt calc-display-trail nil)
 
 (setq math-additional-units
       '((fathom "6 * ft" "Fathom")
@@ -610,24 +610,24 @@ stage it and display a diff."
 ;;{{{ Calendar and friends
 
 ;; Use local (US Pacific) time, not my usual TZ, which is UTC.
-(setq calendar-time-zone -480)
-(setq calendar-standard-time-zone-name "PST")
-(setq calendar-daylight-time-zone-name "PDT")
-(setq calendar-daylight-savings-starts
-      '(calendar-nth-named-day 2 0 3 year))
-(setq calendar-daylight-savings-ends
-      '(calendar-nth-named-day 1 0 11 year))
-(setq calendar-daylight-time-offset 60)
-(setq calendar-daylight-savings-starts-time 120)
-(setq calendar-daylight-savings-ends-time 120)
+(setopt calendar-time-zone -480)
+(setopt calendar-standard-time-zone-name "PST")
+(setopt calendar-daylight-time-zone-name "PDT")
+(setopt calendar-daylight-savings-starts
+        '(calendar-nth-named-day 2 0 3 year))
+(setopt calendar-daylight-savings-ends
+        '(calendar-nth-named-day 1 0 11 year))
+(setopt calendar-daylight-time-offset 60)
+(setopt calendar-daylight-savings-starts-time 120)
+(setopt calendar-daylight-savings-ends-time 120)
 
-(setq calendar-week-start-day 1)
+(setopt calendar-week-start-day 1)
 
-(setq calendar-date-display-form '(year "-" (format "%02d-%02d"
-                                                    (string-to-number month)
-                                                    (string-to-number day))))
-(setq calendar-time-display-form '(24-hours ":" minutes
-                                            (if time-zone" ") time-zone))
+(setopt calendar-date-display-form '(year "-" (format "%02d-%02d"
+                                                      (string-to-number month)
+                                                      (string-to-number day))))
+(setopt calendar-time-display-form '(24-hours ":" minutes
+                                              (if time-zone" ") time-zone))
 
 (add-hook 'initial-calendar-window-hook 'mark-calendar-holidays)
 
@@ -656,9 +656,9 @@ stage it and display a diff."
   :bind ("s-." . dash-at-point))
 
 ;; Compilation mode settings
-(setq compilation-message-face 'default)
-(setq compilation-always-kill t)
-(setq compilation-scroll-output 'first-error)
+(setopt compilation-message-face 'default)
+(setopt compilation-always-kill t)
+(setopt compilation-scroll-output 'first-error)
 
 (use-package grep
   :config
@@ -702,11 +702,11 @@ stage it and display a diff."
 ;;}}}
 ;;{{{ Dired
 
-(setq dired-use-ls-dired t)
+(setopt dired-use-ls-dired t)
 
 ;; Use GNU ls from Homebrew, not BSD ls.
 (when (file-executable-p "/opt/homebrew/bin/gls")
-  (setq insert-directory-program "/opt/homebrew/bin/gls"))
+  (setopt insert-directory-program "/opt/homebrew/bin/gls"))
 
 ;;}}}
 ;;{{{ Flymake
@@ -789,20 +789,18 @@ stage it and display a diff."
         (font-lock-type-face "DarkOliveGreen")
         (font-lock-reference-face "OrangeRed")))
 
-(setq font-lock-maximum-size 2097152)
-
 ;;}}}
 ;;{{{ LLMs
 
 (use-package gptel
   :config
-  (setq gptel-model "gpt-4o")
+  (setopt gptel-model 'gpt-4o)
   (add-hook 'gptel-post-stream-hook #'gptel-auto-scroll))
 
 (use-package chatgpt-shell
   :config
-  (setq chatgpt-shell-anthropic-key (auth-source-pick-first-password :host "api.anthropic.com"))
-  (setq chatgpt-shell-openai-key (auth-source-pick-first-password :host "api.openai.com")))
+  (setopt chatgpt-shell-anthropic-key (auth-source-pick-first-password :host "api.anthropic.com"))
+  (setopt chatgpt-shell-openai-key (auth-source-pick-first-password :host "api.openai.com")))
 
 ;;}}}
 ;;{{{ Completion
@@ -825,13 +823,13 @@ stage it and display a diff."
 ;;}}}
 ;;{{{ Eldoc
 
-(setq eldoc-idle-delay 0.1)
+(setopt eldoc-idle-delay 0.1)
 
 ;; Enable multiple documentation sources.
-(setq eldoc-documentation-strategy #'eldoc-documentation-compose-eagerly)
+(setopt eldoc-documentation-strategy #'eldoc-documentation-compose-eagerly)
 
 ;; Display in a "side" window at the bottom.
-(setq eldoc-display-functions '(eldoc-display-in-buffer))
+(setopt eldoc-display-functions '(eldoc-display-in-buffer))
 (setf (alist-get "^\\*eldoc" display-buffer-alist)
       '((display-buffer-in-side-window)
         (side . bottom)
@@ -842,8 +840,8 @@ stage it and display a diff."
 
 (use-package eglot
   :config
-  (setq eglot-autoshutdown t)
-  (setq eglot-confirm-server-edits nil)
+  (setopt eglot-autoshutdown t)
+  (setopt eglot-confirm-server-edits nil)
   :bind (:map eglot-mode-map
               ("C-c l r" . eglot-rename)
               ("C-c l a" . eglot-code-actions)
@@ -890,7 +888,7 @@ stage it and display a diff."
 
 ;; Python configuration
 ;; "python" on macOS 10.15 is 2.7.
-(setq python-shell-interpreter "python3")
+(setopt python-shell-interpreter "python3")
 
 ;; Python tree-sitter mode
 (add-hook 'python-ts-mode-hook #'eglot-ensure)
@@ -955,7 +953,7 @@ stage it and display a diff."
 (use-package aider
   :straight (:host github :repo "tninja/aider.el")
   :config
-  (setq aider-args nil)
+  (setopt aider-args nil)
   (global-set-key (kbd "C-c a") 'aider-transient-menu))
 
 ;;}}}
@@ -984,8 +982,8 @@ stage it and display a diff."
   '(progn
      (defun pop-up-calc ()
        "Create a new frame with Calc in it.
-The new frame has properties determined by calc-pop-up-frame-properties.
-This function is useful for binding to a hotkey."
+       The new frame has properties determined by calc-pop-up-frame-properties.
+       This function is useful for binding to a hotkey."
        (interactive)
        (let ((frame (make-frame calc-pop-up-frame-properties))
              (buf (generate-new-buffer " pop-up-calc")))
@@ -1014,8 +1012,6 @@ This function is useful for binding to a hotkey."
 ;; Enable the mouse.
 (xterm-mouse-mode 1)
 
-(setq try-oblique-before-italic-fonts t)
-
 (require 'edebug)
 
 ;; Modern performance optimizations
@@ -1026,12 +1022,12 @@ This function is useful for binding to a hotkey."
 
 ;; Native compilation settings
 (when (featurep 'native-compile)
-  (setq native-comp-async-report-warnings-errors 'silent)
-  (setq native-comp-jit-compilation t)
+  (setopt native-comp-async-report-warnings-errors 'silent)
+  (setopt native-comp-jit-compilation t)
   (add-to-list 'native-comp-eln-load-path (expand-file-name "eln-cache/" user-emacs-directory)))
 
 ;; Increase process data chunks for better performance
-(setq read-process-output-max (* 4 1024 1024)) ; 4MiB
+(setopt read-process-output-max (* 4 1024 1024)) ; 4MiB
 
 ;; File-name-handler-alist caching
 (defvar default-file-name-handler-alist file-name-handler-alist)
@@ -1062,7 +1058,7 @@ This function is useful for binding to a hotkey."
 (server-start)
 
 ;; Don't block Emacs exit; that blocks automatic macOS upgrades.
-(setq confirm-kill-processes nil)
+(setopt confirm-kill-processes nil)
 
 (custom-set-faces
  '(default ((t (:inherit nil :extend nil :stipple nil :background "White" :foreground "Black" :inverse-video nil :box nil :strike-through nil :overline nil :underline nil :slant normal :weight normal :height 120 :width normal :foundry "nil" :family "Andale Mono"))))
