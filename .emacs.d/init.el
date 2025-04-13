@@ -81,8 +81,8 @@
 
 (set-fringe-mode '(nil . 0))            ; left-only
 
-(add-to-list 'default-frame-alist '(height . 999))
-(add-to-list 'default-frame-alist '(width . 132))
+(setf (alist-get 'height default-frame-alist) 999)
+(setf (alist-get 'width default-frame-alist) 132)
 
 ;; Enable color emoji.
 (set-fontset-font
@@ -579,7 +579,7 @@ stage it and display a diff."
 ;;{{{ XML
 
 ;; XML mode configuration
-(add-to-list 'auto-mode-alist '("\\.html$" . xml-mode))
+(setf (alist-get "\\.html$" auto-mode-alist nil nil #'string-match-p) 'xml-mode)
 
 (add-hook 'xml-mode-hook
           (lambda ()
@@ -839,11 +839,10 @@ stage it and display a diff."
 
 (with-eval-after-load 'eglot
   ;; Configure eldoc to display in side window
-  (add-to-list 'display-buffer-alist
-               '("^\\*eldoc\\*"
-                 (display-buffer-in-side-window)
-                 (side . bottom)
-                 (window-height . 0.3)))
+  (setf (alist-get "^\\*eldoc\\*" display-buffer-alist nil nil #'equal)
+        '((display-buffer-in-side-window)
+          (side . bottom)
+          (window-height . 0.3))))
   ;; Set up key bindings
   (define-key eglot-mode-map (kbd "C-c l r") #'eglot-rename)
   (define-key eglot-mode-map (kbd "C-c l a") #'eglot-code-actions)
@@ -902,8 +901,8 @@ stage it and display a diff."
 
 ;; Eglot configuration for Python
 (with-eval-after-load 'eglot
-  (add-to-list 'eglot-server-programs
-               '(python-mode . ("basedpyright-langserver" "--stdio"))))
+  (setf (alist-get 'python-mode eglot-server-programs)
+        '("basedpyright-langserver" "--stdio")))
 
 ;; Enable Ruff as an additional source of warnings. This calls
 ;; flymake-ruff-load for every Eglot mode, but it is a no-op for
