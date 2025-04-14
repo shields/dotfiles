@@ -373,7 +373,7 @@ stage it and display a diff."
                   (save-buffer)))))))
     ;; File was already saved.
     (when (magit-file-relative-name)
-      (magit-stage-file buffer-file-name)
+      (magit-file-stage)
       (magit-diff-buffer-file))))
 
 ;;}}}
