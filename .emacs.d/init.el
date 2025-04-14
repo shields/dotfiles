@@ -81,6 +81,7 @@
 
 (setf (alist-get 'height default-frame-alist) 999)
 (setf (alist-get 'width default-frame-alist) 132)
+(setf (alist-get 'internal-border-width default-frame-alist) 0)
 
 ;; Enable color emoji.
 (set-fontset-font
@@ -140,8 +141,16 @@
 (setq-default indent-tabs-mode nil)
 (setopt line-move-visual nil)
 (setopt shift-select-mode nil)
+(setopt mouse-yank-at-point t)
+(setopt save-interprogram-paste-before-kill t)
 
 (add-hook 'prog-mode-hook #'kill-ring-deindent-mode)
+
+(global-so-long-mode 1)
+
+(use-package whole-line-or-region
+  :config
+  (whole-line-or-region-global-mode))
 
 ;; Enable subword-mode in programming modes
 (add-hook 'prog-mode-hook #'subword-mode)
@@ -189,8 +198,6 @@
 
 (use-package expand-region
   :bind ("C-=" . er/expand-region))
-
-(setopt save-interprogram-paste-before-kill t)
 
 (use-package tree-sitter)
 
@@ -799,13 +806,42 @@ stage it and display a diff."
 ;;}}}
 ;;{{{ Completion
 
-(load "~/.emacs.d/completion-config.el")
+(global-completion-preview-mode 1)
+
+(use-package vertico
+  :config
+  (vertico-mode)
+  :custom
+  (vertico-count 20)
+  (vertico-cycle t))
+
+(use-package orderless
+  :custom
+  (completion-styles '(orderless basic))
+  (completion-category-overrides
+   '((file (styles basic partial-completion))))
+  (orderless-matching-styles
+   '(orderless-flex orderless-literal orderless-regexp)))
+
+(use-package marginalia
+  :config
+  (marginalia-mode)
+  :custom
+  (marginalia-max-relative-age 86400)) ; 24 hours in seconds
+
+(use-package cape
+  :config
+  (add-to-list 'completion-at-point-functions #'cape-file)
+  (add-to-list 'completion-at-point-functions #'cape-dabbrev))
 
 ;;}}}
 ;;{{{ Info
 
 (use-package info
   :hook (Info-mode . variable-pitch-mode))
+
+(use-package info-colors
+  :hook (Info-selection . info-colors-fontify-node))
 
 ;;}}}
 ;;{{{ jka-compr
@@ -828,6 +864,8 @@ stage it and display a diff."
       '((display-buffer-in-side-window)
         (side . bottom)
         (window-height . 0.25)))
+
+(global-eldoc-mode 1)
 
 ;;}}}
 ;;{{{ Eglot
