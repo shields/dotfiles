@@ -879,7 +879,20 @@ stage it and display a diff."
               ("C-c l a" . eglot-code-actions)
               ("C-c l f" . eglot-format)
               ("C-c l d" . eldoc)
-              ("C-c l h" . eglot-help-at-point)))
+              ("C-c l h" . eglot-help-at-point))
+  :hook
+  (eglot-managed-mode . eglot-inlay-hints-mode))
+
+;; https://github.com/golang/tools/blob/master/gopls/doc/settings.md
+(setq-default eglot-workspace-configuration
+              '(:gopls ((staticcheck . t)
+                        (vulncheck . "Imports")
+                        (hints . ((assignVariableTypes . t)
+                                  (compositeLiteralFields . t)
+                                  (compositeLiteralTypes . t)
+                                  (functionTypeParameters . t)
+                                  (parameterNames . t)
+                                  (rangeVariableTypes . t))))))
 
 ;;;}}}
 ;;{{{ Markdown
@@ -947,7 +960,6 @@ stage it and display a diff."
               ("C-c C-c a" . eglot-code-actions))
   :custom
   (rustic-analyzer-command '("rust-analyzer"))
-  (eglot-ignored-server-capabilities '(:inlayHintProvider))
   :hook
   (rustic-mode . eglot-ensure))
 
