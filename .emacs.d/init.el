@@ -232,9 +232,10 @@
 (setopt doom-modeline-minor-modes t)
 (setopt doom-modeline-number-limit 999)
 (setopt doom-modeline-vcs-max-length 32)
-(setopt doom-modeline-column-zero-based nil)
 (setopt doom-modeline-total-line-number t)
-(setopt doom-modeline-position-column-line-format '("c%c %l"))
+(setopt doom-modeline-position-column-line-format '("%c:%l"))
+
+(column-number-mode 1)
 
 (minions-mode 1)
 
