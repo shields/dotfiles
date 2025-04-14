@@ -465,7 +465,7 @@ stage it and display a diff."
   :hook
   (go-ts-mode . eglot-ensure)
   (go-ts-mode . shields/suppress-whitespace-mode)
-  (go-mod-ts-mode . shields/suppress-whitespace-mod)
+  (go-mod-ts-mode . shields/suppress-whitespace-mode)
   :config
   (setf (alist-get 'go-dot-mod-mode major-mode-remap-alist) #'go-mod-ts-mode))
 
