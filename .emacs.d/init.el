@@ -271,6 +271,10 @@ when called with a prefix argument."
 (setopt global-auto-revert-non-file-buffers t)
 (setopt auto-revert-verbose nil)
 
+;; This is only an issue when looking at the source for Emacs Lisp packages
+;; installed via straight.
+(setopt vc-follow-symlinks t)
+
 ;;}}}
 ;;{{{ Global keybindings
 
