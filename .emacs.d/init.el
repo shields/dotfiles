@@ -313,11 +313,11 @@ when called with a prefix argument."
 (global-set-key "\e\e" #'eval-expression)
 
 ;; Disable some keys
-(global-set-key [(control x) (o)] nil)  ; other-window
-(global-set-key [(control x) (b)] nil)  ; switch-to-buffer
-(global-set-key [(control v)] nil)      ; scroll-up-command
-(global-set-key [(control w)] nil)      ; kill-region
-(global-set-key [(meta q)] nil)
+(global-unset-key [(control x) (o)])  ; other-window
+(global-unset-key [(control x) (b)])  ; switch-to-buffer
+(global-unset-key [(control v)])      ; scroll-up-command
+(global-unset-key [(control w)])      ; kill-region
+(global-unset-key [(meta q)])         ; macOS standard to quit
 
 ;;}}}
 
