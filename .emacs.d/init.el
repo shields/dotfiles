@@ -355,6 +355,8 @@ when called with a prefix argument."
 (defun shields/save-dwim (arg)
   "Save and do other things.
 
+If the file is part of an active server edit, call `server-edit`.
+
 If the file is being freshly saved and it is part of a project,
 also save all other project buffers.
 
@@ -374,7 +376,10 @@ stage it and display a diff."
     ;; File was already saved.
     (when (magit-file-relative-name)
       (magit-file-stage)
-      (magit-diff-buffer-file))))
+      (magit-diff-buffer-file)))
+  ;; Handle server edit regardless of fresh save or not
+  (when server-buffer-clients
+    (server-edit)))
 
 ;;}}}
 
