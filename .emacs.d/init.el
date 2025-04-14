@@ -879,9 +879,8 @@ stage it and display a diff."
               ("C-c l a" . eglot-code-actions)
               ("C-c l f" . eglot-format)
               ("C-c l d" . eldoc)
-              ("C-c l h" . eglot-help-at-point))
-  :hook
-  (eglot-managed-mode . eglot-inlay-hints-mode))
+              ("C-c l h" . eglot-help-at-point)
+              ("C-c l i" . eglot-inlay-hints-mode)))
 
 ;; https://github.com/golang/tools/blob/master/gopls/doc/settings.md
 (setq-default eglot-workspace-configuration
