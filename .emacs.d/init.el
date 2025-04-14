@@ -421,7 +421,7 @@ stage it and display a diff."
 ;;}}}
 ;;{{{ dockerfile-mode
 
-(use-package dockerfile-mode)
+(use-package dockerfile-ts-mode)
 
 ;;}}}
 ;;{{{ emacs-lisp-mode
