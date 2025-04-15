@@ -348,7 +348,7 @@ when called with a prefix argument."
 (global-set-key "\e\e" #'eval-expression)
 
 ;; Disable some keys
-(global-unset-key [(control c) (f)])  ; set-fill-column
+(global-unset-key [(control x) (f)])  ; set-fill-column
 (global-unset-key [(control x) (o)])  ; other-window
 (global-unset-key [(control x) (b)])  ; switch-to-buffer
 (global-unset-key [(control v)])      ; scroll-up-command
