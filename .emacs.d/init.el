@@ -227,6 +227,27 @@
 (which-key-mode 1)
 (which-key-setup-minibuffer)
 
+(defun shields/atomic-chrome-create-file-strategy (url extension)
+  "Create atomic-chrome temp files in empty directories, so that tools are not
+confused by other nearby files."
+  (if extension
+      (make-temp-file "atomic-chrome-" t)
+    'buffer))
+
+(use-package atomic-chrome
+  :demand t
+  :straight (atomic-chrome
+             :repo "KarimAziev/atomic-chrome"
+             :type git
+             :flavor nil
+             :host github)
+  :commands (atomic-chrome-start-server)
+  :custom
+  (atomic-chrome-buffer-open-style 'frame)
+  (atomic-chrome-create-file-strategy #'shields/atomic-chrome-create-file-strategy)
+  :config
+  (atomic-chrome-start-server))
+
 ;;}}}
 ;;{{{ Mode line
 
