@@ -116,9 +116,10 @@
 (setopt mouse-wheel-tilt-scroll t
         mouse-wheel-flip-direction t)
 
-;; Enable sub-line scrolling.
+;; Enable sub-line scrolling and window sizing.
 (pixel-scroll-precision-mode t)
 (setopt pixel-scroll-precision-use-momentum t)
+(setopt frame-resize-pixelwise t)
 
 ;;}}}
 ;;{{{ Editing behavior
