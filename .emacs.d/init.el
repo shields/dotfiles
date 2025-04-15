@@ -175,7 +175,9 @@
 (use-package aggressive-indent
   :hook (prog-mode . aggressive-indent-mode)
   :config
-  (setopt aggressive-indent-excluded-modes '(go-ts-mode terraform-mode))
+  (add-to-list 'aggressive-indent-excluded-modes 'go-ts-mode)
+  (add-to-list 'aggressive-indent-excluded-modes 'python-ts-mode)
+  (add-to-list 'aggressive-indent-excluded-modes 'terraform-mode)
   (global-aggressive-indent-mode 1))
 
 ;; Leave electric-indent enabled for modes that don't work well with
@@ -223,7 +225,7 @@
 
 (setopt treesit-font-lock-level 4)
 
-(setopt flymake-show-diagnostics-at-end-of-line t)
+(setopt flymake-show-diagnostics-at-end-of-line nil)
 
 (which-key-mode 1)
 (which-key-setup-minibuffer)
