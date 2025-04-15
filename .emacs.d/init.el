@@ -1166,7 +1166,7 @@ stage it and display a diff."
  '(font-lock-doc-markup-face ((t (:inherit font-lock-doc-face))))
  '(font-lock-function-call-face ((t (:foreground "#701919"))))
  '(font-lock-function-name-face ((t (:inherit font-lock-function-call-face :weight bold))))
- '(font-lock-keyword-face ((t (:foreground "Purple"))))
+ '(font-lock-keyword-face ((t (:inherit font-lock-punctuation-face))))
  '(font-lock-negation-char-face ((t (:foreground "dark red"))))
  '(font-lock-property-name-face ((t (:inherit font-lock-property-use-face :weight bold))))
  '(font-lock-property-use-face ((t (:foreground "MidnightBlue"))))
