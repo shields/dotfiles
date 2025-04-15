@@ -981,7 +981,12 @@ stage it and display a diff."
 ;;}}}
 ;;{{{ Rust
 
+(use-package rust-mode
+  :init
+  (setq rust-mode-treesitter-derive t))
+
 (use-package rustic
+  :after rust-mode
   :bind (:map rustic-mode-map
               ("M-?" . xref-find-references)
               ("C-c C-c l" . flycheck-list-errors)
@@ -989,6 +994,7 @@ stage it and display a diff."
               ("C-c C-c a" . eglot-code-actions))
   :custom
   (rustic-analyzer-command '("rust-analyzer"))
+  (rustic-lsp-client 'eglot)
   :hook
   (rustic-mode . eglot-ensure))
 
