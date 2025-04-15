@@ -923,7 +923,18 @@ stage it and display a diff."
                                   (parameterNames . t)
                                   (rangeVariableTypes . t))))))
 
-;;;}}}
+;;}}}
+;;{{{ JavaScript and TypeScript
+
+(use-package js
+  :hook
+  (js-ts-mode-hook . eglot-ensure))
+
+(use-package typescript-ts-mode
+  :hook
+  (typescript-ts-mode-hook . eglot-ensure))
+
+;;}}}
 ;;{{{ Markdown
 
 (use-package markdown-mode
