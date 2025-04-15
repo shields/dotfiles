@@ -30,8 +30,8 @@ export EDITOR VISUAL PAGER
 #}}}
 #{{{ Setup for specific apps
 
-# less. 0.382 ≈ 1/φ. kY matches the macOS findHighlightColor.
-LESS='-eFiMX -j.382 --incsearch --mouse --use-color --color=SkY'
+# less. 0.382 ≈ 1/φ. 16.226 matches the macOS findHighlightColor.
+LESS='-eFiMX -j.382 --incsearch --mouse --use-color --color=PWc$ --color=S16.226$'
 export LESS
 
 # pyenv.
