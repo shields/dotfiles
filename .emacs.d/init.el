@@ -50,7 +50,7 @@
 
 ;; Disable various visual elements
 (blink-cursor-mode 0)
-(menu-bar-mode 0)
+(menu-bar-mode (not (eq system-type 'darwin)))
 (tool-bar-mode 0)
 
 ;; Highlight tabs and trailing spaces
