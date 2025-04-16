@@ -508,6 +508,13 @@ stage it and display a diff."
             #'elisp-eldoc-var-docstring-with-value nil t))
 (add-hook 'emacs-lisp-mode-hook #'shields/elisp-eldoc-with-value)
 
+;; If we have a copy of the Emacs source code, `describe-function' can browse
+;; into it.
+(let ((dir "~/src/emacs/src"))
+  (when (and (not find-function-C-source-directory)
+             (file-readable-p (expand-file-name "emacs.c" dir)))
+    (setq find-function-C-source-directory dir)))
+
 ;;}}}
 ;;{{{ Go
 
