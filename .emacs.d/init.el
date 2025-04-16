@@ -331,6 +331,7 @@ when called with a prefix argument."
 (global-set-key [(meta a)] #'mark-whole-buffer)
 (global-set-key [(meta f)] #'isearch-forward)
 (global-set-key [(meta o)] #'find-file)
+(global-set-key [(meta w)] #'delete-frame)
 
 ;; Navigation
 (global-set-key [(meta \`)] #'other-frame)
