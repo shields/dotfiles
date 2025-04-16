@@ -487,6 +487,9 @@ stage it and display a diff."
 ;;}}}
 ;;{{{ emacs-lisp-mode
 
+(use-package paren-face
+  :hook emacs-lisp-mode)
+
 (define-key emacs-lisp-mode-map [(meta return)] #'eval-last-sexp)
 
 (defun shields/eval-expression-minibuffer-setup ()
@@ -1241,6 +1244,7 @@ stage it and display a diff."
  '(mode-line-buffer-id ((t (:weight semi-bold))))
  '(mode-line-emphasis ((t (:weight semi-bold))))
  '(mode-line-inactive ((t (:inherit mode-line :background "grey80" :foreground "grey20" :box (:line-width -1 :color "grey75") :weight light))))
+ '(parenthesis ((t (:inherit font-lock-bracket-face))))
  '(show-paren-match ((t (:foreground "magenta" :weight bold))))
  '(show-paren-match-expression ((t (:background "#f4f4ff"))))
  '(sp-pair-overlay-face ((t (:inherit sp-show-pair-match-content-face))))
