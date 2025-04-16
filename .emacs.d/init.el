@@ -132,13 +132,16 @@
 (use-package cape)
 
 (use-package crux
-  :bind (("C-k" . crux-smart-kill-line)
-         ("s-o" . crux-smart-open-line)
-         ("C-c d" . crux-duplicate-current-line-or-region)
-         ("C-c e" . crux-eval-and-replace)))
+  :bind
+  (("C-k" . crux-smart-kill-line)
+   ("s-o" . crux-smart-open-line)
+   ("C-c d" . crux-duplicate-current-line-or-region)
+   ("C-c e" . crux-eval-and-replace)))
 
-(use-package goto-last-change
-  :bind ("M-h" . goto-last-change))
+(use-package goto-chg
+  :bind
+  (("C-." . goto-last-change)
+   ("C-," . goto-last-change-reverse)))
 
 (use-package posframe)
 
