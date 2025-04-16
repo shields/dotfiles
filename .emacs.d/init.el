@@ -1179,8 +1179,6 @@ stage it and display a diff."
   :init
   (savehist-mode))
 
-(server-start)
-
 ;; Don't block Emacs exit; that blocks automatic macOS upgrades.
 (setopt confirm-kill-processes nil)
 
