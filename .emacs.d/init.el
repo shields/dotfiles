@@ -62,6 +62,11 @@
 (defun shields/suppress-whitespace-mode ()
   (setq-local whitespace-style nil))
 
+;; Remove trailing whitespace on save, for edited lines only.
+(use-package ws-butler
+  :config
+  (ws-butler-global-mode 1))
+
 ;; Enable visual bell.  But on macOS, the visual bell pops up "the
 ;; standard NextStep image 'caution'" (src/nsterm.m).  This is not
 ;; correct.  Better is to set "Flash the screen when an alert sound
