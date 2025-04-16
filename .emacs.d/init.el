@@ -46,7 +46,8 @@
         window-min-height 2
         blink-matching-delay 0.25
         tab-bar-show 1
-        tab-bar-close-last-tab-choice 'delete-frame)
+        tab-bar-close-last-tab-choice 'delete-frame
+        use-dialog-box nil)
 
 ;; Disable various visual elements
 (blink-cursor-mode 0)
