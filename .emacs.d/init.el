@@ -561,7 +561,11 @@ stage it and display a diff."
 (use-package magit-delta)
 
 ;;}}}
-;;{{{ shell-mode
+;;{{{ sh and bash
+
+(use-package sh-script
+  :hook
+  (bash-ts-mode . eglot-ensure))
 
 (setf (alist-get 'sh-mode major-mode-remap-alist) #'bash-ts-mode)
 
