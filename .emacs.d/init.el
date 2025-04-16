@@ -112,8 +112,6 @@
   (setopt sp-show-pair-delay 0
           sp-ignore-modes-list nil))              ; Even the minibuffer!
 
-;; These settings are now in the use-package declarations above
-
 (setopt scroll-error-top-bottom t)
 
 (setq-default truncate-lines t)
@@ -126,6 +124,8 @@
 (pixel-scroll-precision-mode t)
 (setopt pixel-scroll-precision-use-momentum t)
 (setopt frame-resize-pixelwise t)
+
+(setopt switch-to-buffer-obey-display-actions t)
 
 ;;}}}
 ;;{{{ Editing behavior
@@ -549,11 +549,12 @@ stage it and display a diff."
 ;; Help mode configuration
 (setopt help-window-select t)
 
-(customize-set-variable
- 'display-buffer-alist
- '(("\\*Help\\*" display-buffer-same-window)))
+(add-to-list 'display-buffer-alist
+             '("^\\*Help\\*"
+               (display-buffer-reuse-mode-window
+                display-buffer-below-selected)))
 
-(define-key help-mode-map [(q)] #'previous-buffer)
+(define-key help-mode-map [(q)] #'quit-window)
 
 ;;}}}
 ;;{{{ jsonnet-mode
@@ -940,10 +941,12 @@ stage it and display a diff."
 
 ;; Display in a "side" window at the bottom.
 (setopt eldoc-display-functions '(eldoc-display-in-buffer))
-(setf (alist-get "^\\*eldoc" display-buffer-alist)
-      '((display-buffer-in-side-window)
-        (side . bottom)
-        (window-height . 0.25)))
+(add-to-list 'display-buffer-alist
+             '("^\\*eldoc"
+               (display-buffer-in-side-window)
+               (side . bottom)
+               (window-height . 0.25)
+               (window-parameters . ((no-delete-other-windows . t)))))
 
 (global-eldoc-mode 1)
 
