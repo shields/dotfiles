@@ -539,7 +539,7 @@
                                     "key_code": "keypad_4",
                                     "modifiers": { "optional": [] }
                                 },
-                                "to": [{ "shell_command": "/opt/homebrew/bin/emacsclient --create-frame --alternate-editor ''" }],
+                                "to": [{ "shell_command": "/opt/homebrew/bin/emacsclient --create-frame --alternate-editor '' --no-wait" }],
                                 "type": "basic"
                             }
                         ]
