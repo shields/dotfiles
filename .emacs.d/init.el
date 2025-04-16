@@ -474,8 +474,10 @@ stage it and display a diff."
   (objc-mode . eglot-ensure))
 
 ;; Use a current clangd, not the old one that comes with Xcode.
-(setf (alist-get '(c-mode c-ts-mode c++-mode c++-ts-mode objc-mode) eglot-server-programs)
-      '("/opt/homebrew/opt/llvm/bin/clangd"))
+(with-eval-after-load 'eglot
+  (setf (alist-get '(c-mode c-ts-mode c++-mode c++-ts-mode objc-mode)
+                   eglot-server-programs)
+        '("/opt/homebrew/opt/llvm/bin/clangd")))
 
 ;;}}}
 ;;{{{ dockerfile-mode
