@@ -143,8 +143,6 @@
   (("C-." . goto-last-change)
    ("C-," . goto-last-change-reverse)))
 
-(use-package posframe)
-
 ;; Basic editing settings
 (delete-selection-mode 1)
 (setq-default indent-tabs-mode nil)
