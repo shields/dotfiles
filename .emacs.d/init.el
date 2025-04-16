@@ -338,7 +338,7 @@ when called with a prefix argument."
 (global-set-key [(meta o)] #'find-file)
 (global-set-key [(meta w)] #'delete-frame)
 (with-eval-after-load 'isearch
-  (define-key isearch-mode-map [(meta f)] #'isearch-repeat-forward))
+  (define-key isearch-mode-map [(meta g)] #'isearch-repeat-forward))
 
 ;; Navigation
 (global-set-key [(meta \`)] #'other-frame)
