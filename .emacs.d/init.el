@@ -406,7 +406,8 @@ when called with a prefix argument."
 (defun shields/save-dwim (arg)
   "Save and do other things.
 
-If the file is part of an active server edit, call `server-edit`.
+If the file is part of an active server edit or `with-editor' session,
+then finish that.
 
 If the file is being freshly saved and it is part of a project,
 also save all other project buffers.
@@ -422,15 +423,20 @@ stage it and display a diff."
           (let ((inhibit-message t))
             (dolist (buf (project-buffers proj))
               (with-current-buffer buf
-                (when (buffer-file-name)
+                (when (and (buffer-file-name)
+                           (buffer-modified-p))
                   (save-buffer)))))))
-    ;; File was already saved.
-    (when (magit-file-relative-name)
+    ;; File was already saved. If Magit tracks it, then stage it.
+    (when (and (buffer-file-name)
+               (magit-file-tracked-p (buffer-file-name)))
       (magit-file-stage)
       (magit-diff-buffer-file)))
-  ;; Handle server edit regardless of fresh save or not
-  (when server-buffer-clients
-    (server-edit)))
+  ;; Finish server edit if applicable, whether or not we saved any
+  ;; modifications.
+  (cond (with-editor-mode
+         (with-editor-finish arg))
+        (server-buffer-clients
+         (server-edit))))
 
 ;;}}}
 
