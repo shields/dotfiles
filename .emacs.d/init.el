@@ -515,8 +515,7 @@ stage it and display a diff."
 ;; If we have a copy of the Emacs source code, `describe-function' can browse
 ;; into it.
 (let ((dir "~/src/emacs/src"))
-  (when (and (not find-function-C-source-directory)
-             (file-readable-p (expand-file-name "emacs.c" dir)))
+  (when (file-readable-p (expand-file-name "emacs.c" dir))
     (setq find-function-C-source-directory dir)))
 
 ;;}}}
