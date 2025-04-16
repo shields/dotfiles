@@ -452,7 +452,6 @@ stage it and display a diff."
   (avy-keys '(?a ?n ?e ?t ?o ?s ?h ?d ?i ?r))
 
   (avy-background t)
-  (avy-lead-faces '(error error error error error error))
 
   (avy-orders-alist '((avy-goto-char . avy-order-closest)
                       (avy-goto-char-2 . avy-order-closest)
@@ -1167,6 +1166,10 @@ stage it and display a diff."
 (custom-set-faces
  '(default ((t (:inherit nil :extend nil :stipple nil :background "White" :foreground "Black" :inverse-video nil :box nil :strike-through nil :overline nil :underline nil :slant normal :weight normal :height 120 :width normal :foundry "nil" :family "Andale Mono"))))
  '(Info-quoted ((t (:inherit fixed-pitch))))
+ '(avy-goto-char-timer-face ((t (:inherit match))))
+ '(avy-lead-face ((t (:background "magenta" :foreground "white"))))
+ '(avy-lead-face-0 ((t (:inherit avy-lead-face :foreground "gray90"))))
+ '(avy-lead-face-2 ((t (:inherit avy-lead-face :foreground "gray85"))))
  '(company-preview ((t (:foreground "gray60"))))
  '(completions-annotations ((t (:inherit shadow))))
  '(corfu-preview ((t (:foreground "gray60"))))
