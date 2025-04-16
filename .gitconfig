@@ -36,3 +36,12 @@
 [rerere]
 	enabled = true
 	autoupdate = true
+[color "diff"]
+	# These are poorly documented, but can be found at the top of git/diff.c.
+	commit = bold blue
+	meta = brightcyan
+	frag = dim brightcyan
+	func = brightcyan
+	context = dim black
+	oldMoved = magenta      # Standard color, but not bold.
+	newMoved = cyan         # Same.
