@@ -260,22 +260,26 @@ confused by other nearby files."
 ;;}}}
 ;;{{{ Mode line
 
-(use-package doom-modeline)
-(use-package minions)
-(doom-modeline-mode 1)
+(use-package doom-modeline
+  :custom
+  (doom-modeline-height 21)
 
-(setopt doom-modeline-buffer-encoding nil)
-(setopt doom-modeline-major-mode-icon nil)
-(setopt doom-modeline-buffer-file-name-style 'relative-from-project)
-(setopt doom-modeline-minor-modes t)
-(setopt doom-modeline-number-limit 999)
-(setopt doom-modeline-vcs-max-length 32)
-(setopt doom-modeline-total-line-number t)
-(setopt doom-modeline-position-column-line-format '("%c:%l"))
+  (doom-modeline-buffer-encoding nil)
+  (doom-modeline-major-mode-icon nil)
+  (doom-modeline-buffer-file-name-style 'relative-from-project)
+  (doom-modeline-minor-modes t)
+  (doom-modeline-number-limit 999)
+  (doom-modeline-vcs-max-length 32)
+  (doom-modeline-total-line-number t)
+  (doom-modeline-position-column-line-format '("%c:%l"))
+  :config
+  (doom-modeline-mode 1))
+
+(use-package minions
+  :config
+  (minions-mode 1))
 
 (column-number-mode 1)
-
-(minions-mode 1)
 
 ;;}}}
 ;;{{{ Files and buffers
@@ -1199,15 +1203,18 @@ stage it and display a diff."
  '(cperl-array-face ((t (:foreground "Blue"))))
  '(cperl-hash-face ((t (:foreground "Red" :weight bold))))
  '(cursor ((t (:background "firebrick"))))
+ '(doom-modeline ((t nil)))
  '(doom-modeline-bar ((t nil)))
  '(doom-modeline-bar-inactive ((t nil)))
  '(doom-modeline-buffer-file ((t (:inherit mode-line-buffer-id))))
  '(doom-modeline-buffer-major-mode ((t nil)))
  '(doom-modeline-buffer-minor-mode ((t (:slant normal))))
- '(doom-modeline-buffer-modified ((t (:inherit doom-modeline-buffer-path :foreground "blue"))))
+ '(doom-modeline-buffer-modified ((t (:inherit doom-modeline-buffer-path :foreground "#60f5ff"))))
  '(doom-modeline-buffer-path ((t (:inherit mode-line-emphasis))))
  '(doom-modeline-info ((t nil)))
+ '(doom-modeline-notification ((t (:foreground "#41ff87"))))
  '(doom-modeline-project-dir ((t nil)))
+ '(doom-modeline-warning ((t (:inherit (doom-modeline warning)))))
  '(eglot-highlight-symbol-face ((t nil)))
  '(eglot-inlay-hint-face ((t (:inherit nil :background "gray97" :foreground "gray20" :height 0.707))))
  '(fixed-pitch ((t (:family "Andale Mono"))))
@@ -1250,10 +1257,11 @@ stage it and display a diff."
  '(markdown-header-face ((t (:weight bold))))
  '(match ((t (:background "yellow1" :foreground "black"))))
  '(minibuffer-prompt ((t (:weight bold))))
- '(mode-line ((t (:background "grey90" :foreground "black" :box (:line-width -1 :style released-button) :family "Avenir Next"))))
+ '(mode-line ((t (:background "#005462" :foreground "white" :family "Avenir Next"))))
  '(mode-line-buffer-id ((t (:weight semi-bold))))
  '(mode-line-emphasis ((t (:weight semi-bold))))
- '(mode-line-inactive ((t (:inherit mode-line :background "grey80" :foreground "grey20" :box (:line-width -1 :color "grey75") :weight light))))
+ '(mode-line-highlight ((t (:background "#0093a9"))))
+ '(mode-line-inactive ((t (:inherit mode-line :background "#484848"))))
  '(parenthesis ((t (:inherit font-lock-bracket-face))))
  '(show-paren-match ((t (:foreground "magenta" :weight bold))))
  '(show-paren-match-expression ((t (:background "#f4f4ff"))))
