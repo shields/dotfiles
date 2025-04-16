@@ -462,16 +462,20 @@ stage it and display a diff."
 ;;}}}
 
 ;;; Major modes
-;;{{{ c-mode
+;;{{{ C, C++, and Objective-C
 
-;; C mode configuration
-(setopt c-cleanup-list '(brace-else-brace defun-close-semi))
+(use-package c-ts-mode
+  :hook
+  (c-ts-mode . eglot-ensure)
+  (c++-ts-mode . eglot-ensure))
 
-(add-hook 'c-mode-hook
-          (lambda ()
-            (c-set-style "k&r")
-            (setq c-basic-offset 4)
-            (local-set-key "\C-c\C-c" #'compile)))
+(use-package cc-mode
+  :hook
+  (objc-mode . eglot-ensure))
+
+;; Use a current clangd, not the old one that comes with Xcode.
+(setf (alist-get '(c-mode c-ts-mode c++-mode c++-ts-mode objc-mode) eglot-server-programs)
+      '("/opt/homebrew/opt/llvm/bin/clangd"))
 
 ;;}}}
 ;;{{{ dockerfile-mode
