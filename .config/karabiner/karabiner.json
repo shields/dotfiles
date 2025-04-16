@@ -722,7 +722,11 @@
                                     "key_code": "i",
                                     "modifiers": { "mandatory": ["command"] }
                                 },
-                                "to": [{ "key_code": "left_arrow" }],
+                                "to": [
+                                    { "sticky_modifier": { "left_command": "off" } },
+                                    { "sticky_modifier": { "right_command": "off" } },
+                                    { "key_code": "left_arrow" }
+                                ],
                                 "type": "basic"
                             },
                             {
@@ -730,7 +734,11 @@
                                     "key_code": "a",
                                     "modifiers": { "mandatory": ["command"] }
                                 },
-                                "to": [{ "key_code": "down_arrow" }],
+                                "to": [
+                                    { "sticky_modifier": { "left_command": "off" } },
+                                    { "sticky_modifier": { "right_command": "off" } },
+                                    { "key_code": "down_arrow" }
+                                ],
                                 "type": "basic"
                             },
                             {
@@ -738,7 +746,11 @@
                                     "key_code": "e",
                                     "modifiers": { "mandatory": ["command"] }
                                 },
-                                "to": [{ "key_code": "up_arrow" }],
+                                "to": [
+                                    { "sticky_modifier": { "left_command": "off" } },
+                                    { "sticky_modifier": { "right_command": "off" } },
+                                    { "key_code": "up_arrow" }
+                                ],
                                 "type": "basic"
                             },
                             {
@@ -746,7 +758,11 @@
                                     "key_code": "o",
                                     "modifiers": { "mandatory": ["command"] }
                                 },
-                                "to": [{ "key_code": "right_arrow" }],
+                                "to": [
+                                    { "sticky_modifier": { "left_command": "off" } },
+                                    { "sticky_modifier": { "right_command": "off" } },
+                                    { "key_code": "right_arrow" }
+                                ],
                                 "type": "basic"
                             },
                             {
@@ -754,7 +770,13 @@
                                     "key_code": "i",
                                     "modifiers": { "mandatory": ["command", "shift"] }
                                 },
-                                "to": [{ "key_code": "home" }],
+                                "to": [
+                                    { "sticky_modifier": { "left_command": "off" } },
+                                    { "sticky_modifier": { "right_command": "off" } },
+                                    { "sticky_modifier": { "left_shift": "off" } },
+                                    { "sticky_modifier": { "right_shift": "off" } },
+                                    { "key_code": "home" }
+                                ],
                                 "type": "basic"
                             },
                             {
@@ -762,7 +784,13 @@
                                     "key_code": "a",
                                     "modifiers": { "mandatory": ["command", "shift"] }
                                 },
-                                "to": [{ "key_code": "page_down" }],
+                                "to": [
+                                    { "sticky_modifier": { "left_command": "off" } },
+                                    { "sticky_modifier": { "right_command": "off" } },
+                                    { "sticky_modifier": { "left_shift": "off" } },
+                                    { "sticky_modifier": { "right_shift": "off" } },
+                                    { "key_code": "page_down" }
+                                ],
                                 "type": "basic"
                             },
                             {
@@ -770,7 +798,13 @@
                                     "key_code": "e",
                                     "modifiers": { "mandatory": ["command", "shift"] }
                                 },
-                                "to": [{ "key_code": "page_up" }],
+                                "to": [
+                                    { "sticky_modifier": { "left_command": "off" } },
+                                    { "sticky_modifier": { "right_command": "off" } },
+                                    { "sticky_modifier": { "left_shift": "off" } },
+                                    { "sticky_modifier": { "right_shift": "off" } },
+                                    { "key_code": "page_up" }
+                                ],
                                 "type": "basic"
                             },
                             {
@@ -778,7 +812,13 @@
                                     "key_code": "o",
                                     "modifiers": { "mandatory": ["command", "shift"] }
                                 },
-                                "to": [{ "key_code": "end" }],
+                                "to": [
+                                    { "sticky_modifier": { "left_command": "off" } },
+                                    { "sticky_modifier": { "right_command": "off" } },
+                                    { "sticky_modifier": { "left_shift": "off" } },
+                                    { "sticky_modifier": { "right_shift": "off" } },
+                                    { "key_code": "end" }
+                                ],
                                 "type": "basic"
                             },
                             {
