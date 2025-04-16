@@ -565,6 +565,8 @@ stage it and display a diff."
          ("=" . (lambda ()
                   (interactive)
                   (magit-diff-range "origin/main"))))
+  :init
+  (setq magit-define-global-key-bindings 'recommended)
   :custom
   (magit-no-confirm '(safe-with-wip))
   (magit-save-repository-buffers 'dontask)
