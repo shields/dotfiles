@@ -5,6 +5,24 @@
             "complex_modifications": {
                 "rules": [
                     {
+                        "description": "F22 to F19 in Emacs",
+                        "manipulators": [
+                            {
+                                "conditions": [
+                                    {
+                                        "bundle_identifiers": [
+                                            "^org\\.gnu\\.Emacs$"
+                                        ],
+                                        "type": "frontmost_application_if"
+                                    }
+                                ],
+                                "from": { "key_code": "f22" },
+                                "to": [{ "key_code": "f19" }],
+                                "type": "basic"
+                            }
+                        ]
+                    },
+                    {
                         "description": "F22 to up-arrow in iTerm2",
                         "manipulators": [
                             {

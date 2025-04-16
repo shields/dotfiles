@@ -430,10 +430,14 @@ stage it and display a diff."
 ;;{{{ avy
 
 (use-package avy
-  :bind ("M-k" . avy-goto-char-timer))
-;; QGMLWY home row, ordered by finger strength, starting with left
-;; because S-k is on the right.
-(setopt avy-keys '(?n ?a ?t ?e ?s ?o ?d ?h ?r ?i)) ; QGMLWY home row
+  :bind
+  ;; The left thumb is F22 in Bazecor, but that isn't recognized as a key event
+  ;; by macOS Emacs, so we remap it to F19. This could be less dumb.
+  ("<f19>" . avy-goto-char-timer))
+
+;; QGMLWY home row, ordered by finger strength, starting with the right
+;; because the action key is on the left.
+(setopt avy-keys '(?a ?n ?e ?t ?o ?s ?h ?d ?i ?r))
 
 (setopt avy-background t)
 
