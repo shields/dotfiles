@@ -324,6 +324,7 @@ when called with a prefix argument."
 ;; only, to emulate Super.
 
 ;; Standard macOS shortcuts - https://support.apple.com/en-us/102650
+;; See also ns-win.el
 (global-set-key [(meta x)] #'kill-region)
 (global-set-key [(super x)] #'execute-extended-command)
 (global-set-key [(meta c)] #'copy-region-as-kill)
@@ -334,11 +335,11 @@ when called with a prefix argument."
 (global-set-key [(meta o)] #'find-file)
 
 ;; Navigation
-(global-set-key [(home)] #'move-beginning-of-line)
-(global-set-key [(end)] #'move-end-of-line)
+(global-set-key [(meta \`)] #'other-frame)
 (global-set-key [(meta \')] #'next-multiframe-window)
 (global-set-key [(meta \")] #'previous-multiframe-window)
 (global-set-key [(meta n)] #'next-error)
+(global-set-key [(meta p)] #'previous-error)
 (global-set-key [(meta t)] #'previous-buffer)
 (global-set-key [(meta T)] #'next-buffer)
 (global-set-key [(control t)] #'switch-to-buffer)
