@@ -364,6 +364,7 @@ when called with a prefix argument."
 (global-unset-key [(control v)])      ; scroll-up-command
 (global-unset-key [(control w)])      ; kill-region
 (global-unset-key [(meta q)])         ; macOS standard to quit
+(global-unset-key [(super t)])        ; menu-set-font
 
 ;;}}}
 
