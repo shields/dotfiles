@@ -1,5 +1,7 @@
 ;;; -*- lexical-binding: t -*-
 
+(setq straight-vc-git-default-clone-depth 1)
+
 ;; Straight bootstrap, pasted from its README.md.
 (defvar bootstrap-version)
 (let ((bootstrap-file
