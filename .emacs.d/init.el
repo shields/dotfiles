@@ -314,6 +314,13 @@ when called with a prefix argument."
 ;;}}}
 ;;{{{ Global keybindings
 
+(defun shields/delete-window-or-frame ()
+  "Call `delete-window'. If it fails, call `delete-frame'."
+  (interactive)
+  (condition-case nil
+      (delete-window)
+    (error (delete-frame))))
+
 ;; macOS modifier key setup
 ;; Option (or Alt) ⌥: ignore so as to allow system-wide symbol input mechanism
 (setopt ns-alternate-modifier nil)
@@ -336,7 +343,7 @@ when called with a prefix argument."
 (global-set-key [(meta a)] #'mark-whole-buffer)
 (global-set-key [(meta f)] #'isearch-forward)
 (global-set-key [(meta o)] #'find-file)
-(global-set-key [(meta w)] #'delete-frame)
+(global-set-key [(meta w)] #'shields/delete-window-or-frame)
 (with-eval-after-load 'isearch
   (define-key isearch-mode-map [(meta g)] #'isearch-repeat-forward))
 
