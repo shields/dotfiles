@@ -367,7 +367,6 @@ when called with a prefix argument."
 ;; Disable some keys
 (global-unset-key [(control x) (f)])  ; set-fill-column
 (global-unset-key [(control x) (o)])  ; other-window
-(global-unset-key [(control x) (b)])  ; switch-to-buffer
 (global-unset-key [(control v)])      ; scroll-up-command
 (global-unset-key [(control w)])      ; kill-region
 (global-unset-key [(meta q)])         ; macOS standard to quit
