@@ -478,6 +478,7 @@ stage it and display a diff."
 
   (avy-orders-alist '((avy-goto-char . avy-order-closest)
                       (avy-goto-char-2 . avy-order-closest)
+                      (avy-goto-char-timer . avy-order-closest)
                       (avy-isearch . avy-order-closest)))
 
   (avy-handler-function #'shields/avy-handler))
