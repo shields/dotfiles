@@ -866,9 +866,13 @@ stage it and display a diff."
 ;;{{{ LLMs
 
 (use-package gptel
-  :config
-  (setopt gptel-model 'gpt-4o)
-  (add-hook 'gptel-post-stream-hook #'gptel-auto-scroll))
+  :hook
+  (gptel-post-stream . gptel-auto-scroll)
+  :custom
+  (gptel-model 'claude-3-7-sonnet-20250219)
+  (gptel-backend (gptel-make-anthropic "Claude"
+                   :stream t
+                   :key (auth-source-pick-first-password :host "api.anthropic.com"))))
 
 (use-package chatgpt-shell
   :config
