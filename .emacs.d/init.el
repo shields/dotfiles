@@ -152,6 +152,8 @@
 (setopt mouse-yank-at-point t)
 (setopt save-interprogram-paste-before-kill t)
 
+(setopt search-nonincremental-instead nil)
+
 (add-hook 'prog-mode-hook #'kill-ring-deindent-mode)
 
 (global-so-long-mode 1)
