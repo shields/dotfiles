@@ -653,32 +653,24 @@ stage it and display a diff."
 ;;}}}
 ;;{{{ view-mode
 
-(setopt view-read-only t)
+(defun shields/goto-prefix-percent (arg)
+  (interactive "NGoto percentage: ")
+  (if (and (>= arg 0) (<= arg 100))
+      (goto-char (+ (point-min)
+                    (/ (* (- (point-max) (point-min)) arg) 100)))
+    (error "No such thing as %d%%" arg)))
 
-(add-hook 'view-mode-hook
-          (lambda ()
-            ;; Bind a few view-mode keys to vi/less-like bindings
-            (define-key view-mode-map "j" #'next-line)
-            (define-key view-mode-map "k" #'previous-line)
-            (define-key view-mode-map "^" #'beginning-of-line)
-            (define-key view-mode-map "$" #'end-of-line)
-            (define-key view-mode-map "G"
-                        (lambda (arg)
-                          (interactive "P")
-                          (cond ((null arg) (goto-char (point-max)))
-                                ((numberp arg) (goto-line arg))
-                                (t (error "Must use numeric or no argument")))))))
-
-;; Hmm... worked in Emacs 18.
-;;(define-key view-mode-map "%"
-;;  '(lambda (arg)
-;;     (interactive "P")
-;;     (cond ((numberp arg)
-;;          (if (and (>= arg 0) (<= arg 100))
-;;               (goto-char (+ (point-min)
-;;                             (/ (* (- (point-max) (point-min)) arg) 100))))
-;;            (error "No such thing as %d%%" arg)))
-;;         (t (error "Must use numeric argument")))))
+(use-package view
+  :custom
+  (view-read-only t)
+  :bind
+  (:map view-mode-map
+        ("j" . next-line)
+        ("k" . previous-line)
+        ("^" . beginning-of-line)
+        ("$" . end-of-line)
+        ("G" . goto-line)
+        ("%" . shields/goto-prefix-percent)))
 
 ;;}}}
 ;;{{{ XML
