@@ -854,22 +854,13 @@ stage it and display a diff."
 (use-package flyspell
   :custom
   (flyspell-abbrev-p nil)
-  (flyspell-sort-corrections nil)
-  (flyspell-persistent-highlight nil)
-  :bind (:map flyspell-mode-map
-              ([(meta tab)] . nil))
+  (flyspell-sort-corrections nil)       ; aspell already sorts
+  :bind
+  (:map flyspell-mode-map
+        ([(meta tab)] . nil))
   :hook
-  ;; Normally using (flyspell-mode-on) directly is deprecated in favor
-  ;; of (flyspell-mode 1), which is smart enough not to reinitialize.
-  ;; However, we actually want to reinitialize. For example,
-  ;; message-mode runs text-mode-hook before message-mode-hook; if
-  ;; flyspell mode is already on, then flyspell-generic-check-word-p
-  ;; will never get set with its message-mode-specific value.
-  (text-mode . flyspell-mode-on)
-  (message-mode . flyspell-mode-on)
-  ;; flyspell-prog-mode depends on font-lock to identify comments and
-  ;; strings, so it won't work without it anyway.
-  (font-lock-mode . flyspell-prog-mode))
+  (prog-mode . flyspell-prog-mode)
+  (text-mode . turn-on-flyspell))
 
 ;;}}}
 ;;{{{ LLMs
