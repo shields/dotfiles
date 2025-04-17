@@ -365,7 +365,6 @@ when called with a prefix argument."
 (global-set-key [(control backspace)] #'join-line)
 (global-set-key [(meta g)] #'grep)
 (global-set-key [(meta r)] #'replace-string)
-(global-set-key [s-mouse-1] #'ffap-at-mouse)
 
 ;; Put M-ESC (i.e., ESC ESC) back to the way it was when I learned
 ;; Emacs.  Apparently this changed in 1994.
@@ -378,6 +377,15 @@ when called with a prefix argument."
 (global-unset-key [(control w)])      ; kill-region
 (global-unset-key [(meta q)])         ; macOS standard to quit
 (global-unset-key [(super t)])        ; menu-set-font
+
+;; Disable bindings for the secondary selection, often activated by mistake and
+;; never useful.
+(global-unset-key [M-mouse-1])
+(global-unset-key [M-mouse-2])
+(global-unset-key [M-mouse-3])
+(global-unset-key [M-down-mouse-1])
+(global-unset-key [M-drag-mouse-1])
+(global-unset-key [s-y])
 
 ;;}}}
 
@@ -410,6 +418,14 @@ when called with a prefix argument."
   (if (project-current)
       (project-find-file)
     (counsel-find-file arg)))
+
+(defun shields/ffap-at-mouse-error ()
+  "Same behavior as default, except an error instead of a message."
+  (interactive)
+  (error "No file or URL found at mouse click."))
+(setq ffap-at-mouse-fallback #'shields/ffap-at-mouse-error)
+
+(global-set-key [M-mouse-1] #'ffap-at-mouse)
 
 (defun shields/save-dwim (arg)
   "Save and do other things.
