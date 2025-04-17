@@ -873,9 +873,7 @@ stage it and display a diff."
   :custom
   (flyspell-abbrev-p nil)
   (flyspell-sort-corrections nil)       ; aspell already sorts
-  :bind
-  (:map flyspell-mode-map
-        ([(meta tab)] . nil))
+  (flyspell-use-meta-tab nil)
   :hook
   (prog-mode . flyspell-prog-mode)
   (text-mode . turn-on-flyspell))
