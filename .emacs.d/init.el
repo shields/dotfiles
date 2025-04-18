@@ -703,7 +703,9 @@ stage it and display a diff."
 ;;}}}
 ;;{{{ yaml-mode
 
-(use-package yaml-mode)
+(use-package yaml-mode
+  :hook
+  (yaml-ts-mode-hook . eglot-ensure))
 
 ;;}}}
 ;;; Features
