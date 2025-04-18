@@ -141,8 +141,8 @@
 
 (use-package goto-chg
   :bind
-  (("C-." . goto-last-change)
-   ("C-," . goto-last-change-reverse)))
+  (("s-." . goto-last-change)
+   ("s-," . goto-last-change-reverse)))
 
 ;; Basic editing settings
 (delete-selection-mode 1)
