@@ -116,7 +116,7 @@ brew "yarn"
 brew "yq"
 brew "yt-dlp"
 brew "zsh"
-brew "d12frosted/emacs-plus/emacs-plus@30", args: ["with-native-comp", "with-no-frame-refocus"]
+brew "d12frosted/emacs-plus/emacs-plus@30", args: ["with-no-frame-refocus", "with-retro-emacs-logo-icon"]
 brew "gabrie30/utils/ghorg"
 brew "golangci/tap/golangci-lint"
 brew "osx-cross/avr/avr-gcc@9"

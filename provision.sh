@@ -263,7 +263,12 @@ killall ControlCenter Finder cfprefsd
 # image directly there, so it doesn't reference this source directory.
 desktoppr "$HOME/Library/Application Support/desktoppr/navy_blue.png"
 
+# Emacs setup
 emacs --batch --script .emacs.d/provision.el
+rm -rf /Applications/Emacs.app
+# Per the emacs-plus instructions:
+osascript -e 'tell application "Finder" to make alias file to posix file "/opt/homebrew/opt/emacs-plus@30/Emacs.app" at posix file "/Applications" with properties {name:"Emacs.app"}'
+brew services start d12frosted/emacs-plus/emacs-plus@30
 
 # rustup
 rustup-init --no-modify-path -y >/dev/null
