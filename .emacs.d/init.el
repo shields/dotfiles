@@ -200,10 +200,9 @@
   (apheleia-global-mode 1)
   ;; Replace black with ruff, and gofmt with goimports.
   (dolist (el apheleia-mode-alist)
-    (when (eq (cdr el) 'black)
-      (setf (cdr el) 'ruff))
-    (when (eq (cdr el) 'gofmt)
-      (setf (cdr el) 'goimports))))
+    (pcase (cdr el)
+      ('black (setf (cdr el) 'ruff))
+      ('gofmt (setf (cdr el) 'goimports)))))
 
 (use-package editorconfig
   :config
@@ -826,22 +825,16 @@ stage it and display a diff."
 ;;{{{ Flymake
 
 (defun shields/clean-flymake-diagnostic-message (message)
-  (cond
-   ((string-match "^\\(?:based\\)?pyright \\[[^]]+\\]: \\(.*\\)" message)
-    (match-string 1 message))
-   ((string-match "^Ruff: [A-Z0-9]+ \\(.*\\)" message)
-    (match-string 1 message))
-   (t message)))
+  (pcase message
+    ((rx bos (or "pyright" "basedpyright") " [" (+ (not "]")) "]: " (let msg (+ anything)) eos)
+     msg)
+    ((rx bos "Ruff: " (+ (any "A-Z0-9")) " " (let msg (+ anything)) eos)
+     msg)
+    (_ message)))
 
 (defun shields/flymake-make-diagnostic-advice (args)
-  (let* ((locus (nth 0 args))
-         (beg (nth 1 args))
-         (end (nth 2 args))
-         (type (nth 3 args))
-         (text (nth 4 args))
-         (data (nth 5 args))
-         (overlay-properties (nth 6 args))
-         (cleaned-text (shields/clean-flymake-diagnostic-message text)))
+  (pcase-let* ((`(,locus ,beg ,end ,type ,text ,data ,overlay-properties) args)
+              (cleaned-text (shields/clean-flymake-diagnostic-message text)))
     (list locus beg end type cleaned-text data overlay-properties)))
 
 (ert-deftest shields/test-clean-flymake-diagnostic-message ()
