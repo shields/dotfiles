@@ -720,12 +720,16 @@
 			</dict>
 			<key>Selection Color</key>
 			<dict>
-				<key>Blue Component</key>
+				<key>Alpha Component</key>
 				<real>1</real>
+				<key>Blue Component</key>
+				<real>0.99215686274509807</real>
+				<key>Color Space</key>
+				<string>P3</string>
 				<key>Green Component</key>
-				<real>0.8353000283241272</real>
+				<real>0.92549019607843142</real>
 				<key>Red Component</key>
-				<real>0.70980000495910645</real>
+				<real>0.88235294117647056</real>
 			</dict>
 			<key>Semantic History</key>
 			<dict>
@@ -766,6 +770,8 @@
 			<true/>
 			<key>Use Non-ASCII Font</key>
 			<false/>
+			<key>Use Selected Text Color</key>
+			<true/>
 			<key>Use Underline Color</key>
 			<false/>
 			<key>Vertical Spacing</key>

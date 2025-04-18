@@ -92,7 +92,8 @@ defaults write NSGlobalDomain NSAutomaticWindowAnimationsEnabled -bool false
 defaults write NSGlobalDomain NSScrollAnimationEnabled -bool false
 defaults write NSGlobalDomain NSWindowResizeTime -float 0.001
 # A lighter blue than standard '0.698039 0.843137 1.000000 Blue', which
-# is OKLCH (0.8633, 0.0695, 251.25). I think this is in linear RGB.
+# is OKLCH (0.8633, 0.0695, 251.25). This is in linear RGB.
+# The sRGB equivalent is #dfecff.
 defaults write NSGlobalDomain AppleHighlightColor '0.56153 0.75605 1.01381 Other'
 # Avoid having to sudo by checking this value before writing it. For some
 # reason, 1.5 is stored as 1.496458570615034, so compare it as a number.
