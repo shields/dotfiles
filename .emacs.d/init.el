@@ -834,7 +834,7 @@ stage it and display a diff."
 
 (defun shields/flymake-make-diagnostic-advice (args)
   (pcase-let* ((`(,locus ,beg ,end ,type ,text ,data ,overlay-properties) args)
-              (cleaned-text (shields/clean-flymake-diagnostic-message text)))
+               (cleaned-text (shields/clean-flymake-diagnostic-message text)))
     (list locus beg end type cleaned-text data overlay-properties)))
 
 (ert-deftest shields/test-clean-flymake-diagnostic-message ()
