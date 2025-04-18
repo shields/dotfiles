@@ -175,3 +175,5 @@ md() {
 
 # Initialize Starship prompt
 eval "$(starship init zsh)"
+
+source "$HOME/.iTerm2/shell_integration.zsh"
