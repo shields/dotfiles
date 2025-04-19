@@ -247,7 +247,6 @@ confused by other nearby files."
 
 (use-package atomic-chrome
   :demand t
-  :after minions
   :straight (atomic-chrome
              :repo "KarimAziev/atomic-chrome"
              :type git
@@ -258,7 +257,6 @@ confused by other nearby files."
   (atomic-chrome-buffer-open-style 'frame)
   (atomic-chrome-create-file-strategy #'shields/atomic-chrome-create-file-strategy)
   :config
-  (add-to-list 'minions-prominent-modes 'atomic-chrome-edit-mode)
   (atomic-chrome-start-server))
 
 ;;}}}
@@ -267,20 +265,24 @@ confused by other nearby files."
 (use-package doom-modeline
   :custom
   (doom-modeline-height 21)
+  (doom-modeline-spc-face-overrides '(:inherit (fixed-pitch)))
 
   (doom-modeline-buffer-encoding nil)
-  (doom-modeline-major-mode-icon nil)
+  (doom-modeline-major-mode-icon t)
+  (doom-modeline-major-mode-color-icon nil)
   (doom-modeline-buffer-file-name-style 'relative-from-project)
   (doom-modeline-minor-modes t)
   (doom-modeline-number-limit 999)
   (doom-modeline-vcs-max-length 32)
   (doom-modeline-total-line-number t)
   (doom-modeline-position-column-line-format '("%c:%l"))
+
   :config
   (doom-modeline-mode 1))
 
 (use-package minions
   :config
+  (add-to-list 'minions-prominent-modes 'atomic-chrome-edit-mode)
   (minions-mode 1))
 
 (column-number-mode 1)
@@ -411,9 +413,7 @@ when called with a prefix argument."
 (global-set-key [(meta down)] #'move-line-down)
 
 (use-package project
-  :bind ("M-b" . shields/open-dwim)
-  :custom
-  (project-mode-line t))
+  :bind ("M-b" . shields/open-dwim))
 
 (defun shields/open-dwim (arg)
   "Open in the current project if in a project, otherwise whatever."
