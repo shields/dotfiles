@@ -264,9 +264,6 @@ confused by other nearby files."
 
 (use-package doom-modeline
   :custom
-  (doom-modeline-height 21)
-  (doom-modeline-spc-face-overrides '(:inherit (fixed-pitch)))
-
   (doom-modeline-buffer-encoding nil)
   (doom-modeline-major-mode-icon t)
   (doom-modeline-major-mode-color-icon nil)
@@ -276,6 +273,17 @@ confused by other nearby files."
   (doom-modeline-vcs-max-length 32)
   (doom-modeline-total-line-number t)
   (doom-modeline-position-column-line-format '("%c:%l"))
+
+  (doom-modeline-height 21)
+  (doom-modeline-spc-face-overrides '(:inherit (fixed-pitch)))
+  ;; Pending my https://github.com/seagle0128/doom-modeline/pull/776:
+  (doom-modeline-vcs-state-faces-alist
+   '((needs-update . doom-modeline-warning)
+     (removed . doom-modeline-urgent)
+     (conflict . doom-modeline-urgent)
+     (unregistered . doom-modeline-urgent)
+     (edited . (doom-modeline-buffer-modified doom-modeline-info))
+     (added . (doom-modeline-buffer-modified doom-modeline-info))))
 
   :config
   (doom-modeline-mode 1))
