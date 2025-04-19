@@ -38,7 +38,9 @@
 (use-package symbol-overlay
   :hook (prog-mode . symbol-overlay-mode)
   :config
-  (setopt symbol-overlay-idle-time 0.1))
+  (setopt symbol-overlay-idle-time 0.1)
+  :custom-face
+  (symbol-overlay-default-face ((t (:foreground "magenta")))))
 
 ;; Basic interface settings
 (setopt inhibit-startup-message t
@@ -109,8 +111,14 @@
   (require 'smartparens-config)
   (smartparens-global-mode 1)
   (show-smartparens-global-mode 1)
-  (setopt sp-show-pair-delay 0
-          sp-ignore-modes-list nil))              ; Even the minibuffer!
+  :custom
+  (sp-show-pair-delay 0)
+  (sp-ignore-modes-list nil)            ; Even the minibuffer!
+  :custom-face
+  (sp-pair-overlay-face ((t (:inherit sp-show-pair-match-content-face))))
+  (sp-show-pair-match-content-face ((t (:inherit show-paren-match-expression))))
+  (sp-show-pair-match-face ((t (:inherit (show-paren-match show-paren-match-expression)))))
+  (sp-wrap-overlay-opening-pair ((t (:inherit sp-wrap-overlay-face :foreground "magenta")))))
 
 (setopt scroll-error-top-bottom t)
 
@@ -274,8 +282,7 @@ confused by other nearby files."
   (doom-modeline-number-limit 999)
   (doom-modeline-vcs-max-length 32)
   (doom-modeline-total-line-number t)
-  (doom-modeline-position-column-line-format '("%c:%l"))
-
+  (doom-modeline-position-column-line-format '("%c  %l"))
   (doom-modeline-height 21)
   (doom-modeline-spc-face-overrides '(:inherit (fixed-pitch)))
   ;; Pending my https://github.com/seagle0128/doom-modeline/pull/776:
@@ -286,9 +293,26 @@ confused by other nearby files."
      (unregistered . doom-modeline-urgent)
      (edited . (doom-modeline-buffer-modified doom-modeline-info))
      (added . (doom-modeline-buffer-modified doom-modeline-info))))
-
   :config
-  (doom-modeline-mode 1))
+  (doom-modeline-mode 1)
+
+  :custom-face
+  (doom-modeline ((t (:inherit mode-line))))
+  (doom-modeline-bar ((t (:inherit doom-modeline))))
+  (doom-modeline-bar-inactive ((t (:inherit mode-line-inactive))))
+  (doom-modeline-buffer-file ((t (:inherit mode-line-buffer-id))))
+  (doom-modeline-buffer-major-mode ((t nil)))
+  (doom-modeline-buffer-minor-mode ((t (:inherit doom-modeline :slant normal :weight normal))))
+  (doom-modeline-buffer-modified ((t (:inherit doom-modeline-buffer-path :foreground "#60f5ff"))))
+  (doom-modeline-buffer-path ((t (:inherit mode-line-emphasis))))
+  (doom-modeline-info ((t (:inherit doom-modeline))))
+  (doom-modeline-notification ((t (:foreground "#41ff87"))))
+  (doom-modeline-project-dir ((t (:inherit doom-modeline))))
+  (doom-modeline-project-name ((t (:inherit (doom-modeline italic)))))
+  (doom-modeline-project-parent-dir ((t (:inherit doom-modeline))))
+  (doom-modeline-project-root-dir ((t (:inherit doom-modeline))))
+  (doom-modeline-warning ((t (:inherit (doom-modeline warning)))))
+  (doom-modeline-workspace-name ((t nil))))
 
 (use-package minions
   :config
@@ -513,7 +537,13 @@ stage it and display a diff."
                       (avy-goto-char-timer . avy-order-closest)
                       (avy-isearch . avy-order-closest)))
 
-  (avy-handler-function #'shields/avy-handler))
+  (avy-handler-function #'shields/avy-handler)
+
+  :custom-face
+  (avy-goto-char-timer-face ((t (:inherit match))))
+  (avy-lead-face ((t (:background "magenta" :foreground "white"))))
+  (avy-lead-face-0 ((t (:inherit avy-lead-face :foreground "gray90"))))
+  (avy-lead-face-2 ((t (:inherit avy-lead-face :foreground "gray85")))))
 
 ;;}}}
 
@@ -544,7 +574,10 @@ stage it and display a diff."
 ;;{{{ emacs-lisp-mode
 
 (use-package paren-face
-  :hook emacs-lisp-mode)
+  :hook emacs-lisp-mode
+
+  :custom-face
+  (parenthesis ((t (:inherit font-lock-bracket-face)))))
 
 (define-key emacs-lisp-mode-map [(meta return)] #'eval-last-sexp)
 
@@ -878,7 +911,13 @@ stage it and display a diff."
 
 (use-package flymake
   :config
-  (advice-add 'flymake-make-diagnostic :filter-args #'shields/flymake-make-diagnostic-advice))
+  (advice-add 'flymake-make-diagnostic :filter-args #'shields/flymake-make-diagnostic-advice)
+
+  :custom-face
+  (flymake-end-of-line-diagnostics-face ((t (:background "gray97" :height 0.707))))
+  (flymake-error-echo-at-eol ((t (:inherit (flymake-end-of-line-diagnostics-face compilation-error) :weight normal))))
+  (flymake-note-echo-at-eol ((t (:inherit (flymake-end-of-line-diagnostics-face compilation-info) :weight normal))))
+  (flymake-warning-echo-at-eol ((t (:inherit (flymake-end-of-line-diagnostics-face compilation-warning) :weight normal)))))
 
 ;;}}}
 ;;{{{ Flyspell
@@ -925,7 +964,11 @@ stage it and display a diff."
   (vertico-mode)
   :custom
   (vertico-count 20)
-  (vertico-cycle t))
+  (vertico-cycle t)
+
+  :custom-face
+  (vertico-current ((t (:background "thistle1" :weight bold))))
+  (vertico-group-title ((t (:weight bold)))))
 
 (use-package orderless
   :custom
@@ -994,7 +1037,11 @@ stage it and display a diff."
               ("C-c l f" . eglot-format)
               ("C-c l d" . eldoc)
               ("C-c l h" . eglot-help-at-point)
-              ("C-c l i" . eglot-inlay-hints-mode)))
+              ("C-c l i" . eglot-inlay-hints-mode))
+
+  :custom-face
+  (eglot-highlight-symbol-face ((t nil)))
+  (eglot-inlay-hint-face ((t (:inherit nil :background "gray97" :foreground "gray20" :height 0.707)))))
 
 ;; https://github.com/golang/tools/blob/master/gopls/doc/settings.md
 (setq-default eglot-workspace-configuration
@@ -1024,7 +1071,11 @@ stage it and display a diff."
 (use-package markdown-mode
   :hook
   (markdown-mode . variable-pitch-mode)
-  (markdown-mode . typo-mode))
+  (markdown-mode . typo-mode)
+
+  :custom-face
+  (markdown-code-face ((t (:inherit fixed-pitch :background "#f850f850f850" :height 0.8))))
+  (markdown-header-face ((t (:weight bold)))))
 
 (use-package typo)
 
@@ -1232,41 +1283,13 @@ stage it and display a diff."
 ;; Don't block Emacs exit; that blocks automatic macOS upgrades.
 (setopt confirm-kill-processes nil)
 
+;; Core Emacs custom faces
 (custom-set-faces
  '(default ((t (:inherit nil :extend nil :stipple nil :background "White" :foreground "Black" :inverse-video nil :box nil :strike-through nil :overline nil :underline nil :slant normal :weight normal :height 120 :width normal :foundry "nil" :family "Andale Mono"))))
  '(Info-quoted ((t (:inherit fixed-pitch))))
- '(avy-goto-char-timer-face ((t (:inherit match))))
- '(avy-lead-face ((t (:background "magenta" :foreground "white"))))
- '(avy-lead-face-0 ((t (:inherit avy-lead-face :foreground "gray90"))))
- '(avy-lead-face-2 ((t (:inherit avy-lead-face :foreground "gray85"))))
- '(company-preview ((t (:foreground "gray60"))))
  '(completions-annotations ((t (:inherit shadow))))
- '(corfu-preview ((t (:foreground "gray60"))))
- '(cperl-array-face ((t (:foreground "Blue"))))
- '(cperl-hash-face ((t (:foreground "Red" :weight bold))))
  '(cursor ((t (:background "firebrick"))))
- '(doom-modeline ((t nil)))
- '(doom-modeline-bar ((t nil)))
- '(doom-modeline-bar-inactive ((t nil)))
- '(doom-modeline-buffer-file ((t (:inherit mode-line-buffer-id))))
- '(doom-modeline-buffer-major-mode ((t nil)))
- '(doom-modeline-buffer-minor-mode ((t (:slant normal))))
- '(doom-modeline-buffer-modified ((t (:inherit doom-modeline-buffer-path :foreground "#60f5ff"))))
- '(doom-modeline-buffer-path ((t (:inherit mode-line-emphasis))))
- '(doom-modeline-info ((t nil)))
- '(doom-modeline-notification ((t (:foreground "#41ff87"))))
- '(doom-modeline-project-dir ((t nil)))
- '(doom-modeline-warning ((t (:inherit (doom-modeline warning)))))
- '(eglot-highlight-symbol-face ((t nil)))
- '(eglot-inlay-hint-face ((t (:inherit nil :background "gray97" :foreground "gray20" :height 0.707))))
  '(fixed-pitch ((t (:family "Andale Mono"))))
- '(flycheck-error ((t nil)))
- '(flycheck-info ((t nil)))
- '(flycheck-warning ((t nil)))
- '(flymake-end-of-line-diagnostics-face ((t (:background "gray97" :height 0.707))))
- '(flymake-error-echo-at-eol ((t (:inherit (flymake-end-of-line-diagnostics-face compilation-error) :weight normal))))
- '(flymake-note-echo-at-eol ((t (:inherit (flymake-end-of-line-diagnostics-face compilation-info) :weight normal))))
- '(flymake-warning-echo-at-eol ((t (:inherit (flymake-end-of-line-diagnostics-face compilation-warning) :weight normal))))
  '(font-lock-builtin-face ((t (:inherit font-lock-function-call-face))))
  '(font-lock-comment-face ((t (:foreground "#197019"))))
  '(font-lock-constant-face ((t nil)))
@@ -1291,11 +1314,6 @@ stage it and display a diff."
  '(font-lock-warning-face ((t (:inherit nil))))
  '(highlight ((t (:background "darkseagreen1"))))
  '(isearch ((t (:inherit match))))
- '(ivy-current-match ((t (:background "thistle1" :weight bold))))
- '(ivy-highlight-face ((t (:weight bold))))
- '(ivy-minibuffer-match-face-2 ((t (:foreground "dark magenta" :weight bold))))
- '(ivy-minibuffer-match-face-3 ((t (:inherit ivy-minibuffer-match-face-2))))
- '(ivy-minibuffer-match-face-4 ((t (:inherit ivy-minibuffer-match-face-3))))
  '(lazy-highlight ((t (:inherit match))))
  '(link-visited ((t (:inherit link))))
  '(lsp-face-highlight-textual ((t (:background "#d0ffd0"))))
@@ -1312,15 +1330,6 @@ stage it and display a diff."
  '(region ((t (:background "selectedTextBackgroundColor" :extend nil))))
  '(show-paren-match ((t (:foreground "magenta" :weight bold))))
  '(show-paren-match-expression ((t (:background "#f4f4ff"))))
- '(sp-pair-overlay-face ((t (:inherit sp-show-pair-match-content-face))))
- '(sp-show-pair-match-content-face ((t (:inherit show-paren-match-expression))) t)
- '(sp-show-pair-match-face ((t (:inherit (show-paren-match show-paren-match-expression)))))
- '(sp-wrap-overlay-opening-pair ((t (:inherit sp-wrap-overlay-face :foreground "magenta"))))
- '(swiper-match-face-4 ((t (:inherit match))))
- '(symbol-overlay-default-face ((t (:foreground "magenta"))))
- '(variable-pitch ((t (:height 1.2 :family "Avenir Next"))))
- '(vertico-current ((t (:background "thistle1" :weight bold))))
- '(vertico-group-title ((t (:weight bold))))
- '(vhl/default-face ((t (:background "DarkSeaGreen1")))))
+ '(variable-pitch ((t (:height 1.2 :family "Avenir Next")))))
 
 ;;}}}
