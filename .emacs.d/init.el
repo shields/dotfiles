@@ -623,6 +623,10 @@ stage it and display a diff."
   (magit-no-confirm '(safe-with-wip))
   (magit-save-repository-buffers 'dontask)
   (magit-diff-refine-hunk 'all)
+  (magit-section-initial-visibility-alist
+   '((file . show)
+     (hunk . show)
+     (commit . show)))
   :config
   (magit-wip-mode 1))
 
