@@ -6,7 +6,7 @@
 (load-file ".emacs.d/init.el")
 
 (straight-pull-all)
-
+(straight-check-all)
 (straight-remove-unused-repos t)
 
 (nerd-icons-install-fonts 1)
