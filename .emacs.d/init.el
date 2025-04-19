@@ -11,7 +11,7 @@
 
 ;; Write customizations to a separate file instead of appending here.
 (setopt custom-file (locate-user-emacs-file "custom.el"))
-(load custom-file)
+(load custom-file t)
 
 ;;}}}
 
