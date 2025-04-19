@@ -348,60 +348,60 @@ when called with a prefix argument."
 
 ;; Standard macOS shortcuts - https://support.apple.com/en-us/102650
 ;; See also ns-win.el
-(global-set-key [(meta x)] #'kill-region)
-(global-set-key [(super x)] #'execute-extended-command)
-(global-set-key [(meta c)] #'copy-region-as-kill)
-(global-set-key [(meta v)] #'yank)
-(global-set-key [(meta z)] #'undo)
-(global-set-key [(meta a)] #'mark-whole-buffer)
-(global-set-key [(meta f)] #'isearch-forward)
-(global-set-key [(meta o)] #'find-file)
-(global-set-key [(meta w)] #'shields/delete-window-or-frame)
+(keymap-global-set "M-x" #'kill-region)
+(keymap-global-set "s-x" #'execute-extended-command)
+(keymap-global-set "M-c" #'copy-region-as-kill)
+(keymap-global-set "M-v" #'yank)
+(keymap-global-set "M-z" #'undo)
+(keymap-global-set "M-a" #'mark-whole-buffer)
+(keymap-global-set "M-f" #'isearch-forward)
+(keymap-global-set "M-o" #'find-file)
+(keymap-global-set "M-w" #'shields/delete-window-or-frame)
 (with-eval-after-load 'isearch
   (define-key isearch-mode-map [(meta g)] #'isearch-repeat-forward))
 
 ;; Navigation
-(global-set-key [(meta \`)] #'other-frame)
-(global-set-key [(meta \')] #'next-multiframe-window)
-(global-set-key [(meta \")] #'previous-multiframe-window)
-(global-set-key [(meta n)] #'next-error)
-(global-set-key [(meta p)] #'previous-error)
-(global-set-key [(meta t)] #'previous-buffer)
-(global-set-key [(meta T)] #'next-buffer)
-(global-set-key [(control t)] #'switch-to-buffer)
+(keymap-global-set "M-`" #'other-frame)
+(keymap-global-set "M-'" #'next-multiframe-window)
+(keymap-global-set "M-\"" #'previous-multiframe-window)
+(keymap-global-set "M-n" #'next-error)
+(keymap-global-set "M-p" #'previous-error)
+(keymap-global-set "M-t" #'previous-buffer)
+(keymap-global-set "M-T" #'next-buffer)
+(keymap-global-set "C-t" #'switch-to-buffer)
 
 ;; Coding
-(global-set-key [(meta /)] #'completion-at-point)
-(global-set-key [(meta \:)] #'comment-dwim)
-(global-set-key [(control c) (F)] #'find-file-at-point)
-(global-set-key [(super space)] #'fixup-whitespace)
-(global-set-key [(control backspace)] #'join-line)
-(global-set-key [(meta g)] #'grep)
-(global-set-key [(meta r)] #'replace-string)
+(keymap-global-set "M-/" #'completion-at-point)
+(keymap-global-set "M-:" #'comment-dwim)
+(keymap-global-set "C-c F" #'find-file-at-point)
+(keymap-global-set "s-SPC" #'fixup-whitespace)
+(keymap-global-set "C-<backspace>" #'join-line)
+(keymap-global-set "M-g" #'grep)
+(keymap-global-set "M-r" #'replace-string)
 
 ;; Put M-ESC (i.e., ESC ESC) back to the way it was when I learned
 ;; Emacs.  Apparently this changed in 1994.
-(global-set-key "\e\e" #'eval-expression)
+(keymap-global-set "M-ESC" #'eval-expression)
 
 ;; Disable some keys
-(global-unset-key [(control x) (f)])  ; set-fill-column
-(global-unset-key [(control x) (o)])  ; other-window
-(global-unset-key [(control v)])      ; scroll-up-command
-(global-unset-key [(control w)])      ; kill-region
-(global-unset-key [(meta q)])         ; macOS standard to quit
+(keymap-global-unset "C-x f")  ; set-fill-column
+(keymap-global-unset "C-x o")  ; other-window
+(keymap-global-unset "C-v")    ; scroll-up-command
+(keymap-global-unset "C-w")    ; kill-region
+(keymap-global-unset "M-q")    ; macOS standard to quit
 ;; macOS standard bindings from ns-win.el that I just don't like:
-(global-unset-key [(super m)])        ; iconify-frame
-(global-unset-key [(super q)])        ; save-buffers-kill-emacs
-(global-unset-key [(super t)])        ; menu-set-font
+(keymap-global-unset "s-m")    ; iconify-frame
+(keymap-global-unset "s-q")    ; save-buffers-kill-emacs
+(keymap-global-unset "s-t")    ; menu-set-font
 
 ;; Disable bindings for the secondary selection, often activated by mistake and
 ;; never useful.
-(global-unset-key [M-mouse-1])
-(global-unset-key [M-mouse-2])
-(global-unset-key [M-mouse-3])
-(global-unset-key [M-down-mouse-1])
-(global-unset-key [M-drag-mouse-1])
-(global-unset-key [s-y])
+(keymap-global-unset "M-<mouse-1>")
+(keymap-global-unset "M-<mouse-2>")
+(keymap-global-unset "M-<mouse-3>")
+(keymap-global-unset "M-<down-mouse-1>")
+(keymap-global-unset "M-<drag-mouse-1>")
+(keymap-global-unset "s-y")
 
 ;;}}}
 
@@ -420,8 +420,8 @@ when called with a prefix argument."
   (forward-line 1)
   (transpose-lines 1)
   (forward-line -1))
-(global-set-key [(meta up)] #'move-line-up)
-(global-set-key [(meta down)] #'move-line-down)
+(keymap-global-set "M-<up>" #'move-line-up)
+(keymap-global-set "M-<down>" #'move-line-down)
 
 (use-package project
   :bind ("M-b" . shields/open-dwim))
@@ -439,7 +439,7 @@ when called with a prefix argument."
   (error "No file or URL found at mouse click."))
 (setq ffap-at-mouse-fallback #'shields/ffap-at-mouse-error)
 
-(global-set-key [M-mouse-1] #'ffap-at-mouse)
+(keymap-global-set "M-<mouse-1>" #'ffap-at-mouse)
 
 (defun shields/save-dwim (arg)
   "Save and do other things.
