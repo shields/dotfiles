@@ -1,7 +1,5 @@
 ;;; -*- lexical-binding: t -*-
 
-(setq straight-vc-git-default-clone-depth 1)
-
 ;; Straight bootstrap, pasted from its README.md.
 (defvar bootstrap-version)
 (let ((bootstrap-file
@@ -21,10 +19,21 @@
 
 (setq package-enable-at-startup nil)
 
-;; Configure use-package to use straight.el
 (use-package straight
   :custom
-  (straight-use-package-by-default t))
+  (straight-use-package-by-default t)
+  (straight-vc-git-default-clone-depth 1))
+
+;; Pending https://debbugs.gnu.org/cgi/bugreport.cgi?bug=77928
+(defun use-package-handler/:custom-face (name _keyword args rest state)
+  "Generate use-package custom-face keyword code."
+  (use-package-concat
+   (mapcar #'(lambda (def)
+               `(progn
+                  (apply #'face-spec-set (append (backquote ,def) '(face-defface-spec)))
+                  (put ',(car def) 'face-modified t)))
+           args)
+   (use-package-process-keywords name rest state)))
 
 ;; Work around https://github.com/joaotavora/eglot/discussions/1436
 (straight-use-package 'project)
