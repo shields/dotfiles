@@ -263,6 +263,8 @@ confused by other nearby files."
 ;;{{{ Mode line
 
 (use-package doom-modeline
+  :straight (:fork "shields" :branch "vcs-font-custom")
+
   :custom
   (doom-modeline-buffer-encoding nil)
   (doom-modeline-major-mode-icon t)
