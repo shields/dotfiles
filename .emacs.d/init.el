@@ -389,6 +389,9 @@ when called with a prefix argument."
 (global-unset-key [(control v)])      ; scroll-up-command
 (global-unset-key [(control w)])      ; kill-region
 (global-unset-key [(meta q)])         ; macOS standard to quit
+;; macOS standard bindings from ns-win.el that I just don't like:
+(global-unset-key [(super m)])        ; iconify-frame
+(global-unset-key [(super q)])        ; save-buffers-kill-emacs
 (global-unset-key [(super t)])        ; menu-set-font
 
 ;; Disable bindings for the secondary selection, often activated by mistake and
