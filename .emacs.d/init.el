@@ -247,6 +247,7 @@ confused by other nearby files."
 
 (use-package atomic-chrome
   :demand t
+  :after minions
   :straight (atomic-chrome
              :repo "KarimAziev/atomic-chrome"
              :type git
@@ -257,6 +258,7 @@ confused by other nearby files."
   (atomic-chrome-buffer-open-style 'frame)
   (atomic-chrome-create-file-strategy #'shields/atomic-chrome-create-file-strategy)
   :config
+  (add-to-list 'minions-prominent-modes 'atomic-chrome-edit-mode)
   (atomic-chrome-start-server))
 
 ;;}}}
