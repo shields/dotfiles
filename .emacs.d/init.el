@@ -625,6 +625,12 @@ stage it and display a diff."
 
 (use-package magit-delta)
 
+(use-package forge)
+
+(let ((github-username (magit-config-get-from-cached-list "github.user")))
+  (when github-username
+    (add-to-list 'forge-owned-accounts github-username)))
+
 ;;}}}
 ;;{{{ sh and bash
 

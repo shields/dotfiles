@@ -42,6 +42,7 @@ fi
 # Set email address in .gitconfig.
 if [[ "$(whoami)" == shields ]] && ! (profiles status -type enrollment | grep -q ': Yes'); then
     git config --global user.email shields@msrl.com
+    git config --global github.user shields # For Magit Forge
 fi
 
 # Homebrew bundle sync. Update using `brew bundle dump -f`.
