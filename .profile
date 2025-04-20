@@ -8,9 +8,11 @@
 umask 022
 
 # Terminal and locale setup.
-stty erase '^?'
-stty cs8
-stty -ixon
+if [ -t 0 ]; then
+    stty erase '^?'
+    stty cs8
+    stty -ixon
+fi
 
 if [ -z "$LANG" ]; then
     LANG=en_US.UTF-8
