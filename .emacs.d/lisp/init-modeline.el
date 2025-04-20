@@ -8,8 +8,6 @@
 ;;; Code:
 
 (use-package doom-modeline
-  :straight (:fork "shields" :branch "vcs-font-custom")
-
   :custom
   (doom-modeline-buffer-encoding nil)
   (doom-modeline-major-mode-icon t)
@@ -22,7 +20,6 @@
   (doom-modeline-position-column-line-format '("%c  %l"))
   (doom-modeline-height 21)
   (doom-modeline-spc-face-overrides '(:inherit (fixed-pitch)))
-  ;; Pending my https://github.com/seagle0128/doom-modeline/pull/776:
   (doom-modeline-vcs-state-faces-alist
    '((needs-update . doom-modeline-warning)
      (removed . doom-modeline-urgent)
@@ -30,6 +27,7 @@
      (unregistered . doom-modeline-urgent)
      (edited . (doom-modeline-buffer-modified doom-modeline-info))
      (added . (doom-modeline-buffer-modified doom-modeline-info))))
+
   :config
   (doom-modeline-mode 1)
 
