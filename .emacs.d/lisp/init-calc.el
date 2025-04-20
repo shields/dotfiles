@@ -45,7 +45,7 @@
          (setq calc-transient-frames
                (delete (selected-frame) calc-transient-frames))
          (delete-frame)))
-     (define-key calc-mode-map "q" 'calc-quit-or-delete-transient-frame)))
+     (keymap-set calc-mode-map "q" 'calc-quit-or-delete-transient-frame)))
 
 (provide 'init-calc)
 ;;; init-calc.el ends here

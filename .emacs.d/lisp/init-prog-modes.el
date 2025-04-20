@@ -27,7 +27,7 @@
   :custom-face
   (parenthesis ((t (:inherit font-lock-bracket-face)))))
 
-(define-key emacs-lisp-mode-map [(meta return)] #'eval-last-sexp)
+(keymap-set emacs-lisp-mode-map "M-RET" #'eval-last-sexp)
 
 (defun shields/eval-expression-minibuffer-setup ()
   (insert "()")
@@ -74,7 +74,7 @@
 ;; Makefile
 (add-hook 'makefile-mode-hook
           (lambda ()
-            (local-set-key "\C-c\C-c" #'compile)))
+            (keymap-set (current-local-map) "C-c C-c" #'compile)))
 
 ;; Perl
 ;; Make sure perl-mode doesn't even get loaded.
@@ -88,9 +88,9 @@
 (eval-after-load "perl-mode"
   '(add-hook 'perl-mode-hook
              (function (lambda ()
-                         (define-key perl-mode-map "\M-oq"
+                         (keymap-set perl-mode-map "M-o q"
                                      'describe-perl-symbol)
-                         (define-key perl-mode-map "\M-od"
+                         (keymap-set perl-mode-map "M-o d"
                                      'switch-to-perl-doc-buffer)))))
 
 (eval-after-load "cperl-mode"

@@ -75,7 +75,7 @@
 (use-package whole-line-or-region
   :config
   (whole-line-or-region-global-mode)
-  (define-key whole-line-or-region-local-mode-map [remap comment-dwim] nil))
+  (keymap-set whole-line-or-region-local-mode-map "<remap> <comment-dwim>" nil))
 
 ;; Enable subword-mode in programming modes
 (add-hook 'prog-mode-hook #'subword-mode)

@@ -65,7 +65,7 @@
 ;; XML
 (add-hook 'xml-mode-hook
           (lambda ()
-            (define-key xml-mode-map "'"
+            (keymap-set xml-mode-map "'"
                         (lambda ()
                           (interactive)
                           (insert-string "&#8217;")))))
@@ -78,7 +78,7 @@
                (display-buffer-reuse-mode-window
                 display-buffer-below-selected)))
 
-(define-key help-mode-map [(q)] #'quit-window)
+(keymap-set help-mode-map "q" #'quit-window)
 
 (provide 'init-text-modes)
 ;;; init-text-modes.el ends here
