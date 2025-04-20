@@ -3,8 +3,6 @@
 # Michael Shields <shields@msrl.com>
 #
 
-#{{{ General configuration
-
 umask 022
 
 # Terminal and locale setup.
@@ -24,13 +22,10 @@ if [ "$TERM" = linux ]; then
 fi
 
 # Set default editor and pager.
-EDITOR=vi
+EDITOR="vi"
 VISUAL="$EDITOR"
 test -x /usr/bin/less && PAGER=less
 export EDITOR VISUAL PAGER
-
-#}}}
-#{{{ Setup for specific apps
 
 # less. 0.382 ≈ 1/φ. 16.226 matches the macOS findHighlightColor.
 LESS='-eFiMX -j.382 --incsearch --mouse --use-color --color=PWc$ --color=S16.226$'
@@ -52,14 +47,3 @@ export RSYNC_RSH
 # vi.
 EXINIT=':set ai'
 export EXINIT
-
-#}}}
-
-#{{{ Emacs local variables
-
-# local variables:
-# folded-file: t
-# fold-marks: ("#{{{ " "#}}}")
-# end:
-
-#}}}
