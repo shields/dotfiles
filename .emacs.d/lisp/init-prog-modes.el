@@ -77,22 +77,6 @@
             (keymap-set (current-local-map) "C-c C-c" #'compile)))
 
 ;; Perl
-;; Make sure perl-mode doesn't even get loaded.
-(defalias 'perl-mode 'cperl-mode)
-
-(autoload 'describe-perl-symbol "perl-descr"
-  "One-line information on a perl symbol" t)
-(autoload 'switch-to-perl-doc-buffer "perl-descr"
-  "One-line information on a perl symbol" t)
-
-(eval-after-load "perl-mode"
-  '(add-hook 'perl-mode-hook
-             (function (lambda ()
-                         (keymap-set perl-mode-map "M-o q"
-                                     'describe-perl-symbol)
-                         (keymap-set perl-mode-map "M-o d"
-                                     'switch-to-perl-doc-buffer)))))
-
 (eval-after-load "cperl-mode"
   '(cperl-set-style "PerlStyle"))
 
