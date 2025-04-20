@@ -42,3 +42,8 @@
 (require 'flymake)
 
 (setq use-package-always-ensure t)
+
+(defvar shields/add-lisp-dir-to-load-path t
+  "Used by provision.el to prevent loading old files.")
+(when shields/add-lisp-dir-to-load-path
+  (add-to-list 'load-path (expand-file-name "lisp" user-emacs-directory)))
