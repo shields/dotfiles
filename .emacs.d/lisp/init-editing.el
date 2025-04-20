@@ -183,8 +183,7 @@ confused by other nearby files."
 ;; Native compilation settings
 (when (featurep 'native-compile)
   (setopt native-comp-async-report-warnings-errors 'silent)
-  (setopt native-comp-jit-compilation t)
-  (add-to-list 'native-comp-eln-load-path (expand-file-name "eln-cache/" user-emacs-directory)))
+  (setopt native-comp-jit-compilation t))
 
 ;; Increase process data chunks for better performance
 (setopt read-process-output-max (* 4 1024 1024)) ; 4MiB
