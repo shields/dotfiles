@@ -71,6 +71,11 @@
   :hook
   (typescript-ts-mode-hook . eglot-ensure))
 
+;; Lua
+(use-package lua-ts-mode
+  :hook
+  (lua-ts-mode-hook . eglot-ensure))
+
 ;; Makefile
 (add-hook 'makefile-mode-hook
           (lambda ()

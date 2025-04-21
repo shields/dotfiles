@@ -127,22 +127,11 @@
 
 (use-package tree-sitter)
 
-;; The tree-sitter-langs package installs many useful grammars as .dylib files,
-;; but it does not name them in the way that Emacs expects to find them.
-(setq shields/tree-sitter-langs-path
-      (locate-user-emacs-file "tree-sitter-langs-grammars"))
-(defun shields/symlink-tree-sitter-langs-grammars ()
-  (make-directory shields/tree-sitter-langs-path t)
-  (let ((source-dir (straight--build-dir "tree-sitter-langs" "bin")))
-    (dolist (file (directory-files source-dir nil "\\.\\(dylib\\|so\\)$"))
-      (make-symbolic-link (expand-file-name file source-dir)
-                          (expand-file-name (concat "libtree-sitter-" file)
-                                            shields/tree-sitter-langs-path)
-                          t))))
-
+(defvar shields/tree-sitter-langs-path
+  (locate-user-emacs-file "tree-sitter-langs-grammars")
+  "Used in provision.el to build a symlink farm of bundled grammars.")
 (use-package tree-sitter-langs
   :config
-  (shields/symlink-tree-sitter-langs-grammars)
   (add-to-list 'treesit-extra-load-path shields/tree-sitter-langs-path))
 
 (setopt treesit-font-lock-level 4)
