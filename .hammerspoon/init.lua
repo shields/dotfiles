@@ -1,5 +1,8 @@
 package.path = package.path .. ";" .. os.getenv("HOME") .. "/.hammerspoon/Spoons/?.spoon/init.lua"
 
 hs.loadSpoon("EmmyLua")
+hs.loadSpoon("WindowClipper")
+    :setLogLevel('debug')
+    :start()
 
-print("Hammerspoon config loaded")
+hs.logger.new('Hammerspoon', 'info'):i("Hammerspoon config loaded")
