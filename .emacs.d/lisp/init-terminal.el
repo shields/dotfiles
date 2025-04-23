@@ -12,7 +12,6 @@
   :hook (term-mode . eterm-256color-mode))
 
 (use-package multi-term
-  :bind ("M-p" . multi-term-next)
   :custom
   (term-bind-key-alist
    '(("C-c C-c" . term-interrupt-subjob)
