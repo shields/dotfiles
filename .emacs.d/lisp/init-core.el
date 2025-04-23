@@ -17,8 +17,9 @@
 (load custom-file t)
 
 ;; Disabled commands.  Hmmph.
-(put 'eval-expression 'disabled nil)
+(put 'eval-expression 'disabled nil)    ; M-ESC
 (put 'narrow-to-region 'disabled nil)   ; C-x n n
+(put 'set-goal-column 'disabled nil)    ; C-x C-n
 
 ;; Stop saying "You can run the command blah-blah with M-x bl-b".
 (setopt extended-command-suggest-shorter nil)
