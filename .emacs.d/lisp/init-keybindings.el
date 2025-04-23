@@ -47,7 +47,7 @@
 (keymap-global-set "M-p" #'previous-error)
 (keymap-global-set "M-t" #'previous-buffer)
 (keymap-global-set "M-T" #'next-buffer)
-(keymap-global-set "C-t" #'switch-to-buffer)
+(keymap-global-set "C-t" #'shields/maybe-project-switch-to-buffer)
 
 ;; Coding
 (keymap-global-set "M-/" #'completion-at-point)
@@ -105,7 +105,7 @@
 (keymap-global-set "M-<down>" #'move-line-down)
 
 (use-package project
-  :bind ("M-o" . shields/open-dwim))    ; Really M-b, remapped by Karabiner
+  :bind ("M-o" . shields/maybe-project-find-file))    ; Really M-b, remapped by Karabiner
 
 (defun shields/escape-project-find-file ()
   "Exit project-find-file and run find-file."
@@ -113,9 +113,9 @@
   (run-at-time 0.01 nil (lambda () (call-interactively #'find-file)))
   (exit-minibuffer))
 
-(defun shields/open-dwim (arg)
+(defun shields/maybe-project-find-file (arg)
   "Open in the current project if in a project, otherwise whatever.
-If M-o is pressed inside project-find-file minibuffer, abort and run find-file."
+If \\<global-map>\\[shields/maybe-project-find-file] is pressed inside project-find-file minibuffer, abort and run find-file."
   (interactive "P")
   (if (project-current)
       (minibuffer-with-setup-hook
@@ -123,6 +123,23 @@ If M-o is pressed inside project-find-file minibuffer, abort and run find-file."
             (local-set-key (kbd "M-o") #'shields/escape-project-find-file))
         (project-find-file arg))
     (call-interactively #'find-file)))
+
+(defun shields/escape-project-switch-to-buffer ()
+  "Exit project-switch-to-buffer and run switch-to-buffer."
+  (interactive)
+  (run-at-time 0.01 nil (lambda () (call-interactively #'switch-to-buffer)))
+  (exit-minibuffer))
+
+(defun shields/maybe-project-switch-to-buffer ()
+  "Switch to buffer in the current project if in a project, otherwise whatever.
+If \\<global-map>\\[shields/maybe-project-switch-to-buffer] is pressed inside project-switch-to-buffer minibuffer, abort and run switch-to-buffer."
+  (interactive)
+  (if (project-current)
+      (minibuffer-with-setup-hook
+          (lambda ()
+            (local-set-key (kbd "C-t") #'shields/escape-project-switch-to-buffer))
+        (call-interactively #'project-switch-to-buffer))
+    (call-interactively #'switch-to-buffer)))
 
 (defun shields/ffap-at-mouse-error ()
   "Same behavior as default, except an error instead of a message."
