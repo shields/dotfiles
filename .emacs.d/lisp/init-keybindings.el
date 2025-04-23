@@ -73,6 +73,10 @@
 (keymap-global-unset "s-m")    ; iconify-frame
 (keymap-global-unset "s-q")    ; save-buffers-kill-emacs
 (keymap-global-unset "s-t")    ; menu-set-font
+(keymap-global-unset "C-<mouse-4>")     ; mouse-wheel-text-scale
+(keymap-global-unset "C-<mouse-5>")     ; mouse-wheel-text-scale
+(keymap-global-unset "C-<wheel-down>")  ; mouse-wheel-text-scale
+(keymap-global-unset "C-<wheel-up>")    ; mouse-wheel-text-scale
 
 ;; Disable bindings for the secondary selection, often activated by mistake and
 ;; never useful.
