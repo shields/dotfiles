@@ -107,12 +107,22 @@
 (use-package project
   :bind ("M-o" . shields/open-dwim))    ; Really M-b, remapped by Karabiner
 
+(defun shields/escape-project-find-file ()
+  "Exit project-find-file and run find-file."
+  (interactive)
+  (run-at-time 0.01 nil (lambda () (call-interactively #'find-file)))
+  (exit-minibuffer))
+
 (defun shields/open-dwim (arg)
-  "Open in the current project if in a project, otherwise whatever."
+  "Open in the current project if in a project, otherwise whatever.
+If M-o is pressed inside project-find-file minibuffer, abort and run find-file."
   (interactive "P")
   (if (project-current)
-      (project-find-file arg)
-    (find-file arg)))
+      (minibuffer-with-setup-hook
+          (lambda ()
+            (local-set-key (kbd "M-o") #'shields/escape-project-find-file))
+        (project-find-file arg))
+    (call-interactively #'find-file)))
 
 (defun shields/ffap-at-mouse-error ()
   "Same behavior as default, except an error instead of a message."
