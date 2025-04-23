@@ -16,7 +16,8 @@
 (setopt custom-file (locate-user-emacs-file "custom.el"))
 (load custom-file t)
 
-;; Disabled commands.  Hmmph.
+;; Un-disable some disabled commands. That concept is a mistake: if a command is
+;; too surprising for casual use, then it should not be bound by default.
 (put 'narrow-to-region 'disabled nil)   ; C-x n n
 (put 'set-goal-column 'disabled nil)    ; C-x C-n
 
