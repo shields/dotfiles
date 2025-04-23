@@ -177,13 +177,6 @@ confused by other nearby files."
 ;; Increase process data chunks for better performance
 (setopt read-process-output-max (* 4 1024 1024)) ; 4MiB
 
-;; File-name-handler-alist caching
-(defvar default-file-name-handler-alist file-name-handler-alist)
-(setq file-name-handler-alist nil)
-(add-hook 'emacs-startup-hook
-          (lambda ()
-            (setq file-name-handler-alist default-file-name-handler-alist)))
-
 ;; Tree-sitter mode remapping. This should run after all other packages have
 ;; been loaded, or else we might not know about the modes.
 (defun shields/remap-to-tree-sitter-modes ()
