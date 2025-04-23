@@ -35,7 +35,6 @@
 (keymap-global-set "M-z" #'undo)
 (keymap-global-set "M-a" #'mark-whole-buffer)
 (keymap-global-set "M-f" #'isearch-forward)
-(keymap-global-set "M-o" #'find-file)
 (keymap-global-set "M-w" #'shields/delete-window-or-frame)
 (with-eval-after-load 'isearch
   (define-key isearch-mode-map [(meta g)] #'isearch-repeat-forward))
@@ -106,14 +105,14 @@
 (keymap-global-set "M-<down>" #'move-line-down)
 
 (use-package project
-  :bind ("M-b" . shields/open-dwim))
+  :bind ("M-o" . shields/open-dwim))    ; Really M-b, remapped by Karabiner
 
 (defun shields/open-dwim (arg)
   "Open in the current project if in a project, otherwise whatever."
   (interactive "P")
   (if (project-current)
-      (project-find-file)
-    (counsel-find-file arg)))
+      (project-find-file arg)
+    (find-file arg)))
 
 (defun shields/ffap-at-mouse-error ()
   "Same behavior as default, except an error instead of a message."
