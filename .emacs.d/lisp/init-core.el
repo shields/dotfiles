@@ -17,7 +17,6 @@
 (load custom-file t)
 
 ;; Disabled commands.  Hmmph.
-(put 'eval-expression 'disabled nil)    ; M-ESC
 (put 'narrow-to-region 'disabled nil)   ; C-x n n
 (put 'set-goal-column 'disabled nil)    ; C-x C-n
 
