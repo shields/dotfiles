@@ -11,6 +11,8 @@
 (straight-check-all)
 (straight-remove-unused-repos t)
 
+(tree-sitter-langs-install-latest-grammar t)
+
 ;; The tree-sitter-langs package installs many useful grammars as .dylib files,
 ;; but it does not name them in the way that Emacs expects to find them.
 (make-directory shields/tree-sitter-langs-path t)
