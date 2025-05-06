@@ -147,7 +147,6 @@ cask "git-credential-manager"
 cask "git-credential-manager"
 cask "google-chrome"
 cask "google-cloud-sdk"
-cask "hammerspoon"
 cask "hiddenbar"
 cask "inkscape"
 cask "iterm2"
@@ -178,6 +177,7 @@ mas "Keynote", id: 409183694
 mas "Numbers", id: 409203825
 mas "Pages", id: 409201541
 mas "StopTheMadness Pro", id: 6471380298
+mas "UTC Time", id: 1538245904
 mas "Xcode", id: 497799835
 vscode "charliermarsh.ruff"
 vscode "github.copilot"
