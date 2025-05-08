@@ -155,6 +155,15 @@ export FZF_CTRL_T_COMMAND="fd --type f --hidden --exclude .git"
 export FZF_CTRL_R_OPTS="--height 16 --layout reverse --border none --color bg:#eeeeee"
 export FZF_CTRL_T_OPTS="$FZF_CTRL_R_OPTS"
 
+# fzf-tab configuration
+zstyle ':fzf-tab:*' fzf-command fzf
+zstyle ':fzf-tab:*' fzf-flags --height 16 --layout=reverse --border=none --color bg:#eeeeee
+zstyle ':fzf-tab:*' switch-group ',' '.'
+zstyle ':fzf-tab:*' continuous-trigger '/'
+zstyle ':fzf-tab:*' accept-line enter
+zstyle ':fzf-tab:*' prefix ''
+zstyle ':completion:*:descriptions' format '[%d]'
+
 plugins=(
     autojump
     aws
@@ -163,9 +172,11 @@ plugins=(
     docker
     emacs
     fzf
+    fzf-tab
     git
     kubectl
 )
+
 source $ZSH/oh-my-zsh.sh
 
 unalias md  # from oh-my-zsh lib/directories.zsh

@@ -39,6 +39,13 @@ if [[ ! -d "$HOME/.oh-my-zsh" ]]; then
 fi
 "$HOME/.oh-my-zsh/tools/upgrade.sh" -v minimal
 
+# Install or update fzf-tab plugin
+if [[ ! -d "$HOME/.oh-my-zsh/custom/plugins/fzf-tab" ]]; then
+    git clone --depth=1 https://github.com/Aloxaf/fzf-tab "$HOME/.oh-my-zsh/custom/plugins/fzf-tab"
+else
+    (cd "$HOME/.oh-my-zsh/custom/plugins/fzf-tab" && git pull)
+fi
+
 # Set email address in .gitconfig.
 if [[ "$(whoami)" == shields ]] && ! (profiles status -type enrollment | grep -q ': Yes'); then
     git config --global user.email shields@msrl.com
