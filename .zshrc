@@ -160,7 +160,8 @@ zstyle ':fzf-tab:*' fzf-command fzf
 zstyle ':fzf-tab:*' fzf-flags --height 16 --layout=reverse --border=none --color bg:#eeeeee
 zstyle ':fzf-tab:*' switch-group ',' '.'
 zstyle ':fzf-tab:*' continuous-trigger '/'
-zstyle ':fzf-tab:*' accept-line enter
+# Make Enter only accept completion without executing command
+zstyle ':fzf-tab:*' accept-line ''
 zstyle ':fzf-tab:*' prefix ''
 zstyle ':completion:*:descriptions' format '[%d]'
 
