@@ -4,6 +4,8 @@
 [[ -d /opt/homebrew ]] && eval "$(/opt/homebrew/bin/brew shellenv)"
 [[ -x /usr/local/bin/brew ]] && eval "$(/usr/local/bin/brew shellenv)"
 
+export HOMEBREW_NO_AUTO_UPDATE=1
+
 export PATH="$HOME/bin:$PATH"
 
 # Path to your oh-my-zsh installation.
