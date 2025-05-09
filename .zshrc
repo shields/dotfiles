@@ -159,7 +159,7 @@ export FZF_CTRL_T_OPTS="$FZF_CTRL_R_OPTS"
 
 # fzf-tab configuration
 zstyle ':fzf-tab:*' fzf-command fzf
-zstyle ':fzf-tab:*' fzf-flags --height 16 --layout=reverse --border=none --color bg:#eeeeee
+zstyle ':fzf-tab:*' fzf-flags --height 16 --layout=reverse --border=none --color bg:#eeeeee --bind "one:accept"
 zstyle ':fzf-tab:*' switch-group ',' '.'
 zstyle ':fzf-tab:*' continuous-trigger '/'
 # Make Enter only accept completion without executing command
