@@ -18,4 +18,5 @@ Do not include "generated with Claude Code" in commit messages, and do not add
 
 When setting up a new project, always use ‘uv‘ instead of ‘pip‘.
 
-Always include type annotations and verify that they are correct.
+Always include type annotations and verify that they are correct. Use modern PEP
+385 styles such as ‘list‘ instead of ‘typing.List‘.
