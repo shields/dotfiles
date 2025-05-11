@@ -95,6 +95,9 @@
 ;; Python tree-sitter mode
 (add-hook 'python-ts-mode-hook #'eglot-ensure)
 
+;; R
+(use-package ess)
+
 ;; Rust
 (use-package rust-mode
   :init
