@@ -292,14 +292,6 @@ if [ ! -f "$HOME/.ssh/known_hosts" ] || ! grep -q '^github\.com ' "$HOME/.ssh/kn
         sed -e 's/^/github.com /' >>"$HOME/.ssh/known_hosts"
 fi
 
-# Hammerspoon Spoons setup
-mkdir -p "$HOME/.hammerspoon/Spoons"
-if [ ! -d "$HOME/.hammerspoon/Spoons/.git" ]; then
-    git clone https://github.com/Hammerspoon/Spoons.git "$HOME/.hammerspoon/Spoons"
-else
-    (cd "$HOME/.hammerspoon/Spoons" && git pull)
-fi
-
 # Go setup
 go telemetry on
 GOBIN="$HOME/bin" go install golang.org/x/tools/cmd/goimports@latest
