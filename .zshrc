@@ -112,10 +112,6 @@ alias tfia='tfi && tfa'
 alias tfp='tf plan -parallelism=100 -refresh=false'
 alias tfpr='tf plan -parallelism=100 -refresh=true'
 
-for f in "$(brew --caskroom)"/google-cloud-sdk/latest/google-cloud-sdk/*.zsh.inc; do
-    source $f
-done
-
 # Asking about the merge commit message is unnecessary, since in the
 # rare cases where I want to edit it, there is always --amend.
 export GIT_MERGE_AUTOEDIT=no
@@ -168,6 +164,12 @@ zstyle ':fzf-tab:*' accept-line ''
 zstyle ':fzf-tab:*' prefix ''
 zstyle ':completion:*:descriptions' format '[%d]'
 
+zstyle :omz:plugins:iterm2 shell-integration yes
+
+# zoxide, but call it j instead of z, because of autojump muscle memory and
+# because the z key is poorly placed for this.
+export ZOXIDE_CMD_OVERRIDE=j
+
 plugins=(
     aws
     colorize
@@ -176,9 +178,13 @@ plugins=(
     emacs
     fzf
     fzf-tab
+    gcloud
     git
     git-auto-fetch
+    iterm2
     kubectl
+    starship
+    zoxide
 )
 
 source $ZSH/oh-my-zsh.sh
@@ -187,11 +193,5 @@ unalias md # from oh-my-zsh lib/directories.zsh
 md() {
     mkdir -p "$1" && cd "$1"
 }
-
-eval "$(starship init zsh)"
-
-# zoxide, but call it j instead of z, because of autojump muscle memory and
-# because the z key is poorly placed for this.
-eval "$(zoxide init zsh --cmd=j)"
 
 source "$HOME/.iTerm2/shell_integration.zsh"
