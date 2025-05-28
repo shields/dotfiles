@@ -111,7 +111,7 @@ alias tfia='tfi && tfa'
 alias tfp='tf plan -parallelism=100 -refresh=false'
 alias tfpr='tf plan -parallelism=100 -refresh=true'
 
-for f in $(brew caskroom)/google-cloud-sdk/latest/google-cloud-sdk/*.zsh.inc; do
+for f in "$(brew --caskroom)"/google-cloud-sdk/latest/google-cloud-sdk/*.zsh.inc; do
     source $f
 done
 
