@@ -5,6 +5,7 @@
 [[ -x /usr/local/bin/brew ]] && eval "$(/usr/local/bin/brew shellenv)"
 
 export HOMEBREW_NO_AUTO_UPDATE=1
+export HOMEBREW_NO_ENV_HINTS=1
 
 export PATH="$HOME/bin:$PATH"
 
