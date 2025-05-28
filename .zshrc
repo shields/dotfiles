@@ -95,23 +95,23 @@ alias kcy='kubectl -o yaml'
 
 # https://docs.brew.sh/Homebrew-and-Python
 p() {
-  if [ -n "$VIRTUAL_ENV" ]; then
-    "$VIRTUAL_ENV/bin/python" "$@"
-  else
-    "$(brew --prefix python)/libexec/bin/python" "$@"
-  fi
+    if [ -n "$VIRTUAL_ENV" ]; then
+        "$VIRTUAL_ENV/bin/python" "$@"
+    else
+        "$(brew --prefix python)/libexec/bin/python" "$@"
+    fi
 }
 
 alias s='less'
 
-whence tf > /dev/null || alias tf='terraform'
+whence tf >/dev/null || alias tf='terraform'
 alias tfa='tf apply -parallelism=100'
 alias tfi='tf init'
 alias tfia='tfi && tfa'
 alias tfp='tf plan -parallelism=100 -refresh=false'
 alias tfpr='tf plan -parallelism=100 -refresh=true'
 
-for f in /usr/local/Caskroom/google-cloud-sdk/latest/google-cloud-sdk/*.zsh.inc(.N); do
+for f in $(brew caskroom)/google-cloud-sdk/latest/google-cloud-sdk/*.zsh.inc; do
     source $f
 done
 
@@ -122,8 +122,8 @@ export GIT_MERGE_AUTOEDIT=no
 # Emacs shell dir tracking; see comments in term.el.
 if [ -n "$INSIDE_EMACS" ]; then
     chpwd() {
-	echo -n '\032/'
-	pwd
+        echo -n '\032/'
+        pwd
     }
 fi
 
@@ -181,7 +181,7 @@ plugins=(
 
 source $ZSH/oh-my-zsh.sh
 
-unalias md  # from oh-my-zsh lib/directories.zsh
+unalias md # from oh-my-zsh lib/directories.zsh
 md() {
     mkdir -p "$1" && cd "$1"
 }

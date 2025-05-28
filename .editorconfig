@@ -1,5 +1,20 @@
 root = true
 
-[[shell]]
+trim_trailing_whitespace = true
+insert_final_newline = true
+
+[*.sh]
+indent_style = space
+indent_size = 4
+
+[.profile]
+indent_style = space
+indent_size = 4
+
+[.zprofile]
+indent_style = space
+indent_size = 4
+
+[.zshrc]
 indent_style = space
 indent_size = 4
