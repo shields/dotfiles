@@ -52,11 +52,12 @@ if [[ "$(whoami)" == shields ]] && ! (profiles status -type enrollment | grep -q
     git config --global github.user shields # For Magit Forge
 fi
 
+brew update
+
 # Homebrew bundle sync. Update using `brew bundle dump -f`.
 brew bundle --force | (grep -v '^Using ' || true)
 brew bundle cleanup --force
 # Homebrew upgrades. Run formulas and casks separately to prevent whiny messages.
-brew update
 brew upgrade --formula
 # Suppress upgrade of Chrome since it doesn't like to be upgraded while running.
 brew outdated --greedy-auto-updates --cask --quiet | (grep -v '^google-chrome' || true) | xargs brew upgrade --cask
