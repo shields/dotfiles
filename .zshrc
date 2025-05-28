@@ -177,6 +177,7 @@ plugins=(
     fzf
     fzf-tab
     git
+    git-auto-fetch
     kubectl
 )
 
