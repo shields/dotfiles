@@ -168,7 +168,6 @@ zstyle ':fzf-tab:*' prefix ''
 zstyle ':completion:*:descriptions' format '[%d]'
 
 plugins=(
-    autojump
     aws
     colorize
     direnv
@@ -187,7 +186,10 @@ md() {
     mkdir -p "$1" && cd "$1"
 }
 
-# Initialize Starship prompt
 eval "$(starship init zsh)"
+
+# zoxide, but call it j instead of z, because of autojump muscle memory and
+# because the z key is poorly placed for this.
+eval "$(zoxide init zsh --cmd=j)"
 
 source "$HOME/.iTerm2/shell_integration.zsh"
