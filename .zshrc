@@ -85,33 +85,6 @@ if [[ "$(uname)" == "Darwin" ]]; then
     export EDITOR="$ZSH/plugins/emacs/emacsclient.sh --create-frame"
 fi
 
-alias drit='docker run -it --rm'
-
-alias gc='gcloud'
-
-alias gdi='git diff origin/main'
-
-alias kc='kubectl'
-alias kcy='kubectl -o yaml'
-
-# https://docs.brew.sh/Homebrew-and-Python
-p() {
-    if [ -n "$VIRTUAL_ENV" ]; then
-        "$VIRTUAL_ENV/bin/python" "$@"
-    else
-        "$(brew --prefix python)/libexec/bin/python" "$@"
-    fi
-}
-
-alias s='less'
-
-whence tf >/dev/null || alias tf='terraform'
-alias tfa='tf apply -parallelism=100'
-alias tfi='tf init'
-alias tfia='tfi && tfa'
-alias tfp='tf plan -parallelism=100 -refresh=false'
-alias tfpr='tf plan -parallelism=100 -refresh=true'
-
 # Asking about the merge commit message is unnecessary, since in the
 # rare cases where I want to edit it, there is always --amend.
 export GIT_MERGE_AUTOEDIT=no
@@ -139,11 +112,6 @@ export KUBE_CONFIG_PATH="$HOME/.kube/config"
 
 if [ -d "$HOME/.cargo" ]; then
     PATH="$PATH:$HOME/.cargo/bin"
-fi
-
-if [ -x /usr/bin/pbcopy ]; then
-    alias pc=pbcopy
-    alias pv=pbpaste
 fi
 
 export FZF_DEFAULT_OPTS="--color hl:red,hl:bold,selected-hl:red,selected-hl:bold,current-hl:red,current-hl:bold"
@@ -189,9 +157,44 @@ plugins=(
 
 source $ZSH/oh-my-zsh.sh
 
+# Keep aliases below after OMZ initialization, since some of them override
+# what's defined by OMZ plugins.
+
+alias drit='docker run -it --rm'
+
+alias gc='gcloud'
+
+alias gdi='git diff origin/main'
+
+alias kc='kubectl'
+alias kcy='kubectl -o yaml'
+
 unalias md # from oh-my-zsh lib/directories.zsh
 md() {
     mkdir -p "$1" && cd "$1"
 }
+
+# https://docs.brew.sh/Homebrew-and-Python
+p() {
+    if [ -n "$VIRTUAL_ENV" ]; then
+        "$VIRTUAL_ENV/bin/python" "$@"
+    else
+        "$(brew --prefix python)/libexec/bin/python" "$@"
+    fi
+}
+
+if [ -x /usr/bin/pbcopy ]; then
+    alias pc=pbcopy
+    alias pv=pbpaste
+fi
+
+alias s='less'
+
+whence tf >/dev/null || alias tf='terraform'
+alias tfa='tf apply -parallelism=100'
+alias tfi='tf init'
+alias tfia='tfi && tfa'
+alias tfp='tf plan -parallelism=100 -refresh=false'
+alias tfpr='tf plan -parallelism=100 -refresh=true'
 
 source "$HOME/.iTerm2/shell_integration.zsh"
