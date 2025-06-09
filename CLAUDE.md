@@ -19,7 +19,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ## Package Management
 
 - Use `yarn` for JavaScript/TypeScript
-- Use `uv` for Python packages (never pip)
+- Use `uv` for Python packages (never pip). Even without pyproject.toml, use `uv venv` and `uv pip`
 - Use `brew` for system packages
 
 ## Project Conventions
