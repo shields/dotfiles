@@ -164,7 +164,16 @@ alias drit='docker run -it --rm'
 
 alias gc='gcloud'
 
-alias gdi='git diff origin/main'
+gdi() {
+    if git show-ref --verify --quiet refs/remotes/origin/main; then
+        git diff origin/main "$@"
+    elif git show-ref --verify --quiet refs/remotes/origin/master; then
+        git diff origin/master "$@"
+    else
+        echo "Neither origin/main nor origin/master found" >&2
+        return 1
+    fi
+}
 
 alias kc='kubectl'
 alias kcy='kubectl -o yaml'
