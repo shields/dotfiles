@@ -18,5 +18,11 @@ Do not include "generated with Claude Code" in commit messages, and do not add
 
 When setting up a new project, always use ‘uv‘ instead of ‘pip‘.
 
-Always include type annotations and verify that they are correct. Use modern PEP
-385 styles such as ‘list‘ instead of ‘typing.List‘.
+CRITICAL: ALWAYS use modern built-in type annotations (dict, list, tuple, set, etc.) instead of typing module equivalents
+(typing.Dict, typing.List, typing.Tuple, typing.Set, etc.). This is non-negotiable for Python 3.9+ codebases. Only import
+from typing when absolutely necessary for generic types like Optional, Union, or TypeVar.
+
+NEVER use: typing.Dict, typing.List, typing.Tuple, typing.Set
+ALWAYS use: dict, list, tuple, set
+
+Always include type annotations and verify that they are correct.
