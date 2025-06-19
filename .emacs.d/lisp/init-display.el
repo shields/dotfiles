@@ -114,6 +114,21 @@
 
 (setopt switch-to-buffer-obey-display-actions t)
 
+;; Close frame when quitting the last window
+(defun shields/quit-window-or-frame (orig-fun &optional kill window)
+  "Quit WINDOW, or close frame if it's the only window.
+This is advice for `quit-window' that closes the frame
+when quitting the last window in the frame.
+
+Uses advice rather than key remapping because many functions
+(e.g., magit-mode-quit-window) wrap quit-window programmatically."
+  (let ((window (or window (selected-window))))
+    (if (one-window-p t)
+        (delete-frame)
+      (funcall orig-fun kill window))))
+
+(advice-add 'quit-window :around #'shields/quit-window-or-frame)
+
 ;; Core Emacs custom faces
 (custom-set-faces
  '(default ((t (:inherit nil :extend nil :stipple nil :background "White" :foreground "Black" :inverse-video nil :box nil :strike-through nil :overline nil :underline nil :slant normal :weight normal :height 120 :width normal :foundry "nil" :family "Andale Mono"))))
