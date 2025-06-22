@@ -163,6 +163,7 @@ cask "yubico-yubikey-manager"
 cask "zotero"
 mas "Actions", id: 1586435171
 mas "CrystalFetch", id: 6454431289
+mas "Cursor Pro", id: 1447043133
 mas "Keynote", id: 409183694
 mas "Numbers", id: 409203825
 mas "OmniPlan", id: 1460319993
