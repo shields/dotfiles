@@ -1,4 +1,4 @@
-format = "$username$hostname$directory$git_branch$git_status$python$kubernetes$cmd_duration$jobs$status$character"
+format = "$username$hostname$directory$git_branch$git_status$python$cmd_duration$jobs$status$character"
 add_newline = false
 
 [username]
@@ -28,10 +28,6 @@ stashed = "z"
 format = '[${symbol}${pyenv_prefix}(${version})(\($virtualenv\))]($style) '
 detect_files = []
 detect_extensions = []
-
-[kubernetes]
-format = '[$symbol$context]($style) '
-disabled = false
 
 [cmd_duration]
 format = "[$duration]($style) "
