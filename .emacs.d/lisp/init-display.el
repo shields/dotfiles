@@ -131,11 +131,11 @@ Uses advice rather than key remapping because many functions
 
 ;; Core Emacs custom faces
 (custom-set-faces
- '(default ((t (:inherit nil :extend nil :stipple nil :background "White" :foreground "Black" :inverse-video nil :box nil :strike-through nil :overline nil :underline nil :slant normal :weight normal :height 120 :width normal :foundry "nil" :family "Andale Mono"))))
+ '(default ((t (:inherit nil :extend nil :stipple nil :background "White" :foreground "Black" :inverse-video nil :box nil :strike-through nil :overline nil :underline nil :slant normal :weight normal :height 120 :width normal :foundry "nil" :family "AndaleMono Nerd Font"))))
  '(Info-quoted ((t (:inherit fixed-pitch))))
  '(completions-annotations ((t (:inherit shadow))))
  '(cursor ((t (:background "firebrick"))))
- '(fixed-pitch ((t (:family "Andale Mono"))))
+ '(fixed-pitch ((t (:family "AndaleMono Nerd Font"))))
  '(font-lock-builtin-face ((t (:inherit font-lock-function-call-face))))
  '(font-lock-comment-face ((t (:foreground "#197019"))))
  '(font-lock-constant-face ((t nil)))
