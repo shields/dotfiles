@@ -46,6 +46,13 @@ else
     (cd "$HOME/.oh-my-zsh/custom/plugins/fzf-tab" && git pull)
 fi
 
+# Install or update git-prompt-watcher plugin
+if [[ ! -d "$HOME/.oh-my-zsh/custom/plugins/git-prompt-watcher" ]]; then
+    git clone --depth=1 https://github.com/shields/git-prompt-watcher "$HOME/.oh-my-zsh/custom/plugins/git-prompt-watcher"
+else
+    (cd "$HOME/.oh-my-zsh/custom/plugins/git-prompt-watcher" && git pull)
+fi
+
 # Set email address in .gitconfig.
 if [[ "$(whoami)" == shields ]] && ! (profiles status -type enrollment | grep -q ': Yes'); then
     git config --global user.email shields@msrl.com

@@ -149,6 +149,7 @@ plugins=(
     gcloud
     git
     git-auto-fetch
+    git-prompt-watcher
     iterm2
     kubectl
     starship
