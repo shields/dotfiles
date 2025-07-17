@@ -22,7 +22,7 @@ symbol = ""
 
 [git_commit]
 format = "([$hash$tag]($style) )"
-style = "purple"
+style = "cyan"
 only_detached = false
 tag_disabled = false
 tag_symbol = " 󰓼 "
@@ -33,13 +33,13 @@ ahead = '  ${count}'
 diverged = '⇕  ${ahead_count}  ${behind_count}'
 behind = '  ${count}'
 conflicted = ' [ ](red)'
-untracked = "  ($count)"
-stashed = " 󱞞 "
-modified = "  ($count)"
+untracked = " 󱀶 ($count)"
+stashed = " 󰘓 "
+modified = " 󰏫 ($count)"
 staged = "  ($count)"
-renamed = "  ($count)"
-deleted = "  ($count)"
-style = "purple"
+renamed = " 󰬳 ($count)"
+deleted = "  ($count)"
+style = "cyan"
 
 [python]
 format = '[${symbol}${pyenv_prefix}(${version})(\($virtualenv\))]($style) '
