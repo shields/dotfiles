@@ -1,0 +1,16 @@
+{
+  "includeCoAuthoredBy": false,
+  "hooks": {
+    "PostToolUse": [
+      {
+        "matcher": "Edit|MultiEdit|Write",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "claude_post_edit_hook.sh"
+          }
+        ]
+      }
+    ]
+  }
+}
