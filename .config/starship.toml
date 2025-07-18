@@ -1,4 +1,4 @@
-format = "$username$hostname$directory$git_branch$git_commit$git_status$python$cmd_duration$jobs$status$character"
+format = "$username$hostname$directory$git_commit$git_branch$git_status$python$cmd_duration$jobs$status$character"
 add_newline = false
 
 [username]
@@ -19,6 +19,7 @@ truncate_to_repo = false
 [git_branch]
 format = "[$branch]($style) "
 symbol = ""
+style = "bold cyan"
 
 [git_commit]
 format = "([$hash$tag]($style) )"
