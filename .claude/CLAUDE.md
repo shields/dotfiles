@@ -21,3 +21,7 @@ NEVER use: typing.Dict, typing.List, typing.Tuple, typing.Set
 ALWAYS use: dict, list, tuple, set
 
 Always include type annotations and verify that they are correct.
+
+## Testing rules
+
+CRITICAL: Never settle for partial test success. All tests must pass - no exceptions. If any tests are failing, continue working until every single test passes. Do not stop or declare success until 100% of tests are passing.
