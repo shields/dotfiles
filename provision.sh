@@ -87,11 +87,6 @@ if [[ "$(dscl . read /Users/$(whoami) UserShell)" == "UserShell: /bin/zsh" ]]; t
     sudo dscl . change "/Users/$(whoami)" UserShell /bin/zsh "$HOMEBREW_PREFIX/bin/zsh"
 fi
 
-# NPM-installed tools
-npm install -g @anthropic-ai/claude-code
-npm upgrade -g
-claude config set -g theme light
-
 # Plugins!
 export PIP_DISABLE_PIP_VERSION_CHECK=1
 datasette install --upgrade datasette-cluster-map | (grep -v '^Requirement already satisfied:' || true)
