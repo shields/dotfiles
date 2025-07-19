@@ -156,7 +156,7 @@ plugins=(
     zoxide
 )
 
-source $ZSH/oh-my-zsh.sh
+source "$ZSH/oh-my-zsh.sh"
 
 # Keep aliases below after OMZ initialization, since some of them override
 # what's defined by OMZ plugins.
@@ -172,6 +172,10 @@ alias kcy='kubectl -o yaml'
 
 unalias md # from oh-my-zsh lib/directories.zsh
 md() {
+    if [ $# -ne 1 ] || [ -z "$1" ]; then
+        echo "Usage: md <directory>" >&2
+        return 1
+    fi
     mkdir -p "$1" && cd "$1"
 }
 

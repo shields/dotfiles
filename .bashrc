@@ -46,7 +46,7 @@ kc() {
 
 hpr() {
     # Verify that the working directory is clean.
-    if [ -n "$(git status --porcelain=v1 2>&1)" ]; then
+    if ! git_output="$(git status --porcelain=v1 2>/dev/null)" || [ -n "$git_output" ]; then
         git status --short 1>&2
         return 1
     fi
