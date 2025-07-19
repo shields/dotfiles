@@ -1,7 +1,31 @@
+# Target Python 3.13+ for maximum modernization
+target-version = "py313"
+
 [lint]
-# https://beta.ruff.rs/docs/rules/
-select = ["E", "F", "B", "I", "N", "UP", "YTT", "C4", "DTZ", "ICN", "PT", "SIM", "PTH", "PD", "PLE", "NPY"]
+# https://docs.astral.sh/ruff/rules/
+select = [
+  "ALL",
+]
 
 ignore = [
-  "E501",  # Line too long
+  "ANN401",  # typing.Any
+  "C90",     # Cyclomatic complexity
+  "D",       # pydocstyle (disable docstring rules)
+  "PLR09",   # "Too many" branches, arguments, etc.
+  "S603",    # subprocess output
+  "S607",    # subprocess using path
+  "T201",    # print()
 ]
+
+[lint.per-file-ignores]
+#"tools/diff_defaults.py" = ["T201", "S603", "S607", "C901", "PLR0912", "PLR0911", "ANN401"]
+
+[lint.isort]
+# Modern import sorting
+#force-single-line = false
+#combine-as-imports = true
+#known-first-party = []
+
+[lint.pyupgrade]
+# Keep trailing commas for better diffs
+#keep-runtime-typing = false

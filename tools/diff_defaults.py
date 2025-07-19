@@ -9,40 +9,42 @@ import plistlib
 import shlex
 import subprocess
 import time
+from typing import Any
 
 
-def get_defaults(domain: str):
+def get_defaults(domain: str) -> dict[str, Any]:
     plist = subprocess.check_output(["defaults", "export", domain, "-"])
     return plistlib.loads(plist, fmt=plistlib.FMT_XML)
 
 
-def plist_string(x) -> str:
+def plist_string(x: Any) -> str:
     if isinstance(x, bool):
         return "true" if x else "false"
     if isinstance(x, bytes):
         return x.hex()
     if isinstance(x, datetime.datetime):
         return x.isoformat(sep=" ")
-    if isinstance(x, int) or isinstance(x, float):
+    if isinstance(x, (int, float)):
         return str(x)
     if isinstance(x, str):
         return shlex.quote(x)
 
-    if isinstance(x, list) or isinstance(x, tuple):
+    if isinstance(x, (list, tuple)):
         return " ".join(plist_string(elt) for elt in x)
     if isinstance(x, dict):
-        return " ".join(plist_string(elt) for elt in zip(x.keys(), x.values()))
+        return " ".join(
+            plist_string(elt) for elt in zip(x.keys(), x.values(), strict=True)
+        )
 
-    raise TypeError(f"Unknown type {type(x)}")
+    msg = f"Unknown type {type(x)}"
+    raise TypeError(msg)
 
 
 def is_boring_domain(domain: str) -> bool:
-    if "Cache" in domain:
-        return True
-    return False
+    return "Cache" in domain
 
 
-def print_diff(domain: str, old, new) -> None:
+def print_diff(domain: str, old: dict[str, Any], new: dict[str, Any]) -> None:
     for k, v in new.items():
         if k in old and old[k] == v:
             continue
@@ -50,26 +52,26 @@ def print_diff(domain: str, old, new) -> None:
         if is_boring_domain(k):
             continue
 
-        if type(v) == bool:
+        if isinstance(v, bool):
             value = f"-bool {plist_string(v)}"
-        if type(v) == bytes:
+        elif isinstance(v, bytes):
             value = f"-data {plist_string(v)}"
-        elif type(v) == datetime.datetime:
+        elif isinstance(v, datetime.datetime):
             value = f"-date {plist_string(v)}"
-        elif type(v) == dict:
+        elif isinstance(v, dict):
             value = f"-dict {plist_string(v)}"
-        elif type(v) == float:
+        elif isinstance(v, float):
             value = f"-float {plist_string(v)}"
-        elif type(v) == int:
+        elif isinstance(v, int):
             value = f"-int {plist_string(v)}"
-        elif type(v) == list:
+        elif isinstance(v, list):
             value = f"-array {plist_string(v)}"
         else:
             value = plist_string(v)
 
         print(f"defaults write {shlex.quote(domain)} {shlex.quote(k)} {value}")
 
-    for k in old.keys():
+    for k in old:
         if k in new:
             continue
 
@@ -83,7 +85,7 @@ if __name__ == "__main__":
     domains = set(
         subprocess.check_output(["defaults", "domains"], encoding="ascii")
         .rstrip("\n")
-        .split(", ")
+        .split(", "),
     )
     domains.add("NSGlobalDomain")
 
