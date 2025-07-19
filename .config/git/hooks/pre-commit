@@ -1,9 +1,11 @@
-#!/bin/sh
+#!/bin/bash
 #
 # gitleaks is the only essential pre-commit step. You can fix a bug or a lint
 # problem in a later commit, but you can't un-leak a secret.
 #
 # I am not using the popular pre-commit.com framework here because it's
 # unnecessarily slow.
+
+set -euo pipefail
 
 exec gitleaks protect --staged --no-banner --verbose --log-level=warn

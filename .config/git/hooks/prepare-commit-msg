@@ -1,5 +1,7 @@
 #!/bin/bash
 
+set -euo pipefail
+
 MSG_FILE="$1"
 COMMIT_TYPE="$2"
 
