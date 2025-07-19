@@ -16,16 +16,3 @@ ignore = [
   "S607",    # subprocess using path
   "T201",    # print()
 ]
-
-[lint.per-file-ignores]
-#"tools/diff_defaults.py" = ["T201", "S603", "S607", "C901", "PLR0912", "PLR0911", "ANN401"]
-
-[lint.isort]
-# Modern import sorting
-#force-single-line = false
-#combine-as-imports = true
-#known-first-party = []
-
-[lint.pyupgrade]
-# Keep trailing commas for better diffs
-#keep-runtime-typing = false
