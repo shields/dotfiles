@@ -24,7 +24,20 @@ Always include type annotations and verify that they are correct.
 
 ## Testing rules
 
-CRITICAL: Never settle for partial test success. All tests must pass - no exceptions. If any tests are failing, continue working until every single test passes. Do not stop or declare success until 100% of tests are passing.
+**ABSOLUTE REQUIREMENT: 100% TEST SUCCESS MANDATORY**
+
+CRITICAL: You MUST achieve 100% test pass rate - NO EXCEPTIONS WHATSOEVER. Partial progress is NOT success. Making improvements is NOT completion. 70% passing is NOT acceptable. 90% passing is NOT acceptable. 99% passing is NOT acceptable.
+
+**YOU CANNOT DECLARE VICTORY OR COMPLETION UNTIL EVERY SINGLE TEST PASSES**
+
+- If ANY tests are failing, the job is INCOMPLETE
+- If ANY tests are timing out, the job is INCOMPLETE
+- If ANY tests are erroring, the job is INCOMPLETE
+- Continue working until EVERY test passes without exception
+- Do not stop, do not summarize progress, do not declare partial success
+- The only acceptable outcome is 100% green tests
+
+**NO PARTIAL CREDIT. NO PROGRESS REPORTS AS COMPLETION. ALL TESTS MUST PASS.**
 
 ## Performance benchmarking
 
