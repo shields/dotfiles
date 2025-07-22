@@ -11,6 +11,12 @@ case "$f" in
 *.js | *.json | *.md | *.ts | *.yaml | *.yml)
     prettier --write "$f"
     ;;
+*.rs)
+    rustfmt -- "$f"
+    ;;
+*.go)
+    gofmt -w "$f"
+    ;;
 *.sh)
     shfmt --write "$f"
     ;;
