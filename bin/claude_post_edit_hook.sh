@@ -12,7 +12,7 @@ case "$f" in
     prettier --write "$f"
     ;;
 *.rs)
-    rustfmt -- "$f"
+    cargo fmt -- "$f"
     ;;
 *.go)
     gofmt -w "$f"
