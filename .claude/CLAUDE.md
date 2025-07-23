@@ -9,6 +9,10 @@ newline.
 Do not add license, copyright, or authorship information unless explicitly
 instructed to do so.
 
+Add code comments sparingly. Focus on _why_ something is done, especially for
+complex logic, rather than _what_ is done. Only add high-value comments if
+necessary for clarity or if requested by the user.
+
 ## Python-specific rules
 
 When setting up a new project, always use ‘uv‘ instead of ‘pip‘.
