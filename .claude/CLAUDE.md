@@ -39,6 +39,8 @@ CRITICAL: You MUST achieve 100% test pass rate - NO EXCEPTIONS WHATSOEVER. Parti
 
 **NO PARTIAL CREDIT. NO PROGRESS REPORTS AS COMPLETION. ALL TESTS MUST PASS.**
 
+**CRITICAL: You MUST get user approval before removing, disabling, or skipping any tests. Tests exist for important reasons!**
+
 ## Performance benchmarking
 
 When timing CLI commands, use `hyperfine` instead of `time` for accurate benchmarking.
