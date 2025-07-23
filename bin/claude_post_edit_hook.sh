@@ -20,6 +20,6 @@ case "$f" in
 *.sh)
     shfmt --write "$f"
     ;;
-esac
+esac || exit 2
 
 exit 0
