@@ -29,5 +29,3 @@
              '(lua . ("https://github.com/tree-sitter-grammars/tree-sitter-lua")))
 (treesit-install-language-grammar 'lua)
 (delete-file (expand-file-name "libtree-sitter-lua.dylib" shields/tree-sitter-langs-path))
-
-(nerd-icons-install-fonts 1)
