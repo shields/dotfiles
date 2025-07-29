@@ -49,3 +49,7 @@ CRITICAL: You MUST achieve 100% test pass rate - NO EXCEPTIONS WHATSOEVER. Parti
 ## Performance benchmarking
 
 When timing CLI commands, use `hyperfine` instead of `time` for accurate benchmarking.
+
+## Git hooks
+
+NEVER bypass precommit hooks. Always respect and follow configured git hooks.
