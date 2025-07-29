@@ -37,11 +37,12 @@ CRITICAL: You MUST achieve 100% test pass rate - NO EXCEPTIONS WHATSOEVER. Parti
 - If ANY tests are failing, the job is INCOMPLETE
 - If ANY tests are timing out, the job is INCOMPLETE
 - If ANY tests are erroring, the job is INCOMPLETE
-- Continue working until EVERY test passes without exception
+- If ANY lint errors exist, the job is INCOMPLETE
+- Continue working until EVERY test passes without exception and there are NO lint errors
 - Do not stop, do not summarize progress, do not declare partial success
-- The only acceptable outcome is 100% green tests
+- The only acceptable outcome is 100% green tests and zero lint errors
 
-**NO PARTIAL CREDIT. NO PROGRESS REPORTS AS COMPLETION. ALL TESTS MUST PASS.**
+**NO PARTIAL CREDIT. NO PROGRESS REPORTS AS COMPLETION. ALL TESTS MUST PASS AND CODE MUST BE LINT-FREE.**
 
 **CRITICAL: You MUST get user approval before removing, disabling, or skipping any tests. Tests exist for important reasons!**
 
