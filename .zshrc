@@ -188,6 +188,10 @@ p() {
     fi
 }
 
+r() {
+    rg --pretty "$@" | less -R
+}
+
 if [ -x /usr/bin/pbcopy ]; then
     alias pc=pbcopy
     alias pv=pbpaste
