@@ -4,3 +4,4 @@
 .mypy_cache
 .serena/
 CLAUDE.md
+**/.DS_Store
