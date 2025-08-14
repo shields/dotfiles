@@ -5,6 +5,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ## Commands
 
 - **Build**: `npm run build` (TypeScript compilation)
+- **Type Check**: `basedpyright` (Python type checking)
 - **Tools**: `npm run color-palette` (Color palette generation)
 - **System Setup**: `./provision.sh` (Full macOS setup)
 - **Emacs Setup**: `emacs --batch --script .emacs.d/provision.el`
