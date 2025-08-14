@@ -11,13 +11,10 @@
 (use-package markdown-mode
   :hook
   (markdown-mode . variable-pitch-mode)
-  (markdown-mode . typo-mode)
 
   :custom-face
   (markdown-code-face ((t (:inherit fixed-pitch :background "#f850f850f850" :height 0.8))))
   (markdown-header-face ((t (:weight bold)))))
-
-(use-package typo)
 
 ;; JSON
 (use-package jsonnet-mode)
