@@ -19,7 +19,7 @@
   "hooks": {
     "PostToolUse": [
       {
-        "matcher": "Edit|MultiEdit|Write",
+        "matcher": "Edit|MultiEdit|Write|mcp__serena__insert_after_symbol|mcp__serena__insert_before_symbol|mcp__serena__replace_symbol_body",
         "hooks": [
           {
             "type": "command",
