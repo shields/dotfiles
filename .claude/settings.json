@@ -14,7 +14,11 @@
       "mcp__serena__think_about_collected_information",
       "mcp__serena__write_memory"
     ],
-    "deny": ["Bash(git commit --no-verify:*)", "Bash(git push:*)"]
+    "deny": [
+      "Bash(git commit --no-verify:*)",
+      "Bash(git push:*)",
+      "Bash(lefthook uninstall)"
+    ]
   },
   "hooks": {
     "PostToolUse": [
