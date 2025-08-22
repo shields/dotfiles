@@ -1,28 +1,14 @@
 ---
 description: "TDD: red → green → gates → LGTM"
 argument-hint: "<goal>"
-# Runners: no raw Bash; only make/just. Read/search tools from Serena; Context7 docs; LGTM review.
-allowed-tools:
-  Edit, MultiEdit, Update, Read, Grep, Glob, Bash(make:*), Bash(just:*),
-  mcp__lgtmcp__review_only,
-  # Serena MCP (read/search only; no editors/shell):
-  mcp__serena__find_file,
-  mcp__serena__find_symbol,
-  mcp__serena__find_referencing_symbols,
-  mcp__serena__get_symbols_overview,
-  mcp__serena__list_dir,
-  mcp__serena__read_file,
-  mcp__serena__search_for_pattern,
-  mcp__serena__get_current_config,
-  mcp__serena__initial_instructions,
-  # Context7 MCP (docs lookup):
-  mcp__context7__resolve-library-id,
-  mcp__context7__get-library-docs
+allowed-tools: Edit, MultiEdit, Update, Read, Grep, Glob, Bash(make:*), Bash(just:*), mcp__lgtmcp__review_only, mcp__serena__find_file, mcp__serena__find_symbol, mcp__serena__find_referencing_symbols, mcp__serena__get_symbols_overview, mcp__serena__list_dir, mcp__serena__read_file, mcp__serena__search_for_pattern, mcp__serena__get_current_config, mcp__serena__initial_instructions, mcp__context7__resolve-library-id, mcp__context7__get-library-docs
 ---
 
 Goal: **$ARGUMENTS**.
 
 If no goal specified: Read @CLAUDE.md and find the next TODO item, then use that as the goal.
+
+**CRITICAL**: Work on ONE ITEM AT A TIME. Complete the entire workflow (red → green → gates → LGTM → commit) for each item before moving to the next. Do not start multiple items in parallel.
 
 ### Stack discovery
 
@@ -66,6 +52,7 @@ Run and fix findings via `make`/`just`:
    - Re-run **D** (quality gates)
    - Request review again via `mcp__lgtmcp__review_only`
 3. **CONTINUE this loop until you receive explicit "LGTM"**. Do not stop at partial approval or suggestions.
+4. **After LGTM**: Commit the changes before moving to any new item.
 
 ### Constraints
 
