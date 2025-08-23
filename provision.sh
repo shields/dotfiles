@@ -305,5 +305,9 @@ fi
 go telemetry on
 GOBIN="$HOME/bin" go install golang.org/x/tools/cmd/goimports@latest
 
+# Have python3 access ~/Downloads to prompt a TCC authorization, allowing
+# clean_downloads.py to work.
+python3 -c "import os; os.listdir(os.path.expanduser('~/Downloads'))"
+
 # Reload launchd config.
 launchctl bootstrap gui/$UID
