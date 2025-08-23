@@ -6,7 +6,10 @@ allowed-tools: Edit, MultiEdit, Update, Read, Grep, Glob, Bash(make:*), Bash(jus
 
 Goal: **$ARGUMENTS**.
 
-If no goal specified: Read @CLAUDE.md and find the next TODO item, then use that as the goal.
+If no goal specified:
+
+1. Check for uncommitted changes with `git status`. If uncommitted changes exist, completing and committing that work is the goal.
+2. Otherwise, read @CLAUDE.md and find the most important TODO item, then use that as the goal.
 
 **CRITICAL**: Work on ONE ITEM AT A TIME. Complete the entire workflow (red → green → gates → LGTM → commit) for each item before moving to the next. Do not start multiple items in parallel.
 
