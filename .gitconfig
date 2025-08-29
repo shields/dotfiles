@@ -17,6 +17,7 @@
 	d = diff
 	p = status
 	por = !git push -u origin $(git branch-name)
+	unstage = restore --staged
 [pull]
 	# Merge instead of rebasing to be consistent with GitHub web UI.
 	rebase = false
