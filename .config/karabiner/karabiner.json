@@ -715,7 +715,7 @@
                         ]
                     },
                     {
-                        "description": "HJKL motion (in QGMLWY)",
+                        "description": "HJKL motion (in QGMLWY), ⌘D select all, ⌘P open",
                         "manipulators": [
                             {
                                 "from": {
@@ -836,7 +836,7 @@
                             },
                             {
                                 "from": {
-                                    "key_code": "b",
+                                    "key_code": "p",
                                     "modifiers": { "mandatory": ["command"] }
                                 },
                                 "to": [
