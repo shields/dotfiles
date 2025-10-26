@@ -92,11 +92,6 @@ export PIP_DISABLE_PIP_VERSION_CHECK=1
 datasette install --upgrade datasette-cluster-map | (grep -v '^Requirement already satisfied:' || true)
 llm install --upgrade llm-{gemini,anthropic,perplexity,cmd,openai-plugin} | (grep -v '^Requirement already satisfied:' || true)
 
-# Claude Code "configuration" lives in ~/.claude.json, and is distinct
-# from the "settings" that live in ~/.claude/settings.json.
-claude config set -g autoUpdates false
-claude config set -g verbose true
-
 # Make sure System Preferences isn't open, since it interferes with other
 # processes writing to defaults.
 osascript -e 'tell application "System Preferences" to quit'
