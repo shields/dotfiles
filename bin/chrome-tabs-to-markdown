@@ -1,0 +1,52 @@
+#!/usr/bin/osascript
+--
+-- Dumps all Chrome tabs to stdout as markdown.
+-- Output is grouped by window with "## Window N" headers.
+-- Each tab is formatted as: - [title](url)
+--
+
+on escapeMarkdown(str)
+    set escaped to str
+    set escaped to my replaceText(escaped, "\\", "\\\\")
+    set escaped to my replaceText(escaped, "[", "\\[")
+    set escaped to my replaceText(escaped, "]", "\\]")
+    return escaped
+end escapeMarkdown
+
+on replaceText(theText, searchString, replacementString)
+    set AppleScript's text item delimiters to searchString
+    set theItems to text items of theText
+    set AppleScript's text item delimiters to replacementString
+    set theText to theItems as text
+    set AppleScript's text item delimiters to ""
+    return theText
+end replaceText
+
+tell application "System Events"
+    if not (exists process "Google Chrome") then
+        error "Google Chrome is not running."
+    end if
+end tell
+
+tell application "Google Chrome"
+    set outputLines to {}
+    set windowCount to count of windows
+    repeat with i from 1 to windowCount
+        set w to window i
+        if i > 1 then
+            set end of outputLines to ""
+        end if
+        set end of outputLines to "## Window " & i
+        set end of outputLines to ""
+        repeat with t in tabs of w
+            set tabTitle to title of t
+            set tabURL to URL of t
+            set escapedTitle to my escapeMarkdown(tabTitle)
+            set end of outputLines to "- [" & escapedTitle & "](<" & tabURL & ">)"
+        end repeat
+    end repeat
+    set AppleScript's text item delimiters to linefeed
+    set output to outputLines as text
+    set AppleScript's text item delimiters to ""
+    return output
+end tell
