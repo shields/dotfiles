@@ -303,6 +303,12 @@ fi
 go telemetry on
 GOBIN="$HOME/bin" go install golang.org/x/tools/cmd/goimports@latest
 
+# Claude Code globally available MCP servers
+claude mcp remove lgtmcp -s user 2>/dev/null || true
+claude mcp add lgtmcp -s user -- "$HOME/bin/lgtmcp"
+claude mcp remove playwright -s user 2>/dev/null || true
+claude mcp add playwright -s user -- npx @playwright/mcp@latest --headless
+
 # Have python3 access ~/Downloads to prompt a TCC authorization, allowing
 # clean_downloads.py to work.
 python3 -c "import os; os.listdir(os.path.expanduser('~/Downloads'))"
