@@ -4,6 +4,11 @@ set -euo pipefail
 
 f="$(jq -r '.tool_input.file_path')"
 
+# Skip files in ~/.claude
+case "$f" in
+"$HOME/.claude"/* | ~/.claude/*) exit 0 ;;
+esac
+
 case "$f" in
 *.py)
     ruff format -- "$f"
