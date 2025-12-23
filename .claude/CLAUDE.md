@@ -11,7 +11,7 @@ versions as they may have changed since the knowledge cutoff.
 
 Current latest stable versions (update as needed):
 
-- Debian: 12 (trixie)
+- Debian: 13 (trixie)
 - Python: 3.14
 - Go: 1.25
 
