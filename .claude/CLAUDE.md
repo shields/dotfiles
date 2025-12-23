@@ -53,3 +53,7 @@ When timing CLI commands, use `hyperfine` instead of `time` for accurate benchma
 ## Git hooks
 
 NEVER bypass precommit hooks. Always respect and follow configured git hooks.
+
+## Web access
+
+When you need to access web pages that require JavaScript (e.g., documentation sites with dynamic content), use the Playwright MCP tools instead of WebFetch.
