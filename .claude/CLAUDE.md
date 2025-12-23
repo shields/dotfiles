@@ -3,6 +3,18 @@
 Do not worry about compatibility with older versions. Use modern constructs and
 libraries whenever they are preferred.
 
+## Version guidelines
+
+For new code, always use the latest stable versions of languages, frameworks,
+and dependencies. Do not rely on memory for version numbers—always check current
+versions as they may have changed since the knowledge cutoff.
+
+Current latest stable versions (update as needed):
+
+- Debian: 12 (trixie)
+- Python: 3.14
+- Go: 1.25
+
 Be sure lines do not end in whitespace. The last line of a file should include a
 newline.
 
