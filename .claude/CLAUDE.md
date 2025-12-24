@@ -66,6 +66,14 @@ When timing CLI commands, use `hyperfine` instead of `time` for accurate benchma
 
 NEVER bypass precommit hooks. Always respect and follow configured git hooks.
 
+## Code review (LGTMCP)
+
+When using LGTMCP for code review, if you disagree with the reviewer's feedback,
+do NOT bypass the review and commit directly. Instead, add comments to the code
+explaining why the current approach is correct or necessary (e.g., it's temporary
+for debugging, follows a specific pattern, or addresses a constraint the reviewer
+may not be aware of), then resubmit for review.
+
 ## Web access
 
 When you need to access web pages that require JavaScript (e.g., documentation sites with dynamic content), use the Playwright MCP tools instead of WebFetch.
