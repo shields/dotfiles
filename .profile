@@ -24,15 +24,11 @@ fi
 # Set default editor and pager.
 EDITOR="vi"
 VISUAL="$EDITOR"
-test -x /usr/bin/less && PAGER=less
+PAGER="$HOME/bin/pager"
 export EDITOR VISUAL PAGER
 
 # Claude Code.
 export CLAUDE_CODE_DISABLE_FEEDBACK_SURVEY=1
-
-# less. 0.382 ≈ 1/φ. 16.226 matches the macOS findHighlightColor.
-LESS='-eFiMX -j.382 --incsearch --mouse --use-color --color=PWc$ --color=S16.226$'
-export LESS
 
 # pyenv.
 if command -v pyenv 1>/dev/null 2>&1; then
