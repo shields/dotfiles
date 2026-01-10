@@ -116,16 +116,24 @@ fi
 
 # Attempt to have the menu bar transparent, but not other things. This
 # doesn't entirely take effect immediately.
-defaults write com.apple.universalaccess reduceTransparency true
+if [[ "$(defaults read com.apple.universalaccess reduceTransparency 2>/dev/null)" != @(1|true) ]]; then
+    sudo defaults write com.apple.universalaccess reduceTransparency true
+fi
 defaults write com.apple.Accessibility EnhancedBackgroundContrastEnabled -int 1
 defaults write NSGlobalDomain AppleEnableMenuBarTransparency -bool true
 
 # Keyboard
 defaults write com.apple.HIToolbox AppleCurrentKeyboardLayoutInputSourceID org.unknown.keylayout.Shields
 defaults write NSGlobalDomain com.apple.keyboard.fnState true
-defaults write com.apple.universalaccess stickyKey false
-defaults write com.apple.universalaccess stickyKeyBeepOnModifier false
-defaults write com.apple.universalaccess stickyKeysLocation -int 1
+if [[ "$(defaults read com.apple.universalaccess stickyKey 2>/dev/null)" != @(0|false) ]]; then
+    sudo defaults write com.apple.universalaccess stickyKey false
+fi
+if [[ "$(defaults read com.apple.universalaccess stickyKeyBeepOnModifier 2>/dev/null)" != @(0|false) ]]; then
+    sudo defaults write com.apple.universalaccess stickyKeyBeepOnModifier false
+fi
+if [[ "$(defaults read com.apple.universalaccess stickyKeysLocation 2>/dev/null)" != "1" ]]; then
+    sudo defaults write com.apple.universalaccess stickyKeysLocation -int 1
+fi
 
 # Trackpad tap to click
 defaults write com.apple.driver.AppleBluetoothMultitouch.trackpad Clicking -bool true
