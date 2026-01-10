@@ -199,7 +199,7 @@ if [ -x /usr/bin/pbcopy ]; then
     alias pv=pbpaste
 fi
 
-alias s='less'
+alias s='$PAGER'
 
 whence tf >/dev/null || alias tf='terraform'
 alias tfa='tf apply -parallelism=100'
