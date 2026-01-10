@@ -31,8 +31,7 @@ term = xterm-256color
 background = ffffff
 foreground = 000000
 
-# Bold color (same as foreground - not brightened)
-bold-color = 000000
+# bold-color: leave unset to not brighten colored bold text
 
 # Cursor colors
 cursor-color = 8b1a1a
