@@ -1,0 +1,84 @@
+# Ghostty configuration - matching iTerm2 settings
+
+# Font
+font-family = AndaleMono Nerd Font
+font-size = 12
+
+# Adjust cell width to match iTerm2 (measured: 998px vs 951px for 132 cols)
+adjust-cell-width = -5%
+
+# Window size (columns x rows)
+window-width = 132
+window-height = 100
+
+# Scrollback (in bytes, ~100MB for ~100k lines)
+scrollback-limit = 100000000
+
+# Cursor (block, no blink - matching iTerm2)
+cursor-style = block
+cursor-style-blink = false
+
+# Prevent shell integration from overriding cursor style
+shell-integration-features = no-cursor
+
+# Bell - attention only, no audio
+bell-features = no-audio,attention
+
+# Terminal type
+term = xterm-256color
+
+# Colors - light theme
+background = ffffff
+foreground = 000000
+
+# Bold color (same as foreground - not brightened)
+bold-color = 000000
+
+# Cursor colors
+cursor-color = 8b1a1a
+cursor-text = ffffff
+
+# Selection colors
+selection-background = e1ecfd
+selection-foreground = 000000
+
+# Minimum contrast (WCAG 1-21 scale; iTerm2 0.404 ≈ 3)
+minimum-contrast = 3
+
+# ANSI colors (palette 0-15)
+# Normal colors (0-7)
+palette = 0=#000000
+palette = 1=#920000
+palette = 2=#005b15
+palette = 3=#5d4400
+palette = 4=#2800dd
+palette = 5=#7d007a
+palette = 6=#005462
+palette = 7=#808080
+
+# Bright colors (8-15)
+palette = 8=#484848
+palette = 9=#f70000
+palette = 10=#009e36
+palette = 11=#a17a00
+palette = 12=#4d69ff
+palette = 13=#d600d0
+palette = 14=#0093a9
+palette = 15=#ffffff
+
+# Option key sends normal characters (not alt/meta)
+macos-option-as-alt = false
+
+# Links
+link-url = true
+
+# Window chrome
+window-decoration = true
+macos-titlebar-style = native
+
+# Don't confirm before closing
+confirm-close-surface = false
+
+# Clipboard access (matching iTerm2 AllowClipboardAccess)
+clipboard-read = allow
+clipboard-write = allow

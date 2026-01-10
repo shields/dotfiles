@@ -132,8 +132,6 @@ zstyle ':fzf-tab:*' accept-line ''
 zstyle ':fzf-tab:*' prefix ''
 zstyle ':completion:*:descriptions' format '[%d]'
 
-zstyle :omz:plugins:iterm2 shell-integration yes
-
 # zoxide, but call it j instead of z, because of autojump muscle memory and
 # because the z key is poorly placed for this.
 export ZOXIDE_CMD_OVERRIDE=j
@@ -150,11 +148,15 @@ plugins=(
     git
     git-auto-fetch
     git-prompt-watcher
-    iterm2
     kubectl
     starship
     zoxide
 )
+
+if [[ "$TERM_PROGRAM" == "iTerm.app" ]]; then
+    zstyle :omz:plugins:iterm2 shell-integration yes
+    plugins+=(iterm2)
+fi
 
 source "$ZSH/oh-my-zsh.sh"
 
@@ -206,4 +208,4 @@ alias tfia='tfi && tfa'
 alias tfp='tf plan -parallelism=100 -refresh=false'
 alias tfpr='tf plan -parallelism=100 -refresh=true'
 
-source "$HOME/.iTerm2/shell_integration.zsh"
+[[ "$TERM_PROGRAM" == "iTerm.app" ]] && source "$HOME/.iTerm2/shell_integration.zsh"
