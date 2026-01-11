@@ -2,4 +2,4 @@
 
 set -euo pipefail
 
-starship module git_status
+(git rev-parse --short HEAD; starship module git_status) | tr -d '\n'
