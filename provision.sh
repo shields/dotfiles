@@ -116,7 +116,8 @@ fi
 
 # Attempt to have the menu bar transparent, but not other things. This
 # doesn't entirely take effect immediately.
-if [[ "$(defaults read com.apple.universalaccess reduceTransparency 2>/dev/null)" != @(1|true) ]]; then
+reduce_transparency="$(defaults read com.apple.universalaccess reduceTransparency 2>/dev/null || true)"
+if [[ "$reduce_transparency" != "1" && "$reduce_transparency" != "true" ]]; then
     sudo defaults write com.apple.universalaccess reduceTransparency true
 fi
 defaults write com.apple.Accessibility EnhancedBackgroundContrastEnabled -int 1
@@ -125,10 +126,12 @@ defaults write NSGlobalDomain AppleEnableMenuBarTransparency -bool true
 # Keyboard
 defaults write com.apple.HIToolbox AppleCurrentKeyboardLayoutInputSourceID org.unknown.keylayout.Shields
 defaults write NSGlobalDomain com.apple.keyboard.fnState true
-if [[ "$(defaults read com.apple.universalaccess stickyKey 2>/dev/null)" != @(0|false) ]]; then
+sticky_key="$(defaults read com.apple.universalaccess stickyKey 2>/dev/null || true)"
+if [[ "$sticky_key" != "0" && "$sticky_key" != "false" ]]; then
     sudo defaults write com.apple.universalaccess stickyKey false
 fi
-if [[ "$(defaults read com.apple.universalaccess stickyKeyBeepOnModifier 2>/dev/null)" != @(0|false) ]]; then
+sticky_key_beep="$(defaults read com.apple.universalaccess stickyKeyBeepOnModifier 2>/dev/null || true)"
+if [[ "$sticky_key_beep" != "0" && "$sticky_key_beep" != "false" ]]; then
     sudo defaults write com.apple.universalaccess stickyKeyBeepOnModifier false
 fi
 if [[ "$(defaults read com.apple.universalaccess stickyKeysLocation 2>/dev/null)" != "1" ]]; then
