@@ -1,0 +1,7 @@
+#!/bin/bash
+set -euo pipefail
+
+docker system prune --force
+docker image prune -a --force --filter 'until=72h'
+docker volume prune --force
+docker builder prune --force
