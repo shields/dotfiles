@@ -1,5 +1,5 @@
 .aider*
-.claude/settings.local.json
+.claude/*.local.*
 .env
 .mypy_cache
 .serena/
