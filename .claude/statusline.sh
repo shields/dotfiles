@@ -7,4 +7,5 @@ set -euo pipefail
 (
     git rev-parse --short HEAD
     starship module git_status
+    echo '' # Starship does not print a newline
 ) | tr -d '\n' | sed 's/\x1b\[[0-9;]*m//g'
