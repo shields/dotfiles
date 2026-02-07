@@ -126,7 +126,7 @@ brew "yq"
 brew "yt-dlp"
 brew "zoxide"
 brew "zsh"
-brew "d12frosted/emacs-plus/emacs-plus@30", args: ["with-no-frame-refocus", "with-retro-emacs-logo-icon"]
+brew "d12frosted/emacs-plus/emacs-plus@30"
 brew "fluxcd/tap/flux"
 brew "gabrie30/utils/ghorg"
 brew "gimlet-io/capacitor/capacitor"
