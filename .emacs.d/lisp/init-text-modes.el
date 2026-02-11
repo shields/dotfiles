@@ -77,5 +77,11 @@
 
 (keymap-set help-mode-map "q" #'quit-window)
 
+
+
+;; yasnippet
+(use-package yasnippet
+  :hook (prog-mode . yas-minor-mode-on))
+
 (provide 'init-text-modes)
 ;;; init-text-modes.el ends here

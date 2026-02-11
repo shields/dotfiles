@@ -22,10 +22,5 @@
   (setopt chatgpt-shell-anthropic-key (auth-source-pick-first-password :host "api.anthropic.com"))
   (setopt chatgpt-shell-openai-key (auth-source-pick-first-password :host "api.openai.com")))
 
-;; yasnippet
-(use-package yasnippet
-  ;; :hook (prog-mode . yas-minor-mode-on)
-  )
-
 (provide 'init-ai)
 ;;; init-ai.el ends here
