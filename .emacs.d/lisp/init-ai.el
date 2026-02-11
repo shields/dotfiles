@@ -22,13 +22,6 @@
   (setopt chatgpt-shell-anthropic-key (auth-source-pick-first-password :host "api.anthropic.com"))
   (setopt chatgpt-shell-openai-key (auth-source-pick-first-password :host "api.openai.com")))
 
-;; Aider
-(use-package aider
-  :straight (:host github :repo "tninja/aider.el")
-  :config
-  (setopt aider-args nil)
-  :bind ("C-c a" . aider-transient-menu))
-
 ;; yasnippet
 (use-package yasnippet
   ;; :hook (prog-mode . yas-minor-mode-on)
