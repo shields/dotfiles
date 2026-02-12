@@ -3,5 +3,5 @@
 .env
 .mypy_cache
 .serena/
-CLAUDE.md
-**/.DS_Store
+.DS_Store/
+.playwright-mcp/
