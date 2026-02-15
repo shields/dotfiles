@@ -201,7 +201,7 @@ fi
 
 alias s='$PAGER'
 
-whence tf >/dev/null || alias tf='terraform'
+whence tf >/dev/null || alias tf='tofu'
 alias tfa='tf apply -parallelism=100'
 alias tfi='tf init'
 alias tfia='tfi && tfa'

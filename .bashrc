@@ -58,11 +58,6 @@ alias lla='ls -la'
 alias llr='ls -lR'
 alias llar='ls -laR'
 
-alias tf='terraform'
-alias tfa='terraform apply'
-alias tfp='terraform plan -refresh=false'
-alias tfpr='terraform plan -refresh=true'
-
 alias which='type -path'
 
 zdate() {
