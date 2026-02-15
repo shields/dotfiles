@@ -22,7 +22,7 @@ symbol = ""
 style = "bold cyan"
 
 [git_commit]
-format = "([$hash$tag]($style) )"
+format = "([ $hash$tag]($style) )"
 style = "cyan"
 only_detached = false
 tag_disabled = false
