@@ -13,7 +13,7 @@ Current latest stable versions (update as needed):
 
 - Debian: 13 (trixie)
 - Python: 3.14
-- Go: 1.25
+- Go: 1.26
 
 Be sure lines do not end in whitespace. The last line of a file should include a
 newline.
