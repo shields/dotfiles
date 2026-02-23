@@ -174,13 +174,13 @@ alias gdi='git diff refs/remotes/origin/HEAD'
 alias kc='kubectl'
 alias kcy='kubectl -o yaml'
 
-unalias md # from oh-my-zsh lib/directories.zsh
+unalias md 2>/dev/null || true # from oh-my-zsh lib/directories.zsh
 md() {
     if [ $# -ne 1 ] || [ -z "$1" ]; then
         echo "Usage: md <directory>" >&2
         return 1
     fi
-    mkdir -p "$1" && cd "$1"
+    mkdir -p -- "$1" && cd -- "$1"
 }
 
 # https://docs.brew.sh/Homebrew-and-Python
