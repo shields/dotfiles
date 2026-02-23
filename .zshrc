@@ -160,6 +160,8 @@ fi
 
 source "$ZSH/oh-my-zsh.sh"
 
+for f in "$HOME/.zsh.d/"*.zsh(N); do source "$f"; done
+
 # Keep aliases below after OMZ initialization, since some of them override
 # what's defined by OMZ plugins.
 
