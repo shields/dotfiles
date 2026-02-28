@@ -28,22 +28,30 @@ def get_defaults(domain: str) -> dict[str, PlistValue]:
     return cast(dict[str, PlistValue], plistlib.loads(plist, fmt=plistlib.FMT_XML))
 
 
-def plist_string(x: PlistValue) -> str:
-    if isinstance(x, bool):
-        return "true" if x else "false"
-    if isinstance(x, bytes):
-        return x.hex()
-    if isinstance(x, datetime.datetime):
-        return x.isoformat(sep=" ")
-    if isinstance(x, (int, float)):
-        return str(x)
-    if isinstance(x, str):
-        return shlex.quote(x)
+def _plist_typed(x: PlistValue) -> tuple[str, ...]:
+    match x:
+        case bool():
+            return "-bool", "true" if x else "false"
+        case bytes():
+            return "-data", x.hex()
+        case datetime.datetime():
+            return "-date", x.isoformat(sep=" ")
+        case float():
+            return "-float", str(x)
+        case int():
+            return "-int", str(x)
+        case str():
+            return (shlex.quote(x),)
+        case list():
+            return "-array", " ".join(_plist_str(elt) for elt in x)
+        case dict():
+            return "-dict", " ".join(
+                s for k, v in x.items() for s in (_plist_str(k), _plist_str(v))
+            )
 
-    if isinstance(x, list):
-        return " ".join(plist_string(elt) for elt in x)
 
-    return " ".join(s for k, v in x.items() for s in (plist_string(k), plist_string(v)))
+def _plist_str(x: PlistValue) -> str:
+    return _plist_typed(x)[-1]
 
 
 def is_boring_domain(domain: str) -> bool:
@@ -60,22 +68,7 @@ def print_diff(
         if is_boring_domain(k):
             continue
 
-        if isinstance(v, bool):
-            value = f"-bool {plist_string(v)}"
-        elif isinstance(v, bytes):
-            value = f"-data {plist_string(v)}"
-        elif isinstance(v, datetime.datetime):
-            value = f"-date {plist_string(v)}"
-        elif isinstance(v, dict):
-            value = f"-dict {plist_string(v)}"
-        elif isinstance(v, float):
-            value = f"-float {plist_string(v)}"
-        elif isinstance(v, int):
-            value = f"-int {plist_string(v)}"
-        elif isinstance(v, list):
-            value = f"-array {plist_string(v)}"
-        else:
-            value = plist_string(v)
+        value = " ".join(_plist_typed(v))
 
         print(f"defaults write {shlex.quote(domain)} {shlex.quote(k)} {value}")
 
