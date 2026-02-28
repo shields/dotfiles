@@ -9,15 +9,26 @@ import plistlib
 import shlex
 import subprocess
 import time
-from typing import Any
+from typing import cast
+
+type PlistValue = (
+    bool
+    | int
+    | float
+    | str
+    | bytes
+    | datetime.datetime
+    | list[PlistValue]
+    | dict[str, PlistValue]
+)
 
 
-def get_defaults(domain: str) -> dict[str, Any]:
+def get_defaults(domain: str) -> dict[str, PlistValue]:
     plist = subprocess.check_output(["defaults", "export", domain, "-"])
-    return plistlib.loads(plist, fmt=plistlib.FMT_XML)
+    return cast(dict[str, PlistValue], plistlib.loads(plist, fmt=plistlib.FMT_XML))
 
 
-def plist_string(x: Any) -> str:
+def plist_string(x: PlistValue) -> str:
     if isinstance(x, bool):
         return "true" if x else "false"
     if isinstance(x, bytes):
@@ -29,22 +40,19 @@ def plist_string(x: Any) -> str:
     if isinstance(x, str):
         return shlex.quote(x)
 
-    if isinstance(x, (list, tuple)):
+    if isinstance(x, list):
         return " ".join(plist_string(elt) for elt in x)
-    if isinstance(x, dict):
-        return " ".join(
-            plist_string(elt) for elt in zip(x.keys(), x.values(), strict=True)
-        )
 
-    msg = f"Unknown type {type(x)}"
-    raise TypeError(msg)
+    return " ".join(s for k, v in x.items() for s in (plist_string(k), plist_string(v)))
 
 
 def is_boring_domain(domain: str) -> bool:
     return "Cache" in domain
 
 
-def print_diff(domain: str, old: dict[str, Any], new: dict[str, Any]) -> None:
+def print_diff(
+    domain: str, old: dict[str, PlistValue], new: dict[str, PlistValue]
+) -> None:
     for k, v in new.items():
         if k in old and old[k] == v:
             continue
