@@ -1,15 +1,16 @@
 #!/usr/bin/env python
 
 from PIL import Image, ImageCms
+from PIL.ImageCms import CmsProfile
 
 
-def create_srgb_profile() -> ImageCms.ImageCmsProfile:
+def create_srgb_profile() -> CmsProfile:
     # Create a standard sRGB profile
     return ImageCms.createProfile("sRGB")
 
 
 def embed_icc_profile(
-    image: Image.Image, profile: ImageCms.ImageCmsProfile,
+    image: Image.Image, profile: CmsProfile,
 ) -> Image.Image:
     # Embed the ICC profile
     icc_bytes = ImageCms.ImageCmsProfile(profile).tobytes()
