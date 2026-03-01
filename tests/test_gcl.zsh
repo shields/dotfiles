@@ -1,6 +1,7 @@
 #!/bin/zsh
 set -euo pipefail
 
+PATH="${0:A:h}/../bin:$PATH"
 source "${0:A:h}/../.zsh.d/gcl.zsh"
 
 GCL_ROOT="$(mktemp -d)"

@@ -41,4 +41,5 @@ gcl() {
         return 1
     fi
     cd "$target"
+    git-add-upstream # errors intentionally fatal
 }
