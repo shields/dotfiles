@@ -1,0 +1,21 @@
+# Use diffoscope for binary file diffs.
+*.png diff=diffoscope
+*.jpg diff=diffoscope
+*.jpeg diff=diffoscope
+*.gif diff=diffoscope
+*.bmp diff=diffoscope
+*.ico diff=diffoscope
+*.webp diff=diffoscope
+*.tiff diff=diffoscope
+*.pdf diff=diffoscope
+*.zip diff=diffoscope
+*.gz diff=diffoscope
+*.tar diff=diffoscope
+*.ttf diff=diffoscope
+*.otf diff=diffoscope
+*.woff diff=diffoscope
+*.woff2 diff=diffoscope
+*.o diff=diffoscope
+*.so diff=diffoscope
+*.dylib diff=diffoscope
+*.a diff=diffoscope

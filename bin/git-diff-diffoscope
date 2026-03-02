@@ -1,0 +1,4 @@
+#!/bin/sh
+# Git external diff driver for diffoscope.
+# Arguments: path old-file old-hex old-mode new-file new-hex new-mode
+exec diffoscope "$2" "$5"
