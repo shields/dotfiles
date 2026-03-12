@@ -37,8 +37,6 @@
 [rerere]
 	enabled = true
 	autoupdate = true
-[diff "diffoscope"]
-	command = git-diff-diffoscope
 [color "diff"]
 	# These are poorly documented, but can be found at the top of git/diff.c.
 	commit = bold blue
