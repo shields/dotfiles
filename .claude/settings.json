@@ -1,7 +1,13 @@
 {
+  "env": {
+    "CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS": "1",
+    "DISABLE_AUTOUPDATER": "1"
+  },
   "includeCoAuthoredBy": false,
   "permissions": {
-    "allow": ["WebSearch"],
+    "allow": [
+      "WebSearch"
+    ],
     "deny": [
       "Bash(git commit --no-verify:*)",
       "Bash(git push:*)",
@@ -15,12 +21,9 @@
     "command": "~/.claude/statusline.sh",
     "padding": 0
   },
-  "env": {
-    "CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS": "1",
-    "DISABLE_AUTOUPDATER": "1"
-  },
   "enabledPlugins": {
     "gopls-lsp@claude-plugins-official": true,
-    "typescript-lsp@claude-plugins-official": true
+    "typescript-lsp@claude-plugins-official": true,
+    "clangd-lsp@claude-plugins-official": true
   }
 }
