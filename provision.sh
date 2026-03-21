@@ -73,6 +73,8 @@ brew cleanup --prune=all
 
 uv cache prune
 
+go clean -modcache
+
 # Be sure we're using full Xcode instead of the CLI-tools-only subset.
 if ! xcrun --find xcodebuild 2>/dev/null; then
     sudo xcode-select --reset
