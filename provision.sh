@@ -71,6 +71,8 @@ brew outdated --greedy-auto-updates --cask --quiet | (grep -v '^google-chrome' |
 brew autoremove
 brew cleanup --prune=all
 
+uv cache prune
+
 # Be sure we're using full Xcode instead of the CLI-tools-only subset.
 if ! xcrun --find xcodebuild 2>/dev/null; then
     sudo xcode-select --reset
