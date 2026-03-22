@@ -106,6 +106,7 @@ defaults write NSGlobalDomain AppleReduceDesktopTinting true
 defaults write NSGlobalDomain AppleShowAllExtensions true
 defaults write NSGlobalDomain AppleShowScrollBars -string 'Always'
 defaults write NSGlobalDomain NSAutomaticWindowAnimationsEnabled -bool false
+defaults write NSGlobalDomain NSMenuEnableActionImages -bool false
 defaults write NSGlobalDomain NSScrollAnimationEnabled -bool false
 defaults write NSGlobalDomain NSWindowResizeTime -float 0.001
 # A lighter blue than standard '0.698039 0.843137 1.000000 Blue', which
