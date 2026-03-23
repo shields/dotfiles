@@ -1,5 +1,5 @@
-# Target Python 3.13+ for maximum modernization
-target-version = "py313"
+# Target Python 3.14+ for maximum modernization
+target-version = "py314"
 
 [lint]
 # https://docs.astral.sh/ruff/rules/
@@ -15,4 +15,7 @@ ignore = [
   "S603",    # subprocess output
   "S607",    # subprocess using path
   "T201",    # print()
+  "RUF001",  # ambiguous Unicode character in string
+  "RUF002",  # ambiguous Unicode character in docstring
+  "RUF003",  # ambiguous Unicode character in comment
 ]

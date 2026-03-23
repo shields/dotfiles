@@ -25,7 +25,7 @@ type PlistValue = (
 
 def get_defaults(domain: str) -> dict[str, PlistValue]:
     plist = subprocess.check_output(["defaults", "export", domain, "-"])
-    return cast(dict[str, PlistValue], plistlib.loads(plist, fmt=plistlib.FMT_XML))
+    return cast("dict[str, PlistValue]", plistlib.loads(plist, fmt=plistlib.FMT_XML))
 
 
 def _plist_typed(x: PlistValue) -> tuple[str, ...]:
@@ -59,7 +59,7 @@ def is_boring_domain(domain: str) -> bool:
 
 
 def print_diff(
-    domain: str, old: dict[str, PlistValue], new: dict[str, PlistValue]
+    domain: str, old: dict[str, PlistValue], new: dict[str, PlistValue],
 ) -> None:
     for k, v in new.items():
         if k in old and old[k] == v:
