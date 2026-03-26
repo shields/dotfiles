@@ -1,4 +1,3 @@
-.aider*
 .claude/*.local.*
 .env
 .mypy_cache
