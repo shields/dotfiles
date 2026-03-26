@@ -1,4 +1,5 @@
 .claude/*.local.*
+.claude/worktrees/
 .env
 .mypy_cache
 .serena/
