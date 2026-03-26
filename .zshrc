@@ -174,7 +174,7 @@ alias drit='docker run -it --rm'
 alias gc='gcloud'
 
 alias gdi='git diff refs/remotes/origin/HEAD'
-alias glsf='git ls-files'
+alias glf='git ls-files'
 
 alias kc='kubectl'
 alias kcy='kubectl -o yaml'
