@@ -8,6 +8,7 @@
     "allow": [
       "Bash(git add:*)",
       "Bash(git stash:*)",
+      "Bash(go doc:*)",
       "WebSearch"
     ],
     "deny": [
