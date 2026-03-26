@@ -6,6 +6,8 @@
   "includeCoAuthoredBy": false,
   "permissions": {
     "allow": [
+      "Bash(git add:*)",
+      "Bash(git stash:*)",
       "WebSearch"
     ],
     "deny": [
