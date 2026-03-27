@@ -7,6 +7,7 @@
   "permissions": {
     "allow": [
       "Bash(git add:*)",
+      "Bash(git diff:*)",
       "Bash(git stash:*)",
       "Bash(go doc:*)",
       "WebSearch"
