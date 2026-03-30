@@ -48,26 +48,40 @@ const options: PaletteOptions = { ...defaults };
 for (let i = 0; i < args.length; i++) {
   const arg = args[i];
 
-  if (arg === "--count" || arg === "-c") {
-    options.count = parseInt(args[++i], 10);
-  } else if (arg === "--lightness" || arg === "-l") {
-    options.lightness = parseFloat(args[++i]);
-  } else if (arg === "--chroma" || arg === "-C") {
-    options.chroma = parseFloat(args[++i]);
-  } else if (arg === "--start-hue") {
-    options.startHue = parseFloat(args[++i]);
-  } else if (arg === "--help" || arg === "-h") {
-    console.log(`
+  switch (arg) {
+    case "--count":
+    case "-c": {
+      options.count = Number.parseInt(args[++i] ?? "", 10);
+      break;
+    }
+    case "--lightness":
+    case "-l": {
+      options.lightness = Number.parseFloat(args[++i] ?? "");
+      break;
+    }
+    case "--chroma":
+    case "-C": {
+      options.chroma = Number.parseFloat(args[++i] ?? "");
+      break;
+    }
+    case "--start-hue": {
+      options.startHue = Number.parseFloat(args[++i] ?? "");
+      break;
+    }
+    case "--help":
+    case "-h": {
+      console.log(`
         Usage: color-palette [options]
 
 Options:
-  --count, -c       Number of colors to generate (default: ${defaults.count})
-  --lightness, -l   Lightness value (0-1, default: ${defaults.lightness})
-  --chroma, -C      Chroma value (0-0.4, default: ${defaults.chroma})
-  --start-hue       Starting hue (0-360, default: ${defaults.startHue})
+  --count, -c       Number of colors to generate (default: ${String(defaults.count)})
+  --lightness, -l   Lightness value (0-1, default: ${String(defaults.lightness)})
+  --chroma, -C      Chroma value (0-0.4, default: ${String(defaults.chroma)})
+  --start-hue       Starting hue (0-360, default: ${String(defaults.startHue)})
   --help, -h        Show this help message
     `);
-    process.exit(0);
+      process.exit(0);
+    }
   }
 }
 

@@ -24,6 +24,8 @@ select = [
 ignore = [
   "ANN401",  # typing.Any
   "C90",     # Cyclomatic complexity
+  "COM812",  # Conflicts with Ruff formatter
+  "ISC001",  # Conflicts with Ruff formatter
   "D",       # pydocstyle (disable docstring rules)
   "PLR09",   # "Too many" branches, arguments, etc.
   "S603",    # subprocess output

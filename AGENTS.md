@@ -4,22 +4,22 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Commands
 
-- **Build**: `npm run build` (TypeScript compilation)
+- **Build/Lint/Test/Format**: `make build`, `make lint`, `make test`, `make fmt`
 - **Type Check**: `basedpyright` and `uv run ty check` (Python type checking)
-- **Tools**: `npm run color-palette` (Color palette generation)
+- **Tools**: `bun run tools/color-palette.ts` (Color palette generation)
 - **System Setup**: `./provision.sh` (Full macOS setup)
 - **Emacs Setup**: `emacs --batch --script .emacs.d/provision.el`
 
 ## Code Style
 
-- **TypeScript**: Modern ES2020 target, strict types, Node modules
-- **Python**: Type annotations required, Python 3.13+, Ruff formatting
+- **TypeScript**: ESNext target, strict types, ESLint + Prettier, Node modules
+- **Python**: Type annotations required, Python 3.14+, Ruff formatting
 - **Emacs Lisp**: Lexical binding, use-package based, use keymap-set
 - **Shell Scripts**: set -euo pipefail, prefer absolute paths
 
 ## Package Management
 
-- Use `yarn` for JavaScript/TypeScript
+- Use `bun` for JavaScript/TypeScript
 - Use `uv` for Python packages (never pip). Even without pyproject.toml, use `uv venv` and `uv pip`
 - Use `brew` for system packages
 

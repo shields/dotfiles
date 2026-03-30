@@ -73,7 +73,9 @@ def is_boring_domain(domain: str) -> bool:
 
 
 def print_diff(
-    domain: str, old: dict[str, PlistValue], new: dict[str, PlistValue],
+    domain: str,
+    old: dict[str, PlistValue],
+    new: dict[str, PlistValue],
 ) -> None:
     for k, v in new.items():
         if k in old and old[k] == v:
