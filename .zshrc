@@ -182,7 +182,7 @@ for f in "$HOME/.zsh.d/"*.zsh(N); do source "$f"; done
 
 # Claude Code takes effort as a CLI flag but not in the config.
 # https://github.com/anthropics/claude-code/issues/31923
-alias cl='claude --effort max'
+alias c='claude --effort max'
 
 alias drit='docker run -it --rm'
 
