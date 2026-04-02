@@ -1,6 +1,7 @@
 .claude/*.local.*
 .claude/worktrees/
 .env
+.envrc
 .mypy_cache
 .serena/
 .DS_Store/
