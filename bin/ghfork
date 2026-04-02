@@ -1,0 +1,69 @@
+#!/bin/bash
+#
+# Copyright © 2026 Michael Shields
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+set -euo pipefail
+
+if ! git rev-parse --is-inside-work-tree &>/dev/null; then
+    echo "ghfork: not a git repository" >&2
+    exit 1
+fi
+
+origin_url="$(git remote get-url origin 2>/dev/null)" || {
+    echo "ghfork: no origin remote configured" >&2
+    exit 1
+}
+
+origin_stripped="${origin_url%.git}"
+
+if [[ "$origin_stripped" =~ ^https://github\.com/([^/]+)/([^/]+)$ ]]; then
+    url_scheme=https
+elif [[ "$origin_stripped" =~ ^git@github\.com:([^/]+)/([^/]+)$ ]]; then
+    url_scheme=ssh
+else
+    echo "ghfork: origin is not a GitHub URL" >&2
+    exit 1
+fi
+owner="${BASH_REMATCH[1]}"
+repo="${BASH_REMATCH[2]}"
+
+if git remote get-url upstream &>/dev/null; then
+    echo "ghfork: upstream remote already exists" >&2
+    exit 1
+fi
+
+if ! command -v gh &>/dev/null; then
+    echo "ghfork: gh CLI not found" >&2
+    exit 1
+fi
+
+gh repo fork --remote=false || {
+    echo "ghfork: failed to create fork" >&2
+    exit 1
+}
+
+gh_user="$(gh api user --jq .login)" || {
+    echo "ghfork: failed to determine GitHub username" >&2
+    exit 1
+}
+
+if [[ "$url_scheme" == "ssh" ]]; then
+    fork_url="git@github.com:$gh_user/$repo.git"
+else
+    fork_url="https://github.com/$gh_user/$repo.git"
+fi
+
+git remote rename origin upstream
+git remote add origin "$fork_url"
