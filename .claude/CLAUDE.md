@@ -67,6 +67,10 @@ CRITICAL: You MUST achieve 100% test pass rate - NO EXCEPTIONS WHATSOEVER. Parti
 
 NEVER bypass precommit hooks. Always respect and follow configured git hooks.
 
+## Workflow
+
+After completing a change, run `/simplify` before review/commit.
+
 ## Code review (LGTMCP)
 
 When using LGTMCP for code review, if you disagree with the reviewer's feedback,
