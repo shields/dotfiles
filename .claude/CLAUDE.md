@@ -58,9 +58,10 @@ CRITICAL: You MUST achieve 100% test pass rate - NO EXCEPTIONS WHATSOEVER. Parti
 
 **CRITICAL: You MUST get user approval before removing, disabling, or skipping any tests. Tests exist for important reasons!**
 
-## Performance benchmarking
+## CLI tools
 
-When timing CLI commands, use `hyperfine` instead of `time` for accurate benchmarking.
+- Use `crane` to inspect and check container images.
+- Use `hyperfine` instead of `time` for benchmarking CLI commands.
 
 ## Git hooks
 
