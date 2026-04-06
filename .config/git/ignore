@@ -1,5 +1,6 @@
 .claude/*.local.*
 .claude/worktrees/
+CLAUDE.local.md
 .env
 .envrc
 .mypy_cache
