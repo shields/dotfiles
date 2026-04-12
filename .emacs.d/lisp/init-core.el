@@ -36,5 +36,8 @@
 ;; Stop saying "You can run the command blah-blah with M-x bl-b".
 (setopt extended-command-suggest-shorter nil)
 
+(setq read-extended-command-predicate
+      #'command-completion-default-include-p)
+
 (provide 'init-core)
 ;;; init-core.el ends here
