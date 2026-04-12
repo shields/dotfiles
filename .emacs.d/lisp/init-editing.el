@@ -19,9 +19,8 @@
 
 ;;; Code:
 
-;; Anzu mode for search/replace feedback
-(use-package anzu)
-(global-anzu-mode 1)
+;; Show match count in isearch
+(setopt isearch-lazy-count t)
 
 ;; Avy mode for efficient navigation
 (defun shields/avy-handler (char)
