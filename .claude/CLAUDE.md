@@ -62,6 +62,7 @@ CRITICAL: You MUST achieve 100% test pass rate - NO EXCEPTIONS WHATSOEVER. Parti
 
 - Use `crane` to inspect and check container images.
 - Use `hyperfine` instead of `time` for benchmarking CLI commands.
+- Use `go doc` for Go API documentation.
 
 ## Git hooks
 
