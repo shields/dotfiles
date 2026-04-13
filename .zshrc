@@ -180,9 +180,22 @@ for f in "$HOME/.zsh.d/"*.zsh(N); do source "$f"; done
 # Keep aliases below after OMZ initialization, since some of them override
 # what's defined by OMZ plugins.
 
-# Claude Code takes effort as a CLI flag but not in the config.
-# https://github.com/anthropics/claude-code/issues/31923
-alias c='claude --effort max'
+# Start Claude with a per-session tmpdir and sandbox write permit for it.
+c() {
+    local tmpdir settings
+    tmpdir=$(mktemp -d "${${TMPDIR:-/tmp}%/}/claude.XXXXXX") || return 1
+    # Run from project root; .claude/settings.local.json is project-scoped.
+    settings=./.claude/settings.local.json
+    mkdir -p ./.claude
+    [[ -s "$settings" ]] || echo '{}' > "$settings"
+    # Appends rather than replaces; stale entries are harmless and the OS prunes /tmp.
+    # jq += creates intermediate objects, so this works on a bare {}.
+    jq --arg dir "$tmpdir" '.sandbox.filesystem.allowWrite += [$dir]' "$settings" > "${settings}.tmp" \
+        && mv "${settings}.tmp" "$settings" || { rm -f "${settings}.tmp"; return 1; }
+    # Claude Code takes effort as a CLI flag but not in the config.
+    # https://github.com/anthropics/claude-code/issues/31923
+    TMPDIR="$tmpdir" claude --effort max "$@"
+}
 
 alias drit='docker run -it --rm'
 
