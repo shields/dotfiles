@@ -33,8 +33,8 @@ gcl() {
     url="${url%.git}"
 
     local parts=(${(s:/:)url})
-    if [[ ${#parts[@]} -lt 3 ]]; then
-        echo "gcl: expected <host>/<owner>/<repo>" >&2
+    if [[ ${#parts[@]} -lt 2 ]]; then
+        echo "gcl: expected <host>/<path>" >&2
         return 1
     fi
 
