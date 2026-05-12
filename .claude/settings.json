@@ -17,7 +17,8 @@
       "Bash(git push:*)",
       "Bash(kubectl get secret:*)",
       "Bash(kubectl get secrets:*)",
-      "Bash(lefthook uninstall)"
+      "Bash(lefthook uninstall)",
+      "Bash(brew install *)"
     ]
   },
   "statusLine": {
@@ -34,5 +35,6 @@
   "sandbox": {
     "enabled": true,
     "autoAllowBashIfSandboxed": true
-  }
+  },
+  "awaySummaryEnabled": false
 }
