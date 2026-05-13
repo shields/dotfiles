@@ -45,5 +45,11 @@ when called with a prefix argument."
 ;; installed via straight.
 (setopt vc-follow-symlinks t)
 
+;; Auto-chmod +x scripts with shebangs on save.
+(add-hook 'after-save-hook #'executable-make-buffer-file-executable-if-script-p)
+
+;; Don't let ffap probe the network for hostnames under point.
+(setq ffap-machine-p-known 'reject)
+
 (provide 'init-files)
 ;;; init-files.el ends here

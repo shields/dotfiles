@@ -125,6 +125,7 @@
 (setopt frame-resize-pixelwise t)
 
 (setopt switch-to-buffer-obey-display-actions t)
+(setopt window-combination-resize t)
 
 ;; Close frame when quitting the last window
 (defun shields/quit-window-or-frame (orig-fun &optional kill window)

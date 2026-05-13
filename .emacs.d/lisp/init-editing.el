@@ -76,8 +76,11 @@
 (setopt shift-select-mode nil)
 (setopt mouse-yank-at-point t)
 (setopt save-interprogram-paste-before-kill t)
+(setopt kill-do-not-save-duplicates t)
 
 (setopt search-nonincremental-instead nil)
+(setopt set-mark-command-repeat-pop t)
+(setopt reb-re-syntax 'string)
 
 (add-hook 'prog-mode-hook #'kill-ring-deindent-mode)
 
@@ -188,6 +191,14 @@ confused by other nearby files."
 
 ;; Increase process data chunks for better performance
 (setopt read-process-output-max (* 4 1024 1024)) ; 4MiB
+
+;; Skip RTL/bidi processing; we don't edit right-to-left text.
+(setq-default bidi-display-reordering 'left-to-right
+              bidi-paragraph-direction 'left-to-right)
+(setopt bidi-inhibit-bpa t)
+
+;; Defer fontification while typing for smoother input in large/treesit buffers.
+(setopt redisplay-skip-fontification-on-input t)
 
 ;; Tree-sitter mode remapping. This should run after all other packages have
 ;; been loaded, or else we might not know about the modes.

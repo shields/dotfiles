@@ -199,5 +199,18 @@ stage it and display a diff."
 
 (keymap-global-set "M-s" #'shields/save-dwim)
 
+;; winner-mode + toggle: first C-x 1 deletes other windows, second restores layout.
+(winner-mode 1)
+
+(defun shields/toggle-delete-other-windows ()
+  "Delete other windows in the frame, or restore the previous layout."
+  (interactive)
+  (if (and winner-mode
+           (equal (selected-window) (next-window)))
+      (winner-undo)
+    (delete-other-windows)))
+
+(keymap-global-set "C-x 1" #'shields/toggle-delete-other-windows)
+
 (provide 'init-keybindings)
 ;;; init-keybindings.el ends here
