@@ -135,6 +135,13 @@ if [[ $(bc -e "abs($(defaults read com.apple.universalaccess mouseDriverCursorSi
     sudo defaults write com.apple.universalaccess mouseDriverCursorSize -float 1.5
 fi
 
+# Scroll zoom (https://unsung.aresluna.org/testing-tip-enable-the-zoom-peek-gesture/):
+defaults write com.apple.universalaccess closeViewSmoothImages -bool true
+defaults write com.apple.driver.AppleBluetoothMultitouch.trackpad HIDScrollZoomModifierMask -int 262144
+defaults write com.apple.AppleMultitouchTrackpad HIDScrollZoomModifierMask -int 262144
+defaults write com.apple.universalaccess closeViewScrollWheelToggle -bool true
+defaults write com.apple.universalaccess closeViewSmoothImages -bool false
+
 # Attempt to have the menu bar transparent, but not other things. This
 # doesn't entirely take effect immediately.
 reduce_transparency="$(defaults read com.apple.universalaccess reduceTransparency 2>/dev/null || true)"
