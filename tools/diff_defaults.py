@@ -20,6 +20,7 @@
 
 import datetime
 import plistlib
+import re
 import shlex
 import subprocess
 import time
@@ -39,6 +40,9 @@ type PlistValue = (
 
 def get_defaults(domain: str) -> dict[str, PlistValue]:
     plist = subprocess.check_output(["defaults", "export", domain, "-"])
+    # Some domains store sentinel <date>0000-12-30T00:00:00Z</date> values
+    # that plistlib rejects (year must be >= 1). Remap year 0 to year 1.
+    plist = re.sub(rb"<date>0000-", rb"<date>0001-", plist)
     return cast("dict[str, PlistValue]", plistlib.loads(plist, fmt=plistlib.FMT_XML))
 
 
@@ -115,11 +119,6 @@ if __name__ == "__main__":
 
     # https://bugs.python.org/issue41083
     domains.remove("com.apple.security.KCN")
-
-    # Sometimes includes "<date>0000-12-30T00:00:00Z</date>" which plistlib
-    # chokes on; also, is unimportant.
-    domains.remove("com.apple.stocks.detailintents")
-    domains.remove("com.apple.stocks.widget")
 
     print("Baselining...", end="", flush=True)
     defaults = {domain: get_defaults(domain) for domain in domains}
