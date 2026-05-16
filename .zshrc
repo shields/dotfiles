@@ -226,7 +226,7 @@ p() {
 }
 
 r() {
-    rg --pretty "$@" | less -R -E --redraw-on-quit
+    rg --pretty --line-buffered "$@" | less -R -E --redraw-on-quit
 }
 
 if [ -x /usr/bin/pbcopy ]; then
