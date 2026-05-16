@@ -207,6 +207,9 @@ alias glf='git ls-files'
 alias kc='kubectl'
 alias kcy='kubectl -o yaml'
 
+whence freshl >/dev/null && alias l='freshl'
+alias lr='l -R'
+
 unalias md 2>/dev/null || true # from oh-my-zsh lib/directories.zsh
 md() {
     if [ $# -ne 1 ] || [ -z "$1" ]; then
