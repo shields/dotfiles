@@ -1,4 +1,5 @@
 .claude/*.local.*
+.claude/*.lock
 .claude/worktrees/
 CLAUDE.local.md
 .env
