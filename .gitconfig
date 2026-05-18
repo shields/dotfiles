@@ -19,8 +19,11 @@
 [core]
 	# less -FRX is the git default, but only if you have not set $LESS.
 	pager = less -FRX
-
-	hooksPath = ~/.config/git/hooks
+# gitleaks is the only essential pre-commit step. You can fix a bug or a lint
+# problem in a later commit, but you can't un-leak a secret.
+[hook "gitleaks"]
+	event = pre-commit
+	command = gitleaks protect --staged --no-banner --verbose --log-level=warn
 [alias]
 	br = branch
 	branch-name = !git rev-parse --abbrev-ref HEAD
