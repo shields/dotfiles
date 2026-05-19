@@ -67,3 +67,5 @@ fi
 
 git remote rename origin upstream
 git remote add origin "$fork_url"
+
+gh repo set-default "$owner/$repo"
