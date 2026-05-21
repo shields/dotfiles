@@ -115,6 +115,27 @@
 
 (setq-default truncate-lines t)
 
+;; Markers shown when the right fringe is disabled (see above).
+(defface shields/line-marker '((t :background "#e8f4ff"))
+  "Face for line truncation and wrap markers.")
+(defun shields/install-line-markers (table)
+  "Set truncation and wrap markers in display TABLE."
+  (set-display-table-slot table 'truncation
+                          (make-glyph-code ?… 'shields/line-marker))
+  ;; The double oblique hyphen is what Gutenberg used.
+  (set-display-table-slot table 'wrap
+                          (make-glyph-code ?⸗ 'shields/line-marker)))
+(unless standard-display-table
+  (setq standard-display-table (make-display-table)))
+(shields/install-line-markers standard-display-table)
+;; `whitespace-mode' installs a buffer-local display table for `tab-mark',
+;; which shadows the standard one.  Reapply our markers there too.
+(defun shields/whitespace-mode-line-markers ()
+  "Reapply line markers after `whitespace-mode' installs its table."
+  (when (and whitespace-mode buffer-display-table)
+    (shields/install-line-markers buffer-display-table)))
+(add-hook 'whitespace-mode-hook #'shields/whitespace-mode-line-markers)
+
 ;; Enable horizontal trackpad scrolling.
 (setopt mouse-wheel-tilt-scroll t
         mouse-wheel-flip-direction t)
