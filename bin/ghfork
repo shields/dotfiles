@@ -73,4 +73,12 @@ fi
 git remote rename origin upstream
 git remote add origin "$fork_url"
 
+# `git remote rename origin upstream` rewrites `branch.<name>.remote` from
+# `origin` to `upstream` for every branch that tracked origin. Flip those
+# back so push/pull on existing branches default to the new origin (the
+# fork). The `branch.<name>.merge` ref is unchanged by the rename.
+while IFS= read -r key; do
+    git config "$key" origin
+done < <(git config --get-regexp '^branch\..*\.remote$' '^upstream$' | awk '{print $1}')
+
 gh repo set-default "$owner/$repo"
