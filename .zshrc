@@ -129,6 +129,10 @@ if [ -d "$HOME/.cargo" ]; then
     PATH="$PATH:$HOME/.cargo/bin"
 fi
 
+if whence go >/dev/null; then
+    PATH="$PATH:$(go env GOPATH)/bin"
+fi
+
 export FZF_DEFAULT_OPTS="--color hl:red,hl:bold,selected-hl:red,selected-hl:bold,current-hl:red,current-hl:bold"
 
 export FZF_ALT_C_COMMAND=""
