@@ -115,8 +115,14 @@
 
 (setq-default truncate-lines t)
 
-;; Markers shown when the right fringe is disabled (see above).
-(defface shields/line-marker '((t :background "#e8f4ff"))
+;; Markers shown when the right fringe is disabled (see above).  The family
+;; override is required because display-table glyphs attached to a face are
+;; resolved against the face's primary font directly, bypassing the fontset
+;; fallback that handles missing glyphs in normal text.  Without it the face
+;; inherits the default font (Andale Mono, which lacks U+2E17 DOUBLE OBLIQUE
+;; HYPHEN ⸗) and the wrap marker shows as a missing-glyph box -- even though
+;; ⸗ renders fine inline because the fallback covers it.
+(defface shields/line-marker '((t :family "Courier New" :background "#e8f4ff"))
   "Face for line truncation and wrap markers.")
 (defun shields/install-line-markers (table)
   "Set truncation and wrap markers in display TABLE."
