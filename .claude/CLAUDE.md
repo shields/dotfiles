@@ -70,7 +70,7 @@ NEVER bypass precommit hooks. Always respect and follow configured git hooks.
 
 ## Workflow
 
-After completing a change, run `/code-review max` before review/commit.
+After completing a change, run `/simplify` before review/commit.
 
 ## Code review (LGTMCP)
 
