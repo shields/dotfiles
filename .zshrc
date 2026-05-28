@@ -16,6 +16,9 @@
 
 # The shebang line is for the benefit of shfmt.
 
+# https://donottrack.sh
+export DO_NOT_TRACK=1
+
 [[ -d /opt/homebrew ]] && eval "$(/opt/homebrew/bin/brew shellenv)"
 [[ -x /usr/local/bin/brew ]] && eval "$(/usr/local/bin/brew shellenv)"
 
