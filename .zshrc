@@ -132,6 +132,12 @@ if [ -d "$HOME/.cargo" ]; then
     PATH="$PATH:$HOME/.cargo/bin"
 fi
 
+# Homebrew's rustup is keg-only and puts its cargo/rustc proxies here, not in
+# ~/.cargo/bin (it no longer ships rustup-init).
+if [ -d "/opt/homebrew/opt/rustup/bin" ]; then
+    PATH="$PATH:/opt/homebrew/opt/rustup/bin"
+fi
+
 if whence go >/dev/null; then
     PATH="$PATH:$(go env GOPATH)/bin"
 fi

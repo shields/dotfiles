@@ -326,7 +326,7 @@ rm -rf /Applications/Emacs.app
 osascript -e 'tell application "Finder" to make alias file to posix file "/opt/homebrew/opt/emacs-plus@30/Emacs.app" at posix file "/Applications" with properties {name:"Emacs.app"}'
 
 # rustup
-rustup-init --no-modify-path -y >/dev/null
+rustup default stable >/dev/null
 
 # Bootstrap TLS trust to GitHub SSH trust.
 if [ ! -f "$HOME/.ssh/known_hosts" ] || ! grep -q '^github\.com ' "$HOME/.ssh/known_hosts"; then
