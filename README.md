@@ -13,4 +13,4 @@ Additional steps not yet automated:
   - Users & Groups > Login Items: add Karabiner-Elements
 
 Many preferences can be translated to `defaults write` settings using
-`diff_defaults.py`.
+`tools/diff_defaults.py`.
