@@ -16,12 +16,16 @@
 
 import argparse
 import shutil
+import sys
 import time
 from pathlib import Path
 
 
 def pluralize(count: float, word: str) -> str:
-    return f"{count} {word}" if count == 1 else f"{count} {word}s"
+    # argparse passes --days through float(), so a whole number arrives as e.g.
+    # 7.0; render it as "7" so messages read "7 days" rather than "7.0 days".
+    shown = int(count) if isinstance(count, float) and count.is_integer() else count
+    return f"{shown} {word}" if count == 1 else f"{shown} {word}s"
 
 
 def move_old_downloads_to_trash(days: float = 7, *, dry_run: bool = False) -> None:
@@ -43,7 +47,15 @@ def move_old_downloads_to_trash(days: float = 7, *, dry_run: bool = False) -> No
         print(f"DRY RUN - would move {pluralize(days, 'day')}-old files to trash:\n")
 
     for item in downloads_dir.iterdir():
-        if item.stat().st_mtime >= cutoff_time:
+        # Use lstat so a broken symlink (whose target is gone) is still
+        # considered by its own mtime instead of raising and aborting the run.
+        try:
+            mtime = item.stat(follow_symlinks=False).st_mtime
+        except OSError as exc:
+            print(f"Skipping (cannot stat): {item.name}: {exc}", file=sys.stderr)
+            continue
+
+        if mtime >= cutoff_time:
             continue
 
         dest = trash_dir / item.name
@@ -57,13 +69,17 @@ def move_old_downloads_to_trash(days: float = 7, *, dry_run: bool = False) -> No
                 dest = trash_dir / f"{base}_{counter}{suffix}"
                 counter += 1
 
-        age_days = (time.time() - item.stat().st_mtime) / (24 * 60 * 60)
+        age_days = (time.time() - mtime) / (24 * 60 * 60)
 
-        if dry_run:
-            print(f"Would move: {item.name} (age: {age_days:.1f} days)")
-        else:
-            _ = shutil.move(str(item), str(dest))
-            print(f"Moved to trash: {item.name} (age: {age_days:.1f} days)")
+        try:
+            if dry_run:
+                print(f"Would move: {item.name} (age: {age_days:.1f} days)")
+            else:
+                _ = shutil.move(str(item), str(dest))
+                print(f"Moved to trash: {item.name} (age: {age_days:.1f} days)")
+        except OSError as exc:
+            print(f"Skipping (cannot move): {item.name}: {exc}", file=sys.stderr)
+            continue
 
         moved_count += 1
 
