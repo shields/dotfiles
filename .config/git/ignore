@@ -6,5 +6,5 @@ CLAUDE.local.md
 .envrc
 .mypy_cache
 .serena/
-.DS_Store/
+.DS_Store
 .playwright-mcp/
