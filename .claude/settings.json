@@ -18,7 +18,7 @@
       "Bash(kubectl get secret:*)",
       "Bash(kubectl get secrets:*)",
       "Bash(lefthook uninstall)",
-      "Bash(brew install:*)"
+      "Bash(brew install *)"
     ]
   },
   "statusLine": {
@@ -34,7 +34,15 @@
   },
   "sandbox": {
     "enabled": true,
-    "autoAllowBashIfSandboxed": true
+    "autoAllowBashIfSandboxed": true,
+    "filesystem": {
+      "allowWrite": [
+        "/Users/shields/Library/Caches/go-build",
+        "/Users/shields/Library/Caches/golangci-lint",
+        "/Users/shields/go/pkg/mod"
+      ]
+    }
   },
-  "awaySummaryEnabled": false
+  "awaySummaryEnabled": false,
+  "skipWorkflowUsageWarning": true
 }
