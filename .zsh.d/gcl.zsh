@@ -54,6 +54,6 @@ gcl() {
         rmdir -p "$parent" 2>/dev/null || true
         return 1
     fi
-    cd "$target"
+    cd "$target" || return 1
     git-add-upstream # errors intentionally fatal
 }

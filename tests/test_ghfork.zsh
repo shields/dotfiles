@@ -62,6 +62,9 @@ if [[ "\$1" == "api" && "\$2" == "user" ]]; then
     printf '%s\n' '$api_user'
     exit 0
 fi
+if [[ "\$1" == "repo" && "\$2" == "set-default" ]]; then
+    exit 0
+fi
 exit 1
 SCRIPT
     chmod +x "$dir/gh"
