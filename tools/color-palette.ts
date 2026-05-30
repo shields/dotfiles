@@ -42,6 +42,19 @@ const defaults: PaletteOptions = {
   startHue: 0,
 };
 
+function fail(message: string): never {
+  console.error(`color-palette: ${message}`);
+  process.exit(1);
+}
+
+function requireNumber(arg: string, value: string | undefined): number {
+  const parsed = Number(value);
+  if (value === undefined || value === "" || Number.isNaN(parsed)) {
+    fail(`${arg} requires a numeric value`);
+  }
+  return parsed;
+}
+
 const args = process.argv.slice(2);
 const options: PaletteOptions = { ...defaults };
 
@@ -51,21 +64,25 @@ for (let i = 0; i < args.length; i++) {
   switch (arg) {
     case "--count":
     case "-c": {
-      options.count = Number.parseInt(args[++i] ?? "", 10);
+      const value = requireNumber(arg, args[++i]);
+      if (!Number.isInteger(value) || value < 1) {
+        fail("--count requires a positive integer");
+      }
+      options.count = value;
       break;
     }
     case "--lightness":
     case "-l": {
-      options.lightness = Number.parseFloat(args[++i] ?? "");
+      options.lightness = requireNumber(arg, args[++i]);
       break;
     }
     case "--chroma":
     case "-C": {
-      options.chroma = Number.parseFloat(args[++i] ?? "");
+      options.chroma = requireNumber(arg, args[++i]);
       break;
     }
     case "--start-hue": {
-      options.startHue = Number.parseFloat(args[++i] ?? "");
+      options.startHue = requireNumber(arg, args[++i]);
       break;
     }
     case "--help":
@@ -85,6 +102,17 @@ Options:
   }
 }
 
+const namedColors: Record<string, Color> = {
+  black: new Color("srgb", [0, 0, 0]),
+  white: new Color("srgb", [1, 1, 1]),
+  red: new Color("srgb", [1, 0, 0]),
+  green: new Color("srgb", [0, 1, 0]),
+  blue: new Color("srgb", [0, 0, 1]),
+  magenta: new Color("srgb", [1, 0, 1]),
+  yellow: new Color("srgb", [1, 1, 0]),
+  cyan: new Color("srgb", [0, 1, 1]),
+};
+
 function generatePalette(options: PaletteOptions): ColorInfo[] {
   const { count, lightness, chroma, startHue } = options;
   const palette: ColorInfo[] = [];
@@ -95,17 +123,6 @@ function generatePalette(options: PaletteOptions): ColorInfo[] {
     const p3Color = oklchColor.to("p3");
 
     // Determine closest named color
-    const namedColors: Record<string, Color> = {
-      black: new Color("srgb", [0, 0, 0]),
-      white: new Color("srgb", [1, 1, 1]),
-      red: new Color("srgb", [1, 0, 0]),
-      green: new Color("srgb", [0, 1, 0]),
-      blue: new Color("srgb", [0, 0, 1]),
-      magenta: new Color("srgb", [1, 0, 1]),
-      yellow: new Color("srgb", [1, 1, 0]),
-      cyan: new Color("srgb", [0, 1, 1]),
-    };
-
     let closestName = "Unknown";
     let minDistance = Infinity;
 
