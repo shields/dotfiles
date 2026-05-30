@@ -31,14 +31,16 @@ behavior changes, and do not touch anything ambiguous — **surface those instea
 
 - Record the starting branch: `git branch --show-current` (this is the **original branch** you merge back into; the main working tree stays on it the whole time).
 - Require a **clean working tree** to start. If `git status --porcelain` is non-empty, stop and tell the user to commit or stash first — this is a safety precondition (a dirty base would entangle their uncommitted work in the final merges and test), not an approval gate.
+- Generate a **unique run prefix** so this run's branches can't collide with another run's: run `date +%Y%m%d-%H%M%S` and form the prefix `bughunt/<that-timestamp>` (e.g. `bughunt/20260530-153045`). Pass it into the workflow (Step 1) and reuse it for cleanup (Step 5).
 
 ## Step 1 — Fan out the hunt (Workflow tool)
 
-Run the script below **inline** via the Workflow tool (`script: …`), passing `$ARGUMENTS`
-verbatim as the Workflow `args`. It scouts the repo into disjoint slices and runs one
-worktree-isolated agent per slice: find → fix → `/code-review --fix` → lgtmcp commit. It
-returns the per-slice branches plus everything surfaced (cross-cutting bugs, design
-changes, unclear items).
+Run the script below **inline** via the Workflow tool (`script: …`), passing
+`args: { direction: <$ARGUMENTS, verbatim>, prefix: <the unique run prefix from Preconditions> }`.
+It scouts the repo into disjoint slices and runs one worktree-isolated agent per slice:
+find → fix → `/code-review --fix` → lgtmcp commit. It returns the per-slice branches (all
+under your unique prefix) plus everything surfaced (cross-cutting bugs, design changes,
+unclear items).
 
 ```js
 export const meta = {
@@ -107,7 +109,7 @@ const SLICE = {
   },
 }
 
-function huntPrompt(s, direction) {
+function huntPrompt(s, direction, prefix) {
   return [
     `You are hunting bugs in ONE slice of a codebase, working inside your own git worktree. Slice "${s.id}".`,
     `Owned paths — stay within these, do NOT edit files outside them: ${JSON.stringify(s.paths)}.`,
@@ -117,7 +119,7 @@ function huntPrompt(s, direction) {
     ``,
     `STEPS:`,
     `1. Read your slice's files and find REAL bugs. Be skeptical: skip nitpicks and false positives, only fix what you can justify.`,
-    `2. Create your branch: run "git switch -c bughunt/${s.id}"; if that name already exists (git exits 128), use a unique variant like "bughunt/${s.id}-$RANDOM". Fix the clear bugs and safe simplifications IN PLACE, within your owned paths only.`,
+    `2. Create your branch: run "git switch -c ${prefix}/${s.id}"; if that name already exists (git exits 128), use a unique variant like "${prefix}/${s.id}-$RANDOM". Fix the clear bugs and safe simplifications IN PLACE, within your owned paths only.`,
     `3. Review your own diff before committing: invoke "/code-review --fix" to apply its findings. If you cannot invoke that skill from here, instead re-read your full diff critically for security, correctness, and over-complication, and fix what you find.`,
     `4. Commit with the lgtmcp tool "mcp__lgtmcp__review_and_commit" (load its schema via ToolSearch first if needed): directory = your worktree root (run "git rev-parse --show-toplevel"), with a clear commit_message. If it is NOT approved, address the feedback — or, if you genuinely disagree, add a brief code comment explaining why the code is correct — then resubmit. Never bypass the review. Several focused commits are fine.`,
     `5. After committing, set branch to the actual branch name you used and headSha to "git rev-parse HEAD".`,
@@ -131,7 +133,11 @@ function huntPrompt(s, direction) {
   ].join('\n')
 }
 
-const direction = (typeof args === 'string' && args.trim()) ? args.trim() : ''
+const direction = typeof args === 'string'
+  ? args.trim()
+  : (args && typeof args.direction === 'string' ? args.direction.trim() : '')
+const rawPrefix = args && typeof args === 'object' && typeof args.prefix === 'string' ? args.prefix.trim() : ''
+const prefix = /^[\w.\/-]+$/.test(rawPrefix) ? rawPrefix.replace(/\/+$/, '') : 'bughunt'
 
 phase('Scout')
 const plan = await agent(
@@ -149,13 +155,14 @@ phase('Hunt')
 const results = (
   await parallel(
     plan.slices.map((s) => () =>
-      agent(huntPrompt(s, direction), { label: `hunt:${s.id}`, phase: 'Hunt', isolation: 'worktree', schema: SLICE }),
+      agent(huntPrompt(s, direction, prefix), { label: `hunt:${s.id}`, phase: 'Hunt', isolation: 'worktree', schema: SLICE }),
     ),
   )
 ).filter(Boolean)
 
 return {
   direction,
+  prefix,
   results,
   branches: results.filter((r) => r.branch).map((r) => ({ id: r.id, branch: r.branch, headSha: r.headSha })),
   crossCutting: results.flatMap((r) => r.crossCutting || []),
@@ -166,13 +173,13 @@ return {
 
 ## Step 2 — Merge the reviewed branches (no review needed)
 
-Each `bughunt/*` branch was already reviewed, so the merge itself needs no review. Merge
+Each run-prefixed (`<prefix>/*`) branch was already reviewed, so the merge itself needs no review. Merge
 every `branches[].branch` into the original branch in a deliberate order — shared or
 foundational slices first, then dependents (otherwise smallest first) — **preserving each
 branch's original commits**:
 
 ```sh
-git merge --no-ff bughunt/<id>   # repeat per branch; keeps the slice's commits + a merge commit
+git merge --no-ff <branch>   # branches[].branch, e.g. bughunt/20260530-153045/<id>; repeat per branch
 ```
 
 Skip slices that produced no branch (nothing was committed). Disjoint file ownership means
@@ -201,9 +208,11 @@ anywhere; each runs `/code-review --fix` + lgtmcp), then re-run the full check. 
 ## Step 5 — Clean up and report
 
 Once the merges and tests are done, clean up so reruns start fresh: remove the worktrees the
-hunt created (`git worktree list` shows them checked out on `bughunt/*`; `git worktree remove`
-each), then delete the now-merged branches (`git branch -d bughunt/...` — `-d` is safe, it
-refuses anything not yet merged).
+hunt created (`git worktree list` shows them checked out under your run prefix `<prefix>/*`;
+`git worktree remove` each), then delete this run's now-merged branches — `git branch -d <branch>`
+for each `branches[].branch` (they all share your `<prefix>/` namespace; `-d` is safe, it
+refuses anything not yet merged). Scoping cleanup to your run prefix leaves other runs' branches
+untouched.
 
 Then tell the user, concisely:
 
@@ -218,7 +227,7 @@ Then tell the user, concisely:
 
 - **Worktree isolation is mandatory.** `isolation: 'worktree'` is what lets slices edit files in parallel without clobbering each other; disjoint slice paths are a second safety layer. Don't drop it.
 - **lgtmcp `directory` must be the worktree root** (`git rev-parse --show-toplevel`, not a bare `pwd`), never the main repo — otherwise it reviews and commits the wrong tree.
-- **Branches outlive worktrees.** Worktrees share one `.git`, so a `bughunt/*` branch is visible to the main tree for merging whether or not its worktree still exists — you can even merge a branch that's still checked out in a worktree. Merge by the branch name the agent returned (it disambiguates on collision); fall back to `headSha`.
+- **Branches outlive worktrees.** Worktrees share one `.git`, so a run-prefixed (`<prefix>/*`) branch is visible to the main tree for merging whether or not its worktree still exists — you can even merge a branch that's still checked out in a worktree. Merge by the branch name the agent returned (it disambiguates on collision); fall back to `headSha`.
 - **No per-slice full test — only the final stack test.** Slices may individually break the build; that is expected and is what Step 4's fix-forward catches.
 - **Agents fix, they don't redesign.** Bugs + safe simplifications + doc fixes only. Design/behavior changes and unclear items are surfaced, never applied.
 - **Only new code gets reviewed at the end.** Merges (Step 2) need no review; the cross-cutting (Step 3) and fix-forward (Step 4) changes are new, so they go through `/code-review --fix` + lgtmcp.
