@@ -17,7 +17,8 @@ set -euo pipefail
 # limitations under the License.
 
 temp_dir="$(mktemp -d)"
-trap 'rm -r "$temp_dir"' 0 1 15
+trap 'rm -rf "$temp_dir"' EXIT
+trap 'exit 1' INT TERM
 cd "$temp_dir"
 
 curl -OLs https://github.com/ryanoasis/nerd-fonts/releases/latest/download/FontPatcher.zip
