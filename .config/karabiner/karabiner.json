@@ -306,7 +306,7 @@
                   },
                   {
                     "key_code": "slash",
-                    "modifiers": "left_shift"
+                    "modifiers": ["left_shift"]
                   }
                 ],
                 "type": "basic"
