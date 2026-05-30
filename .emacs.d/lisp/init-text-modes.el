@@ -34,7 +34,7 @@
 ;; YAML
 (use-package yaml-mode
   :hook
-  (yaml-ts-mode-hook . eglot-ensure))
+  (yaml-ts-mode . eglot-ensure))
 
 ;; Text mode and indented-text-mode
 (setopt fill-column 80)
@@ -77,7 +77,7 @@
             (keymap-set xml-mode-map "'"
                         (lambda ()
                           (interactive)
-                          (insert-string "&#8217;")))))
+                          (insert "&#8217;")))))
 
 ;; Help mode
 (setopt help-window-select t)

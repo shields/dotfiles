@@ -53,8 +53,8 @@
 
 ;; Navigation
 (keymap-global-set "M-`" #'other-frame)
-(keymap-global-set "M-'" #'next-multiframe-window)
-(keymap-global-set "M-\"" #'previous-multiframe-window)
+(keymap-global-set "M-'" #'next-window)
+(keymap-global-set "M-\"" #'previous-window)
 (keymap-global-set "M-n" #'next-error)
 (keymap-global-set "M-p" #'previous-error)
 (keymap-global-set "M-t" #'previous-buffer)
@@ -100,7 +100,7 @@
 
 (use-package xref
   :bind (("M-." . xref-find-definitions)
-         ("M-," . xref-pop-marker-stack)))
+         ("M-," . xref-go-back)))
 
 (defun move-line-up ()
   (interactive)

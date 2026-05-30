@@ -77,16 +77,16 @@
 ;; JavaScript and TypeScript
 (use-package js
   :hook
-  (js-ts-mode-hook . eglot-ensure))
+  (js-ts-mode . eglot-ensure))
 
 (use-package typescript-ts-mode
   :hook
-  (typescript-ts-mode-hook . eglot-ensure))
+  (typescript-ts-mode . eglot-ensure))
 
 ;; Lua
 (use-package lua-ts-mode
   :hook
-  (lua-ts-mode-hook . eglot-ensure))
+  (lua-ts-mode . eglot-ensure))
 
 ;; Makefile
 (add-hook 'makefile-mode-hook
