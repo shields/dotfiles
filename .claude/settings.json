@@ -39,7 +39,8 @@
       "allowWrite": [
         "/Users/shields/Library/Caches/go-build",
         "/Users/shields/Library/Caches/golangci-lint",
-        "/Users/shields/go/pkg/mod"
+        "/Users/shields/go/pkg/mod",
+        "/Users/shields/.cache/uv"
       ]
     }
   },
