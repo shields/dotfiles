@@ -38,8 +38,7 @@
        (interactive)
        (let ((frame (make-frame calc-pop-up-frame-properties))
              (buf (generate-new-buffer " pop-up-calc")))
-         (select-frame frame)
-         (focus-frame frame)
+         (select-frame-set-input-focus frame)
          (setq calc-transient-frames (cons frame calc-transient-frames))
          ;; If Calc starts up in its own buffer, it quits.  Hack around.
          (set-buffer buf)
