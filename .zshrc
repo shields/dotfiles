@@ -214,6 +214,7 @@ c() {
     # https://github.com/anthropics/claude-code/issues/31923
     TMPDIR="$tmpdir" claude --effort max "$@"
 }
+alias cauto='c --permission-mode=auto'
 
 alias drit='docker run -it --rm'
 
