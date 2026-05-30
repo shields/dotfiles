@@ -19,6 +19,11 @@
 # https://donottrack.sh
 export DO_NOT_TRACK=1
 
+# Keep PATH free of duplicates so re-sourcing this file (common while editing
+# config) doesn't accumulate repeated entries. -U keeps the first occurrence,
+# which is the one PATH lookup already uses, so resolution is unchanged.
+typeset -U path PATH
+
 [[ -d /opt/homebrew ]] && eval "$(/opt/homebrew/bin/brew shellenv)"
 [[ -x /usr/local/bin/brew ]] && eval "$(/usr/local/bin/brew shellenv)"
 
