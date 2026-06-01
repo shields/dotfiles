@@ -5,9 +5,9 @@ set -euo pipefail
 # 0.382 ≈ 1/φ. 16.226 matches the macOS findHighlightColor.
 export LESS='-eFiMX -j.382 --incsearch --mouse --use-color --color=PWc$ --color=S16.226$'
 
-# Exit immediately if printing 25 lines or fewer.
-if height=$(stty size </dev/tty 2>/dev/null | cut -d' ' -f1) && [ "$height" -gt 25 ]; then
-    export LESS_SHELL_LINES=$((height - 25))
+# Exit immediately if the content fits in 61.8% of the terminal height.
+if height=$(stty size </dev/tty 2>/dev/null | cut -d' ' -f1) && [ "$height" -gt 0 ]; then
+    export LESS_SHELL_LINES=$((height - height * 618 / 1000))
 fi
 
 exec less "$@"
