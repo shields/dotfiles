@@ -10,6 +10,15 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - **System Setup**: `./provision.sh` (Full macOS setup)
 - **Emacs Setup**: `emacs --batch --script .emacs.d/provision.el`
 
+## Deployment
+
+`provision.sh` installs the dotfiles by piping them through `tar` into `$HOME`:
+`bin/`, `Library/`, and every git-tracked path starting with `.` (e.g.
+`.claude/`, `.zshrc`). Files are copied, not symlinked, so this repo is the
+source of truth; edits take effect only after running `./provision.sh`. Because
+`.claude/` is copied, `.claude/CLAUDE.md` here is installed as the global
+`~/.claude/CLAUDE.md`.
+
 ## Code Style
 
 - **TypeScript**: ESNext target, strict types, ESLint + Prettier, Node modules
