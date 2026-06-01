@@ -27,6 +27,12 @@ they add real value.
   Don't report partial progress as completion.
 - Get my approval before removing, disabling, or skipping any test.
 
+## Error handling
+
+- Prefer fail-fast over graceful degradation — surface errors loudly unless
+  told otherwise.
+- Never degrade errors to warnings without asking first.
+
 ## CLI tools
 
 - `crane` to inspect container images.
