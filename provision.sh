@@ -349,6 +349,9 @@ claude mcp add lgtmcp -s user -- "$HOME/bin/lgtmcp"
 claude mcp remove playwright -s user 2>/dev/null || true
 claude mcp add playwright -s user -- npx @playwright/mcp@latest --headless
 
+# Download data for cupertino MCP
+cupertino setup --keep-existing
+
 # Have python3 access ~/Downloads to prompt a TCC authorization, allowing
 # clean_downloads.py to work.
 python3 -c "import os; os.listdir(os.path.expanduser('~/Downloads'))"
