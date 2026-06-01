@@ -31,7 +31,7 @@ behavior changes, and do not touch anything ambiguous — **surface those instea
 
 - Record the starting branch: `git branch --show-current` (this is the **original branch** you merge back into; the main working tree stays on it the whole time).
 - Require a **clean working tree** to start. If `git status --porcelain` is non-empty, stop and tell the user to commit or stash first — this is a safety precondition (a dirty base would entangle their uncommitted work in the final merges and test), not an approval gate.
-- Generate a **unique run prefix** so this run's branches can't collide with another run's: run `date +%Y%m%d-%H%M%S` and form the prefix `bughunt/<that-timestamp>` (e.g. `bughunt/20260530-153045`). Pass it into the workflow (Step 1) and reuse it for cleanup (Step 5).
+- Generate a **unique run prefix** so this run's branches can't collide with another run's: run `date +%Y%m%d-%H%M%S` and form the prefix `bughunt-<that-timestamp>` (e.g. `bughunt-20260530-153045`). Pass it into the workflow (Step 1) and reuse it for cleanup (Step 5).
 
 ## Step 1 — Fan out the hunt (Workflow tool)
 
