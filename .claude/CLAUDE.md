@@ -1,92 +1,48 @@
 # Claude Code instructions
 
-Do not worry about compatibility with older versions. Use modern constructs and
-libraries whenever they are preferred.
-
-## Version guidelines
-
-For new code, always use the latest stable versions of languages, frameworks,
-and dependencies. Do not rely on memory for version numbers—always check current
-versions as they may have changed since the knowledge cutoff.
-
-Current latest stable versions (update as needed):
+Use modern constructs, libraries, and the latest stable versions of languages,
+frameworks, and dependencies; don't worry about compatibility with older ones.
+Don't trust memory for version numbers—check current versions, as they may have
+changed since the knowledge cutoff. Current versions (update as needed):
 
 - Debian: 13 (trixie)
 - Python: 3.14
 - Go: 1.26
 
-Be sure lines do not end in whitespace. The last line of a file should include a
-newline.
+Do not add license, copyright, or authorship information unless explicitly told to.
 
-Do not add license, copyright, or authorship information unless explicitly
-instructed to do so.
+Add code comments sparingly, explaining _why_ rather than _what_, and only when
+they add real value.
 
-Add code comments sparingly. Focus on _why_ something is done, especially for
-complex logic, rather than _what_ is done. Only add high-value comments if
-necessary for clarity or if requested by the user.
+## Python
 
-## Python-specific rules
+- Use `uv`, never `pip` (even with no pyproject.toml: `uv venv`, `uv pip`).
+- Use built-in generics (`dict`, `list`, `tuple`, `set`), not `typing.Dict` etc.
+  Reach for `typing` only when needed (e.g. `TypeVar`); prefer `X | None` over `Optional`.
+- Always include correct type annotations.
 
-When setting up a new project, always use ‘uv‘ instead of ‘pip‘.
+## Testing
 
-CRITICAL: ALWAYS use modern built-in type annotations (dict, list, tuple, set, etc.) instead of typing module equivalents
-(typing.Dict, typing.List, typing.Tuple, typing.Set, etc.). This is non-negotiable for Python 3.9+ codebases. Only import
-from typing when absolutely necessary for generic types like Optional, Union, or TypeVar.
-
-NEVER use: typing.Dict, typing.List, typing.Tuple, typing.Set
-ALWAYS use: dict, list, tuple, set
-
-Always include type annotations and verify that they are correct.
-
-## Testing rules
-
-**ABSOLUTE REQUIREMENT: 100% TEST SUCCESS MANDATORY**
-
-CRITICAL: You MUST achieve 100% test pass rate - NO EXCEPTIONS WHATSOEVER. Partial progress is NOT success. Making improvements is NOT completion. 70% passing is NOT acceptable. 90% passing is NOT acceptable. 99% passing is NOT acceptable.
-
-**YOU CANNOT DECLARE VICTORY OR COMPLETION UNTIL EVERY SINGLE TEST PASSES**
-
-- If ANY tests are failing, the job is INCOMPLETE
-- If ANY tests are timing out, the job is INCOMPLETE
-- If ANY tests are erroring, the job is INCOMPLETE
-- If ANY lint errors exist, the job is INCOMPLETE
-- Continue working until EVERY test passes without exception and there are NO lint errors
-- Do not stop, do not summarize progress, do not declare partial success
-- The only acceptable outcome is 100% green tests and zero lint errors
-
-**NO PARTIAL CREDIT. NO PROGRESS REPORTS AS COMPLETION. ALL TESTS MUST PASS AND CODE MUST BE LINT-FREE.**
-
-**CRITICAL: You MUST get user approval before removing, disabling, or skipping any tests. Tests exist for important reasons!**
+- All tests must pass and lint must be clean before you call the work done.
+  Don't report partial progress as completion.
+- Get my approval before removing, disabling, or skipping any test.
 
 ## CLI tools
 
-- Use `crane` to inspect and check container images.
-- Use `hyperfine` instead of `time` for benchmarking CLI commands.
-- Use `go doc` for Go API documentation.
+- `crane` to inspect container images.
+- `hyperfine` (not `time`) for benchmarking commands.
+- `go doc` for Go API documentation.
 
-## Git hooks
+## Git and commits
 
-NEVER bypass precommit hooks. Always respect and follow configured git hooks.
-
-## Commits
-
-Do not use Conventional Commits format (`feat:`, `fix:`, etc.) unless that is
-already the standard for the repo. Match the style of the existing git history.
-
-## Workflow
-
-After completing a change, run `/code-review --fix` before review/commit.
-
-## Code review (LGTMCP)
-
-When using LGTMCP for code review, if you disagree with the reviewer's feedback,
-do NOT bypass the review and commit directly. Instead, add comments to the code
-explaining why the current approach is correct or necessary (e.g., it's temporary
-for debugging, follows a specific pattern, or addresses a constraint the reviewer
-may not be aware of), then resubmit for review.
+- Never bypass precommit hooks; respect configured git hooks.
+- Don't use Conventional Commits (`feat:`, `fix:`) unless the repo already does;
+  match the existing history.
+- After a change, run `/code-review --fix` before review/commit.
+- LGTMCP: if you disagree with review feedback, don't bypass and commit—add a
+  code comment explaining why, then resubmit.
 
 ## Web access
 
-When you need to access web pages that require JavaScript (e.g., documentation sites with dynamic content), use the Playwright MCP tools instead of WebFetch.
-
-For online PDF documentation, download it with `curl` and read it with the Read tool.
+- For JS-heavy pages, use the Playwright MCP tools, not WebFetch.
+- For online PDFs, download with `curl` and open with Read.
