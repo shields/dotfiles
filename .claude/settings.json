@@ -5,20 +5,25 @@
   },
   "includeCoAuthoredBy": false,
   "permissions": {
-    "allow": [
-      "Bash(git add:*)",
-      "Bash(git diff:*)",
-      "Bash(git stash:*)",
-      "Bash(go doc:*)",
-      "WebSearch"
-    ],
     "deny": [
-      "Bash(git commit --no-verify:*)",
-      "Bash(git push:*)",
-      "Bash(kubectl get secret:*)",
-      "Bash(kubectl get secrets:*)",
-      "Bash(lefthook uninstall)",
-      "Bash(brew install *)"
+      "Bash(brew install *)",
+      "Bash(git commit --no-verify *)",
+      "Bash(git push *)",
+      "Bash(kubectl get secret *)",
+      "Bash(kubectl get secrets *)",
+      "Bash(lefthook uninstall)"
+    ],
+    "ask": [
+      "Bash(git commit *)"
+    ],
+    "allow": [
+      "Bash(git add *)",
+      "Bash(git diff *)",
+      "Bash(git stash *)",
+      "Bash(go doc *)",
+      "Bash(* --version)",
+      "Bash(* --help *)",
+      "WebSearch"
     ]
   },
   "statusLine": {
