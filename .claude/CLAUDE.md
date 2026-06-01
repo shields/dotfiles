@@ -68,6 +68,11 @@ CRITICAL: You MUST achieve 100% test pass rate - NO EXCEPTIONS WHATSOEVER. Parti
 
 NEVER bypass precommit hooks. Always respect and follow configured git hooks.
 
+## Commits
+
+Do not use Conventional Commits format (`feat:`, `fix:`, etc.) unless that is
+already the standard for the repo. Match the style of the existing git history.
+
 ## Workflow
 
 After completing a change, run `/code-review --fix` before review/commit.
