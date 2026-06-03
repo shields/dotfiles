@@ -212,7 +212,7 @@ c() {
         && mv "${settings}.tmp" "$settings" || { rm -f "${settings}.tmp"; return 1; }
     # Claude Code takes effort as a CLI flag but not in the config.
     # https://github.com/anthropics/claude-code/issues/31923
-    TMPDIR="$tmpdir" claude --effort max "$@"
+    TMPDIR="$tmpdir" claude --effort xhigh "$@"
 }
 alias cauto='c --permission-mode=auto'
 
