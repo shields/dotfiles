@@ -44,7 +44,7 @@ they add real value.
 - Never bypass precommit hooks; respect configured git hooks.
 - Don't use Conventional Commits (`feat:`, `fix:`) unless the repo already does;
   match the existing history.
-- After a change, run `/code-review --fix` before review/commit.
+- After a change, run `/code-review max --fix` before review/commit.
 - LGTMCP: if you disagree with review feedback, don't bypass and commit—add a
   code comment explaining why, then resubmit.
 

@@ -1,6 +1,6 @@
 ---
 name: bughunt
-description: Fan out parallel subagents across a codebase to find and fix bugs — security first, then correctness, then anything else (broken docs, dead code, simplifications). Each slice runs in its own git worktree/branch via the Workflow tool; every fix is reviewed with /code-review --fix and committed with lgtmcp. Bugs that reach outside a slice are surfaced to the parent to coordinate; design/behavior changes and unclear items are surfaced to the user, never applied. When done, merge every branch back preserving its original commits, then test the whole stack and fix-forward any breakage. Trigger when the user asks to hunt, sweep, or audit a codebase for bugs, or runs /bughunt.
+description: Fan out parallel subagents across a codebase to find and fix bugs — security first, then correctness, then anything else (broken docs, dead code, simplifications). Each slice runs in its own git worktree/branch via the Workflow tool; every fix is reviewed with /code-review max --fix and committed with lgtmcp. Bugs that reach outside a slice are surfaced to the parent to coordinate; design/behavior changes and unclear items are surfaced to the user, never applied. When done, merge every branch back preserving its original commits, then test the whole stack and fix-forward any breakage. Trigger when the user asks to hunt, sweep, or audit a codebase for bugs, or runs /bughunt.
 ---
 
 # /bughunt — parallel bug hunt, fix, and integrate
@@ -38,7 +38,7 @@ behavior changes, and do not touch anything ambiguous — **surface those instea
 Run the script below **inline** via the Workflow tool (`script: …`), passing
 `args: { direction: <$ARGUMENTS, verbatim>, prefix: <the unique run prefix from Preconditions> }`.
 It scouts the repo into disjoint slices and runs one worktree-isolated agent per slice:
-find → fix → `/code-review --fix` → lgtmcp commit. It returns the per-slice branches (all
+find → fix → `/code-review max --fix` → lgtmcp commit. It returns the per-slice branches (all
 under your unique prefix) plus everything surfaced (cross-cutting bugs, design changes,
 unclear items).
 
@@ -48,7 +48,7 @@ export const meta = {
   description: 'Partition a codebase and fan out worktree-isolated agents to find, fix, review, and commit bugs',
   phases: [
     { title: 'Scout', detail: 'partition the repo into disjoint slices' },
-    { title: 'Hunt', detail: 'one worktree agent per slice: find -> fix -> /code-review --fix -> lgtmcp commit' },
+    { title: 'Hunt', detail: 'one worktree agent per slice: find -> fix -> /code-review max --fix -> lgtmcp commit' },
   ],
 }
 
@@ -120,7 +120,7 @@ function huntPrompt(s, direction, prefix) {
     `STEPS:`,
     `1. Read your slice's files and find REAL bugs. Be skeptical: skip nitpicks and false positives, only fix what you can justify.`,
     `2. Create your branch: run "git switch -c ${prefix}/${s.id}"; if that name already exists (git exits 128), use a unique variant like "${prefix}/${s.id}-$RANDOM". Fix the clear bugs and safe simplifications IN PLACE, within your owned paths only.`,
-    `3. Review your own diff before committing: invoke "/code-review --fix" to apply its findings. If you cannot invoke that skill from here, instead re-read your full diff critically for security, correctness, and over-complication, and fix what you find.`,
+    `3. Review your own diff before committing: invoke "/code-review max --fix" to apply its findings. If you cannot invoke that skill from here, instead re-read your full diff critically for security, correctness, and over-complication, and fix what you find.`,
     `4. Commit with the lgtmcp tool "mcp__lgtmcp__review_and_commit" (load its schema via ToolSearch first if needed): directory = your worktree root (run "git rev-parse --show-toplevel"), with a clear commit_message. If it is NOT approved, address the feedback — or, if you genuinely disagree, add a brief code comment explaining why the code is correct — then resubmit. Never bypass the review. Several focused commits are fine.`,
     `5. After committing, set branch to the actual branch name you used and headSha to "git rev-parse HEAD".`,
     ``,
@@ -190,7 +190,7 @@ the resolution is non-obvious — leave it and surface it in the report instead 
 
 On the merged tree, work `crossCutting` (deduped, **security → correctness → other**). These
 are the "larger bugs" the parent owns. For each that is a genuine **bug**, fix it (spawn a
-focused Agent for big ones), then `/code-review --fix` and commit via lgtmcp — this is new
+focused Agent for big ones), then `/code-review max --fix` and commit via lgtmcp — this is new
 code, so it does get reviewed. Anything that is really a **design/behavior change** or is
 unclear goes to the surfaced list instead; do not apply it.
 
@@ -202,7 +202,7 @@ test`), then `package.json` scripts, then language defaults (`cargo test`, `go t
 `uv run pytest`, etc.).
 
 If it **fails**, fix-forward: dispatch fixer Agent(s) to repair the breakage (they may edit
-anywhere; each runs `/code-review --fix` + lgtmcp), then re-run the full check. Repeat up to
+anywhere; each runs `/code-review max --fix` + lgtmcp), then re-run the full check. Repeat up to
 **3 rounds**. If it still fails, stop and report the failing output — do not keep grinding.
 
 ## Step 5 — Clean up and report
@@ -230,5 +230,5 @@ Then tell the user, concisely:
 - **Branches outlive worktrees.** Worktrees share one `.git`, so a run-prefixed (`<prefix>/*`) branch is visible to the main tree for merging whether or not its worktree still exists — you can even merge a branch that's still checked out in a worktree. Merge by the branch name the agent returned (it disambiguates on collision); fall back to `headSha`.
 - **No per-slice full test — only the final stack test.** Slices may individually break the build; that is expected and is what Step 4's fix-forward catches.
 - **Agents fix, they don't redesign.** Bugs + safe simplifications + doc fixes only. Design/behavior changes and unclear items are surfaced, never applied.
-- **Only new code gets reviewed at the end.** Merges (Step 2) need no review; the cross-cutting (Step 3) and fix-forward (Step 4) changes are new, so they go through `/code-review --fix` + lgtmcp.
+- **Only new code gets reviewed at the end.** Merges (Step 2) need no review; the cross-cutting (Step 3) and fix-forward (Step 4) changes are new, so they go through `/code-review max --fix` + lgtmcp.
 - **Never bypass lgtmcp.** On rejection, address the feedback or add a clarifying comment explaining why the code is correct, then resubmit.
