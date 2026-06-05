@@ -50,13 +50,16 @@ left=$(
 bold=$'\e[1m'
 nobold=$'\e[22m'
 now=$(date +%s)
+# The JSON carries only resets_at, so the elapsed-time display depends on
+# these assumed window lengths.
 five_window=18000  # 5 hours
 week_window=604800 # 7 days
 
-# Set secs to the time remaining until $1, clamped into [0, $2] so the
-# bold comparisons below cannot misfire on clock skew.
-clamp_remaining() {
-    secs=$(( $1 - now ))
+# Set secs to the time elapsed in the window of length $2 that resets at
+# $1, clamped into [0, $2] so the bold comparisons below cannot misfire
+# on clock skew.
+clamp_elapsed() {
+    secs=$(( now - ($1 - $2) ))
     if (( secs < 0 )); then
         secs=0
     elif (( secs > $2 )); then
@@ -66,13 +69,13 @@ clamp_remaining() {
 
 right=''
 if [[ -n "$five_reset" ]]; then
-    clamp_remaining "$five_reset" "$five_window"
+    clamp_elapsed "$five_reset" "$five_window"
     right=$(printf '%d:%02d' $(( secs / 3600 )) $(( secs % 3600 / 60 )))
 fi
 if [[ -n "$five_pct" ]]; then
     style=''
     # Bold when usage runs ahead of the elapsed share of the window.
-    if [[ -n "$five_reset" ]] && (( five_pct * five_window > (five_window - secs) * 100 )); then
+    if [[ -n "$five_reset" ]] && (( five_pct * five_window > secs * 100 )); then
         style=$bold
     fi
     right+="${right:+ }$style$five_pct%${style:+$nobold}"
@@ -80,8 +83,8 @@ fi
 if [[ -n "$week_pct" ]]; then
     style=''
     if [[ -n "$week_reset" ]]; then
-        clamp_remaining "$week_reset" "$week_window"
-        if (( week_pct * week_window > (week_window - secs) * 100 )); then
+        clamp_elapsed "$week_reset" "$week_window"
+        if (( week_pct * week_window > secs * 100 )); then
             style=$bold
         fi
     fi
