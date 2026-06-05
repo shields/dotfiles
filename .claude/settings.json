@@ -33,7 +33,14 @@
       "Bash(go doc *)",
       "Bash(* --version)",
       "Bash(* --help *)",
-      "WebSearch"
+      "WebSearch",
+      "Bash(make coverage)",
+      "Bash(make lint)",
+      "Bash(make test)",
+      "Bash(bun test *)",
+      "Bash(uv run pytest *)",
+      "Bash(uv run ruff check *)",
+      "Bash(uv run ty check *)"
     ]
   },
   "statusLine": {
