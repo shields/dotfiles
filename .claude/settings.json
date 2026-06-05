@@ -6,7 +6,6 @@
   "includeCoAuthoredBy": false,
   "permissions": {
     "deny": [
-      "Bash(brew install *)",
       "Bash(git commit --no-verify *)",
       "Bash(git push *)",
       "Bash(kubectl get secret *)",
@@ -14,7 +13,18 @@
       "Bash(lefthook uninstall)"
     ],
     "ask": [
-      "Bash(git commit *)"
+      "Bash(brew install *)",
+      "Bash(bun a *)",
+      "Bash(bun add *)",
+      "Bash(cargo add *)",
+      "Bash(cargo install *)",
+      "Bash(git commit *)",
+      "Bash(go get *)",
+      "Bash(go install *)",
+      "Bash(swift package add-dependency *)",
+      "Bash(uv add *)",
+      "Bash(uv pip install *)",
+      "Bash(uv tool install *)"
     ],
     "allow": [
       "Bash(git add *)",
