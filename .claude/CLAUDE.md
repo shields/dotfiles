@@ -25,6 +25,8 @@ they add real value.
 
 - All tests must pass and lint must be clean before you call the work done.
   Don't report partial progress as completion.
+- A flaky test is a broken test. Fix all failures, no matter how rare or
+  intermittent.
 - Get my approval before removing, disabling, or skipping any test.
 
 ## Error handling
