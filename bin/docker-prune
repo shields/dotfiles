@@ -1,6 +1,8 @@
 #!/bin/bash
 set -euo pipefail
 
+[[ -S /var/run/docker.sock ]] || exit 0
+
 docker system prune --force
 docker image prune -a --force --filter 'until=72h'
 docker volume prune --force
