@@ -25,6 +25,12 @@ gcl() {
 
     local url="$1"
     local root="${GCL_ROOT:-$HOME/src}"
+    # Strip any trailing slashes (but never reduce "/" to empty) so $root is a
+    # clean prefix for path joins and for the boundary check in the failure
+    # cleanup loop below. A loop avoids relying on the extendedglob option.
+    while [[ "$root" == */ && "$root" != / ]]; do
+        root="${root%/}"
+    done
 
     # Normalize: strip scheme, trailing slash, and .git suffix
     url="${url#https://}"
@@ -50,8 +56,13 @@ gcl() {
     local parent="$(dirname "$target")"
     mkdir -p "$parent"
     if ! git clone "https://$clean_url.git" "$target"; then
-        # Clean up empty parent directories on failure
-        rmdir -p "$parent" 2>/dev/null || true
+        # Remove the now-empty directories we just created, walking up from
+        # $parent but stopping at $root so we never delete $GCL_ROOT or any
+        # directory above it. (rmdir -p would happily ascend past $root.)
+        local dir="$parent"
+        while [[ "$dir" != "$root" && "$dir" != "/" ]] && rmdir "$dir" 2>/dev/null; do
+            dir="$(dirname "$dir")"
+        done
         return 1
     fi
     cd "$target" || return 1
