@@ -32,7 +32,7 @@ else
 fi
 if [[ ! -d $HOMEBREW_REPOSITORY ]]; then
     # CI=1 suppresses confirmation prompts.
-    CI=1 /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/master/install.sh)"
+    CI=1 /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
 fi
 
 eval "$($HOMEBREW_PREFIX/bin/brew shellenv)"
