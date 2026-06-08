@@ -81,11 +81,11 @@ def print_diff(
     old: dict[str, PlistValue],
     new: dict[str, PlistValue],
 ) -> None:
+    if is_boring_domain(domain):
+        return
+
     for k, v in new.items():
         if k in old and old[k] == v:
-            continue
-
-        if is_boring_domain(k):
             continue
 
         value = " ".join(_plist_typed(v))
@@ -94,9 +94,6 @@ def print_diff(
 
     for k in old:
         if k in new:
-            continue
-
-        if is_boring_domain(k):
             continue
 
         print(f"defaults delete {shlex.quote(domain)} {shlex.quote(k)}")
