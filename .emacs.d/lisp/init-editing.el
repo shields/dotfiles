@@ -55,8 +55,6 @@
   (avy-lead-face-0 ((t (:inherit avy-lead-face :foreground "gray90"))))
   (avy-lead-face-2 ((t (:inherit avy-lead-face :foreground "gray85")))))
 
-(use-package cape)
-
 (use-package crux
   :bind
   (("C-k" . crux-smart-kill-line)
