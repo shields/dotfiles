@@ -48,6 +48,7 @@ assert_eq "bad format returns 1" 1 "$rc"
 out="$(gcl github.com/shields/does-not-exist 2>&1)" && rc=$? || rc=$?
 assert_eq "nonexistent repo returns nonzero" 1 "$([[ $rc -ne 0 ]] && echo 1 || echo 0)"
 assert_eq "nonexistent repo creates no dir" 0 "$(ls "$GCL_ROOT" 2>/dev/null | wc -l | tr -d ' ')"
+assert_eq "failed clone leaves GCL_ROOT intact" 1 "$([[ -d $GCL_ROOT ]] && echo 1 || echo 0)"
 
 # --- clone with 2-component url (host/repo) ---
 out="$(gcl https://go.googlesource.com/net 2>&1)" && rc=$? || rc=$?
