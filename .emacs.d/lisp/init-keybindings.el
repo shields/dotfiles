@@ -49,7 +49,7 @@
 (keymap-global-set "M-f" #'isearch-forward)
 (keymap-global-set "M-w" #'shields/delete-window-or-frame)
 (with-eval-after-load 'isearch
-  (define-key isearch-mode-map [(meta g)] #'isearch-repeat-forward))
+  (keymap-set isearch-mode-map "M-g" #'isearch-repeat-forward))
 
 ;; Navigation
 (keymap-global-set "M-`" #'other-frame)
