@@ -9,7 +9,8 @@ changed since the knowledge cutoff. Current versions (update as needed):
 - Python: 3.14
 - Go: 1.26
 
-Do not add license, copyright, or authorship information unless explicitly told to.
+Do not add, remove, or modify license, copyright, or authorship information in
+any way unless explicitly told to.
 
 Add code comments sparingly, explaining _why_ rather than _what_, and only when
 they add real value.
