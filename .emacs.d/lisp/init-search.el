@@ -20,7 +20,7 @@
 ;;; Code:
 
 (use-package dash-at-point
-  :bind ("s-." . dash-at-point))
+  :bind ("s-d" . dash-at-point))
 
 (use-package grep
   :config

@@ -15,12 +15,50 @@ set -euo pipefail
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-PATH="${0:A:h}/../bin:$PATH"
+# Hermetic: git clone and gh are mocked so the suite never touches the network.
+
+MOCKBIN="$(mktemp -d)"
+REAL_GIT="$(command -v git)"
+export REAL_GIT
+
+# Mock git: intercept `clone` (succeed by making a real local repo, or fail for
+# a *does-not-exist* URL), and pass every other subcommand through to real git
+# so git-add-upstream's rev-parse/remote calls still work.
+cat > "$MOCKBIN/git" <<'MOCK'
+#!/bin/bash
+if [[ "$1" == "clone" ]]; then
+    url="$2"
+    target="$3"
+    case "$url" in
+        *does-not-exist*)
+            echo "fatal: repository '$url' not found" >&2
+            exit 128
+            ;;
+    esac
+    mkdir -p "$target" || exit 1
+    "$REAL_GIT" -C "$target" init -q
+    "$REAL_GIT" -C "$target" remote add origin "$url"
+    exit 0
+fi
+exec "$REAL_GIT" "$@"
+MOCK
+chmod +x "$MOCKBIN/git"
+
+# Mock gh: git-add-upstream calls `gh repo view <nwo> --json parent --jq ...`.
+# Emit nothing (no parent) so the clone is treated as a non-fork and no upstream
+# is added — keeping the test off the network.
+cat > "$MOCKBIN/gh" <<'MOCK'
+#!/bin/bash
+exit 0
+MOCK
+chmod +x "$MOCKBIN/gh"
+
+PATH="$MOCKBIN:${0:A:h}/../bin:$PATH"
 source "${0:A:h}/../.zsh.d/gcl.zsh"
 
 GCL_ROOT="$(mktemp -d)"
 export GCL_ROOT
-trap 'rm -rf "$GCL_ROOT"' EXIT
+trap 'rm -rf "$GCL_ROOT" "$MOCKBIN"' EXIT
 
 pass=0
 fail=0

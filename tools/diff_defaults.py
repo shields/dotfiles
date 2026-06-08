@@ -81,9 +81,6 @@ def print_diff(
     old: dict[str, PlistValue],
     new: dict[str, PlistValue],
 ) -> None:
-    if is_boring_domain(domain):
-        return
-
     for k, v in new.items():
         if k in old and old[k] == v:
             continue
@@ -116,6 +113,10 @@ if __name__ == "__main__":
 
     # https://bugs.python.org/issue41083
     domains.remove("com.apple.security.KCN")
+
+    # Cache domains are high-churn noise, not preferences; drop them so we
+    # neither baseline nor repeatedly re-export them in the diff loop.
+    domains -= {domain for domain in domains if is_boring_domain(domain)}
 
     print("Baselining...", end="", flush=True)
     defaults = {domain: get_defaults(domain) for domain in domains}

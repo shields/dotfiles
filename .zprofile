@@ -13,4 +13,6 @@
 # limitations under the License.
 
 source "$HOME/.profile"
-source "$HOME/.orbstack/shell/init.zsh"
+# OrbStack may be uninstalled; only source its init if present (don't error
+# out every login shell). A broken-but-present init still surfaces loudly.
+[[ -r "$HOME/.orbstack/shell/init.zsh" ]] && source "$HOME/.orbstack/shell/init.zsh"

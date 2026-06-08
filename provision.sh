@@ -81,7 +81,12 @@ brew bundle cleanup --force
 # Homebrew upgrades. Run formulas and casks separately to prevent whiny messages.
 brew upgrade --formula
 # Suppress upgrade of Chrome since it doesn't like to be upgraded while running.
-brew outdated --greedy-auto-updates --cask --quiet | (grep -v '^google-chrome' || true) | xargs brew upgrade --cask
+# Capture first and guard on non-empty so an empty list is a no-op without
+# relying on xargs -r/--no-run-if-empty (not portable to older BSD xargs).
+outdated_casks="$(brew outdated --greedy-auto-updates --cask --quiet | (grep -v '^google-chrome' || true))"
+if [ -n "$outdated_casks" ]; then
+    echo "$outdated_casks" | xargs brew upgrade --cask
+fi
 brew autoremove
 brew cleanup --prune=all
 
@@ -339,9 +344,9 @@ if [ ! -f "$HOME/.ssh/known_hosts" ] || ! grep -q '^github\.com ' "$HOME/.ssh/kn
         sed -e 's/^/github.com /' >>"$HOME/.ssh/known_hosts"
 fi
 
-# Go setup
+# Go setup. Tools (goimports, etc.) are installed to ~/bin via the Brewfile's
+# `go` entries; only Go's own settings belong here.
 go telemetry on
-GOBIN="$HOME/bin" go install golang.org/x/tools/cmd/goimports@latest
 
 # Claude Code globally available MCP servers
 claude mcp remove lgtmcp -s user 2>/dev/null || true
