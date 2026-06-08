@@ -16,7 +16,6 @@
 
 // color-palette - Generate evenly spaced color palettes in OKLCH colorspace
 
-// Requires colorjs.io v0.6.0-alpha.1 to support P3 hex output.
 import Color from "colorjs.io";
 
 interface PaletteOptions {
@@ -31,7 +30,7 @@ interface ColorInfo {
   lightness: string;
   chroma: string;
   hue: string;
-  p3Hex: string;
+  srgbHex: string;
   deltaE: string;
 }
 
@@ -60,6 +59,9 @@ const options: PaletteOptions = { ...defaults };
 
 for (let i = 0; i < args.length; i++) {
   const arg = args[i];
+  if (arg === undefined) {
+    break;
+  }
 
   switch (arg) {
     case "--count":
@@ -88,7 +90,7 @@ for (let i = 0; i < args.length; i++) {
     case "--help":
     case "-h": {
       console.log(`
-        Usage: color-palette [options]
+Usage: color-palette [options]
 
 Options:
   --count, -c       Number of colors to generate (default: ${String(defaults.count)})
@@ -98,6 +100,10 @@ Options:
   --help, -h        Show this help message
     `);
       process.exit(0);
+      break; // unreachable, but no-fallthrough doesn't know process.exit never returns
+    }
+    default: {
+      fail(`unknown argument: ${arg}`);
     }
   }
 }
@@ -121,6 +127,9 @@ function generatePalette(options: PaletteOptions): ColorInfo[] {
     const hue = (startHue + (i * 360) / count) % 360;
     const oklchColor = new Color("oklch", [lightness, chroma, hue]);
     const p3Color = oklchColor.to("p3");
+    // colorjs.io emits "#rrggbb" only in sRGB; the P3 color is gamut-mapped
+    // down to sRGB for this hex.
+    const srgbHex = p3Color.toString({ format: "hex" });
 
     // Determine closest named color
     let closestName = "Unknown";
@@ -139,8 +148,11 @@ function generatePalette(options: PaletteOptions): ColorInfo[] {
       lightness: oklchColor.coords[0]?.toFixed(2) ?? "0",
       chroma: oklchColor.coords[1]?.toFixed(2) ?? "0",
       hue: oklchColor.coords[2]?.toFixed(0) ?? "0",
-      p3Hex: p3Color.toString({ format: "hex" }),
-      deltaE: Color.deltaE(oklchColor, p3Color).toFixed(2),
+      srgbHex,
+      // Gamut-mapping error: how far the displayed sRGB hex color lands from
+      // the requested OKLCH color. Comparing against the unmapped p3Color
+      // would always yield ~0, since it is the same point in another space.
+      deltaE: Color.deltaE(oklchColor, new Color(srgbHex)).toFixed(2),
     });
   }
 
@@ -148,11 +160,11 @@ function generatePalette(options: PaletteOptions): ColorInfo[] {
 }
 
 function formatMarkdownTable(palette: ColorInfo[]): string {
-  const header = "| Name | Lightness | Chroma | Hue | P3 RGB | ΔE |";
-  const separator = "| ---- | --------: | ------: | ---: | ------ | --: |";
+  const header = "| Name | Lightness | Chroma | Hue | sRGB | ΔE |";
+  const separator = "| ---- | --------: | ------: | ---: | ---- | --: |";
 
   const rows = palette.map((color) => {
-    return `| ${color.name} | ${color.lightness} | ${color.chroma} | ${color.hue}º | \`${color.p3Hex}\` | ${color.deltaE} |`;
+    return `| ${color.name} | ${color.lightness} | ${color.chroma} | ${color.hue}º | \`${color.srgbHex}\` | ${color.deltaE} |`;
   });
 
   return [header, separator, ...rows].join("\n");

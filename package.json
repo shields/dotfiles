@@ -16,6 +16,7 @@
   "scripts": {
     "color-palette": "bun run tools/color-palette.ts",
     "test:gcl": "zsh tests/test_gcl.zsh",
+    "test:ghfork": "zsh tests/test_ghfork.zsh",
     "test:git-add-upstream": "zsh tests/test_git_add_upstream.zsh"
   }
 }
