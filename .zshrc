@@ -147,7 +147,7 @@ if whence go >/dev/null; then
     PATH="$PATH:$(go env GOPATH)/bin"
 fi
 
-export FZF_DEFAULT_OPTS="--color hl:red,hl:bold,selected-hl:red,selected-hl:bold,current-hl:red,current-hl:bold"
+export FZF_DEFAULT_OPTS="--color hl:red:bold,selected-hl:red:bold,current-hl:red:bold"
 
 export FZF_ALT_C_COMMAND=""
 export FZF_CTRL_T_COMMAND="fd --type f --hidden --exclude .git"
