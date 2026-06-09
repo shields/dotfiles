@@ -116,7 +116,7 @@ fi
 export PIP_DISABLE_PIP_VERSION_CHECK=1
 datasette install --upgrade datasette-cluster-map | (grep -v '^Requirement already satisfied:' || true)
 llm install --upgrade llm-{gemini,anthropic,perplexity,cmd,openai-plugin} | (grep -v '^Requirement already satisfied:' || true)
-gcloud components update
+gcloud --quiet components update
 
 # Make sure System Preferences isn't open, since it interferes with other
 # processes writing to defaults.
