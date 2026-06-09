@@ -27,6 +27,8 @@
       "Bash(uv tool install *)"
     ],
     "allow": [
+      "Bash(gh * list *)",
+      "Bash(gh * view *)",
       "Bash(git add *)",
       "Bash(git diff *)",
       "Bash(git stash *)",
