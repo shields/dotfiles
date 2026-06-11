@@ -27,20 +27,29 @@ left=$(
     ) | tr -d '\n' | sed -e $'s/\x1b\\[[0-9;]*m//g' -e 's/ *$//'
 )
 
-# Rate-limit data from the statusline JSON; each field may be absent
-# (rate_limits only appears after the first API response). The token count
-# is left to Claude Code's own counter, shown in verbose mode.
-# Claude Code always sends valid JSON; if it ever doesn't, jq emits nothing
-# and the failing read aborts the script — intentional fail-fast, not a bug
-# to paper over with `|| true`. Non-number field values map to "" below so
-# they are omitted from display and never reach bash arithmetic.
+# Model, effort, and rate-limit data from the statusline JSON; each field
+# may be absent (rate_limits only appears after the first API response;
+# effort is absent when the current model has no reasoning-effort setting).
+# The str()/num() helpers coerce each field to a single scalar line so the
+# positional reads stay aligned: an absent or wrong-typed value becomes an
+# empty line rather than being dropped or pretty-printed across several.
+# The token count is left to Claude Code's own counter, shown in verbose
+# mode. Claude Code always sends valid JSON; if it ever doesn't, jq emits
+# nothing and the failing read aborts the script — intentional fail-fast,
+# not a bug to paper over with `|| true`. Empty field values are omitted
+# from display below and never reach bash arithmetic.
 {
+    read -r model
+    read -r effort
     read -r five_pct
     read -r five_reset
     read -r week_pct
     read -r week_reset
 } < <(jq -r '
     def num(v; r): v | if type == "number" then r else "" end;
+    def str(v): v | if type == "string" then . else "" end;
+    str(.model.display_name),
+    str(.effort.level),
     num(.rate_limits.five_hour.used_percentage; round),
     num(.rate_limits.five_hour.resets_at; floor),
     num(.rate_limits.seven_day.used_percentage; round),
@@ -91,8 +100,14 @@ if [[ -n "$week_pct" ]]; then
     right+="${right:+ · }week $style$week_pct%${style:+$nobold}"
 fi
 
-if [[ -n "$right" ]]; then
-    printf '%s · %s' "$left" "$right"
-else
-    printf '%s' "$left"
+model_seg=''
+if [[ -n "$model" ]]; then
+    # The 1M-context model reports a verbose display name; abbreviate it.
+    model=${model/'(1M context)'/(1M)}
+    model_seg="$model${effort:+ $effort}"
 fi
+
+out="$left"
+out+="${model_seg:+ · $model_seg}"
+out+="${right:+ · $right}"
+printf '%s' "$out"
