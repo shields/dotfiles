@@ -27,9 +27,11 @@ left=$(
     ) | tr -d '\n' | sed -e $'s/\x1b\\[[0-9;]*m//g' -e 's/ *$//'
 )
 
-# Model, effort, and rate-limit data from the statusline JSON; each field
-# may be absent (rate_limits only appears after the first API response;
+# Model, effort, cost, and rate-limit data from the statusline JSON; each
+# field may be absent (rate_limits only appears after the first API response;
 # effort is absent when the current model has no reasoning-effort setting).
+# Cost is read as integer cents (dollars * 100, rounded) so the display can
+# format it without bash floating-point arithmetic.
 # The str()/num() helpers coerce each field to a single scalar line so the
 # positional reads stay aligned: an absent or wrong-typed value becomes an
 # empty line rather than being dropped or pretty-printed across several.
@@ -41,6 +43,7 @@ left=$(
 {
     read -r model
     read -r effort
+    read -r cost_cents
     read -r five_pct
     read -r five_reset
     read -r week_pct
@@ -50,6 +53,7 @@ left=$(
     def str(v): v | if type == "string" then . else "" end;
     str(.model.display_name),
     str(.effort.level),
+    num(.cost.total_cost_usd; . * 100 | round),
     num(.rate_limits.five_hour.used_percentage; round),
     num(.rate_limits.five_hour.resets_at; floor),
     num(.rate_limits.seven_day.used_percentage; round),
@@ -107,7 +111,13 @@ if [[ -n "$model" ]]; then
     model_seg="$model${effort:+ $effort}"
 fi
 
+cost_seg=''
+if [[ -n "$cost_cents" ]] && (( cost_cents != 0 )); then
+    cost_seg=$(printf '$%d.%02d' $(( cost_cents / 100 )) $(( cost_cents % 100 )))
+fi
+
 out="$left"
 out+="${model_seg:+ · $model_seg}"
 out+="${right:+ · $right}"
+out+="${cost_seg:+ · $cost_seg}"
 printf '%s' "$out"
