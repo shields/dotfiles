@@ -348,11 +348,18 @@ fi
 # `go` entries; only Go's own settings belong here.
 go telemetry on
 
-# Claude Code globally available MCP servers
-claude mcp remove lgtmcp -s user 2>/dev/null || true
-claude mcp add lgtmcp -s user -- "$HOME/bin/lgtmcp"
-claude mcp remove playwright -s user 2>/dev/null || true
-claude mcp add playwright -s user -- npx @playwright/mcp@latest --headless
+# Globally available MCP servers for Claude Code and Codex.
+add_user_mcp_server() {
+    local name="$1"
+    shift
+
+    claude mcp remove "$name" -s user 2>/dev/null || true
+    claude mcp add "$name" -s user -- "$@"
+    codex mcp remove "$name" 2>/dev/null || true
+    codex mcp add "$name" -- "$@"
+}
+add_user_mcp_server lgtmcp "$HOME/bin/lgtmcp"
+add_user_mcp_server playwright npx @playwright/mcp@latest --headless
 
 # Download data for cupertino MCP
 cupertino setup --keep-existing
