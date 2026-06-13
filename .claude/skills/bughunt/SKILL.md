@@ -1,13 +1,13 @@
 ---
 name: bughunt
-description: Fan out parallel subagents across a codebase to find and fix bugs — security first, then correctness, then anything else (broken docs, dead code, simplifications). Each slice runs in its own git worktree/branch via the Workflow tool; every fix is reviewed with /code-review max --fix and committed with lgtmcp. Bugs that reach outside a slice are surfaced to the parent to coordinate; design/behavior changes and unclear items are surfaced to the user, never applied. When done, merge every branch back preserving its original commits, then test the whole stack and fix-forward any breakage. Trigger when the user asks to hunt, sweep, or audit a codebase for bugs, or runs /bughunt.
+description: Fan out parallel subagents across a codebase to find and fix bugs — security first, then correctness, then anything else (broken docs, dead code, simplifications). Each slice runs in its own git worktree/branch via the Workflow tool; every fix is reviewed with /code-review max --fix and committed with lgtmcp. Bugs that reach outside a slice are surfaced to the parent to coordinate; design/behavior changes and unclear items are surfaced to the user, never applied. When done, cherry-pick every branch's commits back onto the original branch so each fix stays a distinct commit, then test the whole stack and fix-forward any breakage. Trigger when the user asks to hunt, sweep, or audit a codebase for bugs, or runs /bughunt.
 ---
 
 # /bughunt — parallel bug hunt, fix, and integrate
 
 Sweep the codebase (or the area named in `$ARGUMENTS`) for bugs, fix them in parallel
-worktrees, review and commit each fix, then merge everything back and test the combined
-result. Runs autonomously end to end — **no approval gate once it starts** (it only needs a
+worktrees, review and commit each fix, then cherry-pick every fix back onto the original
+branch and test the combined result. Runs autonomously end to end — **no approval gate once it starts** (it only needs a
 clean working tree to begin; see Preconditions). The only things that pause for the user
 mid-run are **design/behavior changes** and **anything genuinely unclear**; those land in
 the final report, never applied silently.
@@ -29,8 +29,8 @@ behavior changes, and do not touch anything ambiguous — **surface those instea
 
 ## Preconditions (check first)
 
-- Record the starting branch: `git branch --show-current` (this is the **original branch** you merge back into; the main working tree stays on it the whole time).
-- Require a **clean working tree** to start. If `git status --porcelain` is non-empty, stop and tell the user to commit or stash first — this is a safety precondition (a dirty base would entangle their uncommitted work in the final merges and test), not an approval gate.
+- Record the starting branch: `git branch --show-current` (this is the **original branch** you cherry-pick back onto; the main working tree stays on it the whole time).
+- Require a **clean working tree** to start. If `git status --porcelain` is non-empty, stop and tell the user to commit or stash first — this is a safety precondition (a dirty base would entangle their uncommitted work in the final cherry-picks and test), not an approval gate.
 - Generate a **unique run prefix** so this run's branches can't collide with another run's: run `date +%Y%m%d-%H%M%S` and form the prefix `bughunt-<that-timestamp>` (e.g. `bughunt-20260530-153045`). Pass it into the workflow (Step 1) and reuse it for cleanup (Step 5).
 
 ## Step 1 — Fan out the hunt (Workflow tool)
@@ -171,24 +171,30 @@ return {
 }
 ```
 
-## Step 2 — Merge the reviewed branches (no review needed)
+## Step 2 — Cherry-pick the reviewed commits (no review needed)
 
-Each run-prefixed (`<prefix>/*`) branch was already reviewed, so the merge itself needs no review. Merge
-every `branches[].branch` into the original branch in a deliberate order — shared or
-foundational slices first, then dependents (otherwise smallest first) — **preserving each
-branch's original commits**:
+Each run-prefixed (`<prefix>/*`) branch was already reviewed, so replaying its commits needs no
+further review. Cherry-pick the commits from every `branches[].branch` onto the original branch in
+a deliberate order — shared or foundational slices first, then dependents (otherwise smallest
+first) — so each fix lands as its own **distinct commit** (no merge bubbles). Make sure you're on
+the original branch first (`git switch <original-branch>`):
 
 ```sh
-git merge --no-ff <branch>   # branches[].branch, e.g. bughunt/20260530-153045/<id>; repeat per branch
+git cherry-pick -x <original-branch>..<branch>   # replays that slice's commits in order; -x records the source SHA. Repeat per branch.
 ```
 
+Each slice branched from the same starting commit, so `<original-branch>..<branch>` always resolves
+to exactly that slice's commits even as the original branch advances with earlier slices' picks.
+`-x` appends a "(cherry picked from commit …)" line so provenance survives the new SHAs.
+
 Skip slices that produced no branch (nothing was committed). Disjoint file ownership means
-merges should usually apply cleanly; if one still conflicts, resolve it minimally, or — if
-the resolution is non-obvious — leave it and surface it in the report instead of guessing.
+cherry-picks should usually apply cleanly; if one conflicts, resolve it minimally and `git
+cherry-pick --continue`, or — if the resolution is non-obvious — `git cherry-pick --abort` and
+surface it in the report instead of guessing.
 
 ## Step 3 — Coordinate cross-cutting bugs (parent)
 
-On the merged tree, work `crossCutting` (deduped, **security → correctness → other**). These
+On the integrated tree, work `crossCutting` (deduped, **security → correctness → other**). These
 are the "larger bugs" the parent owns. For each that is a genuine **bug**, fix it (spawn a
 focused Agent for big ones), then `/code-review max --fix` and commit via lgtmcp — this is new
 code, so it does get reviewed. Anything that is really a **design/behavior change** or is
@@ -207,12 +213,15 @@ anywhere; each runs `/code-review max --fix` + lgtmcp), then re-run the full che
 
 ## Step 5 — Clean up and report
 
-Once the merges and tests are done, clean up so reruns start fresh: remove the worktrees the
+Once the cherry-picks and tests are done, clean up so reruns start fresh: remove the worktrees the
 hunt created (`git worktree list` shows them checked out under your run prefix `<prefix>/*`;
-`git worktree remove` each), then delete this run's now-merged branches — `git branch -d <branch>`
-for each `branches[].branch` (they all share your `<prefix>/` namespace; `-d` is safe, it
-refuses anything not yet merged). Scoping cleanup to your run prefix leaves other runs' branches
-untouched.
+`git worktree remove` each), then delete this run's branches. Cherry-pick gave the commits new
+SHAs, so `git branch -d` won't recognize them as merged — before force-deleting, confirm each
+branch's work actually landed with `git cherry <original-branch> <branch>`: every line prefixed `-`
+means an equivalent commit is already on the original branch; a `+` line means one is missing, so
+investigate that branch instead of deleting it. When it's clean, `git branch -D <branch>` for each
+`branches[].branch` (they all share your `<prefix>/` namespace). Scoping cleanup to your run prefix
+leaves other runs' branches untouched.
 
 Then tell the user, concisely:
 
@@ -227,8 +236,9 @@ Then tell the user, concisely:
 
 - **Worktree isolation is mandatory.** `isolation: 'worktree'` is what lets slices edit files in parallel without clobbering each other; disjoint slice paths are a second safety layer. Don't drop it.
 - **lgtmcp `directory` must be the worktree root** (`git rev-parse --show-toplevel`, not a bare `pwd`), never the main repo — otherwise it reviews and commits the wrong tree.
-- **Branches outlive worktrees.** Worktrees share one `.git`, so a run-prefixed (`<prefix>/*`) branch is visible to the main tree for merging whether or not its worktree still exists — you can even merge a branch that's still checked out in a worktree. Merge by the branch name the agent returned (it disambiguates on collision); fall back to `headSha`.
+- **Branches outlive worktrees.** Worktrees share one `.git`, so a run-prefixed (`<prefix>/*`) branch is visible to the main tree whether or not its worktree still exists — you can even cherry-pick from a branch that's still checked out in a worktree. Reference it by the branch name the agent returned (it disambiguates on collision); fall back to `headSha`.
+- **Cherry-pick rewrites SHAs.** The commits that land on the original branch are new commits, not the slice branches' originals — so the recorded `headSha` is provenance only (that's why Step 2 uses `-x`), and Step 5 must clean up with `git branch -D`, not `-d` (the ancestor-based "is it merged?" check no longer recognizes them).
 - **No per-slice full test — only the final stack test.** Slices may individually break the build; that is expected and is what Step 4's fix-forward catches.
 - **Agents fix, they don't redesign.** Bugs + safe simplifications + doc fixes only. Design/behavior changes and unclear items are surfaced, never applied.
-- **Only new code gets reviewed at the end.** Merges (Step 2) need no review; the cross-cutting (Step 3) and fix-forward (Step 4) changes are new, so they go through `/code-review max --fix` + lgtmcp.
+- **Only new code gets reviewed at the end.** The cherry-picks (Step 2) replay already-reviewed commits, so they need no review; the cross-cutting (Step 3) and fix-forward (Step 4) changes are new, so they go through `/code-review max --fix` + lgtmcp.
 - **Never bypass lgtmcp.** On rejection, address the feedback or add a clarifying comment explaining why the code is correct, then resubmit.
