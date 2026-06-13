@@ -76,7 +76,8 @@ fi
 brew update
 
 # Homebrew bundle sync. Update using `brew bundle dump -f`.
-brew bundle --force | (grep -v '^Using ' || true)
+# Keep upgrades below so Chrome can be excluded from cask upgrades.
+brew bundle --force --no-upgrade | (grep -v '^Using ' || true)
 brew bundle cleanup --force
 # Homebrew upgrades. Run formulas and casks separately to prevent whiny messages.
 brew upgrade --formula
