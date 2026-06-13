@@ -17,7 +17,7 @@ set -euo pipefail
 # limitations under the License.
 
 # Copy these files.
-tar cf - bin Library $(git ls-files | grep '^\.') | (cd "$HOME" && tar xvf -)
+git ls-files -- '.*' | tar cf - -T - bin Library | (cd "$HOME" && tar xvf -)
 
 # Install Homebrew and Xcode (which will take tens of minutes).
 # Use path selection logic from https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh
@@ -82,12 +82,7 @@ brew bundle cleanup --force
 # Homebrew upgrades. Run formulas and casks separately to prevent whiny messages.
 brew upgrade --formula
 # Suppress upgrade of Chrome since it doesn't like to be upgraded while running.
-# Capture first and guard on non-empty so an empty list is a no-op without
-# relying on xargs -r/--no-run-if-empty (not portable to older BSD xargs).
-outdated_casks="$(brew outdated --greedy-auto-updates --cask --quiet | (grep -v '^google-chrome' || true))"
-if [ -n "$outdated_casks" ]; then
-    echo "$outdated_casks" | xargs brew upgrade --cask
-fi
+brew outdated --greedy-auto-updates --cask --quiet | sed '/^google-chrome$/d' | xargs -r brew upgrade --cask
 brew autoremove
 brew cleanup --prune=all
 
@@ -109,8 +104,8 @@ fi
 xcodebuild -downloadPlatform iOS
 
 # Set shell to current zsh installed from Homebrew.
-if [[ "$(dscl . read /Users/$(whoami) UserShell)" == "UserShell: /bin/zsh" ]]; then
-    sudo dscl . change "/Users/$(whoami)" UserShell /bin/zsh "$HOMEBREW_PREFIX/bin/zsh"
+if [[ "$(dscl . read "$HOME" UserShell)" == "UserShell: /bin/zsh" ]]; then
+    sudo dscl . change "$HOME" UserShell /bin/zsh "$HOMEBREW_PREFIX/bin/zsh"
 fi
 
 # Plugins!
