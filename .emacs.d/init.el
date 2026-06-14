@@ -1,6 +1,6 @@
 ;;; init.el --- Shields's Emacs initialization file  -*- lexical-binding: t -*-
 
-;; Copyright © 2001 Michael Shields
+;; Copyright © 2001-2003, 2018, 2020-2025 Michael Shields
 ;;
 ;; Licensed under the Apache License, Version 2.0 (the "License");
 ;; you may not use this file except in compliance with the License.

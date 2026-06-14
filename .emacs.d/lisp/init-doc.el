@@ -1,6 +1,6 @@
 ;;; init-doc.el --- Documentation tools -*- lexical-binding: t -*-
 
-;; Copyright © 2024 Michael Shields
+;; Copyright © 2020, 2025 Michael Shields
 ;;
 ;; Licensed under the Apache License, Version 2.0 (the "License");
 ;; you may not use this file except in compliance with the License.

@@ -2,7 +2,7 @@
 
 set -euo pipefail
 
-# Copyright © 2025 Michael Shields
+# Copyright © 2025-2026 Michael Shields
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.

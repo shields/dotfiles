@@ -1,6 +1,6 @@
 ;;; -*- lexical-binding: t -*-
 
-;; Copyright © 2018 Michael Shields
+;; Copyright © 2024-2025 Michael Shields
 ;;
 ;; Licensed under the Apache License, Version 2.0 (the "License");
 ;; you may not use this file except in compliance with the License.

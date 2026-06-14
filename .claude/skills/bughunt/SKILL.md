@@ -3,6 +3,22 @@ name: bughunt
 description: Fan out parallel subagents across a codebase to find and fix bugs — security first, then correctness, then anything else (broken docs, dead code, simplifications). Each slice runs in its own git worktree/branch via the Workflow tool; every fix is reviewed with /code-review max --fix and committed with lgtmcp. Bugs that reach outside a slice are surfaced to the parent to coordinate; design/behavior changes and unclear items are surfaced to the user, never applied. When done, cherry-pick every branch's commits back onto the original branch so each fix stays a distinct commit, then test the whole stack and fix-forward any breakage. Trigger when the user asks to hunt, sweep, or audit a codebase for bugs, or runs /bughunt.
 ---
 
+<!--
+Copyright © 2026 Michael Shields
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+-->
+
 # /bughunt — parallel bug hunt, fix, and integrate
 
 Sweep the codebase (or the area named in `$ARGUMENTS`) for bugs, fix them in parallel

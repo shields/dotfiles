@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 
-# Copyright © 2020 Michael Shields
+# Copyright © 2020, 2022-2026 Michael Shields
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.

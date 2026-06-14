@@ -1,6 +1,6 @@
 ;;; init-spell.el --- Spell checking -*- lexical-binding: t -*-
 
-;; Copyright © 2003 Michael Shields
+;; Copyright © 2003, 2020, 2024-2025 Michael Shields
 ;;
 ;; Licensed under the Apache License, Version 2.0 (the "License");
 ;; you may not use this file except in compliance with the License.
