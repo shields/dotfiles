@@ -200,21 +200,13 @@ for f in "$HOME/.zsh.d/"*.zsh(N); do source "$f"; done
 
 # Start Claude with a per-session tmpdir and sandbox write permit for it.
 c() {
-    local tmpdir settings
+    local tmpdir
     tmpdir=$(mktemp -d "${${TMPDIR:-/tmp}%/}/claude.XXXXXX") || return 1
-    # Run from project root; .claude/settings.local.json is project-scoped.
-    settings=./.claude/settings.local.json
-    mkdir -p ./.claude
-    [[ -s "$settings" ]] || echo '{}' > "$settings"
-    # Appends rather than replaces; stale entries are harmless and the OS prunes /tmp.
-    # jq += creates intermediate objects, so this works on a bare {}.
-    jq --arg dir "$tmpdir" '.sandbox.filesystem.allowWrite += [$dir]' "$settings" > "${settings}.tmp" \
-        && mv "${settings}.tmp" "$settings" || { rm -f "${settings}.tmp"; return 1; }
-    # Claude Code takes effort as a CLI flag but not in the config.
-    # https://github.com/anthropics/claude-code/issues/31923
-    TMPDIR="$tmpdir" claude --effort xhigh "$@"
+    # Permit sandbox writes to this session's tmpdir; scoped to this run only.
+    # Effort is a CLI flag, not a config key: https://github.com/anthropics/claude-code/issues/31923
+    TMPDIR="$tmpdir" claude --effort xhigh --permission-mode=auto \
+        --settings "{\"ultracode\":true,\"sandbox\":{\"filesystem\":{\"allowWrite\":[\"$tmpdir\"]}}}" "$@"
 }
-alias cauto='c --permission-mode=auto'
 
 alias drit='docker run -it --rm'
 
