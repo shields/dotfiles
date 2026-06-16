@@ -29,13 +29,16 @@ fi
 # Claude Code's rendering engine. The $'...' quoting makes bash pass a
 # literal ESC byte to sed, so no sed \x escape support is needed.
 left=$(
-    # Command substitution drops errexit/pipefail; restore them so a git
-    # failure (e.g. not a repository) still fails the whole script.
-    # stderr is deliberately not redirected: surface failures loudly
-    # rather than render a silently degraded status line.
+    # Command substitution drops errexit/pipefail; restore them so a
+    # failure in starship/tr/sed still aborts the whole script. The git
+    # hash lookup is the exception: it fails on an unborn HEAD (a repo
+    # with no commits yet) or outside a repo, and either is a valid state
+    # in which we simply omit the hash rather than blanking the line.
     set -eo pipefail
     (
-        echo -n ' '; git rev-parse --short HEAD
+        if hash=$(git rev-parse --short HEAD 2>/dev/null); then
+            echo "$hash"
+        fi
         starship module git_status
         echo '' # Starship does not print a newline
     ) | tr -d '\n' | sed -e $'s/\x1b\\[[0-9;]*m//g' -e 's/ *$//'
@@ -130,8 +133,13 @@ if [[ -n "$cost_cents" ]] && (( cost_cents != 0 )); then
     cost_seg=$(printf '$%d.%02d' $(( cost_cents / 100 )) $(( cost_cents % 100 )))
 fi
 
-out="$left"
-out+="${model_seg:+ · $model_seg}"
-out+="${right:+ · $right}"
-out+="${cost_seg:+ · $cost_seg}"
-printf '%s' "$out"
+# Join the non-empty segments with ' · '. A leading space provides the
+# left margin (the statusline config sets padding to 0); it is added only
+# when there is something to show, and never doubles up because no segment
+# carries its own leading space.
+out=''
+for seg in "$left" "$model_seg" "$right" "$cost_seg"; do
+    [[ -z "$seg" ]] && continue
+    out+="${out:+ · }$seg"
+done
+printf '%s' "${out:+ }$out"
