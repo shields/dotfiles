@@ -26,7 +26,9 @@ changed since the knowledge cutoff. Current versions (update as needed):
 - Go: 1.26
 
 Do not add, remove, or modify license, copyright, or authorship information in
-any way unless explicitly told to.
+any way unless explicitly told to. Exception: when a file is copyright Michael
+Shields and you make substantive changes to it, update the copyright year to
+include the current year (e.g. `2025-2026`, or `2024, 2026` if discontiguous).
 
 Add code comments sparingly, explaining _why_ rather than _what_, and only when
 they add real value.
