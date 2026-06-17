@@ -1,6 +1,6 @@
 ;;; init-eglot.el --- LSP client configuration -*- lexical-binding: t -*-
 
-;; Copyright © 2025 Michael Shields
+;; Copyright © 2025-2026 Michael Shields
 ;;
 ;; Licensed under the Apache License, Version 2.0 (the "License");
 ;; you may not use this file except in compliance with the License.
@@ -37,6 +37,9 @@
   (eglot-inlay-hint-face ((t (:inherit nil :background "gray97" :foreground "gray20" :height 0.707)))))
 
 ;; https://github.com/golang/tools/blob/master/gopls/doc/settings.md
+;; tinymist formats with typstyle so its formatting matches apheleia's, which
+;; owns format-on-save (see init-text-modes.el); we don't auto-export PDFs here
+;; because typst-ts-mode's compile/watch commands handle output on demand.
 (setq-default eglot-workspace-configuration
               '(:gopls ((staticcheck . t)
                         (vulncheck . "Imports")
@@ -45,7 +48,8 @@
                                   (compositeLiteralTypes . t)
                                   (functionTypeParameters . t)
                                   (parameterNames . t)
-                                  (rangeVariableTypes . t))))))
+                                  (rangeVariableTypes . t))))
+                :tinymist ((formatterMode . "typstyle"))))
 
 ;; Language-specific LSP server configurations
 
@@ -59,6 +63,10 @@
 (with-eval-after-load 'eglot
   (setf (alist-get 'python-mode eglot-server-programs)
         '("basedpyright-langserver" "--stdio")))
+
+;; Typst server: tinymist. Run with no arguments it speaks LSP over stdio.
+(with-eval-after-load 'eglot
+  (add-to-list 'eglot-server-programs '(typst-ts-mode "tinymist")))
 
 ;; Enable Ruff as an additional source of warnings. This calls
 ;; flymake-ruff-load for every Eglot mode, but it is a no-op for

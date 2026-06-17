@@ -1,6 +1,6 @@
 ;;; -*- lexical-binding: t -*-
 
-;; Copyright © 2018, 2020, 2022-2025 Michael Shields
+;; Copyright © 2018, 2020, 2022-2026 Michael Shields
 ;;
 ;; Licensed under the Apache License, Version 2.0 (the "License");
 ;; you may not use this file except in compliance with the License.
@@ -43,3 +43,11 @@
              '(lua . ("https://github.com/tree-sitter-grammars/tree-sitter-lua")))
 (treesit-install-language-grammar 'lua)
 (delete-file (expand-file-name "libtree-sitter-lua.dylib" shields/tree-sitter-langs-path))
+
+;; typst-ts-mode checks its grammar version and only assures uben0's grammar,
+;; which the tree-sitter-langs bundle may lag.  Build it fresh and drop the
+;; bundled symlink so the current grammar wins, exactly as for Lua above.
+(add-to-list 'treesit-language-source-alist
+             '(typst . ("https://github.com/uben0/tree-sitter-typst")))
+(treesit-install-language-grammar 'typst)
+(delete-file (expand-file-name "libtree-sitter-typst.dylib" shields/tree-sitter-langs-path))

@@ -28,6 +28,20 @@
   (markdown-code-face ((t (:inherit fixed-pitch :background "#f850f850f850" :height 0.8))))
   (markdown-header-face ((t (:weight bold)))))
 
+;; Typst
+(use-package typst-ts-mode
+  ;; Not on MELPA; the canonical repo is on Codeberg (the SourceHut and GitHub
+  ;; mirrors lag). The eglot server (tinymist) is registered in init-eglot.el.
+  :straight (typst-ts-mode :type git :host codeberg
+                           :repo "meow_king/typst-ts-mode" :branch "main")
+  :mode "\\.typ\\'"
+  :hook (typst-ts-mode . eglot-ensure)
+  :custom
+  ;; Fontify code inside raw blocks (```rust … ```), not just the fence.
+  (typst-ts-enable-raw-blocks-highlight t)
+  ;; `C-c C-w' (typst-ts-watch-mode) opens the PDF in the default viewer.
+  (typst-ts-watch-options '("--open")))
+
 ;; JSON
 (use-package jsonnet-mode)
 
