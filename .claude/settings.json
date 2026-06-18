@@ -65,6 +65,7 @@
         "/Users/shields/Library/Caches/go-build",
         "/Users/shields/Library/Caches/golangci-lint",
         "/Users/shields/go/pkg/mod",
+        "/Users/shields/.cache/pre-commit",
         "/Users/shields/.cache/uv",
         "/Users/shields/.npm",
         "/Users/shields/.ruff_cache"
