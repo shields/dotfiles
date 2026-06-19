@@ -124,7 +124,9 @@ function generatePalette(options: PaletteOptions): ColorInfo[] {
   const palette: ColorInfo[] = [];
 
   for (let i = 0; i < count; i++) {
-    const hue = (startHue + (i * 360) / count) % 360;
+    // Normalize into [0, 360): a negative --start-hue would otherwise show
+    // (and report) negative hues like -30 instead of the equivalent 330.
+    const hue = (((startHue + (i * 360) / count) % 360) + 360) % 360;
     const oklchColor = new Color("oklch", [lightness, chroma, hue]);
     const p3Color = oklchColor.to("p3");
     // colorjs.io emits "#rrggbb" only in sRGB; the P3 color is gamut-mapped
