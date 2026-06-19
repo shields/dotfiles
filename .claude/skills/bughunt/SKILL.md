@@ -60,76 +60,105 @@ unclear items).
 
 ```js
 export const meta = {
-  name: 'bughunt',
-  description: 'Partition a codebase and fan out worktree-isolated agents to find, fix, review, and commit bugs',
+  name: "bughunt",
+  description:
+    "Partition a codebase and fan out worktree-isolated agents to find, fix, review, and commit bugs",
   phases: [
-    { title: 'Scout', detail: 'partition the repo into disjoint slices' },
-    { title: 'Hunt', detail: 'one worktree agent per slice: find -> fix -> /code-review max --fix -> lgtmcp commit' },
+    { title: "Scout", detail: "partition the repo into disjoint slices" },
+    {
+      title: "Hunt",
+      detail:
+        "one worktree agent per slice: find -> fix -> /code-review max --fix -> lgtmcp commit",
+    },
   ],
-}
+};
 
 const PLAN = {
-  type: 'object',
-  required: ['slices'],
+  type: "object",
+  required: ["slices"],
   properties: {
     slices: {
-      type: 'array',
+      type: "array",
       items: {
-        type: 'object',
-        required: ['id', 'paths', 'focus'],
+        type: "object",
+        required: ["id", "paths", "focus"],
         properties: {
-          id: { type: 'string', description: 'short unique kebab slug' },
-          paths: { type: 'array', items: { type: 'string' }, description: 'disjoint file/dir globs this slice owns' },
-          focus: { type: 'string', description: 'what to pay special attention to here' },
+          id: { type: "string", description: "short unique kebab slug" },
+          paths: {
+            type: "array",
+            items: { type: "string" },
+            description: "disjoint file/dir globs this slice owns",
+          },
+          focus: {
+            type: "string",
+            description: "what to pay special attention to here",
+          },
         },
       },
     },
   },
-}
+};
 
 const SLICE = {
-  type: 'object',
-  required: ['id', 'fixes', 'crossCutting', 'designChanges', 'unclear'],
+  type: "object",
+  required: ["id", "fixes", "crossCutting", "designChanges", "unclear"],
   properties: {
-    id: { type: 'string' },
-    branch: { type: 'string', description: 'branch the commits landed on, empty if no commit' },
-    headSha: { type: 'string', description: 'HEAD after committing, empty if no commit' },
+    id: { type: "string" },
+    branch: {
+      type: "string",
+      description: "branch the commits landed on, empty if no commit",
+    },
+    headSha: {
+      type: "string",
+      description: "HEAD after committing, empty if no commit",
+    },
     fixes: {
-      type: 'array',
+      type: "array",
       items: {
-        type: 'object',
-        required: ['severity', 'file', 'summary'],
+        type: "object",
+        required: ["severity", "file", "summary"],
         properties: {
-          severity: { type: 'string', enum: ['security', 'correctness', 'other'] },
-          file: { type: 'string' },
-          summary: { type: 'string' },
+          severity: {
+            type: "string",
+            enum: ["security", "correctness", "other"],
+          },
+          file: { type: "string" },
+          summary: { type: "string" },
         },
       },
     },
     crossCutting: {
-      type: 'array',
-      description: 'bugs whose fix reaches OUTSIDE this slice — described, not fixed',
+      type: "array",
+      description:
+        "bugs whose fix reaches OUTSIDE this slice — described, not fixed",
       items: {
-        type: 'object',
-        required: ['severity', 'summary'],
+        type: "object",
+        required: ["severity", "summary"],
         properties: {
-          severity: { type: 'string', enum: ['security', 'correctness', 'other'] },
-          area: { type: 'string', description: 'files/modules it spans' },
-          summary: { type: 'string' },
-          suggestedFix: { type: 'string' },
+          severity: {
+            type: "string",
+            enum: ["security", "correctness", "other"],
+          },
+          area: { type: "string", description: "files/modules it spans" },
+          summary: { type: "string" },
+          suggestedFix: { type: "string" },
         },
       },
     },
-    designChanges: { type: 'array', items: { type: 'string' }, description: 'changes needing a human decision — described, NOT applied' },
-    unclear: { type: 'array', items: { type: 'string' } },
+    designChanges: {
+      type: "array",
+      items: { type: "string" },
+      description: "changes needing a human decision — described, NOT applied",
+    },
+    unclear: { type: "array", items: { type: "string" } },
   },
-}
+};
 
 function huntPrompt(s, direction, prefix) {
   return [
     `You are hunting bugs in ONE slice of a codebase, working inside your own git worktree. Slice "${s.id}".`,
     `Owned paths — stay within these, do NOT edit files outside them: ${JSON.stringify(s.paths)}.`,
-    `Focus: ${s.focus}.` + (direction ? ` User direction: ${direction}.` : ''),
+    `Focus: ${s.focus}.` + (direction ? ` User direction: ${direction}.` : ""),
     ``,
     `PRIORITIES, in order: (1) security, (2) correctness, (3) everything else — including wrong/stale docs & comments, dead code, and simplifications. Prefer the simpler equivalent; deleting code is a valid fix.`,
     ``,
@@ -146,45 +175,68 @@ function huntPrompt(s, direction, prefix) {
     `- Anything genuinely unclear -> unclear.`,
     ``,
     `If nothing is worth fixing, make no commit, leave branch empty, and return empty fixes. Return the structured SLICE output.`,
-  ].join('\n')
+  ].join("\n");
 }
 
-const direction = typeof args === 'string'
-  ? args.trim()
-  : (args && typeof args.direction === 'string' ? args.direction.trim() : '')
-const rawPrefix = args && typeof args === 'object' && typeof args.prefix === 'string' ? args.prefix.trim() : ''
-const prefix = /^[\w.\/-]+$/.test(rawPrefix) ? rawPrefix.replace(/\/+$/, '') : 'bughunt'
+const direction =
+  typeof args === "string"
+    ? args.trim()
+    : args && typeof args.direction === "string"
+      ? args.direction.trim()
+      : "";
+const rawPrefix =
+  args && typeof args === "object" && typeof args.prefix === "string"
+    ? args.prefix.trim()
+    : "";
+const prefix = /^[\w.\/-]+$/.test(rawPrefix)
+  ? rawPrefix.replace(/\/+$/, "")
+  : "bughunt";
 
-phase('Scout')
+phase("Scout");
 const plan = await agent(
   `Inventory this git repo and partition it into disjoint slices for a parallel bug hunt.` +
     (direction
       ? ` Direction from the user: "${direction}". If it names paths/globs, restrict the sweep to them; if it names a theme, still cover the repo but record the theme in every slice's focus.`
       : ` Sweep the entire repo.`) +
     ` Group by coherent module/subsystem, balance slices by rough size, and keep the path sets DISJOINT at the FILE level so two worktree agents never edit the same file. Assign shared aggregator files that several areas might touch — package manifests (go.mod, package.json, pyproject.toml), lockfiles, barrel/index files, __init__.py, generated registries — to exactly ONE slice, or leave them out of every slice and note them for the parent. Aim for 3-10 slices (fewer for a small repo; scale up with budget). Skip vendored and generated files and anything in .gitignore. Return the plan.`,
-  { label: 'scout', phase: 'Scout', schema: PLAN },
-)
+  { label: "scout", phase: "Scout", schema: PLAN },
+);
 
-log(`Hunting ${plan.slices.length} slice(s)` + (direction ? ` — direction: ${direction}` : ''))
+log(
+  `Hunting ${plan.slices.length} slice(s)` +
+    (direction ? ` — direction: ${direction}` : ""),
+);
 
-phase('Hunt')
+phase("Hunt");
 const results = (
   await parallel(
-    plan.slices.map((s) => () =>
-      agent(huntPrompt(s, direction, prefix), { label: `hunt:${s.id}`, phase: 'Hunt', isolation: 'worktree', schema: SLICE }),
+    plan.slices.map(
+      (s) => () =>
+        agent(huntPrompt(s, direction, prefix), {
+          label: `hunt:${s.id}`,
+          phase: "Hunt",
+          isolation: "worktree",
+          schema: SLICE,
+        }),
     ),
   )
-).filter(Boolean)
+).filter(Boolean);
 
 return {
   direction,
   prefix,
   results,
-  branches: results.filter((r) => r.branch).map((r) => ({ id: r.id, branch: r.branch, headSha: r.headSha })),
+  branches: results
+    .filter((r) => r.branch)
+    .map((r) => ({ id: r.id, branch: r.branch, headSha: r.headSha })),
   crossCutting: results.flatMap((r) => r.crossCutting || []),
-  designChanges: results.flatMap((r) => (r.designChanges || []).map((d) => ({ id: r.id, change: d }))),
-  unclear: results.flatMap((r) => (r.unclear || []).map((u) => ({ id: r.id, item: u }))),
-}
+  designChanges: results.flatMap((r) =>
+    (r.designChanges || []).map((d) => ({ id: r.id, change: d })),
+  ),
+  unclear: results.flatMap((r) =>
+    (r.unclear || []).map((u) => ({ id: r.id, item: u })),
+  ),
+};
 ```
 
 ## Step 2 — Cherry-pick the reviewed commits (no review needed)
