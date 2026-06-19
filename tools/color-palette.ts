@@ -37,7 +37,10 @@ interface ColorInfo {
 const defaults: PaletteOptions = {
   count: 12,
   lightness: 0.4,
-  chroma: 0.4,
+  // At lightness 0.4, 0.15 keeps the cool/magenta hues within the sRGB gamut
+  // and the rest close to it; the OKLCH maximum of 0.4 puts every hue far out
+  // of gamut, so each swatch would be heavily gamut-mapped and darkened.
+  chroma: 0.15,
   startHue: 0,
 };
 
@@ -119,6 +122,33 @@ const namedColors: Record<string, Color> = {
   cyan: new Color("srgb", [0, 1, 1]),
 };
 
+// OKLCH hue angle of each chromatic anchor. We name a swatch by its nearest
+// hue rather than by full-color distance: at low chroma every dark swatch is
+// "closest" to black under any deltaE metric, which collapses every name onto
+// Black regardless of the actual hue.
+const namedHues: [string, number][] = Object.entries(namedColors)
+  .filter(([name]) => name !== "black" && name !== "white")
+  .map(([name, color]): [string, number] => [name, color.to("oklch").coords[2] ?? 0]);
+
+function closestName(oklch: Color): string {
+  const [lightness, chroma, hue] = oklch.coords;
+  // An (almost) achromatic color has no meaningful hue; name it by lightness.
+  if ((chroma ?? 0) < 0.04) {
+    return (lightness ?? 0) < 0.5 ? "black" : "white";
+  }
+  let best = "black";
+  let minDistance = Infinity;
+  for (const [name, namedHue] of namedHues) {
+    // Smallest absolute angle between the two hues on the [0, 360) circle.
+    const distance = Math.abs(((((hue ?? 0) - namedHue) % 360) + 540) % 360 - 180);
+    if (distance < minDistance) {
+      minDistance = distance;
+      best = name;
+    }
+  }
+  return best;
+}
+
 function generatePalette(options: PaletteOptions): ColorInfo[] {
   const { count, lightness, chroma, startHue } = options;
   const palette: ColorInfo[] = [];
@@ -133,28 +163,19 @@ function generatePalette(options: PaletteOptions): ColorInfo[] {
     // down to sRGB for this hex.
     const srgbHex = p3Color.toString({ format: "hex" });
 
-    // Determine closest named color
-    let closestName = "Unknown";
-    let minDistance = Infinity;
-
-    for (const [name, color] of Object.entries(namedColors)) {
-      const distance = Color.deltaE(p3Color, color);
-      if (distance < minDistance) {
-        minDistance = distance;
-        closestName = name;
-      }
-    }
+    const colorName = closestName(oklchColor);
 
     palette.push({
-      name: closestName.charAt(0).toUpperCase() + closestName.slice(1),
+      name: colorName.charAt(0).toUpperCase() + colorName.slice(1),
       lightness: oklchColor.coords[0]?.toFixed(2) ?? "0",
       chroma: oklchColor.coords[1]?.toFixed(2) ?? "0",
       hue: oklchColor.coords[2]?.toFixed(0) ?? "0",
       srgbHex,
-      // Gamut-mapping error: how far the displayed sRGB hex color lands from
-      // the requested OKLCH color. Comparing against the unmapped p3Color
-      // would always yield ~0, since it is the same point in another space.
-      deltaE: Color.deltaE(oklchColor, new Color(srgbHex)).toFixed(2),
+      // Gamut-mapping error (CIEDE2000): how far the displayed sRGB hex color
+      // lands from the requested OKLCH color. Comparing against the unmapped
+      // p3Color would always yield ~0, since it is the same point in another
+      // space.
+      deltaE: Color.deltaE(oklchColor, new Color(srgbHex), "2000").toFixed(2),
     });
   }
 
