@@ -14,6 +14,8 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+from pathlib import Path
+
 from PIL import Image, ImageCms
 
 img = Image.new("RGB", (100, 100), color=(2, 42, 58))
@@ -25,7 +27,10 @@ icc_bytes = bytearray(
 # to make the output reproducible across runs.
 icc_bytes[24:36] = b"\x00" * 12
 
-img.save(
-    "Library/Application Support/desktoppr/navy_blue.png",
-    icc_profile=icc_bytes,
+# Resolve the output relative to the repo root (this file lives in tools/) so
+# the script writes the committed PNG regardless of the current directory.
+output_path = (
+    Path(__file__).resolve().parent.parent
+    / "Library/Application Support/desktoppr/navy_blue.png"
 )
+img.save(output_path, icc_profile=icc_bytes)
