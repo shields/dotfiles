@@ -89,10 +89,10 @@ week_window=604800 # 7 days
 # $1, clamped into [0, $2] so the bold comparisons below cannot misfire
 # on clock skew.
 clamp_elapsed() {
-    secs=$(( now - ($1 - $2) ))
-    if (( secs < 0 )); then
+    secs=$((now - ($1 - $2)))
+    if ((secs < 0)); then
         secs=0
-    elif (( secs > $2 )); then
+    elif ((secs > $2)); then
         secs=$2
     fi
 }
@@ -100,12 +100,12 @@ clamp_elapsed() {
 right=''
 if [[ -n "$five_reset" ]]; then
     clamp_elapsed "$five_reset" "$five_window"
-    right=$(printf '%d:%02d' $(( secs / 3600 )) $(( secs % 3600 / 60 )))
+    right=$(printf '%d:%02d' $((secs / 3600)) $((secs % 3600 / 60)))
 fi
 if [[ -n "$five_pct" ]]; then
     style=''
     # Bold when usage runs ahead of the elapsed share of the window.
-    if [[ -n "$five_reset" ]] && (( five_pct * five_window > secs * 100 )); then
+    if [[ -n "$five_reset" ]] && ((five_pct * five_window > secs * 100)); then
         style=$bold
     fi
     right+="${right:+ }$style$five_pct%${style:+$nobold}"
@@ -114,7 +114,7 @@ if [[ -n "$week_pct" ]]; then
     style=''
     if [[ -n "$week_reset" ]]; then
         clamp_elapsed "$week_reset" "$week_window"
-        if (( week_pct * week_window > secs * 100 )); then
+        if ((week_pct * week_window > secs * 100)); then
             style=$bold
         fi
     fi
@@ -129,8 +129,8 @@ if [[ -n "$model" ]]; then
 fi
 
 cost_seg=''
-if [[ -n "$cost_cents" ]] && (( cost_cents != 0 )); then
-    cost_seg=$(printf '$%d.%02d' $(( cost_cents / 100 )) $(( cost_cents % 100 )))
+if [[ -n "$cost_cents" ]] && ((cost_cents != 0)); then
+    cost_seg=$(printf '$%d.%02d' $((cost_cents / 100)) $((cost_cents % 100)))
 fi
 
 # Join the non-empty segments with ' · '. A leading space provides the

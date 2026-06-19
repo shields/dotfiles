@@ -14,6 +14,22 @@
 
 .PHONY: build test lint fmt run
 
+# Shell scripts to lint and format with shellcheck and shfmt. zsh files
+# (.zshrc, .zprofile, .zsh.d/*.zsh, tests/*.zsh) and vendored files
+# (.iTerm2/*) are excluded because neither tool supports zsh.
+SHELL_SOURCES = \
+	.bashrc \
+	.bash_profile \
+	.profile \
+	.claude/statusline.sh \
+	provision.sh \
+	tools/create_nerd_andale_mono.sh \
+	bin/$$ \
+	bin/docker-prune \
+	bin/ghfork \
+	bin/git-add-upstream \
+	bin/pager
+
 build:
 	bun run tsc --noEmit
 
@@ -27,10 +43,13 @@ lint:
 	ruff check
 	uv run ty check
 	basedpyright
+	shellcheck --exclude=SC1091 $(SHELL_SOURCES)
+	shfmt -i 4 -d $(SHELL_SOURCES)
 
 fmt:
 	bun run prettier --write --ignore-path .gitignore "**/*.ts" "**/*.json" "**/*.md"
 	ruff format
+	shfmt -i 4 -w $(SHELL_SOURCES)
 
 run:
 	bun run tools/color-palette.ts

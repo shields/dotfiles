@@ -18,15 +18,15 @@
 # just quit now.
 test -z "$PS1" && return
 
-if [ "$TERM" = xterm-debian -a ! -e /etc/terminfo/x/xterm-debian \
-    -a ! -e /usr/share/terminfo/x/xterm-debian ]; then
+if [ "$TERM" = xterm-debian ] && [ ! -e /etc/terminfo/x/xterm-debian ] &&
+    [ ! -e /usr/share/terminfo/x/xterm-debian ]; then
     TERM=xterm
 fi
 
 trimmed_hostname="$(hostname | sed -e 's/\.msrl\.com$//' \
     -e 's/\.above\.net$//' \
     -e 's/\.mfnx\.net$//')"
-if [ "$TERM" = xterm -o "$TERM" = xterm-debian -o "$TERM" = xterm-256color ]; then
+if [ "$TERM" = xterm ] || [ "$TERM" = xterm-debian ] || [ "$TERM" = xterm-256color ]; then
     PS1="\\[\\033]0;\\u@$trimmed_hostname\\007\\]\\w\\$ "
 else
     PS1="\\u@$trimmed_hostname:\\w\\$ "
@@ -85,7 +85,7 @@ if [ -d "$HOME/google-cloud-sdk" ]; then
 fi
 
 # pyenv
-if command -v pyenv 1> /dev/null 2>&1; then
+if command -v pyenv 1>/dev/null 2>&1; then
     eval "$(pyenv init -)"
 fi
 

@@ -12,6 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+# shellcheck shell=sh
 umask 022
 
 # Terminal and locale setup.
@@ -27,7 +28,7 @@ if [ -z "$LANG" ]; then
 fi
 
 if [ "$TERM" = linux ]; then
-    tty | fgrep -q /dev/vc && unicode_start
+    tty | grep -F -q /dev/vc && unicode_start
 fi
 
 # Set default editor and pager.
