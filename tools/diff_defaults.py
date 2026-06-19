@@ -53,7 +53,9 @@ def _plist_typed(x: PlistValue) -> tuple[str, ...]:
         case bytes():
             return "-data", x.hex()
         case datetime.datetime():
-            return "-date", x.isoformat(sep=" ")
+            # The ISO date contains a space, so quote it as a single shell
+            # argument; print_diff emits these values without re-quoting.
+            return "-date", shlex.quote(x.isoformat(sep=" "))
         case float():
             return "-float", str(x)
         case int():
@@ -105,14 +107,16 @@ if __name__ == "__main__":
     domains.add("NSGlobalDomain")
 
     # Remove some domains that are frequently-updated state, not preferences.
-    domains.remove("ContextStoreAgent")
-    domains.remove("com.apple.spaces")
-    domains.remove("com.apple.systempreferences")  # ironically
-    domains.remove("com.apple.xpc.activity2")
-    domains.remove("knowledge-agent")
+    # Use discard, not remove: these vary across macOS versions, and a domain
+    # being absent just means there is nothing to exclude.
+    domains.discard("ContextStoreAgent")
+    domains.discard("com.apple.spaces")
+    domains.discard("com.apple.systempreferences")  # ironically
+    domains.discard("com.apple.xpc.activity2")
+    domains.discard("knowledge-agent")
 
     # https://bugs.python.org/issue41083
-    domains.remove("com.apple.security.KCN")
+    domains.discard("com.apple.security.KCN")
 
     # Cache domains are high-churn noise, not preferences; drop them so we
     # neither baseline nor repeatedly re-export them in the diff loop.
