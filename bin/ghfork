@@ -81,4 +81,9 @@ while IFS= read -r key; do
     git config "$key" origin
 done < <(git config --get-regexp '^branch\..*\.remote$' '^upstream$' | awk '{print $1}')
 
-gh repo set-default "$owner/$repo"
+# Setting the default repo is best-effort and runs last: the remotes are
+# already rewired (this command's primary effect), so if it fails we warn
+# rather than let set -e abort with the repo looking unconfigured.
+if ! gh repo set-default "$owner/$repo"; then
+    echo "ghfork: warning: could not set default repo to $owner/$repo; set it with 'gh repo set-default'" >&2
+fi
