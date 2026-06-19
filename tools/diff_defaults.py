@@ -61,17 +61,17 @@ def _plist_typed(x: PlistValue) -> tuple[str, ...]:
         case int():
             return "-int", str(x)
         case str():
-            return (shlex.quote(x),)
-        case list():
-            return "-array", " ".join(_plist_str(elt) for elt in x)
-        case dict():
-            return "-dict", " ".join(
-                s for k, v in x.items() for s in (_plist_str(k), _plist_str(v))
-            )
-
-
-def _plist_str(x: PlistValue) -> str:
-    return _plist_typed(x)[-1]
+            # Pass -string explicitly: without a type flag `defaults write`
+            # infers the type from the value, so a string that looks like a
+            # plist ("(1, 2)", "{a=1;}") or a flag ("-int") would be mis-typed.
+            return "-string", shlex.quote(x)
+        case list() | dict():
+            # `-array`/`-dict` can only express a flat sequence of bare,
+            # untyped tokens — there is no syntax for typed or nested elements
+            # — so collections that nest (most Dock/Finder/Safari prefs) would
+            # be silently corrupted. Emit the whole value as a single
+            # property-list argument, which round-trips any depth and type.
+            return (shlex.quote(plistlib.dumps(x, fmt=plistlib.FMT_XML).decode()),)
 
 
 def is_boring_domain(domain: str) -> bool:
