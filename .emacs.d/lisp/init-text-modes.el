@@ -55,15 +55,15 @@
 
 (setopt sentence-end-double-space nil)
 
-;; Enable auto-fill in various modes
+;; Enable auto-fill in various modes.  `indented-text-mode' and `xml-mode' are
+;; obsolete aliases (for `text-mode' and `nxml-mode'), so their *-mode-hook
+;; variables never run; both modes inherit auto-fill from `text-mode-hook'.
 (add-hook 'text-mode-hook #'turn-on-auto-fill)
-(add-hook 'indented-text-mode-hook #'turn-on-auto-fill)
 (add-hook 'message-mode-hook #'turn-on-auto-fill)
-(add-hook 'xml-mode-hook #'turn-on-auto-fill)
 
 ;; Perl extension glues.  Not really like C; more like a Makefile.
 (or (assoc "\\.xs$" auto-mode-alist)
-    (add-to-list 'auto-mode-alist '("\\.xs$" . indented-text-mode)))
+    (add-to-list 'auto-mode-alist '("\\.xs$" . text-mode)))
 
 ;; View mode
 (defun shields/goto-prefix-percent (arg)
@@ -84,14 +84,6 @@
         ("$" . end-of-line)
         ("G" . goto-line)
         ("%" . shields/goto-prefix-percent)))
-
-;; XML
-(add-hook 'xml-mode-hook
-          (lambda ()
-            (keymap-set xml-mode-map "'"
-                        (lambda ()
-                          (interactive)
-                          (insert "&#8217;")))))
 
 ;; Help mode
 (setopt help-window-select t)
