@@ -150,6 +150,21 @@ assert_eq "dotted repo name returns 0" 0 "$rc"
 assert_eq "dotted repo sets origin to fork" "https://github.com/testuser/myuser.github.io.git" "$(git -C "$repo" remote get-url origin)"
 assert_eq "dotted repo sets upstream to original" "https://github.com/myuser/myuser.github.io.git" "$(git -C "$repo" remote get-url upstream)"
 
+# --- 12. Branch tracking origin is re-pointed at the new origin (the fork) ---
+# `git remote rename origin upstream` rewrites branch.<name>.remote to upstream;
+# ghfork must flip it back to origin. Covers the get-regexp/awk flip loop, which
+# is otherwise exercised only by fixtures that have no tracking branches.
+repo="$(make_repo tracking https://github.com/someowner/somerepo.git)"
+git -C "$repo" -c user.email=test@example.com -c user.name=Test \
+    -c commit.gpgsign=false commit -q --allow-empty -m init
+git -C "$repo" config branch.main.remote origin
+git -C "$repo" config branch.main.merge refs/heads/main
+mock_gh "$TMPBASE/mock12" 0 "testuser" 0
+out="$(cd "$repo" && PATH="$TMPBASE/mock12:$PATH" bash "$SCRIPT" 2>&1)" && rc=$? || rc=$?
+assert_eq "tracking branch fork returns 0" 0 "$rc"
+assert_eq "tracking branch remote flipped back to origin" "origin" "$(git -C "$repo" config branch.main.remote)"
+assert_eq "tracking branch merge ref unchanged" "refs/heads/main" "$(git -C "$repo" config branch.main.merge)"
+
 echo ""
 echo "Results: $pass passed, $fail failed"
 [[ $fail -eq 0 ]]
