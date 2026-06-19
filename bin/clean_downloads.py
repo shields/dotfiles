@@ -15,6 +15,8 @@
 # limitations under the License.
 
 import argparse
+import errno
+import os
 import shutil
 import sys
 import time
@@ -26,6 +28,44 @@ def pluralize(count: float, word: str) -> str:
     # 7.0; render it as "7" so messages read "7 days" rather than "7.0 days".
     shown = int(count) if isinstance(count, float) and count.is_integer() else count
     return f"{shown} {word}" if count == 1 else f"{shown} {word}s"
+
+
+def _move_to_trash(item: Path, trash_dir: Path) -> Path:
+    """Move item into trash_dir under a free name, never overwriting one.
+
+    For regular files this claims the name with os.link — an atomic
+    compare-and-swap that raises FileExistsError if the name is already taken
+    — then unlinks the source, closing the check-then-move race. Directories,
+    symlinks, and cross-device moves cannot be hardlinked, so they fall back to
+    a check-then-rename with a small residual window, which is acceptable for a
+    single-user local Downloads cleanup.
+    """
+    base = item.stem
+    suffix = item.suffix
+    counter = 0
+    while True:
+        name = item.name if counter == 0 else f"{base}_{counter}{suffix}"
+        dest = trash_dir / name
+        counter += 1
+        if item.is_dir() or item.is_symlink():
+            if dest.exists():
+                continue
+            _ = shutil.move(str(item), str(dest))
+            return dest
+        try:
+            os.link(item, dest)
+        except FileExistsError:
+            continue
+        except OSError as exc:
+            if exc.errno != errno.EXDEV:
+                raise
+            # Different filesystem: hardlinking is impossible, fall back.
+            if dest.exists():
+                continue
+            _ = shutil.move(str(item), str(dest))
+            return dest
+        item.unlink()
+        return dest
 
 
 def move_old_downloads_to_trash(days: float = 7, *, dry_run: bool = False) -> None:
@@ -58,25 +98,17 @@ def move_old_downloads_to_trash(days: float = 7, *, dry_run: bool = False) -> No
         if mtime >= cutoff_time:
             continue
 
-        dest = trash_dir / item.name
-
-        # Handle name conflicts in trash
-        if dest.exists():
-            base = dest.stem
-            suffix = dest.suffix
-            counter = 1
-            while dest.exists():
-                dest = trash_dir / f"{base}_{counter}{suffix}"
-                counter += 1
-
         age_days = (time.time() - mtime) / (24 * 60 * 60)
 
         try:
             if dry_run:
                 print(f"Would move: {item.name} (age: {age_days:.1f} days)")
             else:
-                _ = shutil.move(str(item), str(dest))
-                print(f"Moved to trash: {item.name} (age: {age_days:.1f} days)")
+                dest = _move_to_trash(item, trash_dir)
+                shown = item.name
+                if dest.name != item.name:
+                    shown = f"{item.name} -> {dest.name}"
+                print(f"Moved to trash: {shown} (age: {age_days:.1f} days)")
         except OSError as exc:
             print(f"Skipping (cannot move): {item.name}: {exc}", file=sys.stderr)
             continue
