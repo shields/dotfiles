@@ -41,7 +41,7 @@ left=$(
         fi
         starship module git_status
         echo '' # Starship does not print a newline
-    ) | tr -d '\n' | sed -e $'s/\x1b\\[[0-9;]*m//g' -e 's/ *$//'
+    ) | tr -d '\n' | sed -e $'s/\x1b\\[[0-9;]*m//g' -e 's/^ *//' -e 's/ *$//'
 )
 
 # Model, effort, cost, and rate-limit data from the statusline JSON; each
