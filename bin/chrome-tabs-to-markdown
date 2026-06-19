@@ -17,7 +17,7 @@
 --
 -- Dumps all Chrome tabs to stdout as markdown.
 -- Output is grouped by window with "## Window N" headers.
--- Each tab is formatted as: - [title](url)
+-- Each tab is formatted as: - [title](<url>)
 --
 
 on escapeMarkdown(str)
