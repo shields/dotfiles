@@ -7,6 +7,9 @@
   "permissions": {
     "deny": [
       "Bash(git commit --no-verify *)",
+      "Bash(git commit -n*)",
+      "Bash(git commit *--no-verify*)",
+      "Bash(git -c *commit*)",
       "Bash(git push *)",
       "Bash(kubectl get secret *)",
       "Bash(kubectl get secrets *)",
