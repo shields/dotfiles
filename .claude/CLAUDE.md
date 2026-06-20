@@ -33,6 +33,12 @@ include the current year (e.g. `2025-2026`, or `2024, 2026` if discontiguous).
 Add code comments sparingly, explaining _why_ rather than _what_, and only when
 they add real value.
 
+## Memory
+
+Prefer recording durable facts, preferences, and project guidance in the
+relevant `AGENTS.md` file rather than in the memory system. These
+files are version-controlled, reviewable, and travel with the code.
+
 ## Python
 
 - Use `uv`, never `pip` (even with no pyproject.toml: `uv venv`, `uv pip`).
