@@ -15,12 +15,13 @@
 # limitations under the License.
 
 import argparse
-import errno
 import os
-import shutil
+import subprocess
 import sys
 import time
 from pathlib import Path
+
+TRASH = "/usr/bin/trash"
 
 
 def pluralize(count: float, word: str) -> str:
@@ -30,54 +31,40 @@ def pluralize(count: float, word: str) -> str:
     return f"{shown} {word}" if count == 1 else f"{shown} {word}s"
 
 
-def _move_to_trash(item: Path, trash_dir: Path) -> Path:
-    """Move item into trash_dir under a free name, never overwriting one.
+def _trash(item: Path) -> str:
+    """Move item to the user trash with /usr/bin/trash, returning the name it
+    landed under (the tool renames on collision rather than overwriting).
 
-    For regular files this claims the name with os.link — an atomic
-    compare-and-swap that raises FileExistsError if the name is already taken
-    — then unlinks the source, closing the check-then-move race. Directories,
-    symlinks, and cross-device moves cannot be hardlinked, so they fall back to
-    a check-then-rename with a small residual window, which is acceptable for a
-    single-user local Downloads cleanup.
+    The macOS trash tool owns the trash folder and records "Put Back" info, and
+    picks a free name itself, so there is no name-collision race to guard here.
     """
-    base = item.stem
-    suffix = item.suffix
-    counter = 0
-    while True:
-        name = item.name if counter == 0 else f"{base}_{counter}{suffix}"
-        dest = trash_dir / name
-        counter += 1
-        if item.is_dir() or item.is_symlink():
-            if dest.exists():
-                continue
-            _ = shutil.move(str(item), str(dest))
-            return dest
-        try:
-            os.link(item, dest)
-        except FileExistsError:
-            continue
-        except OSError as exc:
-            if exc.errno != errno.EXDEV:
-                raise
-            # Different filesystem: hardlinking is impossible, fall back.
-            if dest.exists():
-                continue
-            _ = shutil.move(str(item), str(dest))
-            return dest
-        item.unlink()
-        return dest
+    result = subprocess.run(
+        [TRASH, "-v", str(item)],
+        capture_output=True,
+        text=True,
+        check=True,
+    )
+    # Verbose output is `# Moved "<src>" to "<dest>"` on stdout. Anchor on the
+    # source path we passed (echoed back verbatim) rather than splitting on the
+    # `" to "` separator, so a name that itself contains `" to "` or a trailing
+    # quote can't skew the result. Best-effort: fall back to the original name
+    # if the tool ever rewrites the path or changes the format.
+    line = result.stdout.strip()
+    prefix = f'# Moved "{item}" to "'
+    if line.startswith(prefix) and line.endswith('"'):
+        return Path(line[len(prefix) : -1]).name
+    return item.name
 
 
 def move_old_downloads_to_trash(days: float = 7, *, dry_run: bool = False) -> None:
     downloads_dir = Path.home() / "Downloads"
-    trash_dir = Path.home() / ".Trash"
 
     if not downloads_dir.exists():
         msg = f"Downloads directory not found: {downloads_dir}"
         raise FileNotFoundError(msg)
 
-    if not trash_dir.exists():
-        msg = f"Trash directory not found: {trash_dir}"
+    if not os.access(TRASH, os.X_OK):
+        msg = f"Trash tool not found or not executable: {TRASH}"
         raise FileNotFoundError(msg)
 
     cutoff_time = time.time() - (days * 24 * 60 * 60)
@@ -104,13 +91,22 @@ def move_old_downloads_to_trash(days: float = 7, *, dry_run: bool = False) -> No
             if dry_run:
                 print(f"Would move: {item.name} (age: {age_days:.1f} days)")
             else:
-                dest = _move_to_trash(item, trash_dir)
+                dest_name = _trash(item)
                 shown = item.name
-                if dest.name != item.name:
-                    shown = f"{item.name} -> {dest.name}"
+                if dest_name != item.name:
+                    shown = f"{item.name} -> {dest_name}"
                 print(f"Moved to trash: {shown} (age: {age_days:.1f} days)")
-        except OSError as exc:
-            print(f"Skipping (cannot move): {item.name}: {exc}", file=sys.stderr)
+        except (OSError, subprocess.CalledProcessError) as exc:
+            # A non-zero exit carries trash's own message on stderr; failing to
+            # even spawn it (a vanished binary, a fork failure) surfaces as a
+            # plain OSError. Either way, skip this item and keep going rather
+            # than aborting the whole cleanup.
+            if isinstance(exc, subprocess.CalledProcessError):
+                stderr: str = exc.stderr or ""  # pyright: ignore[reportAny]
+                err = stderr.strip() or f"exit status {exc.returncode}"
+            else:
+                err = str(exc)
+            print(f"Skipping (cannot move): {item.name}: {err}", file=sys.stderr)
             continue
 
         moved_count += 1
