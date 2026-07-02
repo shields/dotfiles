@@ -145,6 +145,15 @@ brew "yt-dlp"
 brew "zizmor"
 brew "zoxide"
 brew "zsh"
+brew "d12frosted/emacs-plus/emacs-plus@30", trusted: true
+brew "fluxcd/tap/flux", trusted: true
+brew "gabrie30/utils/ghorg", trusted: true
+brew "gimlet-io/capacitor/capacitor", trusted: true
+brew "golangci/tap/golangci-lint", trusted: true
+brew "mihaelamj/tap/cupertino", trusted: true
+brew "oven-sh/bun/bun", trusted: true
+brew "snyk/tap/snyk", trusted: true
+brew "twilio/brew/twilio", trusted: true
 cask "agentsview"
 cask "airfoil"
 cask "anki"
