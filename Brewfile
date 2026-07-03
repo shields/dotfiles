@@ -1,9 +1,9 @@
+tap "cupertinohq/tap", "https://codeberg.org/CupertinoHQ/homebrew-tap.git"
 tap "d12frosted/emacs-plus"
 tap "fluxcd/tap"
 tap "gabrie30/utils"
 tap "gimlet-io/capacitor"
 tap "golangci/tap"
-tap "mihaelamj/tap"
 tap "oven-sh/bun"
 tap "snyk/tap"
 tap "twilio/brew"
@@ -145,12 +145,12 @@ brew "yt-dlp"
 brew "zizmor"
 brew "zoxide"
 brew "zsh"
+brew "cupertinohq/tap/cupertino"
 brew "d12frosted/emacs-plus/emacs-plus@30", trusted: true
 brew "fluxcd/tap/flux", trusted: true
 brew "gabrie30/utils/ghorg", trusted: true
 brew "gimlet-io/capacitor/capacitor", trusted: true
 brew "golangci/tap/golangci-lint", trusted: true
-brew "mihaelamj/tap/cupertino", trusted: true
 brew "oven-sh/bun/bun", trusted: true
 brew "snyk/tap/snyk", trusted: true
 brew "twilio/brew/twilio", trusted: true
