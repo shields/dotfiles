@@ -207,6 +207,7 @@ c() {
     TMPDIR="$tmpdir" claude --effort xhigh --permission-mode=auto \
         --settings "{\"ultracode\":true,\"sandbox\":{\"filesystem\":{\"allowWrite\":[\"$tmpdir\"]}}}" "$@"
 }
+alias cw='c --worktree'
 
 alias drit='docker run -it --rm'
 
