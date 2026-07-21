@@ -97,6 +97,60 @@ clamp_elapsed() {
     fi
 }
 
+# Fable's weekly usage is exposed only by the undocumented OAuth usage
+# endpoint, never in the statusline JSON, so we fetch it ourselves. The
+# outcome — success or failure — is cached for 60s and the request is
+# time-bounded, so a slow, hung, or failing endpoint is retried at most once
+# a minute and never stalls the 5-second render loop. A cached failure is an
+# empty object that parses to nothing, so the caller shows "Fable ??" rather
+# than a stale number or a silently missing segment. Label and percent come
+# from the endpoint.
+fable_usage() {
+    local cache_dir="${XDG_CACHE_HOME:-$HOME/Library/Caches}/claude-code-statusline"
+    local cache="$cache_dir/usage.json"
+    local mtime
+    mtime=$(stat -f %m "$cache" 2>/dev/null) || mtime=0
+    if ((now - mtime >= 60)); then
+        local tok=''
+        if [[ -f "$HOME/.claude/.credentials.json" ]]; then
+            tok=$(jq -r '.claudeAiOauth.accessToken // empty' \
+                "$HOME/.claude/.credentials.json" 2>/dev/null) || tok=''
+        fi
+        if [[ -z "$tok" ]]; then
+            tok=$(security find-generic-password -s 'Claude Code-credentials' -w 2>/dev/null |
+                jq -r '.claudeAiOauth.accessToken // empty' 2>/dev/null) || tok=''
+        fi
+        mkdir -p "$cache_dir" 2>/dev/null
+        local tmp
+        if tmp=$(mktemp "$cache.XXXXXX" 2>/dev/null); then
+            # -f so an HTTP error (e.g. an expired token's 401) is a failure,
+            # not a valid-JSON error body we would cache and misparse. The
+            # token is passed through a process-substituted header file
+            # (printf is a shell builtin) so it never lands in curl's argv,
+            # where any same-user process could read it from ps.
+            if [[ -n "$tok" ]] &&
+                curl -fsS --connect-timeout 1 --max-time 2 \
+                    -H @<(printf 'Authorization: Bearer %s\n' "$tok") \
+                    -H 'anthropic-beta: oauth-2025-04-20' \
+                    -o "$tmp" https://api.anthropic.com/api/oauth/usage 2>/dev/null &&
+                jq -e . "$tmp" >/dev/null 2>&1; then
+                : # $tmp holds the fresh response
+            else
+                printf '{}' >"$tmp" # cached failure → parses to nothing → "Fable ??"
+            fi
+            mv -f "$tmp" "$cache" 2>/dev/null || rm -f "$tmp"
+        fi
+    fi
+    local line
+    line=$(jq -r '
+        .limits[]?
+        | select(.scope.model.display_name == "Fable")
+        | "\(.scope.model.display_name)\t\(.percent | floor)"
+    ' "$cache" 2>/dev/null | head -n1) || true
+    [[ -n "$line" ]] || return 1
+    printf '%s\n' "$line"
+}
+
 right=''
 if [[ -n "$five_reset" ]]; then
     clamp_elapsed "$five_reset" "$five_window"
@@ -119,6 +173,28 @@ if [[ -n "$week_pct" ]]; then
         fi
     fi
     right+="${right:+ · }week $style$week_pct%${style:+$nobold}"
+fi
+
+# Fable's weekly-scoped limit isn't in the statusline JSON; fable_usage
+# pulls its label and percent from the usage endpoint. Only bother in a
+# subscriber session — one that reports rate limits — so API-key sessions
+# with no OAuth token don't show a permanent "Fable ??" or make needless
+# calls. The scoped window shares the account's weekly reset, so reuse
+# week_reset/week_window to bold it on the same run-rate basis as above.
+if [[ -n "$five_reset" || -n "$week_reset" ]]; then
+    if fable_line=$(fable_usage); then
+        IFS=$'\t' read -r fable_name fable_pct <<<"$fable_line"
+        style=''
+        if [[ -n "$week_reset" ]]; then
+            clamp_elapsed "$week_reset" "$week_window"
+            if ((fable_pct * week_window > secs * 100)); then
+                style=$bold
+            fi
+        fi
+        right+="${right:+ · }$fable_name $style$fable_pct%${style:+$nobold}"
+    else
+        right+="${right:+ · }Fable ??"
+    fi
 fi
 
 model_seg=''
