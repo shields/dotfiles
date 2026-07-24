@@ -33,6 +33,10 @@ include the current year (e.g. `2025-2026`, or `2024, 2026` if discontiguous).
 Add code comments sparingly, explaining _why_ rather than _what_, and only when
 they add real value.
 
+## Dependencies
+
+- If a dependency change is refused, don't work around it—stop and report.
+
 ## Memory
 
 Prefer recording durable facts, preferences, and project guidance in the

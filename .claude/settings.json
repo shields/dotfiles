@@ -16,18 +16,70 @@
       "Bash(lefthook uninstall)"
     ],
     "ask": [
+      "Bash(brew bundle:*)",
       "Bash(brew install *)",
+      "Bash(brew reinstall:*)",
+      "Bash(brew tap:*)",
       "Bash(bun a *)",
       "Bash(bun add *)",
+      "Bash(bun i:*)",
+      "Bash(bun install:*)",
+      "Bash(bundle add:*)",
+      "Bash(bundle install:*)",
+      "Bash(bunx:*)",
       "Bash(cargo add *)",
       "Bash(cargo install *)",
+      "Bash(composer require:*)",
+      "Bash(conda install:*)",
+      "Bash(dotnet add:*)",
+      "Bash(gem install:*)",
       "Bash(git commit *)",
       "Bash(go get *)",
       "Bash(go install *)",
+      "Bash(go mod edit:*)",
+      "Bash(go mod tidy:*)",
+      "Bash(mas install:*)",
+      "Bash(npm add:*)",
+      "Bash(npm i:*)",
+      "Bash(npm install:*)",
+      "Bash(npx:*)",
+      "Bash(pip install:*)",
+      "Bash(pip3 install:*)",
+      "Bash(pipx install:*)",
+      "Bash(pnpm add:*)",
+      "Bash(pnpm i:*)",
+      "Bash(pnpm install:*)",
+      "Bash(poetry add:*)",
+      "Bash(rustup component add:*)",
+      "Bash(rustup target add:*)",
+      "Bash(rustup toolchain install:*)",
       "Bash(swift package add-dependency *)",
       "Bash(uv add *)",
       "Bash(uv pip install *)",
-      "Bash(uv tool install *)"
+      "Bash(uv run --with:*)",
+      "Bash(uv tool install *)",
+      "Bash(uvx:*)",
+      "Bash(yarn add:*)",
+      "Edit(//**/Brewfile)",
+      "Edit(//**/requirements*.txt)",
+      "Edit(//**/constraints.txt)",
+      "Edit(//**/Package.swift)",
+      "Edit(//**/.pre-commit-config.yaml)",
+      "Edit(//**/uv.lock)",
+      "Edit(//**/bun.lock)",
+      "Edit(//**/bun.lockb)",
+      "Edit(//**/Cargo.lock)",
+      "Edit(//**/go.sum)",
+      "Edit(//**/package-lock.json)",
+      "Edit(//**/npm-shrinkwrap.json)",
+      "Edit(//**/pnpm-lock.yaml)",
+      "Edit(//**/yarn.lock)",
+      "Edit(//**/Package.resolved)",
+      "Edit(//**/Gemfile.lock)",
+      "Edit(//**/poetry.lock)",
+      "Edit(//**/composer.lock)",
+      "Edit(//**/Pipfile.lock)",
+      "Edit(//**/flake.lock)"
     ],
     "allow": [
       "Bash(gh * list *)",
@@ -76,5 +128,19 @@
     }
   },
   "awaySummaryEnabled": false,
-  "skipWorkflowUsageWarning": true
+  "skipWorkflowUsageWarning": true,
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Bash|Edit|Write",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "/opt/homebrew/bin/python3 \"$HOME/.claude/hooks/dependency_guard.py\"",
+            "timeout": 10
+          }
+        ]
+      }
+    ]
+  }
 }
