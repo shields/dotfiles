@@ -37,6 +37,7 @@ test:
 	zsh tests/test_gcl.zsh
 	zsh tests/test_git_add_upstream.zsh
 	zsh tests/test_ghfork.zsh
+	zsh tests/test_wt.zsh
 	uv run python tests/test_dependency_guard.py
 
 lint:
