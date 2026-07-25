@@ -162,7 +162,8 @@ if [[ -n "$five_pct" ]]; then
     if [[ -n "$five_reset" ]] && ((five_pct * five_window > secs * 100)); then
         style=$bold
     fi
-    right+="${right:+ }$style$five_pct%${style:+$nobold}"
+    # Displayed as remaining, not used, so it counts down 100% -> 0%.
+    right+="${right:+ }$style$((100 - five_pct))%${style:+$nobold}"
 fi
 if [[ -n "$week_pct" ]]; then
     style=''
@@ -172,7 +173,7 @@ if [[ -n "$week_pct" ]]; then
             style=$bold
         fi
     fi
-    right+="${right:+ · }week $style$week_pct%${style:+$nobold}"
+    right+="${right:+ · }week $style$((100 - week_pct))%${style:+$nobold}"
 fi
 
 # Fable's weekly-scoped limit isn't in the statusline JSON; fable_usage
@@ -191,7 +192,7 @@ if [[ -n "$five_reset" || -n "$week_reset" ]]; then
                 style=$bold
             fi
         fi
-        right+="${right:+ · }$fable_name $style$fable_pct%${style:+$nobold}"
+        right+="${right:+ · }$fable_name $style$((100 - fable_pct))%${style:+$nobold}"
     else
         right+="${right:+ · }Fable ??"
     fi
