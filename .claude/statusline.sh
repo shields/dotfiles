@@ -80,8 +80,8 @@ left=$(
 bold=$'\e[1m'
 nobold=$'\e[22m'
 now=$(date +%s)
-# The JSON carries only resets_at, so the elapsed-time display depends on
-# these assumed window lengths.
+# The JSON carries only resets_at, so the countdown and the run-rate
+# comparisons below depend on these assumed window lengths.
 five_window=18000  # 5 hours
 week_window=604800 # 7 days
 
@@ -154,7 +154,10 @@ fable_usage() {
 right=''
 if [[ -n "$five_reset" ]]; then
     clamp_elapsed "$five_reset" "$five_window"
-    right=$(printf '%d:%02d' $((secs / 3600)) $((secs % 3600 / 60)))
+    # Time left, not elapsed, so it counts down 5:00 -> 0:00 alongside the
+    # percentages.
+    left_secs=$((five_window - secs))
+    right=$(printf '%d:%02d' $((left_secs / 3600)) $((left_secs % 3600 / 60)))
 fi
 if [[ -n "$five_pct" ]]; then
     style=''
