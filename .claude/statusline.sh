@@ -36,9 +36,8 @@ left=$(
     # in which we simply omit the hash rather than blanking the line.
     set -eo pipefail
     (
-        if hash=$(git rev-parse --short HEAD 2>/dev/null); then
-            echo "$hash"
-        fi
+        starship module git_branch
+        starship module git_commit
         starship module git_status
         echo '' # Starship does not print a newline
     ) | tr -d '\n' | sed -e $'s/\x1b\\[[0-9;]*m//g' -e 's/^ *//' -e 's/ *$//'
