@@ -98,7 +98,7 @@ clamp_elapsed() {
 
 # Fable's weekly usage is exposed only by the undocumented OAuth usage
 # endpoint, never in the statusline JSON, so we fetch it ourselves. The
-# outcome — success or failure — is cached for 60s and the request is
+# outcome — success or failure — is cached for 600s and the request is
 # time-bounded, so a slow, hung, or failing endpoint is retried at most once
 # a minute and never stalls the 5-second render loop. A cached failure is an
 # empty object that parses to nothing, so the caller shows "Fable ??" rather
@@ -109,7 +109,7 @@ fable_usage() {
     local cache="$cache_dir/usage.json"
     local mtime
     mtime=$(stat -f %m "$cache" 2>/dev/null) || mtime=0
-    if ((now - mtime >= 60)); then
+    if ((now - mtime >= 600)); then
         local tok=''
         if [[ -f "$HOME/.claude/.credentials.json" ]]; then
             tok=$(jq -r '.claudeAiOauth.accessToken // empty' \
