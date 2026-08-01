@@ -128,7 +128,10 @@ const namedColors: Record<string, Color> = {
 // Black regardless of the actual hue.
 const namedHues: [string, number][] = Object.entries(namedColors)
   .filter(([name]) => name !== "black" && name !== "white")
-  .map(([name, color]): [string, number] => [name, color.to("oklch").coords[2] ?? 0]);
+  .map(([name, color]): [string, number] => [
+    name,
+    color.to("oklch").coords[2] ?? 0,
+  ]);
 
 function closestName(oklch: Color): string {
   const [lightness, chroma, hue] = oklch.coords;
@@ -140,7 +143,9 @@ function closestName(oklch: Color): string {
   let minDistance = Infinity;
   for (const [name, namedHue] of namedHues) {
     // Smallest absolute angle between the two hues on the [0, 360) circle.
-    const distance = Math.abs(((((hue ?? 0) - namedHue) % 360) + 540) % 360 - 180);
+    const distance = Math.abs(
+      (((((hue ?? 0) - namedHue) % 360) + 540) % 360) - 180,
+    );
     if (distance < minDistance) {
       minDistance = distance;
       best = name;
