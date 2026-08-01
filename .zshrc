@@ -204,7 +204,9 @@ c() {
     tmpdir=$(mktemp -d "${${TMPDIR:-/tmp}%/}/claude.XXXXXX") || return 1
     # Permit sandbox writes to this session's tmpdir; scoped to this run only.
     # Effort is a CLI flag, not a config key: https://github.com/anthropics/claude-code/issues/31923
-    TMPDIR="$tmpdir" claude --effort xhigh --permission-mode=auto \
+    TMPDIR="$tmpdir" CLAUDE_CODE_SUBAGENT_MODEL=sonnet claude \
+	--model=fable --effort xhigh \
+	--permission-mode=auto \
         --settings "{\"ultracode\":true,\"sandbox\":{\"filesystem\":{\"allowWrite\":[\"$tmpdir\"]}}}" "$@"
 }
 alias cw='c --worktree'
