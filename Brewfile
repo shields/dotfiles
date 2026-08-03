@@ -219,6 +219,7 @@ mas "OmniPlan", id: 1460319993
 mas "Pages", id: 409201541
 mas "StopTheMadness Pro", id: 6471380298
 mas "UTC Time", id: 1538245904
+mas "Xcode", id: 497799835
 go "mvdan.cc/gofumpt"
 go "golang.org/x/tools/cmd/goimports"
 go "github.com/securego/gosec/v2/cmd/gosec"
