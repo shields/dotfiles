@@ -132,6 +132,7 @@ brew "tinymist"
 brew "tmux"
 brew "tree"
 brew "tree-sitter@0.25", link: true
+brew "ty"
 brew "typescript-language-server"
 brew "typst"
 brew "typstyle"
