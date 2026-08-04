@@ -5,12 +5,36 @@
   },
   "includeCoAuthoredBy": false,
   "permissions": {
+    "allow": [
+      "Bash(gh * list *)",
+      "Bash(gh * view *)",
+      "Bash(git add *)",
+      "Bash(git diff *)",
+      "Bash(git stash *)",
+      "Bash(go doc *)",
+      "Bash(* --version)",
+      "Bash(* --help *)",
+      "WebSearch",
+      "Bash(make coverage)",
+      "Bash(make lint)",
+      "Bash(make test)",
+      "Bash(bun test *)",
+      "Bash(uv run pytest *)",
+      "Bash(uv run ruff check *)",
+      "Bash(uv run ty check *)"
+    ],
     "deny": [
       "Bash(git commit --no-verify *)",
       "Bash(git commit -n*)",
       "Bash(git commit *--no-verify*)",
+      "Bash(git * commit -n*)",
+      "Bash(git * --no-verify*)",
       "Bash(git -c *commit*)",
-      "Bash(git push *)",
+      "Bash(git push*)",
+      "Bash(git -C * push*)",
+      "Bash(git -c * push*)",
+      "Bash(git --git-dir* push*)",
+      "Bash(git --work-tree* push*)",
       "Bash(kubectl get secret *)",
       "Bash(kubectl get secrets *)",
       "Bash(lefthook uninstall)"
@@ -80,24 +104,20 @@
       "Edit(//**/composer.lock)",
       "Edit(//**/Pipfile.lock)",
       "Edit(//**/flake.lock)"
-    ],
-    "allow": [
-      "Bash(gh * list *)",
-      "Bash(gh * view *)",
-      "Bash(git add *)",
-      "Bash(git diff *)",
-      "Bash(git stash *)",
-      "Bash(go doc *)",
-      "Bash(* --version)",
-      "Bash(* --help *)",
-      "WebSearch",
-      "Bash(make coverage)",
-      "Bash(make lint)",
-      "Bash(make test)",
-      "Bash(bun test *)",
-      "Bash(uv run pytest *)",
-      "Bash(uv run ruff check *)",
-      "Bash(uv run ty check *)"
+    ]
+  },
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Bash|Edit|Write",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "/opt/homebrew/bin/python3 \"$HOME/.claude/hooks/dependency_guard.py\"",
+            "timeout": 10
+          }
+        ]
+      }
     ]
   },
   "statusLine": {
@@ -127,19 +147,5 @@
     }
   },
   "awaySummaryEnabled": false,
-  "skipWorkflowUsageWarning": true,
-  "hooks": {
-    "PreToolUse": [
-      {
-        "matcher": "Bash|Edit|Write",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "/opt/homebrew/bin/python3 \"$HOME/.claude/hooks/dependency_guard.py\"",
-            "timeout": 10
-          }
-        ]
-      }
-    ]
-  }
+  "skipWorkflowUsageWarning": true
 }
