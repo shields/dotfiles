@@ -149,7 +149,7 @@ brew "zizmor"
 brew "zlib"
 brew "zoxide"
 brew "zsh"
-brew "cupertinohq/tap/cupertino"
+brew "cupertinohq/tap/cupertino", trusted: true
 brew "d12frosted/emacs-plus/emacs-plus@30", trusted: true
 brew "fluxcd/tap/flux", trusted: true
 brew "gabrie30/utils/ghorg", trusted: true
