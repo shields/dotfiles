@@ -207,8 +207,11 @@ if [[ -n "$model" ]]; then
     model_seg="$model${effort:+ $effort}"
 fi
 
+# On a subscription the cost is notional until the weekly quota is used up
+# and extra usage is billed, so show it only then. A session with no
+# rate-limit data (API key) is billed from the start and always shows it.
 cost_seg=''
-if [[ -n "$cost_cents" ]] && ((cost_cents != 0)); then
+if [[ -n "$cost_cents" ]] && ((cost_cents != 0)) && ((${week_pct:-100} >= 100)); then
     cost_seg=$(printf '$%d.%02d' $((cost_cents / 100)) $((cost_cents % 100)))
 fi
 
