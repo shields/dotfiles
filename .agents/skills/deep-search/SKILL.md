@@ -1,6 +1,6 @@
 ---
 name: deep-search
-description: Conduct persistent, source-driven Internet research beyond a cursory search. Use for deep or exhaustive research, obscure or hard-to-find sources, literature and prior-art searches, quote or claim provenance, lost-page recovery, and requests invoking /deep-search. Do not use for ordinary lookups that one authoritative source answers.
+description: Conduct persistent, source-driven Internet research beyond a cursory search. Use for deep or exhaustive research, obscure or hard-to-find sources, literature and prior-art searches, quote or claim provenance, lost-page recovery, and requests invoking /deep-search or $deep-search. Do not use for ordinary lookups that one authoritative source answers.
 ---
 
 <!--
@@ -19,12 +19,12 @@ See the License for the specific language governing permissions and
 limitations under the License.
 -->
 
-# /deep-search — persistent Internet research
+# Deep search — persistent Internet research
 
-Research the question or target in `$ARGUMENTS` until the evidence converges, not merely
-until a plausible first result appears. Deliver the answer, not a browsing diary.
-If `$ARGUMENTS` is empty and the surrounding request supplies no target, ask what to
-research.
+Research the question or target supplied with the invocation or surrounding request
+(`$ARGUMENTS` in Claude Code) until the evidence converges, not merely until a plausible
+first result appears. Deliver the answer, not a browsing diary. If neither the invocation
+nor the surrounding request supplies a target, ask what to research.
 
 This workflow adapts the query-escalation and source-recovery principles in Gwern's
 [Internet Search Tips](https://gwern.net/search) to the available tools and current
