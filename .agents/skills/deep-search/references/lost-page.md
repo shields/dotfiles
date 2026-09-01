@@ -23,8 +23,8 @@ limitations under the License.
    quoted fragments. Restrict to the original domain and plausible date range, then
    remove the restriction to find mirrors, quotations, or moved copies.
 3. Check the Internet Archive for the exact URL. Inspect snapshots before redirects or
-   error pages, alternate URL variants, and the archive's `URL/*` listing for renamed or
-   neighboring paths.
+   error pages, alternate URL variants, and the archive's `URL/*` listing or CDX index
+   (`web.archive.org/cdx/search/cdx`) for renamed or neighboring paths.
 4. Search other reputable web archives, institutional mirrors, repositories, feeds, and
    syndicated copies. RSS text, citations, link posts, and quoted passages may recover
    content or identify a new canonical location.

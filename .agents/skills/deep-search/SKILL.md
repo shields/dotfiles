@@ -80,6 +80,19 @@ Assume metadata can be wrong. Test plausible typos, OCR confusions, transliterat
 name order, date drift, subtitle loss, and title/author variants rather than fixating on a
 single citation string.
 
+## Parallel angles
+
+One agent working the loop above usually finds the target within a few query batches.
+Fan out to parallel searchers only when the task's shape calls for it: a synthesis across
+several independent corpora, an unresolved provenance question, a primary copy that is
+restricted or fragile and needs alternates, or an explicit request for exhaustiveness.
+Give each searcher a different angle (corpus, modality, identifier) rather than the same
+query. Seed each from, and merge its results back into, the shared scratch list so
+parallel work doesn't duplicate or go stale, and verify candidates by opening or
+downloading them rather than trusting the finder.
+Once the target is found and verified, further breadth means verifying the copy, locating
+alternate hosts, and confirming rights—not searching harder for what is already in hand.
+
 ## Verify and synthesize
 
 - Prefer primary sources for what happened or was said; use authoritative secondary
@@ -120,11 +133,31 @@ Do not purchase material, contact people, create alerts/accounts, or
 upload/archive copies without the user's authorization. Offer lawful next steps such as
 interlibrary loan or an author request when the source remains inaccessible.
 
+If the sandbox's network filter blocks a host, treat it as a signal to slow down rather
+than a nuisance to bypass:
+
+- report the block and suggest `/sandbox` rather than disabling the sandbox to reach
+  it—research targets are unauthenticated and often untrusted, so this overrides the
+  harness's usual default of retrying a blocked command with the sandbox disabled;
+- a `CONNECT tunnel failed` with no `<sandbox_violations>` note is usually an upstream
+  failure, not a block;
+- the Wayback Machine in particular times out often (retry with a longer `curl -m`
+  timeout) and also 404s when no snapshot exists at that exact URL and timestamp—query
+  the CDX index for nearby captures instead of retrying;
+- catalogs behind bot challenges (HathiTrust, BASE) may be readable with the Playwright
+  tools; when even that fails, label evidence taken from search snippets as indirect.
+
 ## Deliver the result
 
 Lead with the answer and its confidence. Then give the evidence and citations close to
 the claims they support. Separate confirmed facts, reasoned inferences, disagreements,
 and unresolved gaps.
+
+When the user asks for a copy of a document, the deliverable is the file: download it
+into the working directory unless told where, name it `Author-Year-Short-Title.ext` (or
+the closest sensible fallback when author or date is unclear), apply the copy checks in
+[references/known-item.md](references/known-item.md) whichever playbook led to the file,
+and report the source URL, access date, SHA-256, and which checks passed.
 
 Include a compact search note only when the search was difficult, yielded a negative
 result, or the user requested reproducibility. In that note, summarize the useful query
