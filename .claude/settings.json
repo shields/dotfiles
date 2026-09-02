@@ -175,5 +175,8 @@
     }
   },
   "awaySummaryEnabled": false,
-  "skipWorkflowUsageWarning": true
+  "skipWorkflowUsageWarning": true,
+  "autoCompactEnabled": true,
+  "theme": "light",
+  "verbose": true
 }
