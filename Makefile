@@ -24,6 +24,7 @@ SHELL_SOURCES = \
 	.claude/statusline.sh \
 	provision.sh \
 	tools/create_nerd_andale_mono.sh \
+	tools/create_nerd_commit_mono.sh \
 	bin/$$ \
 	bin/docker-prune \
 	bin/ghfork \
@@ -39,6 +40,7 @@ test:
 	zsh tests/test_ghfork.zsh
 	zsh tests/test_wt.zsh
 	uv run python tests/test_dependency_guard.py
+	uv run python tests/test_nerd_commit_mono.py
 
 lint:
 	bun run eslint .

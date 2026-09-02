@@ -25,6 +25,8 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - **Tools**: `bun run tools/color-palette.ts` (Color palette generation)
 - **System Setup**: `./provision.sh` (Full macOS setup)
 - **Emacs Setup**: `emacs --batch --script .emacs.d/provision.el`
+- **Fonts**: `tools/create_nerd_commit_mono.sh` rebuilds the Nerd Font in
+  `Library/Fonts/` from `commit-mono/` (checked by `make test`)
 
 ## Deployment
 
