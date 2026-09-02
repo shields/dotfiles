@@ -132,7 +132,8 @@
       "Edit(//**/composer.lock)",
       "Edit(//**/Pipfile.lock)",
       "Edit(//**/flake.lock)"
-    ]
+    ],
+    "defaultMode": "auto"
   },
   "hooks": {
     "PreToolUse": [
@@ -157,7 +158,8 @@
   "enabledPlugins": {
     "gopls-lsp@claude-plugins-official": true,
     "typescript-lsp@claude-plugins-official": true,
-    "clangd-lsp@claude-plugins-official": true
+    "rust-analyzer-lsp@claude-plugins-official": true,
+    "swift-lsp@claude-plugins-official": true
   },
   "sandbox": {
     "enabled": true,
@@ -174,9 +176,14 @@
       ]
     }
   },
+  "modelSettings": {
+    "claude-opus-5": {
+      "effortLevel": "xhigh"
+    }
+  },
   "awaySummaryEnabled": false,
   "skipWorkflowUsageWarning": true,
-  "autoCompactEnabled": true,
   "theme": "light",
-  "verbose": true
+  "verbose": true,
+  "autoCompactEnabled": true
 }

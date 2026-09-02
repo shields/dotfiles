@@ -16,14 +16,8 @@ limitations under the License.
 
 # AGENTS.md
 
-This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
-
 ## Commands
 
-- **Build/Lint/Test/Format**: `make build`, `make lint`, `make test`, `make fmt`
-- **Type Check**: `basedpyright` and `uv run ty check` (Python type checking)
-- **Tools**: `bun run tools/color-palette.ts` (Color palette generation)
-- **System Setup**: `./provision.sh` (Full macOS setup)
 - **Emacs Setup**: `emacs --batch --script .emacs.d/provision.el`
 - **Fonts**: `tools/create_nerd_commit_mono.sh` rebuilds the Nerd Font in
   `Library/Fonts/` from `commit-mono/` (checked by `make test`)
@@ -39,24 +33,13 @@ source of truth; edits take effect only after running `./provision.sh`. Because
 
 ## Code Style
 
-- **TypeScript**: ESNext target, strict types, ESLint + Prettier, Node modules
-- **Python**: Type annotations required, Python 3.14+, Ruff formatting
 - **Emacs Lisp**: Lexical binding, use-package based, use keymap-set
 - **Shell Scripts**: set -euo pipefail, prefer absolute paths
   - In Zsh, never use lowercase `path` as a local or general-purpose variable:
     it is a special array tied to `PATH`, so shadowing it can break command
     lookup and `chpwd` hooks. Use a descriptive name such as `worktree_path`.
 
-## Package Management
-
-- Use `bun` for JavaScript/TypeScript
-- Use `uv` for Python packages (never pip). Even without pyproject.toml, use `uv venv` and `uv pip`
-- Use `brew` for system packages
-
 ## Project Conventions
 
 - Do not optimize Emacs startup time - use emacsclient
-- Tools go in `tools/` directory with descriptive names
-- Configuration files at root level
 - Prefer tree-sitter modes when available
-- Always include proper type annotations
