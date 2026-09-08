@@ -75,6 +75,11 @@ array_contains() {
     return 1
 }
 
+worktree_count() {
+    command git -C "$1" worktree list --porcelain |
+        command awk '$1 == "worktree" { ++count } END { print count + 0 }'
+}
+
 make_repo() {
     local repo="$TMPBASE/$1"
 
@@ -229,16 +234,14 @@ assert_eq "exclude contains one exact .worktrees entry" \
     "$(command awk '$0 == ".worktrees/" { ++count } END { print count + 0 }' "$exclude")"
 
 # --- No argument in a linked worktree toggles back to the main worktree ---
-worktrees_before="$(command git -C "$create_repo" worktree list --porcelain |
-    command awk '$1 == "worktree" { ++count } END { print count + 0 }')"
+worktrees_before="$(worktree_count "$create_repo")"
 run_wt
 assert_eq "no argument in a linked worktree returns 0" 0 "$LAST_RC"
 assert_eq "no argument in a linked worktree enters the main worktree" "$create_repo" "$PWD"
 assert_eq "returning to main does not select more words" 1 "$(<"$create_counter")"
 assert_eq "returning to main creates no worktree" \
     "$worktrees_before" \
-    "$(command git -C "$create_repo" worktree list --porcelain |
-        command awk '$1 == "worktree" { ++count } END { print count + 0 }')"
+    "$(worktree_count "$create_repo")"
 
 # A second creation proves that updating info/exclude is idempotent.
 second_counter="$TMPBASE/second-sort-count"
@@ -416,6 +419,165 @@ CAPTURED_COMPLETIONS=()
 CURRENT=3
 _wt
 assert_eq "completion offers nothing for a second argument" 0 "${#CAPTURED_COMPLETIONS[@]}"
+
+# --- A registered path is usable only while its gitfile points into this repo ---
+layout_repo="$(make_repo "layout main")"
+relative_path="$layout_repo/.worktrees/relative"
+foreign_path="$layout_repo/.worktrees/foreign"
+add_worktree "$layout_repo" relative-branch "$relative_path"
+add_worktree "$layout_repo" foreign-branch "$foreign_path"
+# `git worktree add --relative-paths` writes a gitfile like this; write it
+# directly so the test does not depend on the host's Git version.
+print -r -- "gitdir: ../../.git/worktrees/relative" >"$relative_path/.git"
+# An unrelated repository at a registered path is a valid checkout, and Git
+# does not mark the registration prunable, yet it is not one of our worktrees.
+command rm -rf -- "$foreign_path"
+command git init -q -b main -- "$foreign_path"
+
+cd "$layout_repo"
+run_wt relative
+assert_eq "relative gitfile worktree returns 0" 0 "$LAST_RC"
+assert_eq "relative gitfile worktree is entered" "$relative_path" "$PWD"
+
+run_wt
+assert_eq "no argument returns from a relative gitfile worktree" 0 "$LAST_RC"
+assert_eq "no argument returns to layout main" "$layout_repo" "$PWD"
+
+run_wt foreign
+assert_eq "foreign repository at a registered path returns 1" 1 "$LAST_RC"
+assert_contains "foreign repository at a registered path is reported" \
+    "does not exist" \
+    "$LAST_OUT"
+assert_eq "foreign repository leaves PWD unchanged" "$layout_repo" "$PWD"
+
+CAPTURED_COMPLETIONS=()
+CURRENT=2
+_wt
+assert_command_status "completion includes a relative gitfile worktree" \
+    0 array_contains relative "${CAPTURED_COMPLETIONS[@]}"
+assert_command_status "completion excludes a foreign repository" \
+    1 array_contains foreign "${CAPTURED_COMPLETIONS[@]}"
+
+# --- Worktrees reached through a symlink or living under a newline path ---
+odd_repo="$(make_repo "odd main")"
+plain_path="$odd_repo/.worktrees/plain"
+add_worktree "$odd_repo" plain-branch "$plain_path"
+plain_link="$TMPBASE/link to plain"
+command ln -s -- "$plain_path" "$plain_link"
+newline_path="$TMPBASE/new"$'\n'"line/wrapped"
+add_worktree "$odd_repo" newline-branch "$newline_path"
+
+cd "$plain_link"
+run_wt
+assert_eq "no argument through a symlink returns 0" 0 "$LAST_RC"
+assert_eq "no argument through a symlink enters the main worktree" "$odd_repo" "$PWD"
+
+cd "$newline_path"
+run_wt
+assert_eq "no argument under a newline path returns 0" 0 "$LAST_RC"
+assert_eq "no argument under a newline path enters the main worktree" "$odd_repo" "$PWD"
+
+run_wt wrapped
+assert_eq "named worktree under a newline path returns 0" 0 "$LAST_RC"
+assert_eq "named worktree under a newline path is entered" "$newline_path" "$PWD"
+
+# --- Without a main checkout, the toggle target is whatever Git lists first ---
+first_listed_worktree() {
+    command git -C "$1" worktree list --porcelain -z |
+        command tr '\0' '\n' |
+        command sed -n '1s/^worktree //p'
+}
+
+bare_repo="$TMPBASE/bare main.git"
+command git clone -q --bare -- "$odd_repo" "$bare_repo"
+bare_linked="$TMPBASE/bare linked"
+command git -C "$bare_repo" worktree add -q -- "$bare_linked" main
+cd "$bare_linked"
+run_wt
+assert_eq "no argument in a bare repository's worktree returns 0" 0 "$LAST_RC"
+assert_eq "no argument in a bare repository's worktree enters Git's first entry" \
+    "$(first_listed_worktree "$bare_linked")" \
+    "$PWD"
+
+separate_repo="$TMPBASE/separate main"
+separate_gitdir="$TMPBASE/separate gitdir"
+command git init -q -b main --separate-git-dir="$separate_gitdir" -- "$separate_repo"
+command git -C "$separate_repo" -c user.email=test@example.com -c user.name="Test User" \
+    -c commit.gpgsign=false commit -q --allow-empty -m initial
+separate_linked="$TMPBASE/separate linked"
+add_worktree "$separate_repo" separate-branch "$separate_linked"
+cd "$separate_linked"
+run_wt
+assert_eq "no argument in a separate-git-dir worktree returns 0" 0 "$LAST_RC"
+assert_eq "no argument in a separate-git-dir worktree enters Git's first entry" \
+    "$(first_listed_worktree "$separate_linked")" \
+    "$PWD"
+
+# --- Entering a worktree asks Git, so damaged metadata is refused ---
+damaged_repo="$(make_repo "damaged main")"
+headless_path="$damaged_repo/.worktrees/headless"
+crlf_path="$damaged_repo/.worktrees/crlf"
+oversized_path="$damaged_repo/.worktrees/oversized"
+add_worktree "$damaged_repo" headless-branch "$headless_path"
+add_worktree "$damaged_repo" crlf-branch "$crlf_path"
+add_worktree "$damaged_repo" oversized-branch "$oversized_path"
+# Git lists a registration without HEAD as present and not prunable, yet
+# refuses to operate in its checkout.
+command rm -f -- "$damaged_repo/.git/worktrees/headless/HEAD"
+# Git tolerates a CRLF-terminated gitfile.
+print -r -- "gitdir: $damaged_repo/.git/worktrees/crlf"$'\r' >"$crlf_path/.git"
+# A gitfile holds one path; a huge one must be refused without reading it all.
+print -rn -- "gitdir: " >"$oversized_path/.git"
+command head -c 9000 /dev/zero | command tr '\0' x >>"$oversized_path/.git"
+
+cd "$damaged_repo"
+run_wt headless
+assert_eq "worktree without HEAD returns 1" 1 "$LAST_RC"
+assert_contains "worktree without HEAD is reported" "does not exist" "$LAST_OUT"
+assert_eq "worktree without HEAD leaves PWD unchanged" "$damaged_repo" "$PWD"
+
+run_wt crlf
+assert_eq "CRLF gitfile worktree returns 0" 0 "$LAST_RC"
+assert_eq "CRLF gitfile worktree is entered" "$crlf_path" "$PWD"
+cd "$damaged_repo"
+
+run_wt oversized
+assert_eq "oversized gitfile returns 1" 1 "$LAST_RC"
+assert_contains "oversized gitfile is reported" "does not exist" "$LAST_OUT"
+assert_eq "oversized gitfile leaves PWD unchanged" "$damaged_repo" "$PWD"
+
+CAPTURED_COMPLETIONS=()
+CURRENT=2
+_wt
+assert_command_status "completion excludes a worktree without HEAD" \
+    1 array_contains headless "${CAPTURED_COMPLETIONS[@]}"
+assert_command_status "completion includes a CRLF gitfile worktree" \
+    0 array_contains crlf "${CAPTURED_COMPLETIONS[@]}"
+assert_command_status "completion excludes an oversized gitfile" \
+    1 array_contains oversized "${CAPTURED_COMPLETIONS[@]}"
+
+# --- An environment naming another repository does not make it the current one ---
+odd_worktrees_before="$(worktree_count "$odd_repo")"
+cd "$layout_repo"
+export GIT_DIR="$odd_repo/.git"
+export GIT_WORK_TREE="$odd_repo"
+run_wt
+assert_eq "leaked GIT_DIR returns 1" 1 "$LAST_RC"
+assert_contains "leaked GIT_DIR is reported" "not inside a Git worktree" "$LAST_OUT"
+assert_eq "leaked GIT_DIR leaves PWD unchanged" "$layout_repo" "$PWD"
+
+run_wt plain
+assert_eq "leaked GIT_DIR does not resolve the other repository's names" 1 "$LAST_RC"
+assert_eq "leaked GIT_DIR named lookup leaves PWD unchanged" "$layout_repo" "$PWD"
+
+CAPTURED_COMPLETIONS=()
+CURRENT=2
+_wt
+assert_eq "leaked GIT_DIR offers no completions" 0 "${#CAPTURED_COMPLETIONS[@]}"
+unset GIT_DIR GIT_WORK_TREE
+assert_eq "leaked GIT_DIR creates no worktree in the other repository" \
+    "$odd_worktrees_before" \
+    "$(worktree_count "$odd_repo")"
 
 print
 print -r -- "Results: $pass passed, $fail failed"

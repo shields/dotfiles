@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-.PHONY: build test lint fmt run
+.PHONY: build test lint fmt run bench
 
 # Shell scripts to lint and format with shellcheck and shfmt. zsh files
 # (.zshrc, .zprofile, .zsh.d/*.zsh, tests/*.zsh) and vendored files
@@ -57,3 +57,6 @@ fmt:
 
 run:
 	bun run tools/color-palette.ts
+
+bench:
+	zsh tools/bench_wt.zsh

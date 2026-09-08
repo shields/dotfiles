@@ -21,6 +21,9 @@ limitations under the License.
 - **Emacs Setup**: `emacs --batch --script .emacs.d/provision.el`
 - **Fonts**: `tools/create_nerd_commit_mono.sh` rebuilds the Nerd Font in
   `Library/Fonts/` from `commit-mono/` (checked by `make test`)
+- **Benchmark**: `make bench` times `wt` with hyperfine in a throwaway repo;
+  `zsh tools/bench_wt.zsh --rc` adds the interactive shell's chpwd hooks, and
+  repeated `-s` compares implementations
 
 ## Deployment
 
