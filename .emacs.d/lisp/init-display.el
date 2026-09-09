@@ -119,7 +119,7 @@
 ;; override is required because display-table glyphs attached to a face are
 ;; resolved against the face's primary font directly, bypassing the fontset
 ;; fallback that handles missing glyphs in normal text.  Without it the face
-;; inherits the default font (Andale Mono, which lacks U+2E17 DOUBLE OBLIQUE
+;; inherits the default font (Commit Mono, which lacks U+2E17 DOUBLE OBLIQUE
 ;; HYPHEN ⸗) and the wrap marker shows as a missing-glyph box -- even though
 ;; ⸗ renders fine inline because the fallback covers it.
 (defface shields/line-marker '((t :family "Courier New" :background "#e8f4ff"))
@@ -169,13 +169,22 @@ Uses advice rather than key remapping because many functions
 
 (advice-add 'quit-window :around #'shields/quit-window-or-frame)
 
-;; Core Emacs custom faces
+;; Core Emacs custom faces.  The default face names its font with :font, not
+;; :family: set-face-attribute applies :family before the other attributes and
+;; the default face reloads the frame font right then, so the family is looked
+;; up at the face's previous weight (normal), which the weight-350
+;; CommitMonoShields build does not have, and Emacs silently falls back to
+;; Helvetica.  A :font without a size leaves the size to :height.  fixed-pitch
+;; keeps :family: other faces are realized lazily with weight, slant and width
+;; dropped from the lookup (bug#5934), so the family alone finds the nearest
+;; weight, whereas :font would pin semi-light and upright on every face that
+;; inherits fixed-pitch and strip their bold and italic.
 (custom-set-faces
- '(default ((t (:inherit nil :extend nil :stipple nil :background "White" :foreground "Black" :inverse-video nil :box nil :strike-through nil :overline nil :underline nil :slant normal :weight normal :height 120 :width normal :foundry "nil" :family "AndaleMono Nerd Font"))))
+ '(default ((t (:inherit nil :extend nil :stipple nil :background "White" :foreground "Black" :inverse-video nil :box nil :strike-through nil :overline nil :underline nil :slant normal :weight semi-light :height 120 :width normal :font "CommitMonoShields Nerd Font"))))
  '(Info-quoted ((t (:inherit fixed-pitch))))
  '(completions-annotations ((t (:inherit shadow))))
  '(cursor ((t (:background "firebrick"))))
- '(fixed-pitch ((t (:family "AndaleMono Nerd Font"))))
+ '(fixed-pitch ((t (:family "CommitMonoShields Nerd Font"))))
  '(font-lock-builtin-face ((t (:inherit font-lock-function-call-face))))
  '(font-lock-comment-face ((t (:foreground "#197019"))))
  '(font-lock-constant-face ((t nil)))

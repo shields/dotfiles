@@ -14,12 +14,10 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-# Font
-font-family = AndaleMono Nerd Font
+# Font.  No adjust-cell-width: Ghostty 1.3 gives this font the same 7 x 14 pt
+# cell at 12pt that iTerm2 does (see commit-mono/README.md).
+font-family = CommitMonoShields Nerd Font
 font-size = 12
-
-# Adjust cell width to match iTerm2 (measured: 998px vs 951px for 132 cols)
-adjust-cell-width = -5%
 
 # Window size (columns x rows)
 window-width = 132
