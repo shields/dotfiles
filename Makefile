@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-.PHONY: build test lint fmt run bench
+.PHONY: build test lint fmt run bench bench-startup
 
 # Shell scripts to lint and format with shellcheck and shfmt. zsh files
 # (.zshrc, .zprofile, .zsh.d/*.zsh, tests/*.zsh) and vendored files
@@ -60,3 +60,6 @@ run:
 
 bench:
 	zsh tools/bench_wt.zsh
+
+bench-startup:
+	zsh tools/bench_startup.zsh -p

@@ -24,6 +24,9 @@ limitations under the License.
 - **Benchmark**: `make bench` times `wt` with hyperfine in a throwaway repo;
   `zsh tools/bench_wt.zsh --rc` adds the interactive shell's chpwd hooks, and
   repeated `-s` compares implementations
+- **Shell startup**: `make bench-startup` times a login shell to its first
+  prompt and profiles where the time goes; `zsh tools/bench_startup.zsh`'s
+  repeated `-s` compares `.zshrc` candidates before provisioning them
 
 ## Deployment
 
