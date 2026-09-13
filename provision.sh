@@ -19,6 +19,12 @@ set -euo pipefail
 # Copy these files.
 git ls-files -- '.*' | tar cf - -T - bin Library | (cd "$HOME" && tar xvf -)
 
+# Set email address in .gitconfig. Do this early so we don't leave it missing.
+if [[ "$(whoami)" == shields ]] && ! (profiles status -type enrollment | grep -q ': Yes'); then
+    git config --global user.email shields@msrl.com
+    git config --global github.user shields # For Magit Forge
+fi
+
 # Install Homebrew and Xcode (which will take tens of minutes).
 # Use path selection logic from https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh
 # We will install full Xcode later from the Mac App Store.
@@ -65,12 +71,6 @@ if [[ ! -d "$HOME/.oh-my-zsh/custom/plugins/git-prompt-watcher" ]]; then
     git clone --depth=1 https://github.com/shields/git-prompt-watcher "$HOME/.oh-my-zsh/custom/plugins/git-prompt-watcher"
 else
     (cd "$HOME/.oh-my-zsh/custom/plugins/git-prompt-watcher" && git pull)
-fi
-
-# Set email address in .gitconfig.
-if [[ "$(whoami)" == shields ]] && ! (profiles status -type enrollment | grep -q ': Yes'); then
-    git config --global user.email shields@msrl.com
-    git config --global github.user shields # For Magit Forge
 fi
 
 brew update
