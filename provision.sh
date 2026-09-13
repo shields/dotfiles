@@ -59,6 +59,13 @@ if [[ ! -d "$HOME/.oh-my-zsh" ]]; then
 fi
 "$HOME/.oh-my-zsh/tools/upgrade.sh" -v minimal
 
+# Install or update the deferred startup scheduler.
+if [[ ! -d "$HOME/.local/share/zsh-defer" ]]; then
+    git clone --depth=1 https://github.com/romkatv/zsh-defer "$HOME/.local/share/zsh-defer"
+else
+    git -C "$HOME/.local/share/zsh-defer" pull --ff-only
+fi
+
 # Install or update fzf-tab plugin
 if [[ ! -d "$HOME/.oh-my-zsh/custom/plugins/fzf-tab" ]]; then
     git clone --depth=1 https://github.com/Aloxaf/fzf-tab "$HOME/.oh-my-zsh/custom/plugins/fzf-tab"

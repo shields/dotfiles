@@ -16,6 +16,18 @@
 
 # The shebang line is for the benefit of shfmt.
 
+# Re-sourcing must not duplicate pending tasks. Ctrl-C can leave the queue
+# without a handler, since zsh-defer removes it before running each batch.
+# In that case resume the queue, retrying the interrupted task first.
+if (( ${_startup_pending:-0} && $+functions[_zsh-defer-schedule] &&
+    ${#_zsh_defer_tasks} )); then
+    if [[ -z ${zsh_defer_options+x} &&
+        "$(zle -F -L)" != *' _zsh-defer-resume'* ]]; then
+        _zsh-defer-schedule 0
+    fi
+    return
+fi
+
 # https://donottrack.sh
 export DO_NOT_TRACK=1
 
@@ -24,12 +36,9 @@ export DO_NOT_TRACK=1
 # which is the one PATH lookup already uses, so resolution is unchanged.
 typeset -U path PATH
 
-# brew, starship, fzf and zoxide each print a shell script on every startup
-# that only changes when the tool is upgraded, and oh-my-zsh forks git and
-# scutil for values that change even less often; together that was a third
-# of the time to the first prompt. Print COMMAND's output from the cache file
-# NAME instead, rebuilding it when it is missing or older than any WATCH
-# file. If the cache cannot be rebuilt, say so and run COMMAND.
+# Cache generated initialization scripts until the tool or its configuration
+# changes. Print COMMAND's output from NAME, rebuilding it when missing or
+# older than any WATCH file. If rebuilding fails, say so and run COMMAND.
 #
 # A watch is compared without following symlinks: Homebrew remakes the link
 # in /opt/homebrew/bin on every install, whereas the binary behind it keeps
@@ -229,6 +238,9 @@ zstyle ':completion:*:descriptions' format '[%d]'
 # because the z key is poorly placed for this.
 export ZOXIDE_CMD_OVERRIDE=j
 
+# Starship owns the prompt; AWS otherwise adds a right prompt when loaded late.
+SHOW_AWS_PROMPT=false
+
 plugins=(
     aws
     colorize
@@ -254,27 +266,9 @@ if [[ "$TERM_PROGRAM" == "iTerm.app" ]]; then
     export iterm2_hostname="$HOST"
 fi
 
-# oh-my-zsh.sh names the completion dump after `scutil --get LocalHostName`
-# and stamps it with `git rev-parse HEAD` run in $ZSH, with no way to preset
-# either, and the git, starship, fzf and zoxide plugins fork their tools for
-# output that depends only on the installed binary. Shadow those commands for
-# exactly those calls while oh-my-zsh loads.
-
-# LocalHostName is a system preference stored in this plist.
-scutil() {
-    if (( $# == 2 )) && [[ "$1" == --get && "$2" == LocalHostName ]]; then
-        _startup_cached local-hostname \
-            /Library/Preferences/SystemConfiguration/preferences.plist -- \
-            command scutil --get LocalHostName
-    else
-        command scutil "$@"
-    fi
-}
-
+# The Git plugin only needs the installed version during initialization.
 git() {
-    if (( $# == 2 )) && [[ "$1" == rev-parse && "$2" == HEAD && "$PWD" == "$ZSH" ]]; then
-        _startup_cached omz-head "$ZSH/.git/logs/HEAD" -- command git rev-parse HEAD
-    elif (( $# == 1 )) && [[ "$1" == version ]]; then
+    if (( $# == 1 )) && [[ "$1" == version ]]; then
         _startup_cached git-version "$commands[git]" -- command git version
     else
         command git "$@"
@@ -320,89 +314,224 @@ zoxide() {
     fi
 }
 
-source "$ZSH/oh-my-zsh.sh"
+# Load OMZ libraries explicitly: options, history and basic editing must be
+# established in the main shell before zsh-defer's local execution scope.
+# Completion initialization and individual plugins are queued below.
+: ${ZSH_CUSTOM:="$ZSH/custom"}
+: ${ZSH_CACHE_DIR:="${XDG_CACHE_HOME:-$HOME/.cache}/oh-my-zsh"}
+: ${ZSH_COMPDUMP:="${ZDOTDIR:-$HOME}/.zcompdump-${HOST%%.*}-$ZSH_VERSION"}
+[[ -d "$ZSH_CACHE_DIR/completions" ]] || command mkdir -p "$ZSH_CACHE_DIR/completions"
+typeset -U fpath
+fpath=("$ZSH/functions" "$ZSH/completions" "$ZSH_CUSTOM/functions"
+    "$ZSH_CUSTOM/completions" "$ZSH_CACHE_DIR/completions" $fpath)
+for _startup_name in $plugins; do
+    if [[ -d "$ZSH_CUSTOM/plugins/$_startup_name" ]]; then
+        fpath=("$ZSH_CUSTOM/plugins/$_startup_name" $fpath)
+    elif [[ -d "$ZSH/plugins/$_startup_name" ]]; then
+        fpath=("$ZSH/plugins/$_startup_name" $fpath)
+    fi
+done
 
-# git, fzf and zoxide are used live from here on.
-unfunction scutil git starship _startup_starship_init fzf zoxide _startup_cached
+# Preserve completion registrations made by libraries and our own commands
+# before compinit exists. Quoting each argument preserves spaces and options.
+typeset -ga _startup_compdefs=()
+compdef() { _startup_compdefs+=("${(j: :)${(q)@}}") }
 
-# starship sets RPROMPT to run `starship prompt --right` before every prompt;
-# without a right_format in starship.toml that only ever prints nothing.
-_starship_config="${STARSHIP_CONFIG:-$HOME/.config/starship.toml}"
-if [[ ! -r "$_starship_config" || "$(<"$_starship_config")" != *right_format* ]]; then
-    unset RPROMPT
-fi
-unset _starship_config
-
-for f in "$HOME/.zsh.d/"*.zsh(N); do source "$f"; done
-
-# Keep aliases below after OMZ initialization, since some of them override
-# what's defined by OMZ plugins.
-
-# Start Claude with a per-session tmpdir and sandbox write permit for it.
-c() {
-    local tmpdir
-    tmpdir=$(mktemp -d "${${TMPDIR:-/tmp}%/}/claude.XXXXXX") || return 1
-    # Permit sandbox writes to this session's tmpdir; scoped to this run only.
-    # --effort stays on the command line: settings.json's modelSettings only
-    # sets effortLevel for claude-opus-5, which --model=fable does not match.
-    TMPDIR="$tmpdir" CLAUDE_CODE_SUBAGENT_MODEL=sonnet claude \
-	--model=fable --effort xhigh \
-	--permission-mode=auto \
-        --settings "{\"ultracode\":true,\"sandbox\":{\"filesystem\":{\"allowWrite\":[\"$tmpdir\"]}}}" "$@"
-}
-alias cw='c --worktree'
-
-alias drit='docker run -it --rm'
-
-alias gc='gcloud'
-
-alias gdi='git diff refs/remotes/origin/HEAD'
-alias glf='git ls-files'
-
-alias kc='kubectl'
-alias kcy='kubectl -o yaml'
-
-if whence freshl >/dev/null; then
-    alias l='freshl'
-else
-    alias l='ls -lA'
-fi
-alias lr='l -R'
-
-unalias md 2>/dev/null || true # from oh-my-zsh lib/directories.zsh
-md() {
-    if [ $# -ne 1 ] || [ -z "$1" ]; then
-        echo "Usage: md <directory>" >&2
+_startup_source() {
+    local startup_file="$1"
+    if [[ -f "$ZSH_CUSTOM/$startup_file" ]]; then
+        source "$ZSH_CUSTOM/$startup_file"
+    elif [[ -f "$ZSH/$startup_file" ]]; then
+        source "$ZSH/$startup_file"
+    else
+        print -u2 -r -- "zshrc: missing $startup_file"
         return 1
     fi
-    mkdir -p -- "$1" && cd -- "$1"
 }
+for _startup_file in "$ZSH"/lib/*.zsh; do
+    _startup_source "lib/${_startup_file:t}"
+done
+unset _startup_file _startup_name
+[[ -z "$LS_COLORS" ]] || zstyle ':completion:*' list-colors "${(s.:.)LS_COLORS}"
 
-# https://docs.brew.sh/Homebrew-and-Python
-p() {
-    if [ -n "$VIRTUAL_ENV" ]; then
-        "$VIRTUAL_ENV/bin/python" "$@"
-    else
-        "$(brew --prefix python)/libexec/bin/python" "$@"
-    fi
-}
+# Environment changes must precede the first command. The cached Starship
+# initialization is small; keeping it and iTerm together avoids swapping out
+# a prompt while a command is being entered.
+for _startup_name in direnv gcloud starship; do
+    _startup_source "plugins/$_startup_name/$_startup_name.plugin.zsh"
+done
+unset _startup_name
 
-r() {
-    rg --pretty --line-buffered "$@" | less -R -E --redraw-on-quit
-}
-
-if [ -x /usr/bin/pbcopy ]; then
-    alias pc=pbcopy
-    alias pv=pbpaste
+# Starship's right prompt is empty with this configuration.
+_startup_starship_config="${STARSHIP_CONFIG:-$HOME/.config/starship.toml}"
+if [[ ! -r "$_startup_starship_config" || "$(<"$_startup_starship_config")" != *right_format* ]]; then
+    unset RPROMPT
+fi
+unset _startup_starship_config
+if [[ "$TERM_PROGRAM" == "iTerm.app" ]]; then
+    _startup_source plugins/iterm2/iterm2.plugin.zsh
+    source "$HOME/.iTerm2/shell_integration.zsh"
 fi
 
-alias s='$PAGER'
+for _startup_file in "$HOME/.zsh.d/"*.zsh(N); do source "$_startup_file"; done
+unset _startup_file
 
-whence tf >/dev/null || alias tf='tofu'
-alias tfa='tf apply -parallelism=100'
-alias tfi='tf init'
-alias tfia='tfi && tfa'
-alias tfp='tf plan -parallelism=100 -refresh=false'
-alias tfpr='tf plan -parallelism=100 -refresh=true'
+# Apply our overrides before the first prompt and again before each deferred
+# plugin yields, so loading Git never changes gc or shadows our gcl function.
+_startup_overrides() {
+    unalias gcl md 2>/dev/null || true
+    # Start Claude with a per-session tmpdir and sandbox write permit for it.
+    c() {
+        local tmpdir
+        tmpdir=$(mktemp -d "${${TMPDIR:-/tmp}%/}/claude.XXXXXX") || return 1
+        # Permit sandbox writes to this session's tmpdir; scoped to this run only.
+        # --effort stays on the command line: settings.json's modelSettings only
+        # sets effortLevel for claude-opus-5, which --model=fable does not match.
+        TMPDIR="$tmpdir" CLAUDE_CODE_SUBAGENT_MODEL=sonnet claude \
+            --model=fable --effort xhigh \
+            --permission-mode=auto \
+            --settings "{\"ultracode\":true,\"sandbox\":{\"filesystem\":{\"allowWrite\":[\"$tmpdir\"]}}}" "$@"
+    }
+    alias cw='c --worktree'
 
-[[ "$TERM_PROGRAM" == "iTerm.app" ]] && source "$HOME/.iTerm2/shell_integration.zsh"
+    alias drit='docker run -it --rm'
+
+    alias gc='gcloud'
+
+    alias gdi='git diff refs/remotes/origin/HEAD'
+    alias glf='git ls-files'
+
+    alias kc='kubectl'
+    alias kcy='kubectl -o yaml'
+
+    if whence freshl >/dev/null; then
+        alias l='freshl'
+    else
+        alias l='ls -lA'
+    fi
+    alias lr='l -R'
+
+    function md {
+        if [ $# -ne 1 ] || [ -z "$1" ]; then
+            echo "Usage: md <directory>" >&2
+            return 1
+        fi
+        mkdir -p -- "$1" && cd -- "$1"
+    }
+
+    # https://docs.brew.sh/Homebrew-and-Python
+    p() {
+        if [ -n "$VIRTUAL_ENV" ]; then
+            "$VIRTUAL_ENV/bin/python" "$@"
+        else
+            "$(brew --prefix python)/libexec/bin/python" "$@"
+        fi
+    }
+
+    r() {
+        rg --pretty --line-buffered "$@" | less -R -E --redraw-on-quit
+    }
+
+    if [ -x /usr/bin/pbcopy ]; then
+        alias pc=pbcopy
+        alias pv=pbpaste
+    fi
+
+    alias s='$PAGER'
+
+    whence tf >/dev/null || alias tf='tofu'
+    alias tfa='tf apply -parallelism=100'
+    alias tfi='tf init'
+    alias tfia='tfi && tfa'
+    alias tfp='tf plan -parallelism=100 -refresh=false'
+    alias tfpr='tf plan -parallelism=100 -refresh=true'
+}
+_startup_overrides
+
+_startup_completion() {
+    # Either an OMZ update or a changed fpath can replace completion names or
+    # registrations without changing their count. Check both, while keeping
+    # compinit's ownership checks and checks for added/removed files. The Git
+    # lookup happens after the first prompt along with the rest of this task.
+    local revision="$(command git -C "$ZSH" rev-parse HEAD 2>/dev/null)"
+    local metadata="# dotfiles revision: $revision fpath: $fpath"
+    local -a dump_lines
+    [[ ! -r "$ZSH_COMPDUMP" ]] || dump_lines=("${(@f)$(<"$ZSH_COMPDUMP")}")
+    if [[ "${dump_lines[-1]-}" != "$metadata" ]]; then
+        command rm -f -- "$ZSH_COMPDUMP" "$ZSH_COMPDUMP.zwc"
+    fi
+    autoload -Uz compinit
+    # Despite its name, compinit sets _comp_secure=yes when compaudit fails
+    # and -i excludes insecure entries. Reset it before each initialization.
+    unset _comp_secure
+    compinit -i -d "$ZSH_COMPDUMP" || return
+    if [[ "$_comp_secure" == yes ]]; then
+        handle_completion_insecurities
+    fi
+    dump_lines=("${(@f)$(<"$ZSH_COMPDUMP")}")
+    [[ "${dump_lines[-1]-}" == "$metadata" ]] || print -r -- "$metadata" >>"$ZSH_COMPDUMP"
+    local definition
+    for definition in "${_startup_compdefs[@]}"; do
+        eval "compdef $definition"
+    done
+    unset _startup_compdefs
+}
+
+_startup_plugin() {
+    # zsh-defer uses LOCAL_TRAPS; the watcher's signal handlers must survive
+    # this call. Options themselves are established synchronously above.
+    unsetopt localtraps
+    if [[ "$1" == git-prompt-watcher ]] && (( $+functions[_stop_git_watcher] )); then
+        _stop_git_watcher
+        chpwd_functions=("${(@)chpwd_functions:#_check_git_repo_change}")
+        zshexit_functions=("${(@)zshexit_functions:#_git_prompt_watcher_exit}")
+    fi
+    _startup_source "plugins/$1/$1.plugin.zsh"
+    local result=$?
+    _startup_overrides
+    # The initial zle-line-init already happened before this task was run.
+    if [[ "$1" == git-auto-fetch && -n ${zsh_defer_options+x} ]] &&
+        (( $+functions[git-fetch-all] )); then
+        git-fetch-all
+    fi
+    return $result
+}
+
+_startup_finish() {
+    local startup_file
+    for startup_file in "$ZSH_CUSTOM"/*.zsh(N); do source "$startup_file"; done
+    _startup_overrides
+    unfunction git starship _startup_starship_init fzf zoxide _startup_cached
+    unfunction _startup_source _startup_completion _startup_plugin _startup_overrides _startup_enqueue _startup_finish
+    _startup_pending=0
+}
+
+# The installer owns downloads; opening a terminal never requires the network.
+# A missing dependency or a `zsh -ic command` still gets a fully initialized
+# shell, using the same tasks synchronously.
+if [[ -o interactive && -o zle && -t 0 && -z ${ZSH_EXECUTION_STRING:-} &&
+    -r "${ZSH_DEFER_DIR:-$HOME/.local/share/zsh-defer}/zsh-defer.plugin.zsh" ]]; then
+    source "${ZSH_DEFER_DIR:-$HOME/.local/share/zsh-defer}/zsh-defer.plugin.zsh"
+    # Upstream registers a plain function, where PENDING/KEYS_QUEUED_COUNT
+    # are unavailable. Register its existing widget so typing takes priority
+    # between tasks. This substitution becomes a no-op if upstream fixes it.
+    functions[_zsh-defer-schedule]=${functions[_zsh-defer-schedule]/'zle -F $fd _zsh-defer-resume'/'zle -F -w $fd _zsh-defer-resume'}
+    # Redisplay without rerunning precmd (direnv and Starship) after every
+    # plugin. Keep output and errors visible.
+    _startup_enqueue() { zsh-defer -a +r "$@" }
+else
+    _startup_enqueue() { "$@" }
+fi
+_startup_pending=1
+# Completion comes first; keep plugin order (especially fzf before fzf-tab).
+# Tasks run cooperatively in this shell: typing can interrupt the queue
+# between tasks, but cannot preempt a task that has already started.
+_startup_enqueue _startup_completion
+for _startup_name in $plugins; do
+    case "$_startup_name" in
+        direnv|gcloud|starship|iterm2) continue ;;
+    esac
+    _startup_enqueue _startup_plugin "$_startup_name"
+done
+unset _startup_name
+_startup_enqueue _startup_finish

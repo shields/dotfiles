@@ -32,7 +32,7 @@
 # being written to. The environment is inherited: run this from the terminal
 # whose startup you care about, because plugins key off TERM_PROGRAM.
 #
-# usage: zsh tools/bench_startup.zsh [-C DIR] [-p] [-s ZSHRC]...
+# usage: zsh tools/bench_startup.zsh [-C DIR] [-p] [--ready] [-s ZSHRC]...
 #            [-- HYPERFINE-OPTION...]
 #
 # -C DIR  Start the shell in DIR instead of an empty directory. A git checkout
@@ -44,6 +44,11 @@
 #         completion-laden .zshrc can pay several times its own wall time), so
 #         take totals from the benchmark and attribution from the profile.
 # -s      Repeat to compare .zshrc candidates side by side.
+# --ready Wait for zsh-defer's queue before exiting, to measure initialization
+#         of all features as well as the first prompt. Without this flag,
+#         deferred tasks may never run because exit is already typed ahead.
+#         The traced profile misses code run inside widgets; zprof still
+#         measures those functions.
 #
 # Anything after -- goes to hyperfine.
 
@@ -56,15 +61,16 @@ typeset script_name="${0:t}"
 typeset repo="${${0:A:h}:h}"
 
 usage() {
-    print -u2 -r -- "usage: $script_name [-C dir] [-p] [-s zshrc]..." \
+    print -u2 -r -- "usage: $script_name [-C dir] [-p] [--ready] [-s zshrc]..." \
         "[-- hyperfine options]"
     exit 2
 }
 
-typeset -a opt_dir opt_profile opt_scripts opt_help
+typeset -a opt_dir opt_profile opt_scripts opt_help opt_ready
 zparseopts -D -F -- C:=opt_dir p=opt_profile -profile=opt_profile \
-    s+:=opt_scripts h=opt_help -help=opt_help || usage
+    s+:=opt_scripts h=opt_help -help=opt_help -ready=opt_ready || usage
 (( ${#opt_help[@]} == 0 )) || usage
+export BENCH_STARTUP_READY=${#opt_ready[@]}
 typeset -a hyperfine_options=("$@")
 # zparseopts only consumes the first --, so a second one here would collide
 # with the -- this script itself puts before hyperfine_commands below.
@@ -123,7 +129,11 @@ cd -- "$1"
 export ZDOTDIR="$2"
 shift 2
 zpty shell "$@"
-zpty -w shell exit
+if (( ${BENCH_STARTUP_READY:-0} )); then
+    zpty -w shell 'if (( $+functions[zsh-defer] )); then zsh-defer -a exit; else exit; fi'
+else
+    zpty -w shell exit
+fi
 while zpty -r shell >/dev/null; do :; done
 zpty -d shell
 DRIVER
@@ -220,6 +230,7 @@ done
 
 print
 print -r -- "== startup: login shell on a pseudo-terminal, until the first prompt is drawn and exit has run"
+(( ! ${#opt_ready[@]} )) || print -r -- "   waiting for all deferred initialization before exit"
 # hyperfine errors on a repeated flag rather than letting the last one win, so
 # skip each of our own defaults the caller already passed through --.
 typeset -a hyperfine_defaults
