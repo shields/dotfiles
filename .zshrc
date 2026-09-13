@@ -394,6 +394,8 @@ _startup_overrides() {
     }
     alias cw='c --worktree'
 
+    alias count='sort | uniq -c | sort -n'
+
     alias drit='docker run -it --rm'
 
     alias gc='gcloud'
