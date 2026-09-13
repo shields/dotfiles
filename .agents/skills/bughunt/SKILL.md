@@ -130,7 +130,7 @@ const SLICE = {
     crossCutting: {
       type: "array",
       description:
-        "bugs whose fix reaches OUTSIDE this slice — described, not fixed",
+        "bugs whose fix reaches outside this slice — described, not fixed",
       items: {
         type: "object",
         required: ["severity", "summary"],
@@ -148,7 +148,7 @@ const SLICE = {
     designChanges: {
       type: "array",
       items: { type: "string" },
-      description: "changes needing a human decision — described, NOT applied",
+      description: "changes needing a human decision — described, not applied",
     },
     unclear: { type: "array", items: { type: "string" } },
   },
@@ -156,21 +156,22 @@ const SLICE = {
 
 function huntPrompt(s, direction, prefix) {
   return [
-    `You are hunting bugs in ONE slice of a codebase, working inside your own git worktree. Slice "${s.id}".`,
-    `Owned paths — stay within these, do NOT edit files outside them: ${JSON.stringify(s.paths)}.`,
+    `You are hunting bugs in one slice of a codebase, working inside your own git worktree. Slice "${s.id}".`,
+    `Owned paths: ${JSON.stringify(s.paths)}. Edit only files within them — other agents own the rest.`,
+    `Every slice's commits are cherry-picked onto one branch afterwards, so an edit outside your paths would collide with theirs.`,
     `Focus: ${s.focus}.` + (direction ? ` User direction: ${direction}.` : ""),
     ``,
-    `PRIORITIES, in order: (1) security, (2) correctness, (3) everything else — including wrong/stale docs & comments, dead code, and simplifications. Prefer the simpler equivalent; deleting code is a valid fix.`,
+    `**Priorities, in order:** (1) security, (2) correctness, (3) everything else — including wrong/stale docs & comments, dead code, and simplifications. Prefer the simpler equivalent; deleting code is a valid fix.`,
     ``,
-    `STEPS:`,
-    `1. Read your slice's files and find REAL bugs. Be skeptical: skip nitpicks and false positives, only fix what you can justify.`,
-    `2. Create your branch: run "git switch -c ${prefix}/${s.id}"; if that name already exists (git exits 128), use a unique variant like "${prefix}/${s.id}-$RANDOM". Fix the clear bugs and safe simplifications IN PLACE, within your owned paths only.`,
+    `**Steps:**`,
+    `1. Read your slice's files and find real bugs. Be skeptical: skip nitpicks and false positives, only fix what you can justify.`,
+    `2. Create your branch: run "git switch -c ${prefix}/${s.id}"; if that name already exists (git exits 128), use a unique variant like "${prefix}/${s.id}-$RANDOM". Fix the clear bugs and safe simplifications in place, within your owned paths only.`,
     `3. Review your own diff before committing: invoke "/code-review max --fix" to apply its findings. If you cannot invoke that skill from here, instead re-read your full diff critically for security, correctness, and over-complication, and fix what you find.`,
-    `4. Commit with the lgtmcp tool "mcp__lgtmcp__review_and_commit" (load its schema via ToolSearch first if needed): directory = your worktree root (run "git rev-parse --show-toplevel"), with a clear commit_message. If it is NOT approved, address the feedback — or, if you genuinely disagree, add a brief code comment explaining why the code is correct — then resubmit. Never bypass the review. Several focused commits are fine.`,
+    `4. Commit with the lgtmcp tool "mcp__lgtmcp__review_and_commit" (load its schema via ToolSearch first if needed): directory = your worktree root (run "git rev-parse --show-toplevel"), with a clear commit_message. If it is not approved, address the feedback — or, if you genuinely disagree, add a brief code comment explaining why the code is correct — then resubmit. Never bypass the review. Several focused commits are fine.`,
     `5. After committing, set branch to the actual branch name you used and headSha to "git rev-parse HEAD".`,
     ``,
-    `SURFACE — do NOT fix these yourself:`,
-    `- A bug whose fix reaches OUTSIDE your owned paths -> crossCutting (area + suggestedFix). The parent will coordinate it.`,
+    `**Surface these instead of fixing them yourself:**`,
+    `- A bug whose fix reaches outside your owned paths -> crossCutting (area + suggestedFix). The parent will coordinate it.`,
     `- Anything needing a design / API / behavior decision -> designChanges (described, not applied).`,
     `- Anything genuinely unclear -> unclear.`,
     ``,
@@ -198,7 +199,7 @@ const plan = await agent(
     (direction
       ? ` Direction from the user: "${direction}". If it names paths/globs, restrict the sweep to them; if it names a theme, still cover the repo but record the theme in every slice's focus.`
       : ` Sweep the entire repo.`) +
-    ` Group by coherent module/subsystem, balance slices by rough size, and keep the path sets DISJOINT at the FILE level so two worktree agents never edit the same file. Assign shared aggregator files that several areas might touch — package manifests (go.mod, package.json, pyproject.toml), lockfiles, barrel/index files, __init__.py, generated registries — to exactly ONE slice, or leave them out of every slice and note them for the parent. Aim for 3-10 slices (fewer for a small repo; scale up with budget). Skip vendored and generated files and anything in .gitignore. Return the plan.`,
+    ` Group by coherent module/subsystem, balance slices by rough size, and keep the path sets disjoint at the file level so two worktree agents never edit the same file. Assign shared aggregator files that several areas might touch — package manifests (go.mod, package.json, pyproject.toml), lockfiles, barrel/index files, __init__.py, generated registries — to exactly one slice, or leave them out of every slice and note them for the parent. Aim for 3-10 slices (fewer for a small repo; scale up with budget). Skip vendored and generated files and anything in .gitignore. Return the plan.`,
   { label: "scout", phase: "Scout", schema: PLAN },
 );
 

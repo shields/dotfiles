@@ -24,7 +24,7 @@
   :hook
   (gptel-post-stream . gptel-auto-scroll)
   :custom
-  (gptel-model 'claude-sonnet-4-6)
+  (gptel-model 'claude-sonnet-5)
   (gptel-backend (gptel-make-anthropic "Claude"
                    :stream t
                    :key (auth-source-pick-first-password :host "api.anthropic.com"))))

@@ -23,7 +23,7 @@ changed since the knowledge cutoff. Current versions (update as needed):
 
 - Debian: 13 (trixie)
 - Python: 3.14
-- Go: 1.26
+- Go: 1.27
 
 Do not add, remove, or modify license, copyright, or authorship information in
 any way unless explicitly told to. Exception: when a file is copyright Michael
@@ -39,9 +39,11 @@ they add real value.
 
 ## Memory
 
-Prefer recording durable facts, preferences, and project guidance in the
-relevant `AGENTS.md` file rather than in the memory system. These
-files are version-controlled, reviewable, and travel with the code.
+The memory system is only for facts specific to this machine: its sandbox,
+tooling, credentials, and local quirks. Durable project guidance, preferences,
+and lessons go in the relevant `AGENTS.md`; the results of a literature search
+go in the project's `docs/`. Those files are version-controlled, reviewable,
+and travel with the code.
 
 ## Python
 
