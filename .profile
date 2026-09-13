@@ -17,9 +17,7 @@ umask 022
 
 # Terminal and locale setup.
 if [ -t 0 ]; then
-    stty erase '^?'
-    stty cs8
-    stty -ixon
+    stty erase '^?' cs8 -ixon
 fi
 
 if [ -z "$LANG" ]; then

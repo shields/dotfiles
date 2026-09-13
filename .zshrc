@@ -24,8 +24,66 @@ export DO_NOT_TRACK=1
 # which is the one PATH lookup already uses, so resolution is unchanged.
 typeset -U path PATH
 
-[[ -d /opt/homebrew ]] && eval "$(/opt/homebrew/bin/brew shellenv)"
-[[ -x /usr/local/bin/brew ]] && eval "$(/usr/local/bin/brew shellenv)"
+# brew, starship, fzf and zoxide each print a shell script on every startup
+# that only changes when the tool is upgraded, and oh-my-zsh forks git and
+# scutil for values that change even less often; together that was a third
+# of the time to the first prompt. Print COMMAND's output from the cache file
+# NAME instead, rebuilding it when it is missing or older than any WATCH
+# file. If the cache cannot be rebuilt, say so and run COMMAND.
+#
+# A watch is compared without following symlinks: Homebrew remakes the link
+# in /opt/homebrew/bin on every install, whereas the binary behind it keeps
+# the bottle's build time, which can predate the cache. A watch that does not
+# exist is ignored, so a config file created later still counts once it does.
+#
+# usage: _startup_cached NAME WATCH... -- COMMAND...
+zmodload -F zsh/stat b:zstat
+_startup_cached() {
+    local cache="${XDG_CACHE_HOME:-$HOME/.cache}/zsh/$1" watch
+    local -a watches
+    local -A cache_stat watch_stat
+    shift
+    while [[ "$1" != -- ]]; do
+        watches+=("$1")
+        shift
+    done
+    shift
+    local fresh=0
+    if zstat -H cache_stat -- "$cache" 2>/dev/null && (( cache_stat[size] > 0 )); then
+        fresh=1
+        for watch in "${watches[@]}"; do
+            if zstat -L -H watch_stat -- "$watch" 2>/dev/null &&
+                (( watch_stat[mtime] >= cache_stat[mtime] )); then
+                fresh=0
+                break
+            fi
+        done
+    fi
+    # Build into a temporary file and rename it into place, so a shell killed
+    # mid-rebuild, or two shells rebuilding at once, cannot leave a truncated
+    # cache for the next startup to eval.
+    if (( ! fresh )) && ! { command mkdir -p -- "${cache:h}" &&
+        "$@" >"$cache.$$" && command mv -f -- "$cache.$$" "$cache"; }; then
+        print -u2 -r -- "zshrc: cannot rebuild $cache from: $*"
+        command rm -f -- "$cache.$$" "$cache"
+        "$@"
+        return
+    fi
+    print -r -- "$(<"$cache")"
+}
+
+# brew shellenv's output comes from the script that formats it as much as
+# from brew itself.
+if [[ -d /opt/homebrew ]]; then
+    eval "$(_startup_cached brew-shellenv /opt/homebrew/bin/brew \
+        /opt/homebrew/Library/Homebrew/cmd/shellenv.sh -- \
+        /opt/homebrew/bin/brew shellenv)"
+fi
+if [[ -x /usr/local/bin/brew ]]; then
+    eval "$(_startup_cached brew-shellenv-intel /usr/local/bin/brew \
+        /usr/local/Homebrew/Library/Homebrew/cmd/shellenv.sh -- \
+        /usr/local/bin/brew shellenv)"
+fi
 
 export HOMEBREW_NO_AUTO_UPDATE=1
 export HOMEBREW_NO_ENV_HINTS=1
@@ -104,7 +162,7 @@ HIST_STAMPS="yyyy-mm-dd"
 #
 # but it requires granting accessibility permissions to osascript, which seems
 # risky.
-if [[ "$(uname)" == "Darwin" ]]; then
+if [[ "$OSTYPE" == darwin* ]]; then
     export EDITOR="$ZSH/plugins/emacs/emacsclient.sh --create-frame"
 fi
 
@@ -128,7 +186,7 @@ fi
 #
 # https://developer.apple.com/documentation/corefoundation/cfstringbuiltinencodings/utf8
 # https://superuser.com/questions/82123/mac-whats-cfusertextencoding-for
-export __CF_USER_TEXT_ENCODING="$(id -u):134217984:134217984"
+export __CF_USER_TEXT_ENCODING="$UID:134217984:134217984"
 
 # Needed by Terraform:
 export KUBE_CONFIG_PATH="$HOME/.kube/config"
@@ -143,8 +201,10 @@ if [ -d "/opt/homebrew/opt/rustup/bin" ]; then
     PATH="$PATH:/opt/homebrew/opt/rustup/bin"
 fi
 
+# This is what `go env GOPATH` would print, without starting the toolchain;
+# it only differs if GOPATH is ever pinned with `go env -w`.
 if whence go >/dev/null; then
-    PATH="$PATH:$(go env GOPATH)/bin"
+    PATH="$PATH:${GOPATH:-$HOME/go}/bin"
 fi
 
 export FZF_DEFAULT_OPTS="--color hl:red:bold,selected-hl:red:bold,current-hl:red:bold"
@@ -189,9 +249,89 @@ plugins=(
 if [[ "$TERM_PROGRAM" == "iTerm.app" ]]; then
     zstyle :omz:plugins:iterm2 shell-integration yes
     plugins+=(iterm2)
+    # Unless preset, the shell integration forks `hostname -f` at load and
+    # before every prompt; zsh already knows the answer.
+    export iterm2_hostname="$HOST"
 fi
 
+# oh-my-zsh.sh names the completion dump after `scutil --get LocalHostName`
+# and stamps it with `git rev-parse HEAD` run in $ZSH, with no way to preset
+# either, and the git, starship, fzf and zoxide plugins fork their tools for
+# output that depends only on the installed binary. Shadow those commands for
+# exactly those calls while oh-my-zsh loads.
+
+# LocalHostName is a system preference stored in this plist.
+scutil() {
+    if (( $# == 2 )) && [[ "$1" == --get && "$2" == LocalHostName ]]; then
+        _startup_cached local-hostname \
+            /Library/Preferences/SystemConfiguration/preferences.plist -- \
+            command scutil --get LocalHostName
+    else
+        command scutil "$@"
+    fi
+}
+
+git() {
+    if (( $# == 2 )) && [[ "$1" == rev-parse && "$2" == HEAD && "$PWD" == "$ZSH" ]]; then
+        _startup_cached omz-head "$ZSH/.git/logs/HEAD" -- command git rev-parse HEAD
+    elif (( $# == 1 )) && [[ "$1" == version ]]; then
+        _startup_cached git-version "$commands[git]" -- command git version
+    else
+        command git "$@"
+    fi
+}
+
+# starship's init script also forks `starship prompt --continuation` for
+# PROMPT2 every time it is evaluated; bake that into the cached copy. Unlike
+# the rest of the script, that value depends on the configuration.
+_startup_starship_init() {
+    setopt localoptions pipefail
+    command starship init zsh | command sed '/^PROMPT2=/d' &&
+        print -r -- "PROMPT2=${(qq)$(command starship prompt --continuation)}"
+}
+starship() {
+    if (( $# == 2 )) && [[ "$1" == init && "$2" == zsh ]]; then
+        _startup_cached starship-init "$commands[starship]" \
+            "${STARSHIP_CONFIG:-$HOME/.config/starship.toml}" -- \
+            _startup_starship_init
+    else
+        command starship "$@"
+    fi
+}
+
+fzf() {
+    case "$*" in
+    --version | --zsh)
+        _startup_cached "fzf-${1#--}" "$commands[fzf]" -- command fzf "$1"
+        ;;
+    *)
+        command fzf "$@"
+        ;;
+    esac
+}
+
+# The command name is part of the generated script, so it is in the key.
+zoxide() {
+    if [[ "$*" == "init --cmd $ZOXIDE_CMD_OVERRIDE zsh" ]]; then
+        _startup_cached "zoxide-init-$ZOXIDE_CMD_OVERRIDE" "$commands[zoxide]" -- \
+            command zoxide "$@"
+    else
+        command zoxide "$@"
+    fi
+}
+
 source "$ZSH/oh-my-zsh.sh"
+
+# git, fzf and zoxide are used live from here on.
+unfunction scutil git starship _startup_starship_init fzf zoxide _startup_cached
+
+# starship sets RPROMPT to run `starship prompt --right` before every prompt;
+# without a right_format in starship.toml that only ever prints nothing.
+_starship_config="${STARSHIP_CONFIG:-$HOME/.config/starship.toml}"
+if [[ ! -r "$_starship_config" || "$(<"$_starship_config")" != *right_format* ]]; then
+    unset RPROMPT
+fi
+unset _starship_config
 
 for f in "$HOME/.zsh.d/"*.zsh(N); do source "$f"; done
 

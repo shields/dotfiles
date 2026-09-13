@@ -71,10 +71,8 @@ typeset -a hyperfine_options=("$@")
 (( ${hyperfine_options[(I)--]} == 0 )) || usage
 
 typeset -a candidates
-typeset -i argument
-for (( argument = 2; argument <= ${#opt_scripts[@]}; argument += 2 )); do
-    candidates+=("${opt_scripts[argument]:A}")
-done
+candidates=("${(@)opt_scripts:#-s}")
+candidates=("${candidates[@]:A}")
 (( ${#candidates[@]} > 0 )) || candidates=("$repo/.zshrc")
 typeset zprofile="$repo/.zprofile"
 typeset candidate
@@ -145,6 +143,12 @@ make_zdotdir() {
     # /etc/zshrc on macOS already points HISTFILE into ZDOTDIR; this covers
     # systems that do not, so the benchmark never appends to the real history.
     print -r -- 'HISTFILE="$ZDOTDIR/.zsh_history"' >"$zdotdir/.zshenv"
+    # Likewise isolate anything a candidate keys off $XDG_CACHE_HOME (e.g.
+    # .zshrc's _startup_cached) under this candidate's own ZDOTDIR: shared
+    # across this candidate's own hyperfine samples, so --warmup populates it
+    # like real steady-state use, but never the real machine's cache and
+    # never another candidate's.
+    print -r -- 'export XDG_CACHE_HOME="$ZDOTDIR/cache"' >>"$zdotdir/.zshenv"
     print -r -- "source ${(q)zprofile}" >"$zdotdir/.zprofile"
     print -r -- "source ${(q)candidate}" >"$zdotdir/.zshrc"
     [[ -n "$profile" ]] || return 0
