@@ -77,7 +77,9 @@ and travel with the code.
 - Never bypass precommit hooks; respect configured git hooks.
 - Don't use Conventional Commits (`feat:`, `fix:`) unless the repo already does;
   match the existing history.
-- After a change, run `/code-review max --fix` before review/commit.
+- After a code change, run `/code-review max --fix` before review/commit. Once
+  its fixes are applied, look over just the sections they touched; don't
+  start another full sweep.
 - LGTMCP: if you disagree with review feedback, don't bypass and commit—add a
   code comment explaining why, then resubmit.
 
