@@ -39,5 +39,6 @@ ignore = [
 [lint.per-file-ignores]
 "tests/*" = [
   "INP001",  # tests are standalone files, not a package
+  "PLR2004", # tests compare against literal expectations
   "S101",    # pytest tests assert
 ]

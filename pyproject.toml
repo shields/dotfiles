@@ -29,10 +29,4 @@ dev = [
 ]
 
 [tool.pytest.ini_options]
-# The other scripts in tests/ are standalone programs run directly by
-# `make test` (one is a unittest.TestCase, invoked via its own __main__
-# guard), not pytest suites; pytest's default test_*.py glob would otherwise
-# also collect them, silently running the unittest one (which forks a pty
-# and execs a real interactive zsh per test) and silently collecting zero
-# tests from the others.
-python_files = ["test_statusline.py"]
+testpaths = ["tests"]

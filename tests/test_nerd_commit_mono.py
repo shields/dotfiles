@@ -1,5 +1,3 @@
-#!/usr/bin/env python3
-
 # Copyright © 2026 Michael Shields
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
@@ -26,10 +24,10 @@
 # vertical metrics that set the line height are unchanged.
 
 import math
-import sys
 from pathlib import Path
 from typing import TYPE_CHECKING, NamedTuple, Protocol, cast
 
+import pytest
 from fontTools.pens.boundsPen import BoundsPen
 from fontTools.pens.recordingPen import RecordingPen
 from fontTools.ttLib import TTFont
@@ -390,20 +388,6 @@ class Font:
         return None if table is None else table.table
 
 
-class Report:
-    def __init__(self) -> None:
-        self.failures: int = 0
-        self.total: int = 0
-
-    def check(self, label: str, *, passed: bool, detail: str = "") -> None:
-        self.total += 1
-        if passed:
-            print(f"ok   {label}")
-        else:
-            self.failures += 1
-            print(f"FAIL {label}: {detail}")
-
-
 def in_patched_range(codepoint: int) -> bool:
     return any(low <= codepoint <= high for low, high in PATCHED_RANGES)
 
@@ -582,63 +566,104 @@ def canonical_layout(root: LayoutRoot) -> dict[tuple[str, str], dict[str, Canoni
     return result
 
 
-def check_files(report: Report) -> None:
+class Fonts(NamedTuple):
+    face: Face
+    source: Font
+    patched: Font
+
+    @property
+    def added(self) -> list[int]:
+        """Codepoints the patcher added."""
+        return sorted(set(self.patched.cmap) - set(self.source.cmap))
+
+
+class IconMeasurements(NamedTuple):
+    too_wide: list[str]
+    too_tall: list[str]
+    two_cells: int
+    measured: int
+
+
+@pytest.fixture(scope="module", params=FACES, ids=[face.style for face in FACES])
+def fonts(request: pytest.FixtureRequest) -> Fonts:
+    face = cast("Face", request.param)
+    patched_path = OUTPUT_DIR / face.output
+    if not patched_path.exists():
+        pytest.fail(f"{patched_path} missing")
+    return Fonts(face, Font(SOURCE_DIR / f"{face.source}.otf"), Font(patched_path))
+
+
+@pytest.fixture(scope="module")
+def icons(fonts: Fonts) -> IconMeasurements:
+    patched = fonts.patched
+    too_wide: list[str] = []
+    too_tall: list[str] = []
+    two_cells = 0
+    measured = 0
+    top = patched.ascent + VERTICAL_TOLERANCE * patched.height
+    bottom = patched.descent - VERTICAL_TOLERANCE * patched.height
+    for codepoint in fonts.added:
+        bounds = patched.bounds(patched.cmap[codepoint])
+        if bounds is None:
+            continue
+        measured += 1
+        x_min, y_min, x_max, y_max = bounds
+        width = (x_max - x_min) / patched.cell
+        if width > MAX_ICON_WIDTH_CELLS:
+            too_wide.append(f"U+{codepoint:04X} ({width:.2f} cells)")
+        elif width > 1:
+            two_cells += 1
+        if y_min < bottom or y_max > top:
+            too_tall.append(f"U+{codepoint:04X} ({y_min:.0f}..{y_max:.0f})")
+    return IconMeasurements(too_wide, too_tall, two_cells, measured)
+
+
+def test_output_directory_holds_exactly_the_four_faces() -> None:
     expected = sorted(face.output for face in FACES)
     present = sorted(
         path.name for path in OUTPUT_DIR.glob("CommitMonoShieldsNerdFont*")
     )
-    report.check(
-        "output directory holds exactly the four faces",
-        passed=present == expected,
-        detail=f"expected {expected}, found {present}",
-    )
+    assert present == expected
 
 
-def check_names(report: Report, face: Face, source: Font, patched: Font) -> None:
-    for platform in (WINDOWS_NAMES, MACINTOSH_NAMES):
-        label = f"{face.style}: names on platform {platform[0]}"
-        expected: dict[int, str | None] = {
-            NAME_ID_FAMILY: FAMILY,
-            NAME_ID_SUBFAMILY: face.style,
-            NAME_ID_FULL_NAME: face.full_name,
-            NAME_ID_POSTSCRIPT_NAME: face.postscript,
-        }
-        # Copyright and license must carry over from Commit Mono.
-        for name_id in LICENSE_NAME_IDS:
-            expected[name_id] = source.name(name_id, WINDOWS_NAMES)
-        actual = {name_id: patched.name(name_id, platform) for name_id in expected}
-        report.check(
-            label,
-            passed=actual == expected,
-            detail=f"expected {expected}, got {actual}",
+@pytest.mark.parametrize(
+    "platform", [WINDOWS_NAMES, MACINTOSH_NAMES], ids=["windows", "macintosh"]
+)
+def test_names(fonts: Fonts, platform: tuple[int, int, int]) -> None:
+    expected: dict[int, str | None] = {
+        NAME_ID_FAMILY: FAMILY,
+        NAME_ID_SUBFAMILY: fonts.face.style,
+        NAME_ID_FULL_NAME: fonts.face.full_name,
+        NAME_ID_POSTSCRIPT_NAME: fonts.face.postscript,
+    }
+    # Copyright and license must carry over from Commit Mono.
+    for name_id in LICENSE_NAME_IDS:
+        expected[name_id] = fonts.source.name(name_id, WINDOWS_NAMES)
+    actual = {name_id: fonts.patched.name(name_id, platform) for name_id in expected}
+    assert actual == expected
+    # The typographic family, if the patcher wrote one, must agree.
+    typographic = {
+        name_id: fonts.patched.name(name_id, platform)
+        for name_id, want in (
+            (NAME_ID_TYPOGRAPHIC_FAMILY, FAMILY),
+            (NAME_ID_TYPOGRAPHIC_SUBFAMILY, fonts.face.style),
         )
-        # The typographic family, if the patcher wrote one, must agree.
-        typographic = {
-            name_id: patched.name(name_id, platform)
-            for name_id, want in (
-                (NAME_ID_TYPOGRAPHIC_FAMILY, FAMILY),
-                (NAME_ID_TYPOGRAPHIC_SUBFAMILY, face.style),
-            )
-            if patched.name(name_id, platform) not in (None, want)
-        }
-        report.check(
-            f"{label} (typographic family)",
-            passed=not typographic,
-            detail=f"unexpected {typographic}",
-        )
-    version = patched.name(NAME_ID_VERSION, WINDOWS_NAMES) or ""
-    source_version = source.name(NAME_ID_VERSION, WINDOWS_NAMES) or ""
-    report.check(
-        f"{face.style}: version keeps Commit Mono's {source_version!r}",
-        # An empty source_version would otherwise pass vacuously ("" in x).
-        passed=bool(source_version) and source_version in version,
-        detail=f"got {version!r}",
-    )
+        if fonts.patched.name(name_id, platform) not in (None, want)
+    }
+    assert not typographic
 
 
-def check_style_flags(report: Report, face: Face, patched: Font) -> None:
-    selection = int(patched.field("OS/2", "fsSelection"))
-    mac_style = int(patched.field("head", "macStyle"))
+def test_version_keeps_commit_monos(fonts: Fonts) -> None:
+    version = fonts.patched.name(NAME_ID_VERSION, WINDOWS_NAMES) or ""
+    source_version = fonts.source.name(NAME_ID_VERSION, WINDOWS_NAMES) or ""
+    # An empty source_version would otherwise pass vacuously ("" in x).
+    assert source_version
+    assert source_version in version
+
+
+def test_style_flags(fonts: Fonts) -> None:
+    selection = int(fonts.patched.field("OS/2", "fsSelection"))
+    mac_style = int(fonts.patched.field("head", "macStyle"))
     flags = {
         "fsSelection italic": bool(selection & FS_SELECTION_ITALIC),
         "fsSelection bold": bool(selection & FS_SELECTION_BOLD),
@@ -647,20 +672,16 @@ def check_style_flags(report: Report, face: Face, patched: Font) -> None:
         "macStyle italic": bool(mac_style & MAC_STYLE_ITALIC),
     }
     expected = {
-        "fsSelection italic": face.italic,
-        "fsSelection bold": face.bold,
-        "fsSelection regular": not face.bold and not face.italic,
-        "macStyle bold": face.bold,
-        "macStyle italic": face.italic,
+        "fsSelection italic": fonts.face.italic,
+        "fsSelection bold": fonts.face.bold,
+        "fsSelection regular": not fonts.face.bold and not fonts.face.italic,
+        "macStyle bold": fonts.face.bold,
+        "macStyle italic": fonts.face.italic,
     }
-    report.check(
-        f"{face.style}: style flags",
-        passed=flags == expected,
-        detail=f"expected {expected}, got {flags}",
-    )
+    assert flags == expected
 
 
-def check_metrics(report: Report, face: Face, source: Font, patched: Font) -> None:
+def test_metrics_unchanged(fonts: Fonts) -> None:
     fields = (
         ("head", "unitsPerEm"),
         ("hhea", "ascent"),
@@ -682,69 +703,48 @@ def check_metrics(report: Report, face: Face, source: Font, patched: Font) -> No
         ("post", "underlineThickness"),
     )
     changed = {
-        f"{tag}.{name}": (source.field(tag, name), patched.field(tag, name))
+        f"{tag}.{name}": (fonts.source.field(tag, name), fonts.patched.field(tag, name))
         for tag, name in fields
-        if source.field(tag, name) != patched.field(tag, name)
+        if fonts.source.field(tag, name) != fonts.patched.field(tag, name)
     }
-    report.check(
-        f"{face.style}: metrics unchanged", passed=not changed, detail=f"{changed}"
-    )
-    report.check(
-        f"{face.style}: still fixed pitch",
-        passed=patched.field("post", "isFixedPitch") == 1,
-    )
+    assert not changed
 
 
-def check_original_glyphs(
-    report: Report, face: Face, source: Font, patched: Font
-) -> None:
+def test_still_fixed_pitch(fonts: Fonts) -> None:
+    assert fonts.patched.field("post", "isFixedPitch") == 1
+
+
+def test_glyphs_outside_patched_ranges_survive(fonts: Fonts) -> None:
+    source, patched = fonts.source, fonts.patched
     replaceable = {
         glyph for codepoint, glyph in source.cmap.items() if in_patched_range(codepoint)
     }
     kept = [glyph for glyph in source.glyph_names if glyph not in replaceable]
     missing = [glyph for glyph in kept if glyph not in patched.glyph_set]
+    assert not missing, f"missing {summarize(missing)}"
     changed = [
         glyph
         for glyph in kept
-        if glyph not in missing
-        and (source.outline(glyph), source.advance(glyph))
+        if (source.outline(glyph), source.advance(glyph))
         != (patched.outline(glyph), patched.advance(glyph))
     ]
-    report.check(
-        f"{face.style}: all {len(kept)} glyphs outside patched ranges present",
-        passed=not missing,
-        detail=f"missing {summarize(missing)}",
-    )
-    report.check(
-        f"{face.style}: those glyphs keep their shapes and advances",
-        passed=not changed,
-        detail=f"changed {summarize(changed)}",
-    )
+    assert not changed, f"changed {summarize(changed)}"
+
+
+def test_every_source_codepoint_still_encoded(fonts: Fonts) -> None:
     lost = [
         f"U+{codepoint:04X}"
-        for codepoint in source.cmap
-        if codepoint not in patched.cmap
+        for codepoint in fonts.source.cmap
+        if codepoint not in fonts.patched.cmap
     ]
-    report.check(
-        f"{face.style}: every source codepoint still encoded",
-        passed=not lost,
-        detail=f"lost {summarize(lost)}",
-    )
+    assert not lost, f"lost {summarize(lost)}"
 
 
-def check_layout_tables(
-    report: Report, face: Face, source: Font, patched: Font
-) -> None:
-    source_gsub = source.layout("GSUB")
-    patched_gsub = patched.layout("GSUB")
-    if source_gsub is None or patched_gsub is None:
-        present = (
-            f"source {source_gsub is not None}, patched {patched_gsub is not None}"
-        )
-        report.check(
-            f"{face.style}: GSUB present in both fonts", passed=False, detail=present
-        )
-        return
+def test_gsub_substitutions_unchanged(fonts: Fonts) -> None:
+    source_gsub = fonts.source.layout("GSUB")
+    patched_gsub = fonts.patched.layout("GSUB")
+    assert source_gsub is not None
+    assert patched_gsub is not None
     before = canonical_layout(source_gsub)
     after = canonical_layout(patched_gsub)
     differing = [
@@ -753,22 +753,23 @@ def check_layout_tables(
         for tag, content in features.items()
         if after.get((script, language), {}).get(tag) != content
     ]
-    report.check(
-        f"{face.style}: GSUB substitutions unchanged",
-        passed=before == after,
-        detail=summarize(differing) or f"{sorted(before)} vs {sorted(after)}",
+    assert before == after, (
+        summarize(differing) or f"{sorted(before)} vs {sorted(after)}"
     )
 
-    # Commit Mono has no GPOS or GDEF. The patcher's fontforge round trip may
-    # add them, but they must not position or reclassify the original glyphs.
-    gpos = patched.layout("GPOS")
+
+# Commit Mono has no GPOS or GDEF. The patcher's fontforge round trip may
+# add them, but they must not position or reclassify the original glyphs.
+def test_no_gpos_lookups(fonts: Fonts) -> None:
+    gpos = fonts.patched.layout("GPOS")
     lookups = (
         0 if gpos is None or gpos.LookupList is None else len(gpos.LookupList.Lookup)
     )
-    report.check(
-        f"{face.style}: no GPOS lookups", passed=lookups == 0, detail=f"{lookups}"
-    )
-    gdef = cast("GdefTable | None", patched.ttf.get("GDEF"))
+    assert lookups == 0
+
+
+def test_no_original_glyph_reclassified_as_a_mark(fonts: Fonts) -> None:
+    gdef = cast("GdefTable | None", fonts.patched.ttf.get("GDEF"))
     class_defs = (
         {}
         if gdef is None or gdef.table.GlyphClassDef is None
@@ -776,86 +777,60 @@ def check_layout_tables(
     )
     marks = [
         glyph
-        for glyph in source.glyph_names
+        for glyph in fonts.source.glyph_names
         if class_defs.get(glyph) == MARK_GLYPH_CLASS
     ]
-    report.check(
-        f"{face.style}: no original glyph reclassified as a mark",
-        passed=not marks,
-        detail=summarize(marks),
-    )
+    assert not marks, summarize(marks)
 
 
-def check_icons(report: Report, face: Face, source: Font, patched: Font) -> None:
-    added = sorted(set(patched.cmap) - set(source.cmap))
-    report.check(
-        f"{face.style}: at least {MIN_ADDED_CODEPOINTS} codepoints added",
-        passed=len(added) >= MIN_ADDED_CODEPOINTS,
-        detail=f"{len(added)} added",
-    )
+def test_enough_codepoints_added(fonts: Fonts) -> None:
+    assert len(fonts.added) >= MIN_ADDED_CODEPOINTS
+
+
+def test_every_symbol_set_present(fonts: Fonts) -> None:
     absent = [
         f"U+{codepoint:04X} ({label})"
         for codepoint, label in SAMPLE_ICONS.items()
-        if codepoint not in patched.cmap
+        if codepoint not in fonts.patched.cmap
     ]
-    report.check(
-        f"{face.style}: every symbol set present",
-        passed=not absent,
-        detail=summarize(absent),
-    )
+    assert not absent, summarize(absent)
+
+
+def test_additions_stay_inside_the_patchers_ranges(fonts: Fonts) -> None:
     outside = [
-        f"U+{codepoint:04X}" for codepoint in added if not in_patched_range(codepoint)
+        f"U+{codepoint:04X}"
+        for codepoint in fonts.added
+        if not in_patched_range(codepoint)
     ]
-    report.check(
-        f"{face.style}: additions stay inside the patcher's ranges",
-        passed=not outside,
-        detail=summarize(outside),
-    )
+    assert not outside, summarize(outside)
+
+
+def test_every_glyph_advances_one_cell(fonts: Fonts) -> None:
+    patched = fonts.patched
     wrong_advance = [
         glyph for glyph in patched.glyph_names if patched.advance(glyph) != patched.cell
     ]
-    report.check(
-        f"{face.style}: every glyph advances one cell ({patched.cell})",
-        passed=not wrong_advance,
-        detail=summarize(wrong_advance),
+    assert not wrong_advance, f"cell is {patched.cell}; {summarize(wrong_advance)}"
+
+
+def test_no_icon_wider_than_two_cells(icons: IconMeasurements) -> None:
+    assert not icons.too_wide, summarize(icons.too_wide)
+
+
+def test_icons_overhang_into_a_second_cell(icons: IconMeasurements) -> None:
+    # measured=0 would otherwise pass vacuously (0 >= 0.5 * 0).
+    assert icons.measured > 0
+    assert icons.two_cells >= MIN_TWO_CELL_ICON_SHARE * icons.measured, (
+        f"only {icons.two_cells} of {icons.measured} icons are wider than one cell"
     )
 
-    too_wide: list[str] = []
-    too_tall: list[str] = []
-    two_cells = 0
-    measured = 0
-    top = patched.ascent + VERTICAL_TOLERANCE * patched.height
-    bottom = patched.descent - VERTICAL_TOLERANCE * patched.height
-    for codepoint in added:
-        bounds = patched.bounds(patched.cmap[codepoint])
-        if bounds is None:
-            continue
-        measured += 1
-        x_min, y_min, x_max, y_max = bounds
-        width = (x_max - x_min) / patched.cell
-        if width > MAX_ICON_WIDTH_CELLS:
-            too_wide.append(f"U+{codepoint:04X} ({width:.2f} cells)")
-        elif width > 1:
-            two_cells += 1
-        if y_min < bottom or y_max > top:
-            too_tall.append(f"U+{codepoint:04X} ({y_min:.0f}..{y_max:.0f})")
-    report.check(
-        f"{face.style}: no icon wider than {MAX_ICON_WIDTH_CELLS} cells",
-        passed=not too_wide,
-        detail=summarize(too_wide),
-    )
-    report.check(
-        f"{face.style}: icons overhang into a second cell",
-        # measured=0 would otherwise pass vacuously (0 >= 0.5 * 0).
-        passed=measured > 0 and two_cells >= MIN_TWO_CELL_ICON_SHARE * measured,
-        detail=f"only {two_cells} of {measured} icons are wider than one cell",
-    )
-    report.check(
-        f"{face.style}: icons stay within the line height",
-        passed=not too_tall,
-        detail=summarize(too_tall),
-    )
 
+def test_icons_stay_within_the_line_height(icons: IconMeasurements) -> None:
+    assert not icons.too_tall, summarize(icons.too_tall)
+
+
+def test_powerline_separators_fill_the_cell(fonts: Fonts) -> None:
+    patched = fonts.patched
     not_filling: list[str] = []
     for codepoint in CELL_FILLING_ICONS:
         if codepoint not in patched.cmap:
@@ -874,37 +849,4 @@ def check_icons(report: Report, face: Face, source: Font, patched: Font) -> None
             box = f"({x_min:.0f},{y_min:.0f})..({x_max:.0f},{y_max:.0f})"
             not_filling.append(f"U+{codepoint:04X} {box}")
     cell = f"{patched.cell} x {patched.descent:.0f}..{patched.ascent:.0f}"
-    report.check(
-        f"{face.style}: Powerline separators fill the cell",
-        passed=not not_filling,
-        detail=f"cell is {cell}; {summarize(not_filling)}",
-    )
-
-
-def main() -> int:
-    report = Report()
-    check_files(report)
-    for face in FACES:
-        source_path = SOURCE_DIR / f"{face.source}.otf"
-        patched_path = OUTPUT_DIR / face.output
-        if not patched_path.exists():
-            report.check(f"{face.style}: {patched_path} exists", passed=False)
-            continue
-        source = Font(source_path)
-        patched = Font(patched_path)
-        check_names(report, face, source, patched)
-        check_style_flags(report, face, patched)
-        check_metrics(report, face, source, patched)
-        check_original_glyphs(report, face, source, patched)
-        check_layout_tables(report, face, source, patched)
-        check_icons(report, face, source, patched)
-
-    if report.failures:
-        print(f"\n{report.failures} of {report.total} checks failed")
-        return 1
-    print(f"\nall {report.total} checks passed")
-    return 0
-
-
-if __name__ == "__main__":
-    sys.exit(main())
+    assert not not_filling, f"cell is {cell}; {summarize(not_filling)}"
