@@ -19,7 +19,9 @@
 
 ;;; Code:
 
-;; Markdown
+;; Markdown.  Not the built-in markdown-ts-mode: its grammar's external scanner
+;; overflows its serialization buffer and can corrupt the stack
+;; (https://github.com/tree-sitter-grammars/tree-sitter-markdown/issues/243).
 (use-package markdown-mode
   :hook
   (markdown-mode . variable-pitch-mode)
@@ -94,6 +96,7 @@
                 display-buffer-below-selected)))
 
 (keymap-set help-mode-map "q" #'quit-window)
+(setopt quit-window-kill-buffer '(help-mode))
 
 
 

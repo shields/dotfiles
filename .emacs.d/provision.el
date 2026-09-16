@@ -25,29 +25,15 @@
 (straight-check-all)
 (straight-remove-unused-repos t)
 
-(tree-sitter-langs-install-latest-grammar t)
-
-;; The tree-sitter-langs package installs many useful grammars as .dylib files,
-;; but it does not name them in the way that Emacs expects to find them.
-(make-directory shields/tree-sitter-langs-path t)
-(let ((source-dir (straight--build-dir "tree-sitter-langs" "bin")))
-  (dolist (file (directory-files source-dir nil "\\.\\(dylib\\|so\\)$"))
-    (make-symbolic-link (expand-file-name file source-dir)
-                        (expand-file-name (concat "libtree-sitter-" file)
-                                          shields/tree-sitter-langs-path)
-                        t)))
-
-;; As of 2025-04-21, tree-sitter-langs-grammars uses an ancient Lua grammar that
-;; doesn't work at all.  Inelegantly replace it.
+;; Each built-in tree-sitter mode registers its grammar recipe, pinned to a
+;; commit the mode supports, when its library loads.  Install them all, so that
+;; `treesit-enabled-modes' can use every mode it knows.
+(dolist (mode (delete-dups (mapcar #'cdr treesit-major-mode-remap-alist)))
+  (autoload-do-load (symbol-function mode) mode))
+;; typst-ts-mode is not built in, so it has no recipe.
 (add-to-list 'treesit-language-source-alist
-             '(lua . ("https://github.com/tree-sitter-grammars/tree-sitter-lua")))
-(treesit-install-language-grammar 'lua)
-(delete-file (expand-file-name "libtree-sitter-lua.dylib" shields/tree-sitter-langs-path))
-
-;; typst-ts-mode checks its grammar version and only assures uben0's grammar,
-;; which the tree-sitter-langs bundle may lag.  Build it fresh and drop the
-;; bundled symlink so the current grammar wins, exactly as for Lua above.
-(add-to-list 'treesit-language-source-alist
-             '(typst . ("https://github.com/uben0/tree-sitter-typst")))
-(treesit-install-language-grammar 'typst)
-(delete-file (expand-file-name "libtree-sitter-typst.dylib" shields/tree-sitter-langs-path))
+             '(typst "https://github.com/uben0/tree-sitter-typst"))
+;; Unconditionally, because a new Emacs pins new grammar commits, and a grammar
+;; older than the queries written against it fails in confusing ways.
+(dolist (recipe treesit-language-source-alist)
+  (treesit-install-language-grammar (car recipe)))

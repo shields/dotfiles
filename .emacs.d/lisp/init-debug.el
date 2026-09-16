@@ -1,6 +1,6 @@
 ;;; init-debug.el --- Debugging tools -*- lexical-binding: t -*-
 
-;; Copyright © 2003, 2020, 2023, 2025 Michael Shields
+;; Copyright © 2003, 2020, 2023, 2025-2026 Michael Shields
 ;;
 ;; Licensed under the Apache License, Version 2.0 (the "License");
 ;; you may not use this file except in compliance with the License.
@@ -37,10 +37,10 @@
   (require 'dap-python))
 
 ;; Flymake configuration for errors and warnings
+;; Eglot passes (ORIGIN CODE MESSAGE) rather than a formatted string, and
+;; `flymake-diagnostic-format-alist' already leaves out the origin and code.
 (defun shields/clean-flymake-diagnostic-message (message)
   (pcase message
-    ((rx bos (or "pyright" "basedpyright") " [" (+ (not "]")) "]: " (let msg (+ anything)) eos)
-     msg)
     ((rx bos "Ruff: " (+ (any "A-Z0-9")) " " (let msg (+ anything)) eos)
      msg)
     (_ message)))
@@ -51,12 +51,10 @@
     (list locus beg end type cleaned-text data overlay-properties)))
 
 (ert-deftest shields/test-clean-flymake-diagnostic-message ()
-  (should (string=
-           (shields/clean-flymake-diagnostic-message "pyright [reportUnknownVariableType]: Type of \"i\" is unknown")
-           "Type of \"i\" is unknown"))
-  (should (string=
-           (shields/clean-flymake-diagnostic-message "basedpyright [reportUnknownVariableType]: Type of \"j\" is unknown")
-           "Type of \"j\" is unknown"))
+  (should (equal
+           (shields/clean-flymake-diagnostic-message
+            '("basedpyright" "reportUnknownVariableType" "Type of \"j\" is unknown"))
+           '("basedpyright" "reportUnknownVariableType" "Type of \"j\" is unknown")))
   (should (string=
            (shields/clean-flymake-diagnostic-message "Ruff: F821 Undefined name `y`")
            "Undefined name `y`"))

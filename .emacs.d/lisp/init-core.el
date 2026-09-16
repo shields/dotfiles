@@ -32,6 +32,9 @@
 ;; too surprising for casual use, then it should not be bound by default.
 (put 'narrow-to-region 'disabled nil)   ; C-x n n
 (put 'set-goal-column 'disabled nil)    ; C-x C-n
+;; diff-mode.el disables this when it loads.
+(with-eval-after-load 'diff-mode
+  (put 'diff-restrict-view 'disabled nil)) ; C-c C-n in Diff mode
 
 ;; Stop saying "You can run the command blah-blah with M-x bl-b".
 (setopt extended-command-suggest-shorter nil)

@@ -1,6 +1,6 @@
 ;;; init-spell.el --- Spell checking -*- lexical-binding: t -*-
 
-;; Copyright © 2003, 2020, 2024-2025 Michael Shields
+;; Copyright © 2003, 2020, 2024-2026 Michael Shields
 ;;
 ;; Licensed under the Apache License, Version 2.0 (the "License");
 ;; you may not use this file except in compliance with the License.
@@ -31,9 +31,10 @@
   (flyspell-abbrev-p nil)
   (flyspell-sort-corrections nil)       ; aspell already sorts
   (flyspell-use-meta-tab nil)
+  (flyspell-delay-use-timer t)
   :hook
   (prog-mode . flyspell-prog-mode)
-  (text-mode . turn-on-flyspell))
+  (text-mode . flyspell-mode))
 
 (provide 'init-spell)
 ;;; init-spell.el ends here

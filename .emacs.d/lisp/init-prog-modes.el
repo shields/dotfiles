@@ -50,12 +50,16 @@
 (add-hook 'eval-expression-minibuffer-setup-hook
           #'shields/eval-expression-minibuffer-setup)
 
-(defun shields/elisp-eldoc-with-value ()
+(defun shields/elisp-eldoc-detailed ()
   (remove-hook 'eldoc-documentation-functions
                #'elisp-eldoc-var-docstring t)
+  (remove-hook 'eldoc-documentation-functions
+               #'elisp-eldoc-funcall t)
   (add-hook 'eldoc-documentation-functions
-            #'elisp-eldoc-var-docstring-with-value nil t))
-(add-hook 'emacs-lisp-mode-hook #'shields/elisp-eldoc-with-value)
+            #'elisp-eldoc-var-docstring-with-value nil t)
+  (add-hook 'eldoc-documentation-functions
+            #'elisp-eldoc-funcall-with-docstring nil t))
+(add-hook 'emacs-lisp-mode-hook #'shields/elisp-eldoc-detailed)
 
 ;; If we have a copy of the Emacs source code, `describe-function' can browse
 ;; into it.
@@ -70,9 +74,7 @@
   :hook
   (go-ts-mode . eglot-ensure)
   (go-ts-mode . shields/suppress-whitespace-mode)
-  (go-mod-ts-mode . shields/suppress-whitespace-mode)
-  :config
-  (setf (alist-get 'go-dot-mod-mode major-mode-remap-alist) #'go-mod-ts-mode))
+  (go-mod-ts-mode . shields/suppress-whitespace-mode))
 
 ;; JavaScript and TypeScript
 (use-package js
@@ -100,11 +102,6 @@
 ;; Python
 (use-package ruff-format)
 
-;; Python configuration
-;; "python" on macOS 10.15 is 2.7.
-(setopt python-shell-interpreter "python3")
-
-;; Python tree-sitter mode
 (add-hook 'python-ts-mode-hook #'eglot-ensure)
 
 ;; R
@@ -132,8 +129,6 @@
 (use-package sh-script
   :hook
   (bash-ts-mode . eglot-ensure))
-
-(setf (alist-get 'sh-mode major-mode-remap-alist) #'bash-ts-mode)
 
 ;; Swift
 (use-package swift-mode

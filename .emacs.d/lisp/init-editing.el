@@ -72,6 +72,9 @@
 (setq-default indent-tabs-mode nil)
 (setopt line-move-visual nil)
 (setopt shift-select-mode nil)
+;; Under delete-selection-mode, a region activated by C-x C-x would be replaced
+;; by the next typed character.
+(setopt exchange-point-and-mark-highlight-region nil)
 (setopt mouse-yank-at-point t)
 (setopt save-interprogram-paste-before-kill t)
 (setopt kill-do-not-save-duplicates t)
@@ -138,16 +141,11 @@
   :bind (("C-=" . expreg-expand)
          ("C--" . expreg-contract)))
 
-(use-package tree-sitter)
-
-(defvar shields/tree-sitter-langs-path
-  (locate-user-emacs-file "tree-sitter-langs-grammars")
-  "Used in provision.el to build a symlink farm of bundled grammars.")
-(use-package tree-sitter-langs
-  :config
-  (add-to-list 'treesit-extra-load-path shields/tree-sitter-langs-path))
-
+(setopt treesit-enabled-modes t)
 (setopt treesit-font-lock-level 4)
+;; provision.el installs every grammar; don't prompt mid-session, which blocks
+;; the daemon.
+(setopt treesit-auto-install-grammar 'never)
 
 (setopt flymake-show-diagnostics-at-end-of-line nil)
 
@@ -197,20 +195,6 @@ confused by other nearby files."
 
 ;; Defer fontification while typing for smoother input in large/treesit buffers.
 (setopt redisplay-skip-fontification-on-input t)
-
-;; Tree-sitter mode remapping. This should run after all other packages have
-;; been loaded, or else we might not know about the modes.
-(defun shields/remap-to-tree-sitter-modes ()
-  "Find all major modes ending with -ts-mode and create remappings from their non-ts versions."
-  (interactive)
-  (let ((ts-modes (apropos-internal "-ts-mode$" 'commandp)))
-    (dolist (ts-mode ts-modes)
-      (let* ((ts-mode-name (symbol-name ts-mode))
-             (base-mode-name (replace-regexp-in-string "-ts-mode$" "-mode" ts-mode-name))
-             (base-mode (intern base-mode-name)))
-        (when (fboundp base-mode)
-          (setf (alist-get base-mode major-mode-remap-alist) ts-mode))))))
-(shields/remap-to-tree-sitter-modes)
 
 ;; Persist history over Emacs restarts
 (use-package savehist

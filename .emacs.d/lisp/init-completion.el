@@ -1,6 +1,6 @@
 ;;; init-completion.el --- Completion framework configuration -*- lexical-binding: t -*-
 
-;; Copyright © 2018, 2020, 2024-2025 Michael Shields
+;; Copyright © 2018, 2020, 2024-2026 Michael Shields
 ;;
 ;; Licensed under the Apache License, Version 2.0 (the "License");
 ;; you may not use this file except in compliance with the License.
@@ -37,6 +37,7 @@
   (completion-styles '(orderless basic))
   (completion-category-overrides
    '((file (styles basic partial-completion))))
+  (completion-pcm-leading-wildcard t)
   (orderless-matching-styles
    '(orderless-flex orderless-literal orderless-regexp)))
 

@@ -34,7 +34,11 @@
 (use-package wgrep
   :after grep
   :custom
-  (wgrep-auto-save-buffer t))
+  (wgrep-auto-save-buffer t)
+  :config
+  ;; Not the built-in grep-edit-mode, which writes rg's truncated
+  ;; --max-columns-preview lines back into the files.
+  (keymap-set grep-mode-map "e" #'wgrep-change-to-wgrep-mode))
 
 ;; Web/URL handling
 (use-package url

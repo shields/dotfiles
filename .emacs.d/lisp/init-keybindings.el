@@ -57,6 +57,8 @@
 (keymap-global-set "M-\"" #'previous-window)
 (keymap-global-set "M-n" #'next-error)
 (keymap-global-set "M-p" #'previous-error)
+;; Not M-i: Karabiner rewrites ⌘I to left-arrow in every application.
+(keymap-global-set "s-i" #'imenu)
 (keymap-global-set "M-t" #'previous-buffer)
 (keymap-global-set "M-T" #'next-buffer)
 (keymap-global-set "C-t" #'shields/maybe-project-switch-to-buffer)
@@ -102,6 +104,8 @@
   :bind (("M-." . xref-find-definitions)
          ("M-," . xref-go-back)))
 
+(find-function-mode 1)
+
 (defun move-line-up ()
   (interactive)
   (transpose-lines 1)
@@ -117,7 +121,9 @@
 (keymap-global-set "M-<down>" #'move-line-down)
 
 (use-package project
-  :bind ("M-o" . shields/maybe-project-find-file))    ; Really M-b, remapped by Karabiner
+  :bind (("M-o" . shields/maybe-project-find-file)    ; Really M-b, remapped by Karabiner
+         :map project-prefix-map
+         ("m" . project-find-matching-buffer)))
 
 (defun shields/escape-project-find-file ()
   "Exit project-find-file and run find-file."
@@ -178,13 +184,9 @@ stage it and display a diff."
       ;; File is being freshly saved.
       (progn
         (save-buffer)
-        (when-let* ((proj (project-current)))
+        (when (project-current)
           (let ((inhibit-message t))
-            (dolist (buf (project-buffers proj))
-              (with-current-buffer buf
-                (when (and (buffer-file-name)
-                           (buffer-modified-p))
-                  (save-buffer)))))))
+            (project-save-some-buffers t))))
     ;; File was already saved. If Magit tracks it, then stage it.
     (when (and (buffer-file-name)
                (magit-file-tracked-p (buffer-file-name)))

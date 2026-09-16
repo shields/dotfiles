@@ -196,8 +196,10 @@ Uses advice rather than key remapping because many functions
  '(font-lock-keyword-face ((t (:inherit font-lock-punctuation-face))))
  '(font-lock-negation-char-face ((t (:foreground "dark red"))))
  '(font-lock-number-face ((t (:inherit font-lock-string-face))))
- '(font-lock-property-name-face ((t (:inherit font-lock-property-use-face :weight bold))))
+ ;; Out of alphabetical order: property-use inherits property-name by default,
+ ;; and Emacs 31 signals an error on even a momentary inheritance cycle.
  '(font-lock-property-use-face ((t (:foreground "MidnightBlue"))))
+ '(font-lock-property-name-face ((t (:inherit font-lock-property-use-face :weight bold))))
  '(font-lock-punctuation-face ((t (:foreground "gray50"))))
  '(font-lock-reference-face ((t (:foreground "OrangeRed"))))
  '(font-lock-regexp-grouping-backslash ((t (:inherit font-lock-escape-face))))

@@ -1,6 +1,6 @@
 ;;; -*- lexical-binding: t -*-
 
-;; Copyright © 2024-2025 Michael Shields
+;; Copyright © 2024-2026 Michael Shields
 ;;
 ;; Licensed under the Apache License, Version 2.0 (the "License");
 ;; you may not use this file except in compliance with the License.
@@ -37,23 +37,6 @@
   :custom
   (straight-use-package-by-default t)
   (straight-vc-git-default-clone-depth 1))
-
-;; Pending https://debbugs.gnu.org/cgi/bugreport.cgi?bug=77928
-(defun use-package-handler/:custom-face (name _keyword args rest state)
-  "Generate use-package custom-face keyword code."
-  (use-package-concat
-   (mapcar #'(lambda (def)
-               `(progn
-                  (apply #'face-spec-set (append (backquote ,def) '(face-defface-spec)))
-                  (put ',(car def) 'face-modified t)))
-           args)
-   (use-package-process-keywords name rest state)))
-
-;; Work around https://github.com/joaotavora/eglot/discussions/1436
-(straight-use-package 'project)
-(require 'project)
-(straight-use-package 'flymake)
-(require 'flymake)
 
 (setq use-package-always-ensure t)
 

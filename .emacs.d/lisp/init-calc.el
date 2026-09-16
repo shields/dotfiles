@@ -23,6 +23,7 @@
 (setopt calc-group-char " ")
 (setopt calc-date-format '(YYY "-" MM "-" DD (" " hh ":" mm ":" ss)))
 (setopt calc-display-trail nil)
+(setopt calc-inhibit-startup-message t)
 
 (setq math-additional-units
       '((fathom "6 * ft" "Fathom")

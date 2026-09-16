@@ -1,6 +1,6 @@
 ;;; init-magit.el --- Magit configuration -*- lexical-binding: t -*-
 
-;; Copyright © 2003, 2020, 2025 Michael Shields
+;; Copyright © 2003, 2020, 2025-2026 Michael Shields
 ;;
 ;; Licensed under the Apache License, Version 2.0 (the "License");
 ;; you may not use this file except in compliance with the License.
@@ -48,7 +48,9 @@
 
 (use-package vc
   :custom
-  (diff-switches "-u"))  ; Default is "-c"
+  (diff-switches "-u")  ; Default is "-c"
+  ;; Refining a 100 kB hunk takes about 0.25 s; time grows quadratically.
+  (diff-refine-threshold 100000))
 
 (provide 'init-magit)
 ;;; init-magit.el ends here
