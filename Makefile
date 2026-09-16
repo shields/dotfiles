@@ -41,6 +41,7 @@ test:
 	zsh tests/test_wt.zsh
 	uv run python tests/test_zsh_startup.py
 	uv run python tests/test_dependency_guard.py
+	uv run pytest tests/test_statusline.py
 	uv run python tests/test_nerd_commit_mono.py
 
 lint:

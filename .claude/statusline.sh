@@ -171,11 +171,14 @@ if [[ -n "$week_pct" ]]; then
     style=''
     if [[ -n "$week_reset" ]]; then
         clamp_elapsed "$week_reset" "$week_window"
+        # Hours left, not elapsed, so the label counts down 168h -> 0h
+        # like the five-hour clock.
+        label=$(((week_window - secs) / 3600))h
         if ((week_pct * week_window > secs * 100)); then
             style=$bold
         fi
     fi
-    right+="${right:+ · }week $style$((100 - week_pct))%${style:+$nobold}"
+    right+="${right:+ · }${label:-week} $style$((100 - week_pct))%${style:+$nobold}"
 fi
 
 # Fable's weekly-scoped limit isn't in the statusline JSON; fable_usage
