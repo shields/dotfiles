@@ -31,7 +31,9 @@ Shields and you make substantive changes to it, update the copyright year to
 include the current year (e.g. `2025-2026`, or `2024, 2026` if discontiguous).
 
 Add code comments sparingly, explaining _why_ rather than _what_, and only when
-they add real value.
+they add real value. Don't record change history in comments—that's git's job.
+Exception: warn against reintroducing a bug when it's likely to come back
+without the warning.
 
 ## Dependencies
 
