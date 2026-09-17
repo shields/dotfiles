@@ -30,10 +30,18 @@ any way unless explicitly told to. Exception: when a file is copyright Michael
 Shields and you make substantive changes to it, update the copyright year to
 include the current year (e.g. `2025-2026`, or `2024, 2026` if discontiguous).
 
-Add code comments sparingly, explaining _why_ rather than _what_, and only when
-they add real value. Don't record change history in comments—that's git's job.
-Exception: warn against reintroducing a bug when it's likely to come back
-without the warning.
+Code comments: the default is none. Write one only for a non-obvious _why_ that
+someone reading the file alone needs, in the present tense. It must read
+correctly to someone who never saw the previous version and doesn't know a
+change happened, which rules out more than "previously" and "no longer":
+
+- what the code replaced ("instead of…", "rather than each…")
+- why a signature or visibility changed ("Not private: …")
+- how the problem was found: measurements, profiling, what was probed or tried
+- restating what the function or test does
+
+All of that belongs in the commit message. Exception: warn against
+reintroducing a bug when it's likely to come back without the warning.
 
 ## Dependencies
 
@@ -82,6 +90,11 @@ and travel with the code.
 - After a code change, run `/code-review max --fix` before review/commit. Once
   its fixes are applied, look over just the sections they touched; don't
   start another full sweep.
+- Before committing, list the comment lines the diff adds (e.g.
+  `git diff -U0 | grep -E '^\+\s*(//|#)'`) and hold each to the comment rule
+  above: out of context they show what reads as reasonable inline. Do this
+  yourself on a subagent's work; its comments are written for the diff's
+  reviewer.
 - LGTMCP: if you disagree with review feedback, don't bypass and commit—add a
   code comment explaining why, then resubmit.
 
