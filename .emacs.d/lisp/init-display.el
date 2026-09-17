@@ -196,10 +196,15 @@ Uses advice rather than key remapping because many functions
  '(font-lock-keyword-face ((t (:inherit font-lock-punctuation-face))))
  '(font-lock-negation-char-face ((t (:foreground "dark red"))))
  '(font-lock-number-face ((t (:inherit font-lock-string-face))))
- ;; Out of alphabetical order: property-use inherits property-name by default,
- ;; and Emacs 31 signals an error on even a momentary inheritance cycle.
- '(font-lock-property-use-face ((t (:foreground "MidnightBlue"))))
- '(font-lock-property-name-face ((t (:inherit font-lock-property-use-face :weight bold))))
+ ;; property-use inherits property-name, as in their defaults, and never the
+ ;; reverse: Emacs 31 signals an error on even a momentary inheritance cycle,
+ ;; and ordering these to avoid one does not survive Custom, which sorts the
+ ;; faces alphabetically when it copies them into `custom-file'.  The use faces
+ ;; undo the bold with reset, not normal, which is not the default face's weight.
+ ;; reset is not a weight but a pseudo-value that any attribute accepts, new in
+ ;; Emacs 29, meaning the default face's value; it is not an "Invalid face weight".
+ '(font-lock-property-name-face ((t (:foreground "MidnightBlue" :weight bold))))
+ '(font-lock-property-use-face ((t (:inherit font-lock-property-name-face :weight reset))))
  '(font-lock-punctuation-face ((t (:foreground "gray50"))))
  '(font-lock-reference-face ((t (:foreground "OrangeRed"))))
  '(font-lock-regexp-grouping-backslash ((t (:inherit font-lock-escape-face))))
@@ -207,7 +212,7 @@ Uses advice rather than key remapping because many functions
  '(font-lock-string-face ((t (:foreground "#005462"))))
  '(font-lock-type-face ((t (:foreground "#7070c2"))))
  '(font-lock-variable-name-face ((t (:weight bold))))
- '(font-lock-variable-use-face ((t (:inherit font-lock-variable-name-face :weight normal))))
+ '(font-lock-variable-use-face ((t (:inherit font-lock-variable-name-face :weight reset))))
  '(font-lock-warning-face ((t (:inherit nil))))
  '(highlight ((t (:background "darkseagreen1"))))
  '(isearch ((t (:inherit match))))
