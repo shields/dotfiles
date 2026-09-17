@@ -37,7 +37,7 @@ if TYPE_CHECKING:
 
     from fontTools.pens.basePen import AbstractPen
 
-REPO = Path(__file__).resolve().parent.parent
+REPO = Path(__file__).resolve().parents[1]
 SOURCE_DIR = REPO / "commit-mono"
 OUTPUT_DIR = REPO / "Library" / "Fonts"
 FAMILY = "CommitMonoShields Nerd Font"
@@ -570,11 +570,7 @@ class Fonts(NamedTuple):
     face: Face
     source: Font
     patched: Font
-
-    @property
-    def added(self) -> list[int]:
-        """Codepoints the patcher added."""
-        return sorted(set(self.patched.cmap) - set(self.source.cmap))
+    added: list[int]  # Codepoints the patcher added.
 
 
 class IconMeasurements(NamedTuple):
@@ -590,7 +586,10 @@ def fonts(request: pytest.FixtureRequest) -> Fonts:
     patched_path = OUTPUT_DIR / face.output
     if not patched_path.exists():
         pytest.fail(f"{patched_path} missing")
-    return Fonts(face, Font(SOURCE_DIR / f"{face.source}.otf"), Font(patched_path))
+    source = Font(SOURCE_DIR / f"{face.source}.otf")
+    patched = Font(patched_path)
+    added = sorted(set(patched.cmap) - set(source.cmap))
+    return Fonts(face, source, patched, added)
 
 
 @pytest.fixture(scope="module")
@@ -626,9 +625,12 @@ def test_output_directory_holds_exactly_the_four_faces() -> None:
     assert present == expected
 
 
-@pytest.mark.parametrize(
+name_platforms = pytest.mark.parametrize(
     "platform", [WINDOWS_NAMES, MACINTOSH_NAMES], ids=["windows", "macintosh"]
 )
+
+
+@name_platforms
 def test_names(fonts: Fonts, platform: tuple[int, int, int]) -> None:
     expected: dict[int, str | None] = {
         NAME_ID_FAMILY: FAMILY,
@@ -641,7 +643,16 @@ def test_names(fonts: Fonts, platform: tuple[int, int, int]) -> None:
         expected[name_id] = fonts.source.name(name_id, WINDOWS_NAMES)
     actual = {name_id: fonts.patched.name(name_id, platform) for name_id in expected}
     assert actual == expected
-    # The typographic family, if the patcher wrote one, must agree.
+
+
+@name_platforms
+def test_typographic_family_agrees(
+    fonts: Fonts, platform: tuple[int, int, int]
+) -> None:
+    # The typographic family, if the patcher wrote one, must agree -- a
+    # property independent of test_names above, so it gets its own test
+    # rather than sharing a function where an earlier failing assert would
+    # hide this check.
     typographic = {
         name_id: fonts.patched.name(name_id, platform)
         for name_id, want in (
@@ -714,18 +725,36 @@ def test_still_fixed_pitch(fonts: Fonts) -> None:
     assert fonts.patched.field("post", "isFixedPitch") == 1
 
 
-def test_glyphs_outside_patched_ranges_survive(fonts: Fonts) -> None:
-    source, patched = fonts.source, fonts.patched
+@pytest.fixture(scope="module")
+def kept_glyphs(fonts: Fonts) -> list[str]:
+    """Glyphs outside the codepoint ranges the patcher is allowed to replace."""
     replaceable = {
-        glyph for codepoint, glyph in source.cmap.items() if in_patched_range(codepoint)
+        glyph
+        for codepoint, glyph in fonts.source.cmap.items()
+        if in_patched_range(codepoint)
     }
-    kept = [glyph for glyph in source.glyph_names if glyph not in replaceable]
-    missing = [glyph for glyph in kept if glyph not in patched.glyph_set]
+    return [glyph for glyph in fonts.source.glyph_names if glyph not in replaceable]
+
+
+def test_glyphs_outside_patched_ranges_are_present(
+    fonts: Fonts, kept_glyphs: list[str]
+) -> None:
+    missing = [glyph for glyph in kept_glyphs if glyph not in fonts.patched.glyph_set]
     assert not missing, f"missing {summarize(missing)}"
+
+
+def test_glyphs_outside_patched_ranges_keep_their_shape(
+    fonts: Fonts, kept_glyphs: list[str]
+) -> None:
+    source, patched = fonts.source, fonts.patched
+    # Independent of test_glyphs_outside_patched_ranges_are_present above, so
+    # a glyph missing from patched is skipped here rather than relying on the
+    # other test having already caught it.
     changed = [
         glyph
-        for glyph in kept
-        if (source.outline(glyph), source.advance(glyph))
+        for glyph in kept_glyphs
+        if glyph in patched.glyph_set
+        and (source.outline(glyph), source.advance(glyph))
         != (patched.outline(glyph), patched.advance(glyph))
     ]
     assert not changed, f"changed {summarize(changed)}"

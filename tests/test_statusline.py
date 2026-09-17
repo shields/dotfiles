@@ -16,11 +16,12 @@
 # Claude Code sends and checks the rendered line. The script runs the way
 # Claude Code runs it — by path, under its own #!/bin/bash — with starship
 # and the clock shimmed so the left segment and every countdown are exact,
-# and the usage cache pre-seeded so nothing reaches the network or the
-# keychain.
+# and curl and the keychain shimmed so the usage fetch can be driven through
+# its success and failure paths without reaching the network.
 
 import json
 import os
+import shutil
 import subprocess
 import time
 from pathlib import Path
@@ -35,14 +36,18 @@ NOBOLD = "\x1b[22m"
 HOUR = 3600
 FIVE_HOURS = 5 * HOUR
 WEEK = 7 * 24 * HOUR
-# The clock the script sees. It must stay close to real time so the usage
-# cache written by each case counts as fresh and the script never fetches.
+# The script refetches usage once its cache is this old.
+CACHE_TTL = 600
+# The clock the script sees. It must stay close to real time so a cache
+# written moments ago counts as fresh.
 NOW = int(time.time())
 # What the starship shim's colored, padded output must be reduced to.
 LEFT = "main (abc1234) [!]"
 FABLE_USAGE = {
     "limits": [{"scope": {"model": {"display_name": "Fable"}}, "percent": 45.7}]
 }
+TOKEN = "test-oauth-token"  # noqa: S105 -- a fake, checked only for placement
+CREDENTIALS = {"claudeAiOauth": {"accessToken": TOKEN}}
 
 STARSHIP_SHIM = r"""
 [[ -n "${STATUSLINE_TEST_STARSHIP_FAIL:-}" ]] && exit 1
@@ -54,10 +59,60 @@ case "$2" in
 esac
 """
 
+# Records the call, the argv and the headers (including any read from an
+# @file, as curl would), then answers as STATUSLINE_TEST_CURL directs: a
+# body written to the -o file, or one of curl's failure exit codes.
+CURL_SHIM = r"""
+log="$STATUSLINE_TEST_LOG"
+printf '%s\n' curl >> "$log/calls"
+printf '%s\n' "$*" > "$log/curl.argv"
+: > "$log/curl.headers"
+out=''
+while (($#)); do
+    case "$1" in
+        -H)
+            shift
+            if [[ "$1" == @* ]]; then
+                cat "${1#@}" >> "$log/curl.headers"
+            else
+                printf '%s\n' "$1" >> "$log/curl.headers"
+            fi
+            ;;
+        -o)
+            shift
+            out="$1"
+            ;;
+    esac
+    shift
+done
+case "${STATUSLINE_TEST_CURL:-}" in
+    ok) printf '%s' "$STATUSLINE_TEST_RESPONSE" > "$out" ;;
+    garbage) printf 'not json' > "$out" ;;
+    http-error) exit 22 ;;
+    timeout) exit 28 ;;
+    *) exit 1 ;;
+esac
+"""
+
+# Prints the keychain item when the test provides one; otherwise fails the
+# way `security` does when the item is missing.
+SECURITY_SHIM = r"""
+printf '%s\n' security >> "$STATUSLINE_TEST_LOG/calls"
+[[ -n "${STATUSLINE_TEST_KEYCHAIN:-}" ]] || exit 44
+printf '%s\n' "$STATUSLINE_TEST_KEYCHAIN"
+"""
+
 
 def window(used: object, left: float) -> dict[str, object]:
     """A rate-limit window `used` percent spent, resetting `left` seconds from now."""
     return {"used_percentage": used, "resets_at": NOW + left}
+
+
+# A subscriber session 100 hours before the weekly reset, so 40% of the week
+# has elapsed. The Fable segment only appears in such a session.
+SUBSCRIBER = {"rate_limits": {"seven_day": window(40, 100 * HOUR)}}
+# FABLE_USAGE's 45.7%, floored, is ahead of that pace.
+FABLE_SEGMENT = f"Fable {BOLD}55%{NOBOLD}"
 
 
 def shim(target: Path, body: str) -> None:
@@ -69,9 +124,10 @@ def shim(target: Path, body: str) -> None:
 class Statusline:
     def __init__(self, home: Path) -> None:
         self.home = home
-        self.calls = home / "calls"
         self.usage = home / "cache" / "claude-code-statusline" / "usage.json"
         self.usage.parent.mkdir(parents=True)
+        self.log = home / "log"
+        self.log.mkdir()
         shims = home / "shims"
         shims.mkdir()
         self.env = dict(os.environ)
@@ -79,8 +135,11 @@ class Statusline:
             PATH=f"{shims}:{os.environ['PATH']}",
             HOME=str(home),
             XDG_CACHE_HOME=str(home / "cache"),
+            STATUSLINE_TEST_LOG=str(self.log),
         )
         shim(shims / "starship", STARSHIP_SHIM)
+        shim(shims / "curl", CURL_SHIM)
+        shim(shims / "security", SECURITY_SHIM)
         shim(
             shims / "date",
             rf"""
@@ -91,16 +150,32 @@ else
 fi
 """,
         )
-        # The script must never get as far as fetching usage; record any
-        # attempt so a case can fail on it rather than hang or leak.
-        for name in ("curl", "security"):
-            shim(shims / name, f"printf '%s\\n' {name} >> '{self.calls}'\nexit 1\n")
 
-    def run(
-        self, payload: object = None, *, usage: object = None
-    ) -> subprocess.CompletedProcess[str]:
-        _ = self.usage.write_text(json.dumps({} if usage is None else usage))
-        result = subprocess.run(
+    def cache(self, usage: object, *, age: float = 0) -> None:
+        """Seed the usage cache, `age` seconds old by the script's clock."""
+        _ = self.usage.write_text(json.dumps(usage))
+        os.utime(self.usage, (NOW - age, NOW - age))
+
+    def credentials(self, content: object) -> None:
+        path = self.home / ".claude" / ".credentials.json"
+        path.parent.mkdir()
+        _ = path.write_text(json.dumps(content))
+
+    def curl(self, mode: str, response: object = None) -> None:
+        """Have the curl shim answer with `response`, or fail as `mode` says."""
+        self.env["STATUSLINE_TEST_CURL"] = mode
+        self.env["STATUSLINE_TEST_RESPONSE"] = json.dumps(response)
+
+    def calls(self) -> list[str]:
+        """The fetch commands the script ran, in order."""
+        log = self.log / "calls"
+        return log.read_text().split() if log.exists() else []
+
+    def headers(self) -> list[str]:
+        return (self.log / "curl.headers").read_text().splitlines()
+
+    def run(self, payload: object = None) -> subprocess.CompletedProcess[str]:
+        return subprocess.run(
             [str(SCRIPT)],
             input="" if payload is None else json.dumps(payload),
             capture_output=True,
@@ -109,14 +184,19 @@ fi
             cwd=self.home,
             check=False,
         )
-        assert not self.calls.exists(), "the script tried to fetch usage"
-        return result
 
-    def render(self, payload: object = None, *, usage: object = None) -> str:
-        result = self.run(payload, usage=usage)
+    def line(self, payload: object = None) -> str:
+        result = self.run(payload)
         assert result.returncode == 0, result.stderr
         assert result.stderr == ""
         return result.stdout
+
+    def render(self, payload: object = None, *, usage: object = None) -> str:
+        """Render against a fresh cache holding `usage`, so nothing is fetched."""
+        self.cache({} if usage is None else usage)
+        line = self.line(payload)
+        assert self.calls() == [], "the script tried to fetch usage"
+        return line
 
 
 @pytest.fixture
@@ -205,10 +285,8 @@ def test_bold_marks_usage_ahead_of_pace(
 
 
 def test_fable_shares_the_weekly_pace(statusline: Statusline) -> None:
-    # 45.7% used, floored, at 40% of the week elapsed is ahead of pace.
-    payload = {"rate_limits": {"seven_day": window(40, 100 * HOUR)}}
-    line = statusline.render(payload, usage=FABLE_USAGE)
-    assert line == f" {LEFT} · 100h 60% · Fable {BOLD}55%{NOBOLD}"
+    line = statusline.render(SUBSCRIBER, usage=FABLE_USAGE)
+    assert line == f" {LEFT} · 100h 60% · {FABLE_SEGMENT}"
 
 
 @pytest.mark.parametrize(
@@ -222,8 +300,9 @@ def test_fable_shares_the_weekly_pace(statusline: Statusline) -> None:
 def test_fable_shows_unknown_without_a_cached_figure(
     statusline: Statusline, usage: object
 ) -> None:
-    payload = {"rate_limits": {"seven_day": window(40, 100 * HOUR)}}
-    assert statusline.render(payload, usage=usage) == f" {LEFT} · 100h 60% · Fable ??"
+    assert (
+        statusline.render(SUBSCRIBER, usage=usage) == f" {LEFT} · 100h 60% · Fable ??"
+    )
 
 
 def test_fable_needs_a_subscriber_session(statusline: Statusline) -> None:
@@ -287,3 +366,97 @@ def test_starship_failure_aborts(statusline: Statusline) -> None:
     result = statusline.run({"model": {"display_name": "Fable 5.1"}})
     assert result.returncode != 0
     assert result.stdout == ""
+
+
+def test_first_run_fetches_usage(statusline: Statusline) -> None:
+    statusline.credentials(CREDENTIALS)
+    statusline.curl("ok", FABLE_USAGE)
+    shutil.rmtree(statusline.usage.parent)  # not even the cache directory yet
+    assert statusline.line(SUBSCRIBER) == f" {LEFT} · 100h 60% · {FABLE_SEGMENT}"
+    assert json.loads(statusline.usage.read_text()) == FABLE_USAGE
+    assert not list(statusline.usage.parent.glob("usage.json.*")), "temp file left"
+    # The credentials file supplied the token, so the keychain was not
+    # consulted; the token travelled in a header file and never in argv.
+    assert statusline.calls() == ["curl"]
+    argv = (statusline.log / "curl.argv").read_text()
+    assert "https://api.anthropic.com/api/oauth/usage" in argv
+    assert TOKEN not in argv
+    assert f"Authorization: Bearer {TOKEN}" in statusline.headers()
+    assert "anthropic-beta: oauth-2025-04-20" in statusline.headers()
+
+
+@pytest.mark.parametrize(
+    ("age", "refetched"), [(CACHE_TTL, True), (CACHE_TTL - 1, False)]
+)
+def test_cache_is_refetched_once_stale(
+    statusline: Statusline, age: int, *, refetched: bool
+) -> None:
+    statusline.credentials(CREDENTIALS)
+    statusline.curl("ok", FABLE_USAGE)
+    statusline.cache({}, age=age)
+    segment = FABLE_SEGMENT if refetched else "Fable ??"
+    assert statusline.line(SUBSCRIBER) == f" {LEFT} · 100h 60% · {segment}"
+    assert statusline.calls() == (["curl"] if refetched else [])
+
+
+def test_keychain_supplies_the_token_without_a_credentials_file(
+    statusline: Statusline,
+) -> None:
+    statusline.env["STATUSLINE_TEST_KEYCHAIN"] = json.dumps(CREDENTIALS)
+    statusline.curl("ok", FABLE_USAGE)
+    assert statusline.line(SUBSCRIBER) == f" {LEFT} · 100h 60% · {FABLE_SEGMENT}"
+    assert statusline.calls() == ["security", "curl"]
+    assert f"Authorization: Bearer {TOKEN}" in statusline.headers()
+
+
+def test_keychain_backs_a_credentials_file_without_a_token(
+    statusline: Statusline,
+) -> None:
+    statusline.credentials({"claudeAiOauth": {}})
+    statusline.env["STATUSLINE_TEST_KEYCHAIN"] = json.dumps(CREDENTIALS)
+    statusline.curl("ok", FABLE_USAGE)
+    assert statusline.line(SUBSCRIBER) == f" {LEFT} · 100h 60% · {FABLE_SEGMENT}"
+    assert statusline.calls() == ["security", "curl"]
+
+
+def test_no_token_means_no_request(statusline: Statusline) -> None:
+    statusline.curl("ok", FABLE_USAGE)
+    assert statusline.line(SUBSCRIBER) == f" {LEFT} · 100h 60% · Fable ??"
+    assert statusline.calls() == ["security"]
+    assert json.loads(statusline.usage.read_text()) == {}
+
+
+@pytest.mark.parametrize("failure", ["http-error", "timeout", "garbage"])
+def test_failed_fetch_is_cached_and_not_retried(
+    statusline: Statusline, failure: str
+) -> None:
+    statusline.credentials(CREDENTIALS)
+    statusline.curl(failure)
+    assert statusline.line(SUBSCRIBER) == f" {LEFT} · 100h 60% · Fable ??"
+    assert json.loads(statusline.usage.read_text()) == {}
+    assert not list(statusline.usage.parent.glob("usage.json.*")), "temp file left"
+    # The failure is cached for as long as a success would be.
+    statusline.curl("ok", FABLE_USAGE)
+    assert statusline.line(SUBSCRIBER) == f" {LEFT} · 100h 60% · Fable ??"
+    assert statusline.calls() == ["curl"]
+
+
+def test_api_key_session_never_fetches(statusline: Statusline) -> None:
+    statusline.credentials(CREDENTIALS)
+    statusline.curl("ok", FABLE_USAGE)
+    payload = {"model": {"display_name": "Fable 5.1"}}
+    assert statusline.line(payload) == f" {LEFT} · Fable 5.1"
+    assert statusline.calls() == []
+    assert not statusline.usage.exists()
+
+
+def test_unwritable_cache_directory_still_renders(statusline: Statusline) -> None:
+    statusline.credentials(CREDENTIALS)
+    statusline.curl("ok", FABLE_USAGE)
+    statusline.usage.parent.chmod(0o500)
+    try:
+        assert statusline.line(SUBSCRIBER) == f" {LEFT} · 100h 60% · Fable ??"
+    finally:
+        statusline.usage.parent.chmod(0o700)
+    assert statusline.calls() == []
+    assert not statusline.usage.exists()

@@ -84,9 +84,9 @@ now=$(date +%s)
 five_window=18000  # 5 hours
 week_window=604800 # 7 days
 
-# Set secs to the time elapsed in the window of length $2 that resets at
-# $1, clamped into [0, $2] so the bold comparisons below cannot misfire
-# on clock skew.
+# Set secs to the time elapsed, and remaining to the time left, in the
+# window of length $2 that resets at $1, both clamped into [0, $2] so the
+# bold comparisons and countdowns below cannot misfire on clock skew.
 clamp_elapsed() {
     secs=$((now - ($1 - $2)))
     if ((secs < 0)); then
@@ -94,16 +94,17 @@ clamp_elapsed() {
     elif ((secs > $2)); then
         secs=$2
     fi
+    remaining=$(($2 - secs))
 }
 
 # Fable's weekly usage is exposed only by the undocumented OAuth usage
 # endpoint, never in the statusline JSON, so we fetch it ourselves. The
 # outcome — success or failure — is cached for 600s and the request is
 # time-bounded, so a slow, hung, or failing endpoint is retried at most once
-# a minute and never stalls the 5-second render loop. A cached failure is an
-# empty object that parses to nothing, so the caller shows "Fable ??" rather
-# than a stale number or a silently missing segment. Label and percent come
-# from the endpoint.
+# every ten minutes and never stalls the 5-second render loop. A cached
+# failure is an empty object that parses to nothing, so the caller shows
+# "Fable ??" rather than a stale number or a silently missing segment. Label
+# and percent come from the endpoint.
 fable_usage() {
     local cache_dir="${XDG_CACHE_HOME:-$HOME/Library/Caches}/claude-code-statusline"
     local cache="$cache_dir/usage.json"
@@ -155,8 +156,7 @@ if [[ -n "$five_reset" ]]; then
     clamp_elapsed "$five_reset" "$five_window"
     # Time left, not elapsed, so it counts down 5:00 -> 0:00 alongside the
     # percentages.
-    left_secs=$((five_window - secs))
-    right=$(printf '%d:%02d' $((left_secs / 3600)) $((left_secs % 3600 / 60)))
+    right=$(printf '%d:%02d' $((remaining / 3600)) $((remaining % 3600 / 60)))
 fi
 if [[ -n "$five_pct" ]]; then
     style=''
@@ -173,7 +173,7 @@ if [[ -n "$week_pct" ]]; then
         clamp_elapsed "$week_reset" "$week_window"
         # Hours left, not elapsed, so the label counts down 168h -> 0h
         # like the five-hour clock.
-        label=$(((week_window - secs) / 3600))h
+        label=$((remaining / 3600))h
         if ((week_pct * week_window > secs * 100)); then
             style=$bold
         fi

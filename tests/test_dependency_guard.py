@@ -29,9 +29,8 @@ import pytest
 if TYPE_CHECKING:
     from collections.abc import Mapping
 
-HOOK = (
-    Path(__file__).resolve().parent.parent / ".claude" / "hooks" / "dependency_guard.py"
-)
+REPO = Path(__file__).resolve().parents[1]
+HOOK = REPO / ".claude" / "hooks" / "dependency_guard.py"
 
 PYPROJECT = """\
 [project]
