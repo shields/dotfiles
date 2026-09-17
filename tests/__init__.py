@@ -1,4 +1,4 @@
-# Copyright © 2024, 2026 Michael Shields
+# Copyright © 2026 Michael Shields
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -11,22 +11,3 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-
-[project]
-name = "dotfiles"
-version = "0.1.0"
-requires-python = ">=3.14"
-dependencies = [
-    "pillow>=12.3.0",
-]
-
-[dependency-groups]
-dev = [
-    "fonttools>=4.64.0",
-    "pytest>=9.1.1",
-    "ruff>=0.16.0",
-    "ty>=0.0.19",
-]
-
-[tool.pytest.ini_options]
-testpaths = ["tests"]

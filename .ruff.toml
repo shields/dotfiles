@@ -35,3 +35,9 @@ ignore = [
   "RUF002",  # ambiguous Unicode character in docstring
   "RUF003",  # ambiguous Unicode character in comment
 ]
+
+[lint.per-file-ignores]
+"tests/*" = [
+  "PLR2004", # tests compare against literal expectations
+  "S101",    # pytest tests assert
+]

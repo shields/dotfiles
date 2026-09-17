@@ -1,5 +1,3 @@
-#!/usr/bin/env python3
-
 # Copyright © 2026 Michael Shields
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
@@ -23,19 +21,16 @@
 import json
 import subprocess
 import sys
-import tempfile
 from pathlib import Path
 from typing import TYPE_CHECKING, NamedTuple, cast
+
+import pytest
 
 if TYPE_CHECKING:
     from collections.abc import Mapping
 
-HOOK = (
-    Path(__file__).resolve().parent.parent / ".claude" / "hooks" / "dependency_guard.py"
-)
-
-# Marks a structurally wrong hook response, which fails a case either way.
-MALFORMED = "malformed response:"
+REPO = Path(__file__).resolve().parents[1]
+HOOK = REPO / ".claude" / "hooks" / "dependency_guard.py"
 
 PYPROJECT = """\
 [project]
@@ -358,24 +353,33 @@ CASES = (
     ),
 )
 
+
+class BashCase(NamedTuple):
+    label: str
+    command: str
+    ask: bool
+
+
 BASH_CASES = (
-    ("bash: append to requirements.txt", "echo 'requests' >> requirements.txt", True),
-    (
-        "bash: heredoc into pyproject.toml",
+    BashCase(
+        "append to requirements.txt", "echo 'requests' >> requirements.txt", ask=True
+    ),
+    BashCase(
+        "heredoc into pyproject.toml",
         "cat > pyproject.toml <<'EOF'\n[project]\nEOF",
-        True,
+        ask=True,
     ),
-    ("bash: sed -i on go.mod", "sed -i '' 's/a/b/' go.mod", True),
-    ("bash: tee into Brewfile", "echo 'brew \"jq\"' | tee -a Brewfile", True),
-    (
-        "bash: python writes go.mod",
+    BashCase("sed -i on go.mod", "sed -i '' 's/a/b/' go.mod", ask=True),
+    BashCase("tee into Brewfile", "echo 'brew \"jq\"' | tee -a Brewfile", ask=True),
+    BashCase(
+        "python writes go.mod",
         "python3 -c \"open('go.mod','a').write('x')\"",
-        True,
+        ask=True,
     ),
-    ("bash: reading a manifest", "cat pyproject.toml", False),
-    ("bash: grepping a manifest", "grep pillow pyproject.toml", False),
-    ("bash: unrelated redirect", "make lint > /tmp/out.txt", False),
-    ("bash: ordinary command", "uv run pytest -q", False),
+    BashCase("reading a manifest", "cat pyproject.toml", ask=False),
+    BashCase("grepping a manifest", "grep pillow pyproject.toml", ask=False),
+    BashCase("unrelated redirect", "make lint > /tmp/out.txt", ask=False),
+    BashCase("ordinary command", "uv run pytest -q", ask=False),
 )
 
 
@@ -389,77 +393,44 @@ def run_hook(payload: Mapping[str, object]) -> tuple[bool, str]:
         check=False,
     )
     # The hook only ever exits 0 (it prints an ask decision or nothing), so any
-    # non-zero exit is a real failure — a syntax error or crash. Flag it as
-    # malformed so it fails the case outright rather than reading as "silent".
-    if result.returncode != 0:
-        return (
-            False,
-            f"{MALFORMED} hook exited {result.returncode}: {result.stderr.strip()}",
-        )
+    # non-zero exit is a real failure — a syntax error or crash.
+    assert result.returncode == 0, result.stderr.strip()
     out = result.stdout.strip()
     if not out:
         return False, ""
     response = cast("dict[str, dict[str, str]]", json.loads(out))
     decision = response["hookSpecificOutput"]
-    if decision.get("hookEventName") != "PreToolUse":
-        return False, f"{MALFORMED} hookEventName {decision.get('hookEventName')!r}"
-    if not decision.get("permissionDecisionReason"):
-        return False, f"{MALFORMED} no permissionDecisionReason"
-    return decision["permissionDecision"] == "ask", decision.get(
-        "permissionDecisionReason", ""
-    )
+    assert decision.get("hookEventName") == "PreToolUse", decision
+    assert decision.get("permissionDecisionReason"), decision
+    return decision["permissionDecision"] == "ask", decision["permissionDecisionReason"]
 
 
-def check(label: str, *, asked: bool, expected: bool, detail: str) -> bool:
-    if detail.startswith(MALFORMED):
-        print(f"FAIL {label}: {detail}")
-        return False
-    if asked == expected:
-        print(f"ok   {label}")
-        return True
-    wanted = "ask" if expected else "silence"
-    got = f"ask ({detail})" if asked else "silence"
-    print(f"FAIL {label}: expected {wanted}, got {got}")
-    return False
+def check(payload: Mapping[str, object], *, ask: bool) -> None:
+    asked, reason = run_hook(payload)
+    wanted = "ask" if ask else "silence"
+    got = f"ask ({reason})" if asked else "silence"
+    assert asked == ask, f"expected {wanted}, got {got}"
 
 
-def main() -> int:
-    failures = 0
-    with tempfile.TemporaryDirectory() as tmp:
-        root = Path(tmp)
-        for index, case in enumerate(CASES):
-            # A fresh directory per case keeps Write-to-a-new-file honest.
-            workdir = root / str(index)
-            workdir.mkdir()
-            target = workdir / (case.filename or "pyproject.toml")
-            if case.filename:
-                _ = target.write_text(case.before, encoding="utf-8")
-            payload = {
-                "hook_event_name": "PreToolUse",
-                "tool_name": case.tool,
-                "tool_input": {"file_path": str(target), **case.tool_input},
-            }
-            asked, detail = run_hook(payload)
-            if not check(case.label, asked=asked, expected=case.ask, detail=detail):
-                failures += 1
-
-    for label, command, expected in BASH_CASES:
-        payload = {
-            "hook_event_name": "PreToolUse",
-            "tool_name": "Bash",
-            "tool_input": {"command": command},
-        }
-        asked, detail = run_hook(payload)
-        if not check(label, asked=asked, expected=expected, detail=detail):
-            failures += 1
-
-    total = len(CASES) + len(BASH_CASES)
-    if failures:
-        print(f"\n{failures} of {total} cases failed")
-        return 1
-    print(f"\nall {total} cases passed")
-    return 0
+@pytest.mark.parametrize("case", CASES, ids=[case.label for case in CASES])
+def test_file_edit(case: Case, tmp_path: Path) -> None:
+    # tmp_path is fresh per case, which keeps Write-to-a-new-file honest.
+    target = tmp_path / (case.filename or "pyproject.toml")
+    if case.filename:
+        _ = target.write_text(case.before, encoding="utf-8")
+    payload = {
+        "hook_event_name": "PreToolUse",
+        "tool_name": case.tool,
+        "tool_input": {"file_path": str(target), **case.tool_input},
+    }
+    check(payload, ask=case.ask)
 
 
-if __name__ == "__main__":
-    sys.exit(main())
+@pytest.mark.parametrize("case", BASH_CASES, ids=[case.label for case in BASH_CASES])
+def test_bash_command(case: BashCase) -> None:
+    payload = {
+        "hook_event_name": "PreToolUse",
+        "tool_name": "Bash",
+        "tool_input": {"command": case.command},
+    }
+    check(payload, ask=case.ask)
