@@ -40,13 +40,7 @@ source of truth; edits take effect only after running `./provision.sh`. Because
 
 ## Code Style
 
-- **Emacs Lisp**: Lexical binding, use-package based, use keymap-set
 - **Shell Scripts**: set -euo pipefail, prefer absolute paths
   - In Zsh, never use lowercase `path` as a local or general-purpose variable:
     it is a special array tied to `PATH`, so shadowing it can break command
     lookup and `chpwd` hooks. Use a descriptive name such as `worktree_path`.
-
-## Project Conventions
-
-- Do not optimize Emacs startup time - use emacsclient
-- Prefer tree-sitter modes when available

@@ -19,6 +19,8 @@
 (setq shields/add-lisp-dir-to-load-path nil)
 (load-file ".emacs.d/early-init.el")
 (add-to-list 'load-path ".emacs.d/lisp")
+;; `load-theme' otherwise finds the installed themes, which may be old.
+(add-to-list 'custom-theme-load-path (expand-file-name ".emacs.d"))
 (load-file ".emacs.d/init.el")
 
 (straight-pull-all)
