@@ -1,0 +1,53 @@
+# Copyright © 2026 Michael Shields
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+prefix_rule(
+    pattern = [["gh", "/opt/homebrew/bin/gh", "/usr/local/bin/gh"], "repo", ["archive", "create", "delete", "edit", "fork", "rename", "sync", "unarchive"]],
+    decision = "forbidden",
+    justification = "The user manages GitHub repositories. Use read-only repo commands.",
+    match = ["gh repo delete example/repo", "/opt/homebrew/bin/gh repo edit --visibility public"],
+    not_match = ["gh repo view", "gh repo list", "gh pr create"],
+)
+
+prefix_rule(
+    pattern = [["gh", "/opt/homebrew/bin/gh", "/usr/local/bin/gh"], "repo", "autolink", ["create", "delete"]],
+    decision = "forbidden",
+    justification = "The user manages repository autolinks.",
+    match = ["gh repo autolink create TICKET https://example.com/tickets/", "gh repo autolink delete 123"],
+    not_match = ["gh repo autolink list", "gh repo autolink view 123"],
+)
+
+prefix_rule(
+    pattern = [["gh", "/opt/homebrew/bin/gh", "/usr/local/bin/gh"], "repo", "deploy-key", ["add", "delete"]],
+    decision = "forbidden",
+    justification = "The user manages repository deploy keys.",
+    match = ["gh repo deploy-key add key.pub", "gh repo deploy-key delete 123"],
+    not_match = ["gh repo deploy-key list"],
+)
+
+prefix_rule(
+    pattern = [["lefthook", "/opt/homebrew/bin/lefthook", "/usr/local/bin/lefthook"], "uninstall"],
+    decision = "forbidden",
+    justification = "Keep the configured Git hooks installed and fix any reported failures.",
+    match = ["lefthook uninstall", "/opt/homebrew/bin/lefthook uninstall"],
+    not_match = ["lefthook run pre-commit", "lefthook install"],
+)
+
+prefix_rule(
+    pattern = [["git", "/usr/bin/git", "/opt/homebrew/bin/git", "/usr/local/bin/git"], "commit", ["--no-verify", "-n"]],
+    decision = "forbidden",
+    justification = "Respect the configured Git hooks. Commit without bypass flags.",
+    match = ["git commit --no-verify -m message", "git commit -n -m message", "/usr/local/bin/git commit --no-verify"],
+    not_match = ["git commit -m message"],
+)
