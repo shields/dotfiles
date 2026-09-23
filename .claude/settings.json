@@ -34,7 +34,8 @@
       "Bash(bun test *)",
       "Bash(uv run pytest *)",
       "Bash(uv run ruff check *)",
-      "Bash(uv run ty check *)"
+      "Bash(uv run ty check *)",
+      "mcp__cupertino"
     ],
     "deny": [
       "Bash(git commit --no-verify *)",
