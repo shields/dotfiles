@@ -387,8 +387,8 @@ _startup_overrides() {
         # Permit sandbox writes to this session's tmpdir; scoped to this run only.
         # --effort stays on the command line: settings.json's modelSettings only
         # sets effortLevel for claude-opus-5, which --model=fable does not match.
-        TMPDIR="$tmpdir" CLAUDE_CODE_SUBAGENT_MODEL=sonnet claude \
-            --model=fable --effort xhigh \
+        TMPDIR="$tmpdir" claude \
+            --model=opus --effort xhigh \
             --permission-mode=auto \
             --settings "{\"ultracode\":true,\"sandbox\":{\"filesystem\":{\"allowWrite\":[\"$tmpdir\"]}}}" "$@"
     }
