@@ -173,7 +173,8 @@
         "/Users/shields/.cache/pre-commit",
         "/Users/shields/.cache/uv",
         "/Users/shields/.npm",
-        "/Users/shields/.ruff_cache"
+        "/Users/shields/.ruff_cache",
+        "/Volumes/Cache"
       ]
     }
   },
