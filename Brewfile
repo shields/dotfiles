@@ -1,3 +1,4 @@
+tap "anthropics/tap"
 tap "cupertinohq/tap", "https://codeberg.org/CupertinoHQ/homebrew-tap.git"
 tap "d12frosted/emacs-plus"
 tap "fluxcd/tap"
@@ -162,6 +163,7 @@ brew "twilio/brew/twilio", trusted: true
 cask "agentsview"
 cask "airfoil"
 cask "anki"
+cask "anthropics/tap/ant", trusted: true
 cask "autodesk-fusion"
 cask "bambu-studio"
 cask "bazecor"
