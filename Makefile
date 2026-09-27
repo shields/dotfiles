@@ -50,7 +50,7 @@ lint:
 	shfmt -i 4 -d $(SHELL_SOURCES)
 
 fmt:
-	bun run prettier --write --ignore-path .gitignore "**/*.ts" "**/*.json" "**/*.md"
+	bun run prettier --write "**/*.ts" "**/*.json" "**/*.md"
 	ruff format
 	shfmt -i 4 -w $(SHELL_SOURCES)
 
