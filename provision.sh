@@ -19,6 +19,12 @@ set -euo pipefail
 # Copy these files.
 git ls-files -- '.*' | tar cf - -T - bin Library | (cd "$HOME" && tar xvf -)
 
+{
+    cat .agents/AGENTS.md
+    printf '\n'
+    cat .codex/instructions.md
+} >"$HOME/.codex/AGENTS.md"
+
 # Set email address in .gitconfig. Do this early so we don't leave it missing.
 if [[ "$(whoami)" == shields ]] && ! (profiles status -type enrollment | grep -q ': Yes'); then
     git config --global user.email shields@msrl.com

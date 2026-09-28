@@ -14,16 +14,16 @@ See the License for the specific language governing permissions and
 limitations under the License.
 -->
 
-@../.agents/AGENTS.md
-
-# Claude Code instructions
+# Codex instructions
 
 ## Git and commits
 
-- After a code change, run `/code-review max --fix` before review/commit. Then,
-  after applying its fixes or any later small or straightforward change to the
-  reviewed code, look over just what changed; don't start another full sweep.
+- After a code change, review the diff for correctness, regressions, and
+  missing tests before review/commit. Then, after applying fixes or any later
+  small or straightforward change to the reviewed code, look over just what
+  changed; don't start another full sweep.
 
 ## Web access
 
-- For online PDFs, download with `curl` and open with Read.
+- For online PDFs, open them with the web tool and use PDF screenshots to
+  inspect relevant pages.

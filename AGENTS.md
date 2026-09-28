@@ -34,9 +34,14 @@ limitations under the License.
 `provision.sh` installs the dotfiles by piping them through `tar` into `$HOME`:
 `bin/`, `Library/`, and every git-tracked path starting with `.` (e.g.
 `.claude/`, `.zshrc`). Files are copied, not symlinked, so this repo is the
-source of truth; edits take effect only after running `./provision.sh`. Because
-`.claude/` is copied, `.claude/CLAUDE.md` here is installed as the global
-`~/.claude/CLAUDE.md`.
+source of truth; edits take effect only after running `./provision.sh`.
+
+Shared agent instructions live in `.agents/AGENTS.md`. The global
+`~/.claude/CLAUDE.md` imports them with `@../.agents/AGENTS.md` and adds
+Claude-specific instructions. Provisioning concatenates `.agents/AGENTS.md`
+and `.codex/instructions.md` into the global `~/.codex/AGENTS.md`, since Codex
+does not expand `@` imports. Edit those source files to change Codex's
+instructions; the installed file is generated.
 
 ## Code Style
 
