@@ -5,6 +5,7 @@ tap "fluxcd/tap"
 tap "gabrie30/utils"
 tap "gimlet-io/capacitor"
 tap "golangci/tap"
+tap "openai/tools", trusted: { formulae: ["softnet"] }
 tap "oven-sh/bun"
 tap "snyk/tap"
 tap "twilio/brew"
@@ -157,6 +158,7 @@ brew "fluxcd/tap/flux", trusted: true
 brew "gabrie30/utils/ghorg", trusted: true
 brew "gimlet-io/capacitor/capacitor", trusted: true
 brew "golangci/tap/golangci-lint", trusted: true
+brew "openai/tools/tart", trusted: true
 brew "oven-sh/bun/bun", trusted: true
 brew "snyk/tap/snyk", trusted: true
 brew "twilio/brew/twilio", trusted: true
