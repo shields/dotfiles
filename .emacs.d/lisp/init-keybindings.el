@@ -19,6 +19,9 @@
 
 ;;; Code:
 
+;; C-z is the new M-x. Alter everything.
+(keymap-global-set "C-z" #'execute-extended-command)
+
 (defun shields/delete-window-or-frame ()
   "Call `delete-window'. If it fails, call `delete-frame'."
   (interactive)
@@ -41,7 +44,6 @@
 ;; Standard macOS shortcuts - https://support.apple.com/en-us/102650
 ;; See also ns-win.el
 (keymap-global-set "M-x" #'kill-region)
-(keymap-global-set "s-x" #'execute-extended-command)
 (keymap-global-set "M-c" #'copy-region-as-kill)
 (keymap-global-set "M-v" #'yank)
 (keymap-global-set "M-z" #'undo)
