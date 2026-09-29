@@ -154,20 +154,8 @@
 (setopt switch-to-buffer-obey-display-actions t)
 (setopt window-combination-resize t)
 
-;; Close frame when quitting the last window
-(defun shields/quit-window-or-frame (orig-fun &optional kill window)
-  "Quit WINDOW, or close frame if it's the only window.
-This is advice for `quit-window' that closes the frame
-when quitting the last window in the frame.
-
-Uses advice rather than key remapping because many functions
-(e.g., magit-mode-quit-window) wrap quit-window programmatically."
-  (let ((window (or window (selected-window))))
-    (if (one-window-p t)
-        (delete-frame)
-      (funcall orig-fun kill window))))
-
-(advice-add 'quit-window :around #'shields/quit-window-or-frame)
+(setopt quit-restore-window-no-switch t
+        frame-auto-hide-function #'delete-frame)
 
 ;; Old `custom-set-faces' calls left copies in `custom-file'.  The user theme
 ;; takes precedence, so discard those copies for faces now owned by shields.
