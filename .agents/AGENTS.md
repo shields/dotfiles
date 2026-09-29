@@ -94,6 +94,8 @@ and travel with the code.
   reviewer.
 - LGTMCP: if you disagree with review feedback, don't bypass and commit—add a
   code comment explaining why, then resubmit.
+- Commit a merge of already-reviewed branches directly with `git commit`, not
+  through LGTMCP.
 
 ## Web access
 
