@@ -70,6 +70,7 @@
 (keymap-global-set "M-:" #'comment-dwim)
 (keymap-global-set "C-c F" #'find-file-at-point)
 (keymap-global-set "s-SPC" #'fixup-whitespace)
+(keymap-global-set "C-w" #'fill-paragraph) ; "wrap", replacing kill-region
 (keymap-global-set "C-<backspace>" #'join-line)
 (keymap-global-set "M-g" #'grep)
 (keymap-global-set "M-r" #'replace-string)
@@ -82,7 +83,6 @@
 (keymap-global-unset "C-x f")  ; set-fill-column
 (keymap-global-unset "C-x o")  ; other-window
 (keymap-global-unset "C-v")    ; scroll-up-command
-(keymap-global-unset "C-w")    ; kill-region
 (keymap-global-unset "M-q")    ; macOS standard to quit
 ;; macOS standard bindings from ns-win.el that I just don't like:
 (keymap-global-unset "s-m")    ; iconify-frame
