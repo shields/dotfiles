@@ -19,12 +19,18 @@
 
 ;;; Code:
 
+(defun shields/markdown-wrap-lines ()
+  "Enable line continuation in Markdown buffers."
+  (setq-local truncate-lines nil
+              truncate-partial-width-windows nil))
+
 ;; Markdown.  Not the built-in markdown-ts-mode: its grammar's external scanner
 ;; overflows its serialization buffer and can corrupt the stack
 ;; (https://github.com/tree-sitter-grammars/tree-sitter-markdown/issues/243).
 (use-package markdown-mode
   :hook
   (markdown-mode . variable-pitch-mode)
+  (markdown-mode . shields/markdown-wrap-lines)
 
   :custom-face
   (markdown-code-face ((t (:inherit fixed-pitch :background "#f850f850f850" :height 0.8))))
