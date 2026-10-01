@@ -12,6 +12,12 @@ or changed hook definitions until they are trusted. Hooks are enabled by default
 an explicit `features.hooks = false` setting disables this additional check.
 The hook uses `python3` from `PATH` and requires Python 3.14 or later, like the repo.
 
+Provisioning runs `tools/configure_codex.py` to authorize LGTMCP's code transfers to
+Gemini in `auto_review.extra_policy` and preapprove its `review_only` and
+`review_and_commit` tools. The script reads the existing TOML to preserve extra
+policy, then writes the settings through Codex's `config/batchWrite` app-server
+API. Other settings are preserved. Restart Codex after applying these settings.
+
 Prefix rules match literal argument prefixes. The hook supplements those rules
 for ordinary shell invocations, command chains, and `sh`/`bash`/`zsh -c` wrappers.
 It does not evaluate aliases, dynamically constructed commands, substitutions
