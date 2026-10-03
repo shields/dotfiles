@@ -392,6 +392,9 @@ _startup_overrides() {
     }
     alias cw='c --worktree'
 
+    alias cx='codex'
+    alias cxw='cx --worktree'
+
     alias count='sort | uniq -c | sort -n'
 
     alias drit='docker run -it --rm'
