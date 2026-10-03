@@ -23,8 +23,13 @@ import plistlib
 import re
 import shlex
 import subprocess
+import sys
 import time
 from typing import cast
+
+from tqdm import tqdm
+
+DEFAULTS_TIMEOUT = 30
 
 type PlistValue = (
     bool
@@ -39,7 +44,9 @@ type PlistValue = (
 
 
 def get_defaults(domain: str) -> dict[str, PlistValue]:
-    plist = subprocess.check_output(["defaults", "export", domain, "-"])
+    plist = subprocess.check_output(
+        ["defaults", "export", domain, "-"], timeout=DEFAULTS_TIMEOUT
+    )
     # Some domains store sentinel <date>0000-12-30T00:00:00Z</date> values
     # that plistlib rejects (year must be >= 1). Remap year 0 to year 1.
     plist = re.sub(rb"<date>0000-", rb"<date>0001-", plist)
@@ -89,18 +96,22 @@ def print_diff(
 
         value = " ".join(_plist_typed(v))
 
-        print(f"defaults write {shlex.quote(domain)} {shlex.quote(k)} {value}")
+        tqdm.write(f"defaults write {shlex.quote(domain)} {shlex.quote(k)} {value}")
 
     for k in old:
         if k in new:
             continue
 
-        print(f"defaults delete {shlex.quote(domain)} {shlex.quote(k)}")
+        tqdm.write(f"defaults delete {shlex.quote(domain)} {shlex.quote(k)}")
+
+    _ = sys.stdout.flush()
 
 
 if __name__ == "__main__":
     domains = set(
-        subprocess.check_output(["defaults", "domains"], encoding="ascii")
+        subprocess.check_output(
+            ["defaults", "domains"], encoding="ascii", timeout=DEFAULTS_TIMEOUT
+        )
         .rstrip("\n")
         .split(", "),
     )
@@ -122,15 +133,36 @@ if __name__ == "__main__":
     # neither baseline nor repeatedly re-export them in the diff loop.
     domains -= {domain for domain in domains if is_boring_domain(domain)}
 
-    print("Baselining...", end="", flush=True)
-    defaults = {domain: get_defaults(domain) for domain in domains}
-    print("ready")
+    watched_domains = sorted(domains)
+    defaults: dict[str, dict[str, PlistValue]] = {}
+    with (
+        tqdm(
+            watched_domains, desc="Baselining", unit="domain", dynamic_ncols=True
+        ) as progress,
+        tqdm(
+            bar_format="{desc}", position=1, leave=False, dynamic_ncols=True
+        ) as domain_progress,
+    ):
+        for domain in progress:
+            domain_progress.set_description_str(domain)
+            defaults[domain] = get_defaults(domain)
 
     while True:
         time.sleep(1)
-        for domain in domains:
-            print("Diffing...", end="", flush=True)
-            new = get_defaults(domain)
-            print("\r          \r", end="", flush=True)
-            print_diff(domain, defaults[domain], new)
-            defaults[domain] = new
+        with (
+            tqdm(
+                watched_domains,
+                desc="Diffing",
+                unit="domain",
+                dynamic_ncols=True,
+                leave=False,
+            ) as progress,
+            tqdm(
+                bar_format="{desc}", position=1, leave=False, dynamic_ncols=True
+            ) as domain_progress,
+        ):
+            for domain in progress:
+                domain_progress.set_description_str(domain)
+                new = get_defaults(domain)
+                print_diff(domain, defaults[domain], new)
+                defaults[domain] = new
