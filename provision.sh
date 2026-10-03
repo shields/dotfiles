@@ -179,6 +179,7 @@ fi
 if [[ "$(defaults read com.apple.universalaccess stickyKeysLocation 2>/dev/null)" != "1" ]]; then
     sudo defaults write com.apple.universalaccess stickyKeysLocation -int 1
 fi
+defaults write NSGlobalDomain NSAutomaticPeriodSubstitutionEnabled -bool false
 
 # Trackpad tap to click
 defaults write com.apple.driver.AppleBluetoothMultitouch.trackpad Clicking -bool true
