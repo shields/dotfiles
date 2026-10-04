@@ -303,6 +303,10 @@ if ! grep -q '^server time\.google\.com$' /etc/ntp.conf; then
     sudo systemsetup -setnetworktimeserver time.google.com
 fi
 
+# Reduce DHCP lease time from the default 24h to avoid pool exhaustion
+# when starting many Tart VMs in a day.
+sudo defaults write /Library/Preferences/SystemConfiguration/com.apple.InternetSharing.default.plist bootpd -dict DHCPLeaseTimeSecs -int 600
+
 # Restart affected processes
 killall ControlCenter Finder cfprefsd
 
