@@ -90,6 +90,7 @@ macos-titlebar-style = native
 # Don't confirm before closing
 confirm-close-surface = false
 
-# Clipboard access (matching iTerm2 AllowClipboardAccess)
-clipboard-read = allow
+# Clipboard access: writes are free, but reads ask first so that a program
+# on a remote host cannot read what was copied.
+clipboard-read = ask
 clipboard-write = allow
