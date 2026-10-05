@@ -43,7 +43,7 @@ test:
 
 lint:
 	bun run eslint .
-	ruff check
+	uv run ruff check
 	uv run ty check
 	basedpyright
 	shellcheck --exclude=SC1091 $(SHELL_SOURCES)
@@ -51,7 +51,7 @@ lint:
 
 fmt:
 	bun run prettier --write "**/*.ts" "**/*.json" "**/*.md"
-	ruff format
+	uv run ruff format
 	shfmt -i 4 -w $(SHELL_SOURCES)
 
 run:
