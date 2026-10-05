@@ -62,8 +62,17 @@ out="$(cd "$TMPBASE" && bash "$SCRIPT" 2>&1)" && rc=$? || rc=$?
 assert_eq "not a git repo returns 1" 1 "$rc"
 
 # --- 2. gh not on PATH ---
+# A PATH of symlinks to just the tools the script needs, so gh stays hidden
+# even where the system package manager installs it in /usr/bin. bash is
+# /bin/bash, the interpreter of the script's #!/bin/bash shebang, which is
+# bash 3.2 on macOS.
+NO_GH_BIN="$TMPBASE/no-gh-bin"
+mkdir -p "$NO_GH_BIN"
+ln -s /bin/bash "$NO_GH_BIN/bash"
+ln -s "$(whence -p git)" "$NO_GH_BIN/git"
+assert_eq "scratch PATH hides gh" absent "$(env PATH="$NO_GH_BIN" /bin/sh -c 'command -v gh || echo absent')"
 repo="$(make_repo no-gh https://github.com/octocat/Hello-World.git)"
-out="$(cd "$repo" && PATH=/usr/bin:/bin bash "$SCRIPT" 2>&1)" && rc=$? || rc=$?
+out="$(cd "$repo" && PATH="$NO_GH_BIN" bash "$SCRIPT" 2>&1)" && rc=$? || rc=$?
 assert_eq "no gh returns 0" 0 "$rc"
 
 # --- 3. Non-github.com origin ---

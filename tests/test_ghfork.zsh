@@ -97,8 +97,17 @@ assert_eq "upstream exists prints message" 1 "$([[ "$out" == *"upstream remote a
 assert_eq "upstream exists leaves origin unchanged" "https://github.com/someowner/somerepo.git" "$(git -C "$repo" remote get-url origin)"
 
 # --- 5. gh not on PATH ---
+# A PATH of symlinks to just the tools the script needs, so gh stays hidden
+# even where the system package manager installs it in /usr/bin. bash is
+# /bin/bash, the interpreter of the script's #!/bin/bash shebang, which is
+# bash 3.2 on macOS.
+NO_GH_BIN="$TMPBASE/no-gh-bin"
+mkdir -p "$NO_GH_BIN"
+ln -s /bin/bash "$NO_GH_BIN/bash"
+ln -s "$(whence -p git)" "$NO_GH_BIN/git"
+assert_eq "scratch PATH hides gh" absent "$(env PATH="$NO_GH_BIN" /bin/sh -c 'command -v gh || echo absent')"
 repo="$(make_repo no-gh https://github.com/someowner/somerepo.git)"
-out="$(cd "$repo" && PATH=/usr/bin:/bin bash "$SCRIPT" 2>&1)" && rc=$? || rc=$?
+out="$(cd "$repo" && PATH="$NO_GH_BIN" bash "$SCRIPT" 2>&1)" && rc=$? || rc=$?
 assert_eq "no gh returns 1" 1 "$rc"
 assert_eq "no gh prints message" 1 "$([[ "$out" == *"gh CLI not found"* ]] && echo 1 || echo 0)"
 
