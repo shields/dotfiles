@@ -328,3 +328,38 @@ def test_dependency_guard_asks_about_a_new_dependency(
     result = sandbox.run(["/bin/sh", "-c"], command, payload(hook, "Edit", edit))
     assert (result.returncode, result.stdout, result.stderr) == (0, "", "")
     assert sandbox.resolved() == ["slot0", "slot0"]
+
+
+def claude_settings() -> dict[str, dict[str, object]]:
+    return cast("dict[str, dict[str, object]]", json.loads(CLAUDE_SETTINGS.read_text()))
+
+
+ALLOW_WRITE = [
+    "~/.cache/go-build",
+    "~/.cache/golangci-lint",
+    "~/.cache/pre-commit",
+    "~/.cache/uv",
+    "~/.npm",
+    "~/.ruff_cache",
+    "~/Library/Caches/go-build",
+    "~/Library/Caches/golangci-lint",
+    "~/go/pkg/mod",
+    "/Volumes/Cache",
+]
+
+
+def test_claude_sandbox_is_enforced_and_narrow() -> None:
+    sandbox = claude_settings()["sandbox"]
+    assert sandbox["enabled"] is True
+    assert sandbox["failIfUnavailable"] is True
+    filesystem = cast("dict[str, list[str]]", sandbox["filesystem"])
+    # .zshrc evals files from ~/.cache/zsh, so ~/.cache must not be writable.
+    assert sorted(filesystem["allowWrite"]) == sorted(ALLOW_WRITE)
+    assert filesystem["denyRead"] == ["~/.config/secrets", "~/.config/lgtmcp"]
+
+
+def test_claude_subprocess_env_is_not_scrubbed() -> None:
+    env = cast("dict[str, str]", claude_settings()["env"])
+    # The scrub turns off sandbox auto-allow and forces the default permission
+    # mode in every session, including on the Mac.
+    assert "CLAUDE_CODE_SUBPROCESS_ENV_SCRUB" not in env
