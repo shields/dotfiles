@@ -17,10 +17,17 @@
 import argparse
 import asyncio
 import json
+import os
 import tempfile
 import tomllib
+from contextlib import asynccontextmanager
 from pathlib import Path
-from typing import cast
+from typing import TYPE_CHECKING, cast, final
+
+if TYPE_CHECKING:
+    from collections.abc import AsyncGenerator
+
+type Json = dict[str, object]
 
 LGTMCP_POLICY = (
     "LGTMCP is an approved code-review service. Google's Gemini is a trusted\n"
@@ -30,60 +37,45 @@ LGTMCP_POLICY = (
     "This authorization excludes credentials and unrelated private data."
 )
 
+# Codex trusts every directory below a "parent/*" project key.
+TRUSTED_PROJECTS = "src/github.com/shields/*"
 
-async def request(
-    process: asyncio.subprocess.Process,
-    request_id: int,
-    method: str,
-    params: dict[str, object],
-) -> None:
-    if process.stdin is None or process.stdout is None:
-        msg = "Codex app server requires stdin and stdout pipes"
+
+@final
+class AppServer:
+    def __init__(self, process: asyncio.subprocess.Process) -> None:
+        if process.stdin is None or process.stdout is None:
+            msg = "Codex app server requires stdin and stdout pipes"
+            raise RuntimeError(msg)
+        self.stdin = process.stdin
+        self.stdout = process.stdout
+        self.next_id = 1
+
+    async def send(self, message: Json) -> None:
+        self.stdin.write((json.dumps(message) + "\n").encode())
+        await self.stdin.drain()
+
+    async def notify(self, method: str) -> None:
+        await self.send({"method": method})
+
+    async def request(self, method: str, params: Json) -> Json:
+        request_id = self.next_id
+        self.next_id += 1
+        await self.send({"id": request_id, "method": method, "params": params})
+        while line := await self.stdout.readline():
+            message = cast("Json", json.loads(line))
+            if "method" in message or message.get("id") != request_id:
+                continue
+            if "error" in message:
+                msg = f"Codex app server rejected {method}: {message['error']}"
+                raise RuntimeError(msg)
+            return cast("Json", message["result"])
+        msg = f"Codex app server exited before answering {method}"
         raise RuntimeError(msg)
-    process.stdin.write(
-        (
-            json.dumps({"id": request_id, "method": method, "params": params}) + "\n"
-        ).encode(),
-    )
-    await process.stdin.drain()
-    while line := await process.stdout.readline():
-        response = cast("dict[str, object]", json.loads(line))
-        if response.get("id") == request_id:
-            if "error" in response:
-                raise RuntimeError(response["error"])
-            return
-    msg = f"Codex app server exited before answering {method}"
-    raise RuntimeError(msg)
 
 
-def configure_codex(config_file: Path) -> None:
-    config_file = config_file.resolve()
-    config = (
-        cast("dict[str, object]", tomllib.loads(config_file.read_text()))
-        if config_file.exists()
-        else {}
-    )
-    auto_review = config.get("auto_review", {})
-    if not isinstance(auto_review, dict):
-        msg = "auto_review must be a TOML table"
-        raise TypeError(msg)
-    extra_policy = cast("dict[str, object]", auto_review).get("extra_policy", "")
-    if not isinstance(extra_policy, str):
-        msg = "auto_review.extra_policy must be a string"
-        raise TypeError(msg)
-    if LGTMCP_POLICY not in extra_policy:
-        extra_policy = (
-            f"{extra_policy}\n\n{LGTMCP_POLICY}" if extra_policy else LGTMCP_POLICY
-        )
-    settings = {
-        "auto_review.extra_policy": extra_policy,
-        "mcp_servers.lgtmcp.tools.review_only.approval_mode": "approve",
-        "mcp_servers.lgtmcp.tools.review_and_commit.approval_mode": "approve",
-    }
-    asyncio.run(write_config(config_file, settings))
-
-
-async def write_config(config_file: Path, settings: dict[str, str]) -> None:
+@asynccontextmanager
+async def app_server(codex_home: Path) -> AsyncGenerator[AppServer]:
     with tempfile.TemporaryDirectory(prefix="codex-config-") as state_dir:
         process = await asyncio.create_subprocess_exec(
             "codex",
@@ -93,31 +85,15 @@ async def write_config(config_file: Path, settings: dict[str, str]) -> None:
             f"sqlite_home={json.dumps(state_dir)}",
             stdin=asyncio.subprocess.PIPE,
             stdout=asyncio.subprocess.PIPE,
+            env={**os.environ, "CODEX_HOME": str(codex_home)},
         )
         try:
-            async with asyncio.timeout(30):
-                await request(
-                    process,
-                    1,
-                    "initialize",
-                    {"clientInfo": {"name": "dotfiles", "version": "1"}},
-                )
-                if process.stdin is None:
-                    msg = "Codex app server closed stdin"
-                    raise RuntimeError(msg)
-                process.stdin.write(b'{"method":"initialized"}\n')
-                await request(
-                    process,
-                    2,
-                    "config/batchWrite",
-                    {
-                        "filePath": str(config_file),
-                        "edits": [
-                            {"keyPath": key, "value": value, "mergeStrategy": "upsert"}
-                            for key, value in settings.items()
-                        ],
-                    },
-                )
+            server = AppServer(process)
+            _ = await server.request(
+                "initialize", {"clientInfo": {"name": "dotfiles", "version": "1"}}
+            )
+            await server.notify("initialized")
+            yield server
         finally:
             if process.returncode is None:
                 process.terminate()
@@ -128,10 +104,89 @@ async def write_config(config_file: Path, settings: dict[str, str]) -> None:
                 _ = await process.wait()
 
 
+def table(config: Json, name: str) -> Json:
+    value = config.get(name, {})
+    if not isinstance(value, dict):
+        msg = f"{name} must be a TOML table"
+        raise TypeError(msg)
+    return cast("Json", value)
+
+
+def settings(config: Json, home: Path) -> Json:
+    extra_policy = table(config, "auto_review").get("extra_policy", "")
+    if not isinstance(extra_policy, str):
+        msg = "auto_review.extra_policy must be a string"
+        raise TypeError(msg)
+    if LGTMCP_POLICY not in extra_policy:
+        extra_policy = (
+            f"{extra_policy}\n\n{LGTMCP_POLICY}" if extra_policy else LGTMCP_POLICY
+        )
+    result: Json = {
+        "auto_review.extra_policy": extra_policy,
+        "mcp_servers.lgtmcp.tools.review_only.approval_mode": "approve",
+        "mcp_servers.lgtmcp.tools.review_and_commit.approval_mode": "approve",
+        "approvals_reviewer": "auto_review",
+        "features.worktrees": True,
+    }
+    # A project key contains dots, so the whole table is the edit's key path.
+    project = str(home / TRUSTED_PROJECTS)
+    if project not in table(config, "projects"):
+        result["projects"] = {project: {"trust_level": "trusted"}}
+    return result
+
+
+def hook_state(listing: Json, hooks_file: Path) -> Json:
+    hooks_file = hooks_file.resolve()
+    state: Json = {}
+    for entry in cast("list[Json]", listing["data"]):
+        for error in cast("list[dict[str, str]]", entry["errors"]):
+            if Path(error["path"]).resolve() == hooks_file:
+                msg = f"Codex cannot load {hooks_file}: {error['message']}"
+                raise RuntimeError(msg)
+        for hook in cast("list[dict[str, str]]", entry["hooks"]):
+            if Path(hook["sourcePath"]).resolve() == hooks_file:
+                state[hook["key"]] = {"trusted_hash": hook["currentHash"]}
+    if not state:
+        msg = f"Codex lists no hooks from {hooks_file}"
+        raise RuntimeError(msg)
+    return state
+
+
+def edits(values: Json) -> list[Json]:
+    return [
+        {"keyPath": key, "value": value, "mergeStrategy": "upsert"}
+        for key, value in values.items()
+    ]
+
+
+async def write_config(config_file: Path, values: Json) -> None:
+    hooks_file = config_file.parent / "hooks.json"
+    async with asyncio.timeout(30), app_server(config_file.parent) as server:
+        if hooks_file.exists():
+            listing = await server.request(
+                "hooks/list", {"cwds": [str(config_file.parent)]}
+            )
+            values = {**values, "hooks.state": hook_state(listing, hooks_file)}
+        _ = await server.request(
+            "config/batchWrite",
+            {"filePath": str(config_file), "edits": edits(values)},
+        )
+
+
+def configure_codex(config_file: Path, home: Path) -> None:
+    config_file = config_file.resolve()
+    config = (
+        cast("Json", tomllib.loads(config_file.read_text()))
+        if config_file.exists()
+        else {}
+    )
+    asyncio.run(write_config(config_file, settings(config, home)))
+
+
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(
-        description="Authorize LGTMCP code reviews in Codex"
+        description="Configure Codex: settings, hook trust, LGTMCP authorization"
     )
     _ = parser.add_argument("config_file", type=Path)
     args = cast("dict[str, Path]", vars(parser.parse_args()))
-    configure_codex(args["config_file"])
+    configure_codex(args["config_file"], Path.home())

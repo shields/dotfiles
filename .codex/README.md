@@ -6,10 +6,13 @@ commands for pushes with global Git options (including `-C`, `-c`, `--git-dir`,
 and `--work-tree`) and commit bypass flags in other positions. Like the Claude
 permissions, it rejects commits with Git configuration overrides.
 
-`provision.sh` copies tracked files into `~/.codex/`. After provisioning, restart
-Codex and use `/hooks` to review and trust the `git_guard.py` hook. Codex skips new
-or changed hook definitions until they are trusted. Hooks are enabled by default;
-an explicit `features.hooks = false` setting disables this additional check.
+`provision.sh` copies tracked files into `~/.codex/` and then trusts the hook
+definitions it installed, so `/hooks` shows `git_guard.py` as trusted after a
+restart of Codex. Codex skips new or changed hook definitions until they are
+trusted, so a hand edit to `~/.codex/hooks.json` shows up in `/hooks` as modified
+until provisioning runs again or you review it there. Hooks are enabled by
+default; an explicit `features.hooks = false` setting disables this additional
+check.
 
 The hook command runs `git_guard.py` with the first `python3.14` that exists in
 `/opt/homebrew/bin`, `/usr/local/bin`, and `/home/linuxbrew/.linuxbrew/bin`, in
@@ -29,9 +32,20 @@ miss, such as `/usr/bin/git push` and `env git push`.
 
 Provisioning runs `tools/configure_codex.py` to authorize LGTMCP's code transfers to
 Gemini in `auto_review.extra_policy` and preapprove its `review_only` and
-`review_and_commit` tools. The script reads the existing TOML to preserve extra
-policy, then writes the settings through Codex's `config/batchWrite` app-server
-API. Other settings are preserved. Restart Codex after applying these settings.
+`review_and_commit` tools. It also sets `approvals_reviewer = "auto_review"` and
+`features.worktrees = true`, and trusts `~/src/github.com/shields/*` as a project
+unless the config already has an entry for that key.
+
+The same run seeds hook trust. The script asks the app server for `hooks/list`,
+then writes `hooks.state.<key>.trusted_hash` for every hook that
+`~/.codex/hooks.json` defines, using the hash Codex computed for the installed
+definition. That re-trusts `git_guard.py` after a change to its command, and Lima
+clones and the Cloudflare image inherit the trust. The script fails if Codex lists
+no hook from that file, or reports that the file does not load.
+
+The script reads the existing TOML to preserve extra policy, then writes the
+settings through Codex's `config/batchWrite` app-server API. Other settings are
+preserved. Restart Codex after applying these settings.
 
 Prefix rules match literal argument prefixes. The hook supplements those rules
 for ordinary shell invocations, command chains, and `sh`/`bash`/`zsh -c` wrappers.
@@ -45,6 +59,9 @@ the hook, the rules, and how both agents launch the hook. The launch tests run
 each registered command with fake interpreters and a decoy `python3` on `PATH`.
 Rule tests use `codex execpolicy check` and skip when the Codex CLI is
 unavailable; none of the test commands are executed.
+`tests/test_configure_codex.py` drives `tools/configure_codex.py` against a stub
+`codex` that speaks just enough of the app-server protocol, so it never touches
+`~/.codex`.
 
 References: [Codex rules](https://learn.chatgpt.com/docs/agent-configuration/rules)
 and [Codex hooks](https://learn.chatgpt.com/docs/hooks).
