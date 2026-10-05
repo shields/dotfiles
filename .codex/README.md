@@ -10,7 +10,17 @@ permissions, it rejects commits with Git configuration overrides.
 Codex and use `/hooks` to review and trust the `git_guard.py` hook. Codex skips new
 or changed hook definitions until they are trusted. Hooks are enabled by default;
 an explicit `features.hooks = false` setting disables this additional check.
-The hook uses `python3` from `PATH` and requires Python 3.14 or later, like the repo.
+
+The hook command runs `git_guard.py` with the first `python3.14` that exists in
+`/opt/homebrew/bin`, `/usr/local/bin`, and `/home/linuxbrew/.linuxbrew/bin`, in
+that order. It never searches `PATH`, so neither a hijacked `PATH` nor an older
+Python in `~/.local/bin` can stand in for it. When none exists, the command prints
+a recovery hint to stderr and exits 2, which Codex treats as a block with the hint
+as its reason: a missing interpreter stops Bash tool calls rather than silently
+turning the check off. Only the lookup fails closed; Codex treats any other
+nonzero exit as a non-blocking hook failure and runs the command anyway. Codex
+runs the command with `$SHELL -lc` and Claude Code with `sh -c`, so keep it valid
+in both.
 
 Provisioning runs `tools/configure_codex.py` to authorize LGTMCP's code transfers to
 Gemini in `auto_review.extra_policy` and preapprove its `review_only` and

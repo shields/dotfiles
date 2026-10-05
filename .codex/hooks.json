@@ -6,7 +6,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "/usr/bin/env python3 \"$HOME/.codex/hooks/git_guard.py\"",
+            "command": "for py in /opt/homebrew/bin/python3.14 /usr/local/bin/python3.14 /home/linuxbrew/.linuxbrew/bin/python3.14; do [ -x \"$py\" ] && exec \"$py\" \"$HOME/.codex/hooks/git_guard.py\"; done; echo 'git_guard.py: Python 3.14 not found in /opt/homebrew/bin, /usr/local/bin or /home/linuxbrew/.linuxbrew/bin; run provision.sh or brew install python@3.14' >&2; exit 2",
             "timeout": 10
           }
         ]
