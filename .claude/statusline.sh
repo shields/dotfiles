@@ -106,10 +106,21 @@ clamp_elapsed() {
 # "Fable ??" rather than a stale number or a silently missing segment. Label
 # and percent come from the endpoint.
 fable_usage() {
-    local cache_dir="${XDG_CACHE_HOME:-$HOME/Library/Caches}/claude-code-statusline"
+    local cache_root
+    if [[ -n "${XDG_CACHE_HOME:-}" ]]; then
+        cache_root=$XDG_CACHE_HOME
+    elif [[ ${OSTYPE:-} == darwin* ]]; then
+        cache_root=$HOME/Library/Caches
+    else
+        cache_root=$HOME/.cache
+    fi
+    local cache_dir="$cache_root/claude-code-statusline"
     local cache="$cache_dir/usage.json"
     local mtime
-    mtime=$(stat -f %m "$cache" 2>/dev/null) || mtime=0
+    # BSD and GNU stat take incompatible format flags. BSD date -r accepts a
+    # filename as well as seconds (see its usage line), and GNU date -r takes
+    # only a filename, so date -r FILE reads the mtime on both.
+    mtime=$(date -r "$cache" +%s 2>/dev/null) || mtime=0
     if ((now - mtime >= 600)); then
         local tok=''
         if [[ -f "$HOME/.claude/.credentials.json" ]]; then

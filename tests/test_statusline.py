@@ -399,6 +399,24 @@ def test_cache_is_refetched_once_stale(
     assert statusline.calls() == (["curl"] if refetched else [])
 
 
+@pytest.mark.parametrize(
+    ("ostype", "default_cache"),
+    [("darwin25.0", "Library/Caches"), ("linux-gnu", ".cache")],
+)
+def test_default_cache_directory_depends_on_the_os(
+    statusline: Statusline, ostype: str, default_cache: str
+) -> None:
+    del statusline.env["XDG_CACHE_HOME"]
+    statusline.env["OSTYPE"] = ostype
+    statusline.usage = (
+        statusline.home / default_cache / "claude-code-statusline" / "usage.json"
+    )
+    statusline.usage.parent.mkdir(parents=True)
+    assert statusline.render(SUBSCRIBER, usage=FABLE_USAGE) == (
+        f" {LEFT} · 100h 60% · {FABLE_SEGMENT}"
+    )
+
+
 def test_keychain_supplies_the_token_without_a_credentials_file(
     statusline: Statusline,
 ) -> None:
@@ -453,10 +471,8 @@ def test_api_key_session_never_fetches(statusline: Statusline) -> None:
 def test_unwritable_cache_directory_still_renders(statusline: Statusline) -> None:
     statusline.credentials(CREDENTIALS)
     statusline.curl("ok", FABLE_USAGE)
-    statusline.usage.parent.chmod(0o500)
-    try:
-        assert statusline.line(SUBSCRIBER) == f" {LEFT} · 100h 60% · Fable ??"
-    finally:
-        statusline.usage.parent.chmod(0o700)
+    shutil.rmtree(statusline.usage.parent)
+    _ = statusline.usage.parent.write_text("")
+    assert statusline.line(SUBSCRIBER) == f" {LEFT} · 100h 60% · Fable ??"
     assert statusline.calls() == []
     assert not statusline.usage.exists()
