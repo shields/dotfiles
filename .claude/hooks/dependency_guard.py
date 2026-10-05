@@ -1,4 +1,4 @@
-#!/opt/homebrew/bin/python3
+#!/usr/bin/env python3.14
 
 # Copyright © 2026 Michael Shields
 #
@@ -32,10 +32,12 @@
 # CLAUDE.md: a hook cannot deliver it on the path that needs it, because on a
 # denial the tool call short-circuits before hook output reaches the model.
 #
-# The interpreter is pinned rather than /usr/bin/env python3 on purpose: macOS
-# ships 3.9 at /usr/bin/python3, which has no tomllib. An ImportError here would
-# exit 1, and a PreToolUse hook that exits 1 is a *non-blocking* error — the
-# edit would proceed unguarded. Pinning keeps the failure mode closed.
+# This file needs Python 3.14 (PEP 758 syntax below). A PreToolUse hook that
+# exits 1 is a *non-blocking* error, so an interpreter that cannot run the file
+# would let the edit proceed unguarded. The command in settings.json therefore
+# has to run it under an absolute python3.14 path, never a PATH lookup, and exit
+# 2 when that interpreter is missing, which blocks the tool call. The shebang
+# matters only when the file is run directly.
 
 import json
 import re
@@ -320,8 +322,8 @@ def _read(path: Path) -> str | None:
         if path.stat().st_size > MAX_BYTES:
             return None
         return path.read_text(encoding="utf-8")
-    # Parenthesis-free multi-except: valid since Python 3.14 (PEP 758). The
-    # interpreter is pinned to 3.14 above, and ruff's formatter keeps this form.
+    # Parenthesis-free multi-except: valid since Python 3.14 (PEP 758), which
+    # this file requires. Ruff's formatter keeps this form.
     except OSError, UnicodeDecodeError, ValueError:
         return None
 
@@ -425,15 +427,26 @@ BASH_GUARDED = (
 
 _MANIFEST = f"(?:{'|'.join(BASH_GUARDED)})"
 # Stop each pattern at a shell separator so a write later in the line is not
-# attributed to a manifest merely read earlier in it.
+# attributed to a manifest merely read earlier in it. The split is not
+# quote-aware, so a ; | or & inside a quoted sed script also ends the segment.
 _SEG = r"[^|;&\n]*?"
+# The in-place flag of BSD (-i, -I) and GNU sed. It may end a cluster of
+# argument-less flags (-Ei, -ni), carry a suffix (-i.bak) or be spelled out; GNU
+# accepts any prefix of --in-place (--in-pl, --i) and, unlike BSD, the flag
+# after the file operands.
+_SED_IN_PLACE = r"(?:-[abEnrsuz]*[iI]|--i[a-z-]*)"
 
 BASH_WRITE_RES = tuple(
     re.compile(pattern)
     for pattern in (
         rf">>?\s*\S*{_MANIFEST}\b",
         rf"\btee\b{_SEG}\s\S*{_MANIFEST}\b",
-        rf"\bsed\b{_SEG}\s-i{_SEG}\s\S*{_MANIFEST}\b",
+        # Two independent lookaheads, flag first, keep each sed to two linear
+        # scans and accept the flag on either side of the file operands. One
+        # pattern that chains the searches backtracks super-linearly on a long
+        # command, and this hook fails open when it outlasts its timeout. gsed
+        # is Homebrew's GNU sed.
+        rf"\bg?sed\b(?={_SEG}\s{_SED_IN_PLACE})(?={_SEG}\s\S*{_MANIFEST}\b)",
         rf"\bdd\b{_SEG}\bof=\S*{_MANIFEST}\b",
         rf"\b(?:python3?|perl|ruby|node|bun)\b{_SEG}\s-[ce]\b{_SEG}{_MANIFEST}",
     )

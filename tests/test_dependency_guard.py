@@ -376,8 +376,101 @@ BASH_CASES = (
         "python3 -c \"open('go.mod','a').write('x')\"",
         ask=True,
     ),
+    # GNU sed spells the in-place flag more ways than BSD sed does.
+    BashCase("sed -i.bak on Cargo.toml", "sed -i.bak 's/a/b/' Cargo.toml", ask=True),
+    BashCase("sed -Ei on pyproject.toml", "sed -Ei 's/a/b/' pyproject.toml", ask=True),
+    BashCase("sed -ni on package.json", "sed -ni 's/a/b/p' package.json", ask=True),
+    BashCase(
+        "sed -i after other flags",
+        "sed -E -n -i 's/a/b/p' pyproject.toml",
+        ask=True,
+    ),
+    BashCase("sed --in-place on go.mod", "sed --in-place 's/a/b/' go.mod", ask=True),
+    BashCase(
+        "sed --in-place with a suffix on go.sum",
+        "sed --in-place=.orig 's/a/b/' go.sum",
+        ask=True,
+    ),
+    BashCase(
+        "sed abbreviates --in-place",
+        "sed --in-pl 's/a/b/' package-lock.json",
+        ask=True,
+    ),
+    BashCase("sed -i after the file", "sed 's/a/b/' go.mod -i", ask=True),
+    BashCase("Homebrew gsed -i on go.mod", "gsed -i 's/a/b/' go.mod", ask=True),
+    BashCase("Homebrew gsed -Ei on Cargo.toml", "gsed -Ei s/a/b/ Cargo.toml", ask=True),
+    BashCase(
+        "sed --in-place after the file", "sed 's/a/b/' go.mod --in-place", ask=True
+    ),
+    BashCase("BSD sed -I on uv.lock", "sed -I '' 's/a/b/' uv.lock", ask=True),
+    BashCase("BSD sed -nI on yarn.lock", "sed -nI '' 's/a/b/p' yarn.lock", ask=True),
+    BashCase(
+        "tee into a module Brewfile",
+        "echo 'brew \"jq\"' | tee brew/dev.Brewfile",
+        ask=True,
+    ),
+    BashCase(
+        "redirect into a module Brewfile",
+        "echo 'brew \"jq\"' > brew/base.Brewfile",
+        ask=True,
+    ),
+    BashCase(
+        "append to a module Brewfile",
+        "echo 'brew \"jq\"' >> brew/cloud.Brewfile",
+        ask=True,
+    ),
+    BashCase(
+        "heredoc into a module Brewfile",
+        "cat > brew/data.Brewfile <<'EOF'\nbrew \"duckdb\"\nEOF",
+        ask=True,
+    ),
+    BashCase(
+        "sed -i on a module Brewfile",
+        "sed -i s/a/b/ brew/macos.Brewfile",
+        ask=True,
+    ),
+    BashCase(
+        "GNU sed -Ei on a module Brewfile",
+        "sed -Ei 's/a/b/' brew/linux.Brewfile",
+        ask=True,
+    ),
     BashCase("reading a manifest", "cat pyproject.toml", ask=False),
     BashCase("grepping a manifest", "grep pillow pyproject.toml", ask=False),
+    BashCase("reading a module Brewfile", "cat brew/dev.Brewfile", ask=False),
+    BashCase(
+        "grepping a module Brewfile", "grep -n ripgrep brew/base.Brewfile", ask=False
+    ),
+    BashCase(
+        "sed without in-place on a manifest",
+        "sed -n 's/a/b/p' go.mod",
+        ask=False,
+    ),
+    BashCase(
+        "sed -E without in-place on a manifest",
+        "sed -E 's/a/b/' pyproject.toml",
+        ask=False,
+    ),
+    BashCase(
+        "sed long options without in-place on a manifest",
+        "sed --quiet --expression='s/a/b/p' package.json",
+        ask=False,
+    ),
+    BashCase(
+        "sed -e script on a module Brewfile",
+        "sed -e 's/a/b/' brew/dev.Brewfile",
+        ask=False,
+    ),
+    BashCase("gsed without in-place on a manifest", "gsed -n p go.mod", ask=False),
+    BashCase(
+        "sed in place on an unguarded file", "sed -Ei 's/a/b/' src/app.py", ask=False
+    ),
+    BashCase(
+        "sed in place elsewhere, manifest read in the next command",
+        "sed -i 's/a/b/' notes.txt && cat go.mod",
+        ask=False,
+    ),
+    BashCase("sed over many manifest mentions", "sed go.mod " * 800, ask=False),
+    BashCase("sed with a very long token", "sed -n p " + "a" * 64_000, ask=False),
     BashCase("unrelated redirect", "make lint > /tmp/out.txt", ask=False),
     BashCase("ordinary command", "uv run pytest -q", ask=False),
 )
@@ -391,6 +484,7 @@ def run_hook(payload: Mapping[str, object]) -> tuple[bool, str]:
         capture_output=True,
         text=True,
         check=False,
+        timeout=5,
     )
     # The hook only ever exits 0 (it prints an ask decision or nothing), so any
     # non-zero exit is a real failure — a syntax error or crash.
