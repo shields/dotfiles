@@ -68,7 +68,6 @@ and travel with the code.
   Don't report partial progress as completion.
 - A flaky test is a broken test. Fix all failures, no matter how rare or
   intermittent.
-- Get my approval before removing, disabling, or skipping any test.
 
 ## Error handling
 
