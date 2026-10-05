@@ -44,8 +44,10 @@
 
 ;; Disable various visual elements
 (blink-cursor-mode 0)
-(menu-bar-mode (if (eq system-type 'darwin) -1 1))
-(tool-bar-mode 0)
+(menu-bar-mode -1)
+;; Void in a build without a window system, as is `set-fringe-mode'.
+(when (fboundp 'tool-bar-mode)
+  (tool-bar-mode 0))
 
 ;; Highlight tabs and trailing spaces
 (setq-default whitespace-style
@@ -76,15 +78,19 @@
       (t
        (setopt visible-bell t)))
 
-(set-fringe-mode '(nil . 0))            ; left-only
+(when (fboundp 'set-fringe-mode)
+  (set-fringe-mode '(nil . 0)))         ; left-only
 
 (setf (alist-get 'height default-frame-alist) 999)
 (setf (alist-get 'width default-frame-alist) 132)
 (setf (alist-get 'internal-border-width default-frame-alist) 0)
 
-;; Enable color emoji.
-(set-fontset-font
- t 'symbol (font-spec :family "Apple Color Emoji") nil 'prepend)
+;; Enable color emoji.  `featurep' and not `display-graphic-p', because a macOS
+;; daemon is headless when this runs.  `set-fontset-font' is void in a build
+;; without a window system.
+(when (featurep 'ns)
+  (set-fontset-font
+   t 'symbol (font-spec :family "Apple Color Emoji") nil 'prepend))
 
 (use-package diff-hl
   :config

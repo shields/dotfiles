@@ -49,6 +49,10 @@
 ;;
 ;; reset is a pseudo-value that any attribute accepts, meaning the default
 ;; face's value, which for :weight is not normal here.
+;;
+;; The match and region faces name NSColor system colors, which only an ns frame
+;; can resolve.  Every other frame, such as a terminal, gets fixed colors: yellow
+;; for match and #dfecff, the macOS highlight color, for region.
 (custom-theme-set-faces
  'shields
  '(default ((t (:inherit nil :extend nil :stipple nil :background "White" :foreground "Black" :inverse-video nil :box nil :strike-through nil :overline nil :underline nil :slant normal :weight semi-light :height 120 :width normal :font "CommitMonoShields Nerd Font"))))
@@ -87,7 +91,8 @@
  '(lsp-face-highlight-textual ((t (:background "#d0ffd0"))))
  '(markdown-code-face ((t (:inherit fixed-pitch :background "#f850f850f850" :height 0.8))))
  '(markdown-header-face ((t (:weight bold))))
- '(match ((t (:background "findHighlightColor" :foreground "black"))))
+ '(match ((((type ns)) (:background "findHighlightColor" :foreground "black"))
+          (t (:background "yellow" :foreground "black"))))
  '(minibuffer-prompt ((t (:weight bold))))
  '(mode-line ((t (:background "#005462" :foreground "white" :family "Avenir Next"))))
  '(mode-line-buffer-id ((t (:weight semi-bold))))
@@ -95,7 +100,8 @@
  '(mode-line-highlight ((t (:background "#0093a9"))))
  '(mode-line-inactive ((t (:inherit mode-line :background "#484848"))))
  '(parenthesis ((t (:inherit font-lock-bracket-face))))
- '(region ((t (:background "selectedTextBackgroundColor" :extend nil))))
+ '(region ((((type ns)) (:background "selectedTextBackgroundColor" :extend nil))
+           (t (:background "#dfecff" :extend nil))))
  '(show-paren-match ((t (:foreground "magenta" :weight bold))))
  '(show-paren-match-expression ((t (:background "#f4f4ff"))))
  '(variable-pitch ((t (:height 1.2 :family "Avenir Next")))))
