@@ -17,23 +17,80 @@ set -euo pipefail
 # limitations under the License.
 
 cd "$(dirname "$0")"
+dotfiles_root=$PWD
+user=$(id -un)
 
 uname_s=$(uname -s)
 case $uname_s in
 Darwin) os=macos ;;
+Linux) os=linux ;;
 *)
-    echo "provision.sh: unsupported OS $uname_s; only macOS is supported" >&2
+    echo "provision.sh: unsupported OS $uname_s; only macOS and Linux are supported" >&2
     exit 1
     ;;
 esac
 
+if [[ $os == linux && $(id -u) -eq 0 ]]; then
+    echo "provision.sh: run as a regular user with sudo access; Homebrew refuses to run as root" >&2
+    exit 1
+fi
+
+source provision/modules.sh
 if [[ $os == macos ]]; then
     source provision/macos.sh
 fi
 
-# Copy these files.
-git ls-files -- '.*' | tar cf - -T - bin Library | (cd "$HOME" && tar xvf -)
+# Homebrew's prefix is not chosen until later, so look in each place it can be.
+have_brew=0
+brew_found=
+for brew_candidate in /opt/homebrew/bin/brew /usr/local/bin/brew /home/linuxbrew/.linuxbrew/bin/brew; do
+    if [[ -x $brew_candidate ]]; then
+        have_brew=1
+        brew_found=$brew_candidate
+        break
+    fi
+done
+selection_file=$HOME/.config/dotfiles/brew-modules
+modules_status=0
+modules_resolve "$os" "$dotfiles_root/brew" "$selection_file" "$have_brew" "$@" || modules_status=$?
+if [[ $modules_status -eq 3 && $have_brew -eq 1 ]]; then
+    echo "brew bundle cleanup would uninstall:" >&2
+    HOMEBREW_DOTFILES_BREW_MODULES=${modules_selection:-none} "$brew_found" bundle cleanup --file="$dotfiles_root/Brewfile" >&2 || true
+fi
+if [[ $modules_status -ne 0 ]]; then
+    exit "$modules_status"
+fi
+modules_persist "$selection_file" "$modules_selection"
+# Brew drops empty HOMEBREW_* variables, so an empty selection is written as none.
+export HOMEBREW_DOTFILES_BREW_MODULES=${modules_selection:-none}
 
+# Copy these files.
+copy_paths=('.*' bin)
+case $os in
+macos)
+    copy_paths+=(Library ':(exclude)bin/setup-secrets')
+    ;;
+linux)
+    copy_paths+=(
+        ':(exclude).CFUserTextEncoding'
+        ':(exclude).iTerm2/com.googlecode.iterm2.plist'
+        ':(exclude).config/karabiner'
+        ':(exclude).config/ghostty'
+        ':(exclude).config/alacritty'
+        ':(exclude).config/emacs-plus'
+        ':(exclude).gnupg/gpg-agent.conf'
+        ':(exclude)bin/chrome-tabs-to-markdown'
+        ':(exclude)bin/*.applescript'
+        ':(exclude)bin/clean_downloads.py'
+        ':(exclude)bin/limavm'
+        ':(exclude).agents/skills/transcribe'
+        ':(exclude).claude/skills/transcribe'
+    )
+    ;;
+esac
+git ls-files -z -- "${copy_paths[@]}" | tar --null -cf - -T - | (cd "$HOME" && tar xvf -)
+
+mkdir -p "$HOME/.codex"
 {
     cat .agents/AGENTS.md
     printf '\n'
@@ -41,25 +98,42 @@ git ls-files -- '.*' | tar cf - -T - bin Library | (cd "$HOME" && tar xvf -)
 } >"$HOME/.codex/AGENTS.md"
 
 # Set email address in .gitconfig. Do this early so we don't leave it missing.
-if [[ "$(whoami)" == shields ]] && ! (profiles status -type enrollment | grep -q ': Yes'); then
+if [[ $os == macos ]]; then
+    if [[ "$(whoami)" == shields ]] && ! (profiles status -type enrollment | grep -q ': Yes'); then
+        git config --global user.email shields@msrl.com
+        git config --global github.user shields # For Magit Forge
+    fi
+elif [[ $user == shields ]]; then
     git config --global user.email shields@msrl.com
     git config --global github.user shields # For Magit Forge
 fi
 
-# Install Homebrew and Xcode (which will take tens of minutes).
-# Use path selection logic from https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh
-# We will install full Xcode later from the Mac App Store.
-UNAME_MACHINE="$(/usr/bin/uname -m)"
-if [[ ${UNAME_MACHINE} == "arm64" ]]; then
-    HOMEBREW_PREFIX="/opt/homebrew"
-    HOMEBREW_REPOSITORY="${HOMEBREW_PREFIX}"
-else
-    HOMEBREW_PREFIX="/usr/local"
-    HOMEBREW_REPOSITORY="${HOMEBREW_PREFIX}/Homebrew"
+if [[ $os == linux ]]; then
+    sudo "$dotfiles_root/provision/linux-system.sh" "$user"
 fi
-if [[ ! -d $HOMEBREW_REPOSITORY ]]; then
-    # CI=1 suppresses confirmation prompts.
-    CI=1 /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
+
+# Install Homebrew (which will take tens of minutes).
+if [[ $os == linux ]]; then
+    HOMEBREW_PREFIX="/home/linuxbrew/.linuxbrew"
+    if [[ ! -x $HOMEBREW_PREFIX/bin/brew ]]; then
+        install_script=$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)
+        NONINTERACTIVE=1 /bin/bash -c "$install_script"
+    fi
+else
+    # Use path selection logic from https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh
+    # We will install full Xcode later from the Mac App Store.
+    UNAME_MACHINE="$(/usr/bin/uname -m)"
+    if [[ ${UNAME_MACHINE} == "arm64" ]]; then
+        HOMEBREW_PREFIX="/opt/homebrew"
+        HOMEBREW_REPOSITORY="${HOMEBREW_PREFIX}"
+    else
+        HOMEBREW_PREFIX="/usr/local"
+        HOMEBREW_REPOSITORY="${HOMEBREW_PREFIX}/Homebrew"
+    fi
+    if [[ ! -d $HOMEBREW_REPOSITORY ]]; then
+        # CI=1 suppresses confirmation prompts.
+        CI=1 /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
+    fi
 fi
 
 eval "$($HOMEBREW_PREFIX/bin/brew shellenv)"
@@ -100,7 +174,17 @@ fi
 
 brew update
 
-# Homebrew bundle sync. Update using `brew bundle dump -f --no-describe`.
+# brew bundle finds cargo only on the PATH brew was started with. Without it,
+# the cargo entries install the rust formula, which cleanup then removes.
+if modules_has "$modules_selection" dev; then
+    brew install rustup
+    rustup_prefix=$(brew --prefix rustup)
+    export PATH="$rustup_prefix/bin:$PATH"
+    rustup default stable >/dev/null
+fi
+
+# Homebrew bundle sync. Edit brew/*.Brewfile to change what is installed, or
+# use `brew bundle add --file=brew/<module>.Brewfile`.
 # Keep upgrades below so Chrome can be excluded from cask upgrades.
 brew bundle --force --no-upgrade | (grep -v '^Using ' || true)
 brew bundle cleanup --force
@@ -124,9 +208,13 @@ fi
 
 # Plugins!
 export PIP_DISABLE_PIP_VERSION_CHECK=1
-datasette install --upgrade datasette-cluster-map | (grep -v '^Requirement already satisfied:' || true)
-llm install --upgrade llm-{gemini,anthropic,perplexity,cmd,openai-plugin} | (grep -v '^Requirement already satisfied:' || true)
-gcloud --quiet components update
+if modules_has "$modules_selection" data; then
+    datasette install --upgrade datasette-cluster-map | (grep -v '^Requirement already satisfied:' || true)
+    llm install --upgrade llm-{gemini,anthropic,perplexity,cmd,openai-plugin} | (grep -v '^Requirement already satisfied:' || true)
+fi
+if modules_has "$modules_selection" cloud; then
+    gcloud --quiet components update
+fi
 
 if [[ $os == macos ]]; then
     macos_defaults
@@ -137,9 +225,6 @@ emacs --batch --script .emacs.d/provision.el
 if [[ $os == macos ]]; then
     macos_emacs_app
 fi
-
-# rustup
-rustup default stable >/dev/null
 
 # Bootstrap TLS trust to GitHub SSH trust.
 if [ ! -f "$HOME/.ssh/known_hosts" ] || ! grep -q '^github\.com ' "$HOME/.ssh/known_hosts"; then
@@ -166,10 +251,60 @@ add_user_mcp_server() {
     codex mcp remove "$name" 2>/dev/null || true
     codex mcp add "$name" -- "$@"
 }
-add_user_mcp_server lgtmcp "$HOME/bin/lgtmcp"
-add_user_mcp_server playwright npx @playwright/mcp@latest --headless
-dotfiles_root="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
+# ~/bin/lgtmcp is the hand-built binary the Mac relies on. Homebrew's go
+# entries install under HOMEBREW_GOBIN and HOMEBREW_GOPATH, ignoring GOBIN and
+# GOPATH, so go is asked with those.
+lgtmcp=$HOME/bin/lgtmcp
+if [[ ! -x $lgtmcp ]]; then
+    gobin=$(GOBIN=${HOMEBREW_GOBIN-} GOPATH=${HOMEBREW_GOPATH-} go env GOBIN)
+    if [[ -z $gobin ]]; then
+        gopath=$(GOBIN=${HOMEBREW_GOBIN-} GOPATH=${HOMEBREW_GOPATH-} go env GOPATH)
+        gobin=${gopath%%:*}/bin
+    fi
+    lgtmcp=$gobin/lgtmcp
+    if [[ ! -x $lgtmcp ]]; then
+        echo "provision.sh: lgtmcp not found in $HOME/bin or $gobin; it is installed by the go entry in brew/base.Brewfile" >&2
+        exit 1
+    fi
+fi
+add_user_mcp_server lgtmcp "$lgtmcp"
+if [[ $os == macos ]]; then
+    add_user_mcp_server playwright npx @playwright/mcp@latest --headless
+else
+    playwright_version=$(npm view @playwright/mcp version)
+    add_user_mcp_server playwright npx "@playwright/mcp@$playwright_version" --headless --browser chromium
+    npx -y -p "@playwright/mcp@$playwright_version" playwright install chromium
+    # The browser's system libraries come from apt, so this needs root, and a
+    # second password prompt where sudo asks for one. root's PATH leaves out the
+    # user's own bin directories and puts the user-owned Homebrew prefix last, so
+    # only node and npx come from it.
+    sudo -v
+    sudo env PATH="/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:$HOMEBREW_PREFIX/bin" npx -y -p "@playwright/mcp@$playwright_version" playwright install-deps chromium
+fi
 python3 "$dotfiles_root/tools/configure_codex.py" "$HOME/.codex/config.toml"
+
+if [[ $os == linux ]]; then
+    mkdir -p "$HOME/.config/git"
+    for credential_url in https://github.com https://gist.github.com; do
+        git config --file "$HOME/.config/git/config" "credential.$credential_url.helper" '!gh auth git-credential'
+    done
+
+    # Without hasCompletedOnboarding, Claude Code ignores CLAUDE_CODE_OAUTH_TOKEN.
+    claude_json=$HOME/.claude.json
+    if [[ ! -s $claude_json ]]; then
+        (umask 077 && printf '{}\n' >"$claude_json")
+    fi
+    claude_json_new=$(mktemp "$claude_json.XXXXXX")
+    if ! jq --arg src "$HOME/src" \
+        '.hasCompletedOnboarding = true | .projects[$src].hasTrustDialogAccepted = true' \
+        "$claude_json" >"$claude_json_new" || [[ ! -s $claude_json_new ]]; then
+        rm -f "$claude_json_new"
+        echo "provision.sh: cannot update $claude_json" >&2
+        exit 1
+    fi
+    mv "$claude_json_new" "$claude_json"
+fi
 
 if [[ $os == macos ]]; then
     macos_finish
