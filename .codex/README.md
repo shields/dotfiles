@@ -22,6 +22,11 @@ nonzero exit as a non-blocking hook failure and runs the command anyway. Codex
 runs the command with `$SHELL -lc` and Claude Code with `sh -c`, so keep it valid
 in both.
 
+Claude Code runs the same hook. `.claude/settings.json` registers
+`~/.codex/hooks/git_guard.py` as a `PreToolUse` hook for Bash with the same
+interpreter lookup, which also catches the spellings its string-matched deny rules
+miss, such as `/usr/bin/git push` and `env git push`.
+
 Provisioning runs `tools/configure_codex.py` to authorize LGTMCP's code transfers to
 Gemini in `auto_review.extra_policy` and preapprove its `review_only` and
 `review_and_commit` tools. The script reads the existing TOML to preserve extra
@@ -35,9 +40,11 @@ inside quoted arguments, or code executed by scripts and interpreters. It skips
 here-document bodies. These checks are guardrails, not a complete boundary against
 arbitrary code, and do not govern GitHub connector tools.
 
-Run `uv run pytest tests/test_codex_policy.py` to check the hook and rules. Rule
-tests use `codex execpolicy check` and skip when the Codex CLI is unavailable;
-none of the test commands are executed.
+Run `uv run pytest tests/test_codex_policy.py tests/test_agent_hooks.py` to check
+the hook, the rules, and how both agents launch the hook. The launch tests run
+each registered command with fake interpreters and a decoy `python3` on `PATH`.
+Rule tests use `codex execpolicy check` and skip when the Codex CLI is
+unavailable; none of the test commands are executed.
 
 References: [Codex rules](https://learn.chatgpt.com/docs/agent-configuration/rules)
 and [Codex hooks](https://learn.chatgpt.com/docs/hooks).
