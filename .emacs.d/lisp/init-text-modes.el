@@ -47,8 +47,9 @@
   :custom
   ;; Fontify code inside raw blocks (```rust … ```), not just the fence.
   (typst-ts-enable-raw-blocks-highlight t)
-  ;; `C-c C-w' (typst-ts-watch-mode) opens the PDF in the default viewer.
-  (typst-ts-watch-options '("--open")))
+  ;; `C-c C-w' (typst-ts-watch-mode) opens the PDF in the default viewer, which
+  ;; only the Mac has.
+  (typst-ts-watch-options (when (eq system-type 'darwin) '("--open"))))
 
 ;; JSON
 (use-package jsonnet-mode)

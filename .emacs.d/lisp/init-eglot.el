@@ -55,9 +55,10 @@
 
 ;; Use a current clangd, not the old one that comes with Xcode
 (with-eval-after-load 'eglot
-  (setf (alist-get '(c-mode c-ts-mode c++-mode c++-ts-mode objc-mode)
-                   eglot-server-programs)
-        '("/opt/homebrew/opt/llvm/bin/clangd")))
+  (let ((brew-clangd "/opt/homebrew/opt/llvm/bin/clangd"))
+    (setf (alist-get '(c-mode c-ts-mode c++-mode c++-ts-mode objc-mode)
+                     eglot-server-programs)
+          (list (if (file-executable-p brew-clangd) brew-clangd "clangd")))))
 
 ;; Python server configuration
 (with-eval-after-load 'eglot

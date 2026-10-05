@@ -31,8 +31,12 @@
 
 (use-package chatgpt-shell
   :config
-  (setopt chatgpt-shell-anthropic-key (auth-source-pick-first-password :host "api.anthropic.com"))
-  (setopt chatgpt-shell-openai-key (auth-source-pick-first-password :host "api.openai.com")))
+  ;; A key is a string or a function; setting nil, as when authinfo has no entry,
+  ;; makes `setopt' warn on every start.
+  (when-let* ((key (auth-source-pick-first-password :host "api.anthropic.com")))
+    (setopt chatgpt-shell-anthropic-key key))
+  (when-let* ((key (auth-source-pick-first-password :host "api.openai.com")))
+    (setopt chatgpt-shell-openai-key key)))
 
 (provide 'init-ai)
 ;;; init-ai.el ends here

@@ -40,11 +40,15 @@
 
 (use-package magit-delta)
 
-(use-package forge)
+;; Forge stores its data in SQLite and cannot load in an Emacs built without it.
+;; This is `when', not `:if', because straight installs a package before
+;; use-package tests `:if'.
+(when (sqlite-available-p)
+  (use-package forge)
 
-(let ((github-username (magit-config-get-from-cached-list "github.user")))
-  (when github-username
-    (add-to-list 'forge-owned-accounts github-username)))
+  (let ((github-username (magit-config-get-from-cached-list "github.user")))
+    (when github-username
+      (add-to-list 'forge-owned-accounts github-username))))
 
 (use-package vc
   :custom

@@ -19,8 +19,10 @@
 
 ;;; Code:
 
-(use-package dash-at-point
-  :bind ("s-d" . dash-at-point))
+;; Dash is a macOS app.
+(when (eq system-type 'darwin)
+  (use-package dash-at-point
+    :bind ("s-d" . dash-at-point)))
 
 (use-package grep
   :config
