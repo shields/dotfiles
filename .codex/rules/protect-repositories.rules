@@ -13,29 +13,31 @@
 # limitations under the License.
 
 prefix_rule(
-    pattern = [["gh", "/opt/homebrew/bin/gh", "/usr/local/bin/gh"], "repo", ["archive", "create", "delete", "edit", "fork", "rename", "sync", "unarchive"]],
+    pattern = [["gh", "/usr/bin/gh", "/opt/homebrew/bin/gh", "/usr/local/bin/gh", "/home/linuxbrew/.linuxbrew/bin/gh"], "repo", ["archive", "create", "delete", "edit", "fork", "rename", "sync", "unarchive"]],
     decision = "forbidden",
     justification = "The user manages GitHub repositories. Use read-only repo commands.",
-    match = ["gh repo delete example/repo", "/opt/homebrew/bin/gh repo edit --visibility public"],
+    match = ["gh repo delete example/repo", "/usr/bin/gh repo delete example/repo", "/opt/homebrew/bin/gh repo edit --visibility public", "/home/linuxbrew/.linuxbrew/bin/gh repo fork"],
     not_match = ["gh repo view", "gh repo list", "gh pr create"],
 )
 
 prefix_rule(
-    pattern = [["gh", "/opt/homebrew/bin/gh", "/usr/local/bin/gh"], "repo", "autolink", ["create", "delete"]],
+    pattern = [["gh", "/usr/bin/gh", "/opt/homebrew/bin/gh", "/usr/local/bin/gh", "/home/linuxbrew/.linuxbrew/bin/gh"], "repo", "autolink", ["create", "delete"]],
     decision = "forbidden",
     justification = "The user manages repository autolinks.",
-    match = ["gh repo autolink create TICKET https://example.com/tickets/", "gh repo autolink delete 123"],
+    match = ["gh repo autolink create TICKET https://example.com/tickets/", "gh repo autolink delete 123", "/usr/bin/gh repo autolink delete 123", "/home/linuxbrew/.linuxbrew/bin/gh repo autolink create TICKET https://example.com/tickets/"],
     not_match = ["gh repo autolink list", "gh repo autolink view 123"],
 )
 
 prefix_rule(
-    pattern = [["gh", "/opt/homebrew/bin/gh", "/usr/local/bin/gh"], "repo", "deploy-key", ["add", "delete"]],
+    pattern = [["gh", "/usr/bin/gh", "/opt/homebrew/bin/gh", "/usr/local/bin/gh", "/home/linuxbrew/.linuxbrew/bin/gh"], "repo", "deploy-key", ["add", "delete"]],
     decision = "forbidden",
     justification = "The user manages repository deploy keys.",
-    match = ["gh repo deploy-key add key.pub", "gh repo deploy-key delete 123"],
+    match = ["gh repo deploy-key add key.pub", "gh repo deploy-key delete 123", "/usr/bin/gh repo deploy-key add key.pub", "/home/linuxbrew/.linuxbrew/bin/gh repo deploy-key delete 123"],
     not_match = ["gh repo deploy-key list"],
 )
 
+# On Linux lefthook is installed under ~/go/bin, which has no fixed absolute
+# path to list, so only the bare name matches there.
 prefix_rule(
     pattern = [["lefthook", "/opt/homebrew/bin/lefthook", "/usr/local/bin/lefthook"], "uninstall"],
     decision = "forbidden",
@@ -45,9 +47,9 @@ prefix_rule(
 )
 
 prefix_rule(
-    pattern = [["git", "/usr/bin/git", "/opt/homebrew/bin/git", "/usr/local/bin/git"], "commit", ["--no-verify", "-n"]],
+    pattern = [["git", "/usr/bin/git", "/opt/homebrew/bin/git", "/usr/local/bin/git", "/home/linuxbrew/.linuxbrew/bin/git"], "commit", ["--no-verify", "-n"]],
     decision = "forbidden",
     justification = "Respect the configured Git hooks. Commit without bypass flags.",
-    match = ["git commit --no-verify -m message", "git commit -n -m message", "/usr/local/bin/git commit --no-verify"],
+    match = ["git commit --no-verify -m message", "git commit -n -m message", "/usr/local/bin/git commit --no-verify", "/home/linuxbrew/.linuxbrew/bin/git commit -n"],
     not_match = ["git commit -m message"],
 )

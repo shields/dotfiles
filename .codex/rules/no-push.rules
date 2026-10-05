@@ -13,9 +13,9 @@
 # limitations under the License.
 
 prefix_rule(
-    pattern = [["git", "/usr/bin/git", "/opt/homebrew/bin/git", "/usr/local/bin/git"], "push"],
+    pattern = [["git", "/usr/bin/git", "/opt/homebrew/bin/git", "/usr/local/bin/git", "/home/linuxbrew/.linuxbrew/bin/git"], "push"],
     decision = "forbidden",
     justification = "The user performs all pushes. Leave commits local.",
-    match = ["git push origin main", "/usr/bin/git push", "/opt/homebrew/bin/git push", "/usr/local/bin/git push"],
+    match = ["git push origin main", "/usr/bin/git push", "/opt/homebrew/bin/git push", "/usr/local/bin/git push", "/home/linuxbrew/.linuxbrew/bin/git push"],
     not_match = ["git fetch", "git status"],
 )
