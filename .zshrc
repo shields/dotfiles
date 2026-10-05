@@ -40,9 +40,11 @@ typeset -U path PATH
 # changes. Print COMMAND's output from NAME, rebuilding it when missing or
 # older than any WATCH file. If rebuilding fails, say so and run COMMAND.
 #
-# A watch is compared without following symlinks: Homebrew remakes the link
-# in /opt/homebrew/bin on every install, whereas the binary behind it keeps
-# the bottle's build time, which can predate the cache. A watch that does not
+# A watch is compared by status-change time, which is when the file arrived.
+# Its modification time can predate the cache: dpkg keeps the packaged one,
+# and a Homebrew bottle keeps its build time. The comparison does not follow
+# symlinks: Homebrew remakes the link in its bin directory on every install, so
+# the link's own status-change time marks the install. A watch that does not
 # exist is ignored, so a config file created later still counts once it does.
 #
 # usage: _startup_cached NAME WATCH... -- COMMAND...
@@ -62,7 +64,7 @@ _startup_cached() {
         fresh=1
         for watch in "${watches[@]}"; do
             if zstat -L -H watch_stat -- "$watch" 2>/dev/null &&
-                (( watch_stat[mtime] >= cache_stat[mtime] )); then
+                (( watch_stat[ctime] >= cache_stat[mtime] )); then
                 fresh=0
                 break
             fi
@@ -93,11 +95,25 @@ if [[ -x /usr/local/bin/brew ]]; then
         /usr/local/Homebrew/Library/Homebrew/cmd/shellenv.sh -- \
         /usr/local/bin/brew shellenv)"
 fi
+# /home is an autofs mount on macOS, where probing it waits tens of
+# milliseconds on every start.
+if [[ "$OSTYPE" == linux* && -x /home/linuxbrew/.linuxbrew/bin/brew ]]; then
+    eval "$(_startup_cached brew-shellenv-linux \
+        /home/linuxbrew/.linuxbrew/bin/brew \
+        /home/linuxbrew/.linuxbrew/Homebrew/Library/Homebrew/cmd/shellenv.sh -- \
+        /home/linuxbrew/.linuxbrew/bin/brew shellenv)"
+fi
 
 export HOMEBREW_NO_AUTO_UPDATE=1
 export HOMEBREW_NO_ENV_HINTS=1
 
-export PATH="$HOME/bin:$PATH"
+# On the Mac, ~/.local/bin holds uv's python shims, which must not shadow
+# Homebrew's python.
+if [[ "$OSTYPE" == linux* ]]; then
+    export PATH="$HOME/bin:$HOME/.local/bin:$PATH"
+else
+    export PATH="$HOME/bin:$PATH"
+fi
 
 # Path to your oh-my-zsh installation.
 export ZSH="$HOME/.oh-my-zsh"
@@ -173,6 +189,9 @@ HIST_STAMPS="yyyy-mm-dd"
 # risky.
 if [[ "$OSTYPE" == darwin* ]]; then
     export EDITOR="$ZSH/plugins/emacs/emacsclient.sh --create-frame"
+elif [[ "$OSTYPE" == linux* ]]; then
+    # An empty --alternate-editor starts the Emacs daemon if none is running.
+    export EDITOR='emacsclient --tty --alternate-editor='
 fi
 
 # Asking about the merge commit message is unnecessary, since in the
@@ -195,10 +214,20 @@ fi
 #
 # https://developer.apple.com/documentation/corefoundation/cfstringbuiltinencodings/utf8
 # https://superuser.com/questions/82123/mac-whats-cfusertextencoding-for
-export __CF_USER_TEXT_ENCODING="$UID:134217984:134217984"
+if [[ "$OSTYPE" == darwin* ]]; then
+    export __CF_USER_TEXT_ENCODING="$UID:134217984:134217984"
+fi
 
 # Needed by Terraform:
 export KUBE_CONFIG_PATH="$HOME/.kube/config"
+
+[[ -z "$TTY" ]] || export GPG_TTY="$TTY"
+
+# Not in .zshenv, which would hand the token to every non-interactive zsh.
+if [[ "$OSTYPE" == linux* && -e "$HOME/.config/secrets/CLAUDE_CODE_OAUTH_TOKEN" ]]; then
+    CLAUDE_CODE_OAUTH_TOKEN="$(<"$HOME/.config/secrets/CLAUDE_CODE_OAUTH_TOKEN")" &&
+        export CLAUDE_CODE_OAUTH_TOKEN
+fi
 
 if [ -d "$HOME/.cargo" ]; then
     PATH="$PATH:$HOME/.cargo/bin"
@@ -206,8 +235,8 @@ fi
 
 # Homebrew's rustup is keg-only and puts its cargo/rustc proxies here, not in
 # ~/.cargo/bin (it no longer ships rustup-init).
-if [ -d "/opt/homebrew/opt/rustup/bin" ]; then
-    PATH="$PATH:/opt/homebrew/opt/rustup/bin"
+if [[ -n "$HOMEBREW_PREFIX" && -d "$HOMEBREW_PREFIX/opt/rustup/bin" ]]; then
+    PATH="$PATH:$HOMEBREW_PREFIX/opt/rustup/bin"
 fi
 
 # This is what `go env GOPATH` would print, without starting the toolchain;
@@ -264,6 +293,16 @@ if [[ "$TERM_PROGRAM" == "iTerm.app" ]]; then
     # Unless preset, the shell integration forks `hostname -f` at load and
     # before every prompt; zsh already knows the answer.
     export iterm2_hostname="$HOST"
+fi
+
+# The rest of this file loads oh-my-zsh from $ZSH, so stop when its libraries
+# are missing. This file is sourced, so use return: exit would close the
+# terminal.
+_startup_libs=("$ZSH"/lib/*.zsh(N))
+if (( ! ${#_startup_libs} )); then
+    print -u2 -r -- "zshrc: no oh-my-zsh libraries in $ZSH/lib"
+    unset _startup_libs
+    return 1
 fi
 
 # The Git plugin only needs the installed version during initialization.
@@ -348,10 +387,10 @@ _startup_source() {
         return 1
     fi
 }
-for _startup_file in "$ZSH"/lib/*.zsh; do
+for _startup_file in $_startup_libs; do
     _startup_source "lib/${_startup_file:t}"
 done
-unset _startup_file _startup_name
+unset _startup_file _startup_libs _startup_name
 [[ -z "$LS_COLORS" ]] || zstyle ':completion:*' list-colors "${(s.:.)LS_COLORS}"
 
 # Environment changes must precede the first command. The cached Starship
@@ -399,6 +438,11 @@ _startup_overrides() {
 
     alias drit='docker run -it --rm'
 
+    # The plugin's aliases open GUI frames; te opens a terminal frame.
+    if [[ "$OSTYPE" == linux* ]] && (( $+aliases[te] )); then
+        alias emacs=te e=te
+    fi
+
     alias gc='gcloud'
 
     alias gdi='git diff refs/remotes/origin/HEAD'
@@ -427,7 +471,7 @@ _startup_overrides() {
         if [ -n "$VIRTUAL_ENV" ]; then
             "$VIRTUAL_ENV/bin/python" "$@"
         else
-            "$(brew --prefix python)/libexec/bin/python" "$@"
+            "$HOMEBREW_PREFIX/opt/python/libexec/bin/python" "$@"
         fi
     }
 
@@ -435,7 +479,16 @@ _startup_overrides() {
         rg --pretty --line-buffered "$@" | less -R -E --redraw-on-quit
     }
 
-    if [ -x /usr/bin/pbcopy ]; then
+    if [[ "$OSTYPE" == linux* ]]; then
+        # There is no pbcopy; tmux or the terminal itself sets the clipboard.
+        function pc {
+            if [[ -n "$TMUX" ]]; then
+                tmux load-buffer -w -
+            else
+                printf '\e]52;c;%s\a' "$(base64 | tr -d '\n')"
+            fi
+        }
+    elif [ -x /usr/bin/pbcopy ]; then
         alias pc=pbcopy
         alias pv=pbpaste
     fi

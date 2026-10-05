@@ -25,12 +25,13 @@
 #
 # Candidates are .zshrc files, the repo's by default, loaded through a
 # throwaway ZDOTDIR so that an edited copy can be timed before it is installed.
-# The repo's .zprofile is always used alongside, and whatever the candidate
-# sources itself (~/.zsh.d, oh-my-zsh, ...) comes from $HOME as installed. The
-# completion dumps and the history file are copied into the ZDOTDIR, so startup
-# is timed with warm caches and a realistic history without the real files
-# being written to. The environment is inherited: run this from the terminal
-# whose startup you care about, because plugins key off TERM_PROGRAM.
+# The repo's .zshenv and .zprofile are always used alongside, and whatever the
+# candidate sources itself (~/.zsh.d, oh-my-zsh, ...) comes from $HOME as
+# installed. The completion dumps and the history file are copied into the
+# ZDOTDIR, so startup is timed with warm caches and a realistic history without
+# the real files being written to. The environment is inherited: run this from
+# the terminal whose startup you care about, because plugins key off
+# TERM_PROGRAM.
 #
 # usage: zsh tools/bench_startup.zsh [-C DIR] [-p] [--ready] [-s ZSHRC]...
 #            [-- HYPERFINE-OPTION...]
@@ -80,9 +81,10 @@ typeset -a candidates
 candidates=("${(@)opt_scripts:#-s}")
 candidates=("${candidates[@]:A}")
 (( ${#candidates[@]} > 0 )) || candidates=("$repo/.zshrc")
+typeset zshenv="$repo/.zshenv"
 typeset zprofile="$repo/.zprofile"
 typeset candidate
-for candidate in "${candidates[@]}" "$zprofile"; do
+for candidate in "${candidates[@]}" "$zshenv" "$zprofile"; do
     if [[ ! -r "$candidate" ]]; then
         print -u2 -r -- "$script_name: cannot read $candidate"
         exit 1
@@ -150,9 +152,12 @@ make_zdotdir() {
     for file in "$HOME"/.zcompdump*(N) "$HOME/.zsh_history"(N); do
         command cp -p -- "$file" "$zdotdir/"
     done
+    # Setting ZDOTDIR hides the installed ~/.zshenv, so the repo's runs first,
+    # as it would from $HOME.
+    print -r -- "source ${(q)zshenv}" >"$zdotdir/.zshenv"
     # /etc/zshrc on macOS already points HISTFILE into ZDOTDIR; this covers
     # systems that do not, so the benchmark never appends to the real history.
-    print -r -- 'HISTFILE="$ZDOTDIR/.zsh_history"' >"$zdotdir/.zshenv"
+    print -r -- 'HISTFILE="$ZDOTDIR/.zsh_history"' >>"$zdotdir/.zshenv"
     # Likewise isolate anything a candidate keys off $XDG_CACHE_HOME (e.g.
     # .zshrc's _startup_cached) under this candidate's own ZDOTDIR: shared
     # across this candidate's own hyperfine samples, so --warmup populates it
