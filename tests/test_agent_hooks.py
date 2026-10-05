@@ -363,3 +363,25 @@ def test_claude_subprocess_env_is_not_scrubbed() -> None:
     # The scrub turns off sandbox auto-allow and forces the default permission
     # mode in every session, including on the Mac.
     assert "CLAUDE_CODE_SUBPROCESS_ENV_SCRUB" not in env
+
+
+INSTALL_ASK = {
+    "Edit(//**/*.Brewfile)",
+    *(
+        f"Bash({sudo}{command})"
+        for sudo in ("", "sudo ")
+        for command in (
+            "apt install *",
+            "apt * install *",
+            "apt-get install *",
+            "apt-get * install *",
+            "dpkg -i *",
+            "dpkg --install *",
+        )
+    ),
+}
+
+
+def test_claude_asks_before_installing_packages() -> None:
+    ask = cast("dict[str, list[str]]", claude_settings()["permissions"])["ask"]
+    assert set(ask) >= INSTALL_ASK
