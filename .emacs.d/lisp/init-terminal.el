@@ -1,6 +1,6 @@
 ;;; init-terminal.el --- Terminal configuration -*- lexical-binding: t -*-
 
-;; Copyright © 2018, 2020, 2025 Michael Shields
+;; Copyright © 2018, 2020, 2025-2026 Michael Shields
 ;;
 ;; Licensed under the Apache License, Version 2.0 (the "License");
 ;; you may not use this file except in compliance with the License.
@@ -38,6 +38,11 @@
 
 ;; Enable the mouse for terminals
 (xterm-mouse-mode 1)
+
+;; Under tmux, Emacs takes these capabilities of the outer terminal as given and
+;; does not probe for them.  They work only with tmux's `extended-keys' and
+;; `set-clipboard' options on.
+(setopt xterm-tmux-extra-capabilities '(modifyOtherKeys setSelection))
 
 (provide 'init-terminal)
 ;;; init-terminal.el ends here
