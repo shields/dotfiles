@@ -75,6 +75,19 @@
 (keymap-global-set "M-g" #'grep)
 (keymap-global-set "M-r" #'replace-string)
 
+;; A terminal can't send the s- keys, F19 or C-<backspace>, and sends C-= and
+;; C-- only with modifyOtherKeys, so these C-c keys run the same commands.  The
+;; use-package forms in init-editing.el autoload the commands.
+(keymap-global-set "C-c i" #'imenu)                     ; s-i
+(keymap-global-set "C-c SPC" #'fixup-whitespace)        ; s-SPC
+(keymap-global-set "C-c o" #'crux-smart-open-line)      ; s-o
+(keymap-global-set "C-c ." #'goto-last-change)          ; s-.
+(keymap-global-set "C-c ," #'goto-last-change-reverse)  ; s-,
+(keymap-global-set "C-c j" #'avy-goto-char-timer)       ; F19
+(keymap-global-set "C-c =" #'expreg-expand)             ; C-=
+(keymap-global-set "C-c -" #'expreg-contract)           ; C--
+(keymap-global-set "C-c J" #'join-line)                 ; C-<backspace>
+
 ;; Put M-ESC (i.e., ESC ESC) back to the way it was when I learned
 ;; Emacs.  Apparently this changed in 1994.
 (keymap-global-set "M-ESC" #'eval-expression)
