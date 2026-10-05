@@ -15,6 +15,36 @@
 # shellcheck shell=sh
 umask 022
 
+# The skeleton .profile that Debian installs, which this file replaces, is what
+# puts ~/bin and ~/.local/bin on a bash login shell's PATH; Linuxbrew needs
+# adding too. This is the PATH that .zshenv gives zsh. Bash and zsh set OSTYPE;
+# a shell that does not, such as dash, skips this.
+# shellcheck disable=SC3028
+case ${OSTYPE:-} in
+linux*)
+    for dir in /home/linuxbrew/.linuxbrew/sbin /home/linuxbrew/.linuxbrew/bin; do
+        [ -d "$dir" ] || continue
+        case ":$PATH:" in
+        *":$dir:"*) ;;
+        *) PATH="$dir:$PATH" ;;
+        esac
+    done
+    for dir in "$HOME/.local/bin" "$HOME/bin"; do
+        case ":$PATH:" in
+        *":$dir:"*) ;;
+        *) PATH="$dir:$PATH" ;;
+        esac
+    done
+    if [ -d "$HOME/go/bin" ]; then
+        case ":$PATH:" in
+        *":$HOME/go/bin:"*) ;;
+        *) PATH="$PATH:$HOME/go/bin" ;;
+        esac
+    fi
+    unset dir
+    ;;
+esac
+
 # Terminal and locale setup.
 if [ -t 0 ]; then
     stty erase '^?' cs8 -ixon
