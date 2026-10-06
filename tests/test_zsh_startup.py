@@ -19,6 +19,7 @@ import shlex
 import shutil
 import signal
 import subprocess
+import sys
 import time
 from contextlib import suppress
 from pathlib import Path
@@ -487,15 +488,22 @@ def test_cached_output_is_rebuilt_when_a_watch_changes_status(shell: Shell) -> N
 
 
 @pytest.mark.parametrize(
-    ("ostype", "probed"), [(None, False), (DARWIN, False), (LINUX, True)]
+    ("ostype", "probed"),
+    [(None, sys.platform == "linux"), (DARWIN, False), (LINUX, True)],
 )
 def test_linuxbrew_is_probed_only_on_linux(
     shell: Shell, ostype: str | None, *, probed: bool
 ) -> None:
     shell.set_ostype(ostype)
+    # The trace prints PATH, which names Linuxbrew on a Linux host that has it.
+    path = ":".join(
+        entry
+        for entry in shell.env["PATH"].split(":")
+        if not entry.startswith("/home/linuxbrew")
+    )
     result = subprocess.run(
         [ZSH, "-ixc", ":"],
-        env=shell.env,
+        env={**shell.env, "PATH": path},
         cwd=shell.home,
         stdin=subprocess.DEVNULL,
         capture_output=True,

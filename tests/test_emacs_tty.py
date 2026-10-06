@@ -112,6 +112,10 @@ HARNESS = r""";;; -*- lexical-binding: t -*-
   (and (equal (plist-get args :host) "api.anthropic.com") "sk-ant"))
 (provide 'chatgpt-shell)
 
+;; The Mac build preloads tool-bar.el, but the Linux build loads it on demand,
+;; and loading it later would replace the stub or define what the scenario
+;; leaves void.
+(require 'tool-bar)
 (dolist (fn '(tool-bar-mode set-fringe-mode set-fontset-font))
   (let ((fn fn))
     (if h-macos
