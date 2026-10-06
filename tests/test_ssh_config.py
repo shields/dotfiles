@@ -33,7 +33,10 @@ def resolved_options(tmp_path: Path, host: str) -> dict[str, list[str]]:
     assert ssh, "ssh is required"
     lima = tmp_path / ".lima/test"
     lima.mkdir(parents=True, exist_ok=True)
-    _ = (lima / "ssh.config").write_text(LIMA_HOST)
+    config = lima / "ssh.config"
+    _ = config.write_text(LIMA_HOST)
+    # Upstream OpenSSH rejects an included file that is group- or world-writable.
+    config.chmod(0o644)
     # Only HOME is set, so that nothing in the caller's environment reaches
     # ssh; -G starts no other program, so ssh needs no PATH.
     result = subprocess.run(

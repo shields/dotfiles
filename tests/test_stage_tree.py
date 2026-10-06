@@ -185,9 +185,13 @@ def seed(tmp_path_factory: pytest.TempPathFactory) -> Seed:
         path = repo / name
         path.parent.mkdir(parents=True, exist_ok=True)
         _ = path.write_text(text)
+    # tar -p carries these modes into the staged tree, where the tests assert
+    # them, so neither the umask nor the checkout may decide them.
     (repo / "bin/run").chmod(0o755)
+    (repo / "README.md").chmod(0o644)
     (repo / "tools").mkdir()
     _ = shutil.copy2(SCRIPT, repo / "tools/stage_tree.sh")
+    (repo / "tools/stage_tree.sh").chmod(0o755)
     (repo / "link-to-readme").symlink_to("README.md")
     _ = run_git(env, repo, "add", "-A")
     _ = run_git(env, repo, "commit", "-q", "-m", "initial")
@@ -443,7 +447,14 @@ def test_a_non_ascii_name_is_kept_or_the_run_fails(
     layout.write(name, "non-ascii\n")
     path = tool_dir(layout, "tar-bin", {"tar": variant}, {})
     result = layout.stage(env=path_with(layout, path))
-    if sys.platform == "darwin" and variant != "gtar":
+    version = subprocess.run(
+        [str(path / "tar"), "--version"],
+        capture_output=True,
+        text=True,
+        timeout=15,
+        check=True,
+    ).stdout
+    if sys.platform == "darwin" and "GNU tar" not in version:
         assert result.returncode != 0
         assert "differ from the source file names" in result.stderr
         assert not layout.dest.exists()
