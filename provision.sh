@@ -279,7 +279,7 @@ if [[ ! -x $lgtmcp ]]; then
         exit 1
     fi
 fi
-add_user_mcp_server lgtmcp "$lgtmcp"
+add_user_mcp_server lgtmcp "$lgtmcp" -tools review_and_commit
 if [[ $os == macos ]]; then
     add_user_mcp_server playwright npx @playwright/mcp@latest --headless
 else

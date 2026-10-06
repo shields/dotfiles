@@ -669,7 +669,7 @@ def test_lgtmcp_is_found_in_home_bin_then_gobin() -> None:
     assert f"gopath=$({homebrew_env} go env GOPATH)" in body
     assert "gobin=${gopath%%:*}/bin" in body
     assert "exit 1" in body
-    assert 'add_user_mcp_server lgtmcp "$lgtmcp"' in LINES
+    assert 'add_user_mcp_server lgtmcp "$lgtmcp" -tools review_and_commit' in LINES
     assert '$HOME/bin/lgtmcp"' not in "\n".join(
         LINES[find(r"^add_user_mcp_server lgtmcp ") :]
     )
@@ -858,7 +858,7 @@ MACOS_SPINE = (
     "jq -r '.ssh_keys[]' |",
     f"sed -e 's/^/github.com /' >>{KNOWN_HOSTS}",
     "go telemetry on",
-    'add_user_mcp_server lgtmcp "$lgtmcp"',
+    'add_user_mcp_server lgtmcp "$lgtmcp" -tools review_and_commit',
     "add_user_mcp_server playwright npx @playwright/mcp@latest --headless",
     'python3 "$dotfiles_root/tools/configure_codex.py" "$HOME/.codex/config.toml"',
     "macos_finish",
