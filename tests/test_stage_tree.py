@@ -12,13 +12,17 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import contextlib
 import hashlib
 import os
+import re
+import shlex
 import shutil
 import signal
 import stat
 import subprocess
 import sys
+import time
 from dataclasses import dataclass
 from pathlib import Path
 from typing import TYPE_CHECKING
@@ -88,7 +92,6 @@ class Layout:
         script: Path | None = None,
         env: Mapping[str, str | None] | None = None,
         args: list[str] | None = None,
-        new_session: bool = False,
     ) -> subprocess.CompletedProcess[str]:
         environment = dict(self.env)
         for name, value in (env or {}).items():
@@ -106,7 +109,6 @@ class Layout:
             text=True,
             timeout=120,
             check=False,
-            start_new_session=new_session,
         )
 
     def write(self, relative: str, text: str, mode: int | None = None) -> None:
@@ -625,16 +627,46 @@ def test_a_tree_with_nothing_to_copy_is_refused(layout: Layout) -> None:
 
 
 def test_a_terminated_run_leaves_no_destination(layout: Layout) -> None:
+    # The group is signalled once, as a terminal does, after tar has started. A
+    # signal that arrives while the script is removing its files cuts the
+    # removal short.
+    started = layout.base / "creating"
     stub = (
         "#!/bin/sh\n"
         "case $1 in --version) echo 'bsdtar 3.0'; exit 0 ;; esac\n"
-        "kill -TERM 0\n"
+        f": >{shlex.quote(str(started))}\n"
+        "exec sleep 60\n"
     )
-    path = tool_dir(layout, "killer-tar", {}, {"tar": stub})
-    result = layout.stage(env=path_with(layout, path), new_session=True)
-    assert result.returncode == -signal.SIGTERM
+    path = tool_dir(layout, "waiting-tar", {}, {"tar": stub})
+    process = subprocess.Popen(
+        [str(layout.script), str(layout.dest)],
+        cwd=layout.base,
+        env={**layout.env, "PATH": f"{path}{os.pathsep}{layout.env['PATH']}"},
+        stdin=subprocess.DEVNULL,
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+        start_new_session=True,
+    )
+    try:
+        deadline = time.monotonic() + 60
+        while not started.exists():
+            assert time.monotonic() < deadline, "the script never ran tar"
+            time.sleep(0.05)
+        os.killpg(process.pid, signal.SIGTERM)
+        assert process.wait(timeout=60) == -signal.SIGTERM
+    finally:
+        with contextlib.suppress(ProcessLookupError, PermissionError):
+            os.killpg(process.pid, signal.SIGKILL)
+        _ = process.wait()
     assert not layout.dest.exists()
     assert list(layout.tmp.iterdir()) == []
+
+
+def test_the_archive_passes_through_a_file_not_a_pipe() -> None:
+    lines = SCRIPT.read_text().splitlines()
+    tars = [line for line in lines if re.search(r"\btar -[cx]\b", line)]
+    assert len(tars) == 2
+    assert all('"$work/tree.tar"' in line and not line.endswith("|") for line in tars)
 
 
 def test_git_environment_from_a_hook_does_not_reach_the_source(

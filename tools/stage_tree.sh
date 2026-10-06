@@ -171,8 +171,11 @@ while IFS= read -r -d '' path; do
 done <"$all" >"$list"
 ((count > 0)) || die "no files to stage"
 
-(cd "$root" && tar -c -f - "${create_flags[@]}" --no-recursion --null -T "$list") |
-    tar -x -p -f - "${extract_flags[@]}" -C "$dest"
+# bsdtar's extractor exits at the end-of-archive marker, and a creator still
+# writing padding into a pipe after it fails with "Write error", so the archive
+# is a file.
+(cd "$root" && tar -c -f "$work/tree.tar" "${create_flags[@]}" --no-recursion --null -T "$list")
+tar -x -p -f "$work/tree.tar" "${extract_flags[@]}" -C "$dest"
 
 # bsdtar on macOS writes non-ASCII names in decomposed form, which a Linux
 # consumer would then see as different from the names git records.
