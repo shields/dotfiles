@@ -389,6 +389,26 @@ def test_index_matches_the_copy_and_nothing_is_committed(layout: Layout) -> None
     assert layout.git("rev-parse", "--git-dir", cwd=layout.dest).strip() == ".git"
 
 
+def test_staging_an_unchanged_tree_twice_gives_identical_files(
+    layout: Layout,
+) -> None:
+    first = layout.stage(layout.base / "first")
+    second = layout.stage(layout.base / "second")
+    assert first.returncode == 0, first.stderr
+    assert second.returncode == 0, second.stderr
+
+    def contents(root: Path) -> dict[str, bytes | str]:
+        return {
+            path.relative_to(root).as_posix(): (
+                str(path.readlink()) if path.is_symlink() else path.read_bytes()
+            )
+            for path in sorted(root.rglob("*"))
+            if path.is_symlink() or path.is_file()
+        }
+
+    assert contents(layout.base / "first") == contents(layout.base / "second")
+
+
 def test_the_new_repository_is_configured_for_a_case_sensitive_consumer(
     layout: Layout,
 ) -> None:

@@ -612,6 +612,17 @@ def test_bundle_steps_and_comment() -> None:
     assert find(r"^bin/docker-prune$") > find(r"^go clean -modcache")
 
 
+def test_the_image_build_keeps_homebrew_downloads_and_other_runs_prune_them() -> None:
+    cleanup = find(r"^\s+brew cleanup --prune=all$")
+    otherwise = LINES[cleanup - 1]
+    assert otherwise == "else"
+    guard = find(r"^if \[\[ -n \$\{DOTFILES_KEEP_BREW_DOWNLOADS-\} \]\]; then$")
+    assert guard < cleanup
+    assert [line.strip() for line in LINES[guard + 1 : cleanup - 1]] == ["brew cleanup"]
+    dockerfile = (REPO / "cloudflare" / "Dockerfile").read_text()
+    assert "DOTFILES_KEEP_BREW_DOWNLOADS=1 ./provision.sh $MODULES" in dockerfile
+
+
 def test_plugins_update_only_for_the_modules_that_install_them() -> None:
     data = find(r'^if modules_has "\$modules_selection" data; then')
     assert [line.split()[0] for line in block(data)] == ["datasette", "llm"]

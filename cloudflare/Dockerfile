@@ -41,7 +41,7 @@ ARG TARGETARCH
 # build cache, npm's cache in /root from its sudo'd Playwright step, and the
 # Codex installation id that every container would otherwise share.
 RUN --mount=type=cache,target=/home/shields/.cache/Homebrew,id=homebrew-${TARGETARCH},sharing=locked,uid=1000,gid=1000 \
-    ./provision.sh $MODULES \
+    DOTFILES_KEEP_BREW_DOWNLOADS=1 ./provision.sh $MODULES \
     && rm -rf /home/shields/.cache/go-build /home/shields/.codex/installation_id \
     && sudo rm -rf /var/lib/apt/lists/* /root/.npm /root/.cache
 

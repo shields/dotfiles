@@ -196,7 +196,13 @@ brew upgrade --formula --yes
 # Suppress upgrade of Chrome since it doesn't like to be upgraded while running.
 brew outdated --greedy-auto-updates --cask --quiet | sed '/^google-chrome$/d' | xargs -r brew upgrade --cask --yes
 brew autoremove
-brew cleanup --prune=all
+# The image build mounts Homebrew's download cache to keep it for the next
+# build, which --prune=all would empty.
+if [[ -n ${DOTFILES_KEEP_BREW_DOWNLOADS-} ]]; then
+    brew cleanup
+else
+    brew cleanup --prune=all
+fi
 
 uv cache prune
 

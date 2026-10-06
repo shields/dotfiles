@@ -193,6 +193,10 @@ git -C "$dest" init -q --template=
 git -C "$dest" -c core.excludesFile=/dev/null add -Af .
 indexed=$(git -C "$dest" ls-files -z | tr -cd '\0' | wc -c)
 ((indexed == count)) || die "the index holds $((indexed)) files but $count were copied"
+# An index read back from its tree has no ctime or inode for any entry. Those
+# differ on every run, and with them Docker's layer cache never matches the
+# staged copy of a tree that has not changed.
+git -C "$dest" read-tree "$(git -C "$dest" write-tree)"
 # The tree is used on Linux, where the case-insensitivity that init probed on a
 # macOS volume does not apply.
 git -C "$dest" config core.ignorecase false
