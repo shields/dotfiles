@@ -72,8 +72,7 @@ that are selected.
   `brew bundle cleanup` (without `--force`) in an interactive shell. The cargo
   entries are found only where rustup's `bin` is on the `PATH`, which `.zshrc`
   arranges.
-- `brew bundle dump` no longer applies: it would replace the loader with a flat
-  list.
+- Do not run `brew bundle dump`: it would replace the loader with a flat list.
 
 # Persistent Linux box
 
@@ -81,7 +80,7 @@ A Linux machine that you reach over SSH gets the same shell, git, Emacs (in the
 terminal) and agent setup as the Mac. It needs Debian 13 on x86_64 or arm64 and
 a regular user with sudo; Homebrew refuses to run as root.
 
-1. `sudo apt install git tmux`
+1. `sudo apt update && sudo apt install git tmux`
 1. `git clone https://github.com/shields/dotfiles.git ~/src/github.com/shields/dotfiles`
 1. `cd ~/src/github.com/shields/dotfiles`
 1. Run `tmux`, then `./provision.sh [MODULE...]` inside it, so that a dropped
@@ -100,14 +99,16 @@ Nothing secret is in the repository, so log in once on each machine:
 - GitHub: `gh auth login`, or a fine-grained token that is limited to the
   repositories you need: `gh auth login --with-token`. git uses `gh` as its
   credential helper.
-- Claude Code: `claude login`, or run `claude setup-token` and put the token in
-  `~/.config/secrets/CLAUDE_CODE_OAUTH_TOKEN` (mode 0600). Interactive zsh
-  shells export it from there.
+- Claude Code: `claude auth login`, or run `claude setup-token` and put the
+  token in `~/.config/secrets/CLAUDE_CODE_OAUTH_TOKEN` (mode 0600). Interactive
+  zsh shells export it from there.
 - Codex: `codex login --device-auth`
 
 Login shells set `LANG` to `en_US.UTF-8` when the SSH client did not send one,
 but a non-interactive `ssh box command` runs without a `LANG` unless the client
-sends it (`SendEnv LANG`, which the stock macOS `ssh_config` does).
+sends it (`SendEnv LANG`). The system `ssh_config` of Debian and of macOS's own
+`/usr/bin/ssh` does, but Homebrew's `ssh`, which `provision.sh` installs and
+`.zshrc` puts first in `PATH` on a Mac, does not.
 
 # Testing on Linux
 
@@ -120,5 +121,5 @@ runs `bun install --frozen-lockfile` and `make test lint` in the image as an
 unprivileged user. It fails if any step fails.
 
 `make test-linux MODULES="dev cloud"` provisions other modules (the default is
-`dev`), and `LINUX_IMAGE` names the image (the default is
-`dotfiles-linux-test`).
+`dev`, whose tools `make test lint` needs, so keep it in the list), and
+`LINUX_IMAGE` names the image (the default is `dotfiles-linux-test`).

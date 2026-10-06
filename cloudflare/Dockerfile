@@ -13,7 +13,7 @@
 # limitations under the License.
 
 # The build context is a staged tree (tools/stage_tree.sh DEST), so this builds
-# from any directory with: docker build -f cloudflare/Dockerfile DEST
+# from any directory with: docker build -f DEST/cloudflare/Dockerfile DEST
 
 FROM debian:trixie-slim
 

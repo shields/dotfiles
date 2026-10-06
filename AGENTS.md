@@ -21,8 +21,8 @@ limitations under the License.
 - **Emacs Setup**: `emacs --batch --script .emacs.d/provision.el`
 - **Linux tests**: `make test-linux` provisions a Debian 13 image in Docker and
   runs `make test lint` inside it, so it also covers uncommitted changes.
-  `MODULES` selects Brewfile modules (`dev` by default). The first run takes
-  tens of minutes.
+  `MODULES` selects Brewfile modules (`dev` by default, and `make test lint`
+  needs its tools). The first run takes tens of minutes.
 - **Fonts**: `tools/create_nerd_commit_mono.sh` rebuilds the Nerd Font in
   `Library/Fonts/` from `commit-mono/` (checked by `make test`)
 - **Benchmark**: `make bench` times `wt` with hyperfine in a throwaway repo;
@@ -47,9 +47,10 @@ effect only after running `./provision.sh`.
   in `provision.sh`, and `tests/test_provision.py` checks it, so a new
   macOS-only file needs an entry in both.
 - The macOS-only steps are functions in `provision/macos.sh`, which
-  `provision.sh` calls in their original order. Call them as plain statements:
-  inside `fn &&`, `fn ||` or `if fn`, errexit is off. The apt packages, locale
-  and login shell on Linux are `provision/linux-system.sh`, run with sudo.
+  `provision.sh` calls in the order a macOS run needs them. Call them as plain
+  statements: inside `fn &&`, `fn ||` or `if fn`, errexit is off. The apt
+  packages, locale and login shell on Linux are `provision/linux-system.sh`, run
+  with sudo.
 - `provision.sh` and everything else that runs on macOS must work in bash 3.2:
   no `mapfile`, associative arrays or `${var,,}`, and no expansion of an empty
   array under `set -u`.
