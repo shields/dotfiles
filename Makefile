@@ -26,6 +26,7 @@ SHELL_SOURCES = \
 	provision/linux-system.sh \
 	provision/macos.sh \
 	provision/modules.sh \
+	provision/throwaway.sh \
 	tools/create_nerd_andale_mono.sh \
 	tools/create_nerd_commit_mono.sh \
 	tools/stage_tree.sh \

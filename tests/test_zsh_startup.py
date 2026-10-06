@@ -672,3 +672,99 @@ def test_gpg_tty_is_the_terminal(shell: Shell) -> None:
     gpg, tty = (field.partition("=")[2] for field in line.split(" "))
     assert tty.startswith("/dev/")
     assert gpg == tty
+
+
+CLAUDE_STUB = """#!/bin/sh
+printf '%s\\n' "$@" > "$HOME/claude-args"
+printf '%s' "$TMPDIR" > "$HOME/claude-tmpdir"
+"""
+SANDBOXED_CLAUDE = [
+    "--model=sonnet",
+    "--effort",
+    "xhigh",
+    "--permission-mode=auto",
+    "--settings",
+]
+
+
+def stub_claude(shell: Shell, ostype: str, *, marker: bool) -> None:
+    shell.set_ostype(ostype)
+    (shell.home / "bin").mkdir(exist_ok=True)
+    (shell.home / "scratch").mkdir(exist_ok=True)
+    shell.env["TMPDIR"] = str(shell.home / "scratch")
+    executable(shell.home / "bin/claude", CLAUDE_STUB)
+    shell.env["PATH"] = f"{shell.home}/bin:{shell.env['PATH']}"
+    # The marker is the file whose existence a throwaway environment's
+    # provisioning creates; pointing at a missing file keeps a developer's own
+    # /etc/dotfiles-throwaway out of the test.
+    marker_file = shell.home / "marker"
+    if marker:
+        _ = marker_file.write_text("throwaway\n")
+    shell.env["DOTFILES_THROWAWAY_MARKER"] = str(marker_file)
+
+
+def sandbox_settings(tmpdir: str) -> str:
+    return (
+        f'{{"ultracode":true,"sandbox":{{"filesystem":{{"allowWrite":["{tmpdir}"]}}}}}}'
+    )
+
+
+@pytest.mark.parametrize(
+    ("ostype", "marker"), [(LINUX, False), (DARWIN, False), (DARWIN, True)]
+)
+def test_c_starts_claude_in_auto_mode_in_its_sandbox_unless_throwaway(
+    shell: Shell, ostype: str, *, marker: bool
+) -> None:
+    stub_claude(shell, ostype, marker=marker)
+    _ = shell.run_command("c -p 'two words'")
+    argv = (shell.home / "claude-args").read_text().splitlines()
+    tmpdir = (shell.home / "claude-tmpdir").read_text()
+    assert tmpdir.startswith(f"{shell.home}/scratch/claude.")
+    assert argv == [*SANDBOXED_CLAUDE, sandbox_settings(tmpdir), "-p", "two words"]
+
+
+def test_c_leaves_the_mode_and_the_sandbox_to_managed_settings_in_a_throwaway(
+    shell: Shell,
+) -> None:
+    stub_claude(shell, LINUX, marker=True)
+    _ = shell.run_command("c --worktree -p 'two words'")
+    argv = (shell.home / "claude-args").read_text().splitlines()
+    assert argv == [
+        "--model=sonnet",
+        "--effort",
+        "xhigh",
+        "--settings",
+        '{"ultracode":true}',
+        "--worktree",
+        "-p",
+        "two words",
+    ]
+    assert (shell.home / "claude-tmpdir").read_text() != ""
+
+
+@pytest.mark.parametrize("ostype", [LINUX, DARWIN])
+def test_cx_is_plain_codex_in_a_throwaway_too(shell: Shell, ostype: str) -> None:
+    stub_claude(shell, ostype, marker=True)
+    assert shell.run_command('print -r -- "$aliases[cx]|$aliases[cxw]"') == (
+        "codex|cx --worktree"
+    )
+
+
+@pytest.mark.parametrize("marker", [True, False])
+def test_the_throwaway_check_forks_nothing(shell: Shell, *, marker: bool) -> None:
+    stub_claude(shell, LINUX, marker=marker)
+    result = subprocess.run(
+        [ZSH, "-ic", "setopt xtrace; c; unsetopt xtrace"],
+        env=shell.env,
+        cwd=shell.home,
+        capture_output=True,
+        text=True,
+        timeout=TIMEOUT,
+        check=False,
+    )
+    assert result.returncode == 0, result.stderr
+    trace = [line for line in result.stderr.splitlines() if line.startswith("+c:")]
+    checks = [line for line in trace if "[[" in line and "-e" in line]
+    assert len(checks) == 1, trace
+    commands = {line.split("> ", 1)[1].split(" ", 1)[0] for line in trace}
+    assert not commands & {"test", "[", "stat", "ls", "cat"}, trace
