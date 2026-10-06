@@ -471,6 +471,13 @@ BASH_CASES = (
     ),
     BashCase("sed over many manifest mentions", "sed go.mod " * 800, ask=False),
     BashCase("sed with a very long token", "sed -n p " + "a" * 64_000, ask=False),
+    BashCase("sed -i with a very long token", "sed -i p " + "a" * 64_000, ask=False),
+    BashCase("redirect with a very long token", "echo x > " + "a" * 64_000, ask=False),
+    BashCase(
+        "manifest write after a very long token",
+        "sed -i p " + "a" * 64_000 + "\nsed -i s/a/b/ go.mod",
+        ask=True,
+    ),
     BashCase("unrelated redirect", "make lint > /tmp/out.txt", ask=False),
     BashCase("ordinary command", "uv run pytest -q", ask=False),
 )

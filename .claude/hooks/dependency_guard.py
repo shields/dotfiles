@@ -405,7 +405,11 @@ def _edit_reason(tool: str, tool_input: dict[str, Any]) -> str | None:
 
 
 # Manifests worth guarding against a raw shell write. Unlike the Edit path this
-# cannot parse anything, so any write to one of these asks.
+# cannot parse anything, so any write to one of these asks. Each is matched
+# after \S* or _SEG, which already cover a leading run of filename characters,
+# so no alternative may begin with a loop over those characters: the overlap
+# makes a long token cost quadratic time, and a hook that outlasts its timeout
+# fails open.
 BASH_GUARDED = (
     r"pyproject\.toml",
     r"package\.json",
@@ -417,7 +421,7 @@ BASH_GUARDED = (
     r"\.pre-commit-config\.yaml",
     r"requirements[\w.-]*\.txt",
     r"constraints\.txt",
-    r"[\w.-]*\.lockb?",
+    r"\.lockb?",
     r"package-lock\.json",
     r"npm-shrinkwrap\.json",
     r"pnpm-lock\.yaml",
@@ -441,10 +445,8 @@ BASH_WRITE_RES = tuple(
     for pattern in (
         rf">>?\s*\S*{_MANIFEST}\b",
         rf"\btee\b{_SEG}\s\S*{_MANIFEST}\b",
-        # Two independent lookaheads, flag first, keep each sed to two linear
-        # scans and accept the flag on either side of the file operands. One
-        # pattern that chains the searches backtracks super-linearly on a long
-        # command, and this hook fails open when it outlasts its timeout. gsed
+        # Two independent lookaheads, flag first, so that the flag may sit on
+        # either side of the file operands and each lookahead is one scan. gsed
         # is Homebrew's GNU sed.
         rf"\bg?sed\b(?={_SEG}\s{_SED_IN_PLACE})(?={_SEG}\s\S*{_MANIFEST}\b)",
         rf"\bdd\b{_SEG}\bof=\S*{_MANIFEST}\b",
