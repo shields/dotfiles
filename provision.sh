@@ -291,13 +291,15 @@ if [[ $os == linux ]]; then
     done
 
     # Without hasCompletedOnboarding, Claude Code ignores CLAUDE_CODE_OAUTH_TOKEN.
+    # A repository is trusted only by its own entry, not a parent directory's,
+    # and `claude -p` ignores its permissions.allow until it is.
     claude_json=$HOME/.claude.json
     if [[ ! -s $claude_json ]]; then
         (umask 077 && printf '{}\n' >"$claude_json")
     fi
     claude_json_new=$(mktemp "$claude_json.XXXXXX")
-    if ! jq --arg src "$HOME/src" \
-        '.hasCompletedOnboarding = true | .projects[$src].hasTrustDialogAccepted = true' \
+    if ! jq --arg root "$dotfiles_root" \
+        '.hasCompletedOnboarding = true | .projects[$root].hasTrustDialogAccepted = true' \
         "$claude_json" >"$claude_json_new" || [[ ! -s $claude_json_new ]]; then
         rm -f "$claude_json_new"
         echo "provision.sh: cannot update $claude_json" >&2

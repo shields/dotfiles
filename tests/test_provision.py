@@ -15,12 +15,14 @@
 # provision.sh changes the machine it runs on, so it is never executed here.
 # Its structure is checked from the text, and the copy step's `git ls-files`
 # and `tar` run against the repository and a scratch repository: they only
-# read.
+# read. The ~/.claude.json update runs too, against a scratch home.
 
+import json
 import os
 import re
 import shlex
 import shutil
+import stat
 import subprocess
 from pathlib import Path
 
@@ -687,9 +689,75 @@ def test_linux_gets_git_credential_helpers_and_claude_onboarding() -> None:
     assert "'!gh auth git-credential'" in body
     assert "$HOME/.config/git/config" in body
     assert "hasCompletedOnboarding = true" in body
-    assert ".projects[$src].hasTrustDialogAccepted = true" in body
-    assert '--arg src "$HOME/src"' in body
+    assert ".projects[$root].hasTrustDialogAccepted = true" in body
+    assert '--arg root "$dotfiles_root"' in body
     assert 'mv "$claude_json_new" "$claude_json"' in body
+
+
+def run_claude_json_update(home: Path, root: Path) -> subprocess.CompletedProcess[str]:
+    start = find(r"^\s+claude_json=\$HOME/\.claude\.json$")
+    end = find(r'^\s+mv "\$claude_json_new" "\$claude_json"$', start)
+    script = "set -euo pipefail\n" + "\n".join(LINES[start : end + 1])
+    return subprocess.run(
+        ["/bin/bash", "-c", script],
+        env={
+            "PATH": os.environ["PATH"],
+            "HOME": str(home),
+            "dotfiles_root": str(root),
+        },
+        stdin=subprocess.DEVNULL,
+        capture_output=True,
+        text=True,
+        timeout=30,
+        check=False,
+    )
+
+
+def test_claude_json_update_keeps_what_the_file_already_holds(tmp_path: Path) -> None:
+    claude_json = tmp_path / ".claude.json"
+    existing: dict[str, object] = {
+        "theme": "dark",
+        "projects": {"/other": {"allowedTools": []}},
+    }
+    _ = claude_json.write_text(json.dumps(existing))
+    root = tmp_path / "dotfiles"
+    result = run_claude_json_update(tmp_path, root)
+    assert result.returncode == 0, result.stderr
+    assert json.loads(claude_json.read_text()) == {
+        "theme": "dark",
+        "hasCompletedOnboarding": True,
+        "projects": {
+            "/other": {"allowedTools": []},
+            str(root): {"hasTrustDialogAccepted": True},
+        },
+    }
+    assert [entry.name for entry in tmp_path.iterdir()] == [".claude.json"]
+
+
+def test_claude_json_update_creates_a_missing_file_for_its_owner_only(
+    tmp_path: Path,
+) -> None:
+    root = tmp_path / "dotfiles"
+    result = run_claude_json_update(tmp_path, root)
+    assert result.returncode == 0, result.stderr
+    claude_json = tmp_path / ".claude.json"
+    assert json.loads(claude_json.read_text()) == {
+        "hasCompletedOnboarding": True,
+        "projects": {str(root): {"hasTrustDialogAccepted": True}},
+    }
+    assert stat.S_IMODE(claude_json.stat().st_mode) == 0o600
+
+
+def test_claude_json_update_refuses_a_file_that_jq_prints_nothing_for(
+    tmp_path: Path,
+) -> None:
+    claude_json = tmp_path / ".claude.json"
+    _ = claude_json.write_text("\n")
+    result = run_claude_json_update(tmp_path, tmp_path / "dotfiles")
+    assert result.returncode == 1
+    assert "cannot update" in result.stderr
+    assert claude_json.read_text() == "\n"
+    assert [entry.name for entry in tmp_path.iterdir()] == [".claude.json"]
 
 
 def test_known_hosts_then_go_telemetry_then_mcp_registration() -> None:
