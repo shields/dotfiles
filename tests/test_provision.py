@@ -257,9 +257,13 @@ def test_only_the_nonempty_copy_array_is_expanded_whole(script: Path) -> None:
 
 def test_header_finds_the_checkout_and_the_user_once() -> None:
     header = [line for _, line in code_lines()][:6]
-    assert header[:2] == ["set -euo pipefail", 'cd "$(dirname "$0")"']
-    assert header[2] == "dotfiles_root=$PWD"
-    assert header[3] == "user=$(id -un)"
+    assert header[:3] == [
+        "set -euo pipefail",
+        "unset CDPATH",
+        'cd "$(dirname "$0")"',
+    ]
+    assert header[3] == "dotfiles_root=$PWD"
+    assert header[4] == "user=$(id -un)"
     assert "$USER" not in TEXT
     assert "BASH_SOURCE" not in TEXT
 
@@ -271,7 +275,11 @@ def test_os_is_detected_once_and_others_are_refused() -> None:
         "Darwin) os=macos ;;",
         "Linux) os=linux ;;",
     ]
-    assert "unsupported OS $uname_s" in TEXT
+    refusal = (
+        '    echo "provision.sh: unsupported OS $uname_s; '
+        'only macOS and Linux are supported" >&2'
+    )
+    assert LINES[detect + 4 : detect + 8] == ["*)", refusal, "    exit 1", "    ;;"]
 
 
 def test_linux_refuses_to_run_as_root() -> None:
@@ -324,7 +332,8 @@ def test_macos_sh_is_only_sourced_on_macos() -> None:
 
 def test_macos_only_commands_stay_inside_the_macos_guard() -> None:
     word = "|".join(re.escape(c) for c in MACOS_ONLY_COMMANDS)
-    command = re.compile(rf"(?:^|[;&|(!]|\bthen|\bdo)\s*(?:sudo\s+)?({word})(?![\w-])")
+    lead = r"(?:^|[;&|(!]|\bthen|\bdo|\bif|\belif|\bwhile|\buntil)"
+    command = re.compile(rf"{lead}\s*(?:sudo\s+(?:-\S+\s+)*)?({word})(?![\w-])")
     bare: list[str] = []
     for index, line in code_lines():
         match = command.search(strip_quotes(line.strip()))
@@ -629,6 +638,13 @@ def test_docker_prune_runs_only_on_macos() -> None:
     assert sum("bin/docker-prune" in line for _, line in code_lines()) == 1
 
 
+def test_the_plugin_tools_come_from_the_modules_that_update_them() -> None:
+    data = (REPO / "brew" / "data.Brewfile").read_text()
+    assert 'brew "datasette"' in data
+    assert 'brew "llm"' in data
+    assert 'cask "gcloud-cli"' in (REPO / "brew" / "cloud.Brewfile").read_text()
+
+
 def test_plugins_update_only_for_the_modules_that_install_them() -> None:
     data = find(r'^if modules_has "\$modules_selection" data; then')
     assert [line.split()[0] for line in block(data)] == ["datasette", "llm"]
@@ -793,8 +809,8 @@ BREW_OUTDATED = "brew outdated --greedy-auto-updates --cask --quiet"
 KNOWN_HOSTS = '"$HOME/.ssh/known_hosts"'
 QUIET_PIP = " | (grep -v '^Requirement already satisfied:' || true)"
 
-# What the macOS run has always executed, in order. Lines may be added between
-# them, but none may change, move or disappear.
+# The macOS run's commands, in order. Lines may be added between them, but none
+# may change, move or disappear.
 MACOS_SPINE = (
     "cat .codex/instructions.md",
     MACOS_IDENTITY_IF.strip(),

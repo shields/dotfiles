@@ -16,6 +16,7 @@ set -euo pipefail
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+unset CDPATH
 cd "$(dirname "$0")"
 dotfiles_root=$PWD
 user=$(id -un)

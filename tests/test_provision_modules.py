@@ -91,6 +91,7 @@ def resolve(
     persisted: str | None = None,
     have_brew: bool = False,
     names: tuple[str, ...] = FAKE_MODULES,
+    cwd: Path | None = None,
 ) -> Resolution:
     brew_dir = make_brew_dir(tmp_path, names)
     selection_file = tmp_path / "config" / "brew-modules"
@@ -105,6 +106,7 @@ def resolve(
         str(selection_file),
         "1" if have_brew else "0",
         *args,
+        cwd=cwd,
     )
     assert result.returncode == 0, result.stderr
     fields = dict(line.split("=", 1) for line in result.stdout.splitlines())
@@ -329,7 +331,7 @@ def test_unknown_modules_are_all_reported(tmp_path: Path) -> None:
 
 
 def test_a_glob_is_not_expanded_into_module_names(tmp_path: Path) -> None:
-    resolved = resolve(tmp_path, "linux", "*")
+    resolved = resolve(tmp_path, "linux", "*", cwd=tmp_path)
     assert resolved.status == 1
     assert "unknown modules *;" in resolved.stderr
 
