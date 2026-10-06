@@ -125,6 +125,7 @@ def test_inputrc_tolerates_a_missing_system_file(tmp_path: Path) -> None:
 def test_tmux_forwards_clipboard_and_keys_but_not_passthrough() -> None:
     options = tmux_options()
     assert options["set-clipboard"] == "on"
+    assert options.get("get-clipboard", "off") == "off"
     assert options["extended-keys"] == "on"
     assert options["default-terminal"] == "tmux-256color"
     assert "*:RGB" in options.values()
