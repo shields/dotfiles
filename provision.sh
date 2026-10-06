@@ -55,7 +55,9 @@ modules_status=0
 modules_resolve "$os" "$dotfiles_root/brew" "$selection_file" "$have_brew" "$@" || modules_status=$?
 if [[ $modules_status -eq 3 && $have_brew -eq 1 ]]; then
     echo "brew bundle cleanup would uninstall:" >&2
-    HOMEBREW_DOTFILES_BREW_MODULES=${modules_selection:-none} "$brew_found" bundle cleanup --file="$dotfiles_root/Brewfile" >&2 || true
+    # With stdin on a terminal, brew asks whether to proceed and uninstalls on y;
+    # reading /dev/null makes this only a preview.
+    HOMEBREW_DOTFILES_BREW_MODULES=${modules_selection:-none} "$brew_found" bundle cleanup --file="$dotfiles_root/Brewfile" >&2 </dev/null || true
 fi
 if [[ $modules_status -ne 0 ]]; then
     exit "$modules_status"
@@ -176,8 +178,9 @@ brew update
 
 # brew bundle finds cargo only on the PATH brew was started with. Without it,
 # the cargo entries install the rust formula, which cleanup then removes.
+# Homebrew asks before it installs dependencies, which rustup has on Linux.
 if modules_has "$modules_selection" dev; then
-    brew install rustup
+    brew install --yes rustup
     rustup_prefix=$(brew --prefix rustup)
     export PATH="$rustup_prefix/bin:$PATH"
     rustup default stable >/dev/null
@@ -278,9 +281,10 @@ else
     # The browser's system libraries come from apt, so this needs root, and a
     # second password prompt where sudo asks for one. root's PATH leaves out the
     # user's own bin directories and puts the user-owned Homebrew prefix last, so
-    # only node and npx come from it.
+    # only node and npx come from it. sudo drops DEBIAN_FRONTEND, so env sets it
+    # for the apt-get that Playwright runs.
     sudo -v
-    sudo env PATH="/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:$HOMEBREW_PREFIX/bin" npx -y -p "@playwright/mcp@$playwright_version" playwright install-deps chromium
+    sudo env DEBIAN_FRONTEND=noninteractive PATH="/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:$HOMEBREW_PREFIX/bin" npx -y -p "@playwright/mcp@$playwright_version" playwright install-deps chromium
 fi
 python3 "$dotfiles_root/tools/configure_codex.py" "$HOME/.codex/config.toml"
 

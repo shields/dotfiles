@@ -564,6 +564,7 @@ def test_dropped_modules_preview_what_brew_would_uninstall() -> None:
     )
     assert "bundle cleanup" in body
     assert "--force" not in body
+    assert ">&2 </dev/null || true" in body
 
 
 def test_homebrew_is_installed_per_os() -> None:
@@ -589,7 +590,7 @@ def test_rustup_is_ready_before_bundle_on_dev_only() -> None:
     guard = find(r'^if modules_has "\$modules_selection" dev; then')
     body = block(guard)
     assert body == [
-        "brew install rustup",
+        "brew install --yes rustup",
         "rustup_prefix=$(brew --prefix rustup)",
         'export PATH="$rustup_prefix/bin:$PATH"',
         "rustup default stable >/dev/null",
@@ -656,7 +657,9 @@ def test_playwright_is_registered_per_os() -> None:
     assert otherwise < version
     steps = [line.strip() for line in LINES[version : find(r"^fi$", version)]]
     pinned = '"@playwright/mcp@$playwright_version"'
-    root_npx = f'sudo env PATH="{ROOT_PATH}" npx -y -p {pinned}'
+    root_npx = (
+        f'sudo env DEBIAN_FRONTEND=noninteractive PATH="{ROOT_PATH}" npx -y -p {pinned}'
+    )
     assert [s for s in steps if not s.startswith("#")] == [
         "playwright_version=$(npm view @playwright/mcp version)",
         f"add_user_mcp_server playwright npx {pinned} --headless --browser chromium",
