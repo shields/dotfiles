@@ -153,6 +153,10 @@ class Shell:
             "VIRTUAL_ENV",
         ):
             _ = self.env.pop(name, None)
+        # A git hook exports GIT_DIR and GIT_INDEX_FILE, which would aim this
+        # fixture's git commands at the repository that the hook belongs to.
+        for name in [name for name in self.env if name.startswith("GIT_")]:
+            del self.env[name]
         self.set_ostype(None)
         (home / ".zsh.d").symlink_to(REPO / ".zsh.d", target_is_directory=True)
         self.write(".oh-my-zsh/lib/base.zsh", BASE_ZSH)

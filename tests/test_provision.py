@@ -182,6 +182,10 @@ def copy_pathspecs(os_name: str) -> list[str]:
 def git_ls_files(
     repo: Path, pathspecs: list[str], env: dict[str, str] | None = None
 ) -> list[str]:
+    if env is None:
+        # A git hook exports GIT_DIR and GIT_INDEX_FILE, which would make this
+        # list the files of the commit that is being made, not those of repo.
+        env = {k: v for k, v in os.environ.items() if not k.startswith("GIT_")}
     result = subprocess.run(
         ["git", "ls-files", "-z", "--", *pathspecs],
         cwd=repo,
