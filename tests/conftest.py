@@ -1,0 +1,31 @@
+# Copyright © 2026 Michael Shields
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+import os
+from typing import TYPE_CHECKING
+
+import pytest
+
+if TYPE_CHECKING:
+    from collections.abc import Iterator
+
+
+@pytest.fixture(autouse=True)
+def _fixed_umask() -> Iterator[None]:
+    # Fixtures create files and directories with the caller's umask, and
+    # compaudit treats a group-writable directory as insecure. Debian's
+    # pam_umask gives ssh sessions 002.
+    previous = os.umask(0o022)
+    yield
+    _ = os.umask(previous)
