@@ -21,6 +21,7 @@
 
 import json
 import os
+import re
 import shutil
 import subprocess
 from pathlib import Path
@@ -86,6 +87,9 @@ HARNESS = r""";;; -*- lexical-binding: t -*-
       custom-theme-directory h-repo)
 (add-to-list 'load-path (expand-file-name "lisp" h-repo))
 (add-to-list 'custom-theme-load-path h-repo)
+
+;; Batch Emacs starts with the menu bar off, so turn it on for init to turn off.
+(menu-bar-mode 1)
 
 (setq use-package-always-defer t)
 (push :straight use-package-keywords)
@@ -246,6 +250,12 @@ def names(report: Report, field: str) -> list[str]:
 
 def test_init_files_load(report: Report) -> None:
     assert report["loaded"] == FILES
+
+
+def test_init_requires_every_file() -> None:
+    init = (EMACS_DIR / "init.el").read_text(encoding="utf-8")
+    required = re.findall(r"^\(require '(init-[\w-]+)\)", init, flags=re.MULTILINE)
+    assert set(required) == set(FILES)
 
 
 def test_macos_only_packages_are_gated(reports: dict[str, Report]) -> None:
