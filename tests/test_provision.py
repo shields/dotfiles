@@ -307,7 +307,7 @@ def test_macos_functions_are_called_in_the_original_order() -> None:
     analytics = find(r"^brew analytics off")
     oh_my_zsh = find(r"Oh My Zsh installation")
     assert analytics < preflight < oh_my_zsh
-    assert find(r"^bin/docker-prune") < xcode
+    assert find(r"^\s+bin/docker-prune$") < xcode
     assert login_shell == xcode + 1
     assert find(r"gcloud --quiet components update") < defaults
     emacs = find(r"^emacs --batch --script \.emacs\.d/provision\.el")
@@ -609,7 +609,7 @@ def test_bundle_steps_and_comment() -> None:
     assert find(r"^brew upgrade --formula --yes") == bundle + 3
     assert find(r"^uv cache prune") > bundle
     assert LINES[find(r"^go clean -modcache")] == "go clean -modcache"
-    assert find(r"^bin/docker-prune$") > find(r"^go clean -modcache")
+    assert find(r"^\s+bin/docker-prune$") > find(r"^go clean -modcache")
 
 
 def test_the_image_build_keeps_homebrew_downloads_and_other_runs_prune_them() -> None:
@@ -621,6 +621,12 @@ def test_the_image_build_keeps_homebrew_downloads_and_other_runs_prune_them() ->
     assert [line.strip() for line in LINES[guard + 1 : cleanup - 1]] == ["brew cleanup"]
     dockerfile = (REPO / "cloudflare" / "Dockerfile").read_text()
     assert "DOTFILES_KEEP_BREW_DOWNLOADS=1 ./provision.sh $MODULES" in dockerfile
+
+
+def test_docker_prune_runs_only_on_macos() -> None:
+    prune = find(r"^\s+bin/docker-prune$")
+    assert openers(prune)[:1] == [MACOS_GUARD]
+    assert sum("bin/docker-prune" in line for _, line in code_lines()) == 1
 
 
 def test_plugins_update_only_for_the_modules_that_install_them() -> None:

@@ -208,9 +208,10 @@ uv cache prune
 
 go clean -modcache
 
-bin/docker-prune
-
 if [[ $os == macos ]]; then
+    # On Linux, /var/run/docker.sock can exist without the user being able to
+    # use it, which bin/docker-prune's socket check cannot tell.
+    bin/docker-prune
     macos_xcode
     macos_login_shell
 fi
