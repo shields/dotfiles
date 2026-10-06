@@ -319,8 +319,7 @@ def test_configure_points_the_app_server_at_the_config_directory(
     tool.configure_codex(codex_home / "config.toml", HOME)
     launch = codex.launch()
     argv = cast("list[str]", launch["argv"])
-    assert argv[:3] == ["app-server", "--strict-config", "-c"]
-    assert argv[3].startswith('sqlite_home="')
+    assert argv == ["app-server", "--strict-config"]
     assert launch["codex_home"] == str(codex_home)
 
 

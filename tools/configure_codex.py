@@ -18,7 +18,6 @@ import argparse
 import asyncio
 import json
 import os
-import tempfile
 import tomllib
 from contextlib import asynccontextmanager
 from pathlib import Path
@@ -76,32 +75,32 @@ class AppServer:
 
 @asynccontextmanager
 async def app_server(codex_home: Path) -> AsyncGenerator[AppServer]:
-    with tempfile.TemporaryDirectory(prefix="codex-config-") as state_dir:
-        process = await asyncio.create_subprocess_exec(
-            "codex",
-            "app-server",
-            "--strict-config",
-            "-c",
-            f"sqlite_home={json.dumps(state_dir)}",
-            stdin=asyncio.subprocess.PIPE,
-            stdout=asyncio.subprocess.PIPE,
-            env={**os.environ, "CODEX_HOME": str(codex_home)},
+    # Do not move sqlite_home to an empty directory: the server then rebuilds its
+    # state from every saved session before it answers initialize, which takes
+    # minutes when ~/.codex holds gigabytes of them.
+    process = await asyncio.create_subprocess_exec(
+        "codex",
+        "app-server",
+        "--strict-config",
+        stdin=asyncio.subprocess.PIPE,
+        stdout=asyncio.subprocess.PIPE,
+        env={**os.environ, "CODEX_HOME": str(codex_home)},
+    )
+    try:
+        server = AppServer(process)
+        _ = await server.request(
+            "initialize", {"clientInfo": {"name": "dotfiles", "version": "1"}}
         )
+        await server.notify("initialized")
+        yield server
+    finally:
+        if process.returncode is None:
+            process.terminate()
         try:
-            server = AppServer(process)
-            _ = await server.request(
-                "initialize", {"clientInfo": {"name": "dotfiles", "version": "1"}}
-            )
-            await server.notify("initialized")
-            yield server
-        finally:
-            if process.returncode is None:
-                process.terminate()
-            try:
-                _ = await asyncio.wait_for(process.wait(), timeout=5)
-            except TimeoutError:
-                process.kill()
-                _ = await process.wait()
+            _ = await asyncio.wait_for(process.wait(), timeout=5)
+        except TimeoutError:
+            process.kill()
+            _ = await process.wait()
 
 
 def table(config: Json, name: str) -> Json:
