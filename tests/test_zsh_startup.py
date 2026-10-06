@@ -547,6 +547,13 @@ def test_editor_and_text_encoding_follow_the_system(
     assert values == [editor.format(home=shell.home), encoding]
 
 
+def test_visual_follows_editor_on_linux(shell: Shell) -> None:
+    shell.set_ostype(LINUX)
+    shell.env["VISUAL"] = "vi"  # What .profile exports in every login shell.
+    values = shell.run_command('print -rl -- "$EDITOR" "$VISUAL"').splitlines()
+    assert values == ["emacsclient --tty --alternate-editor="] * 2
+
+
 @pytest.mark.parametrize(
     ("ostype", "token", "expected"),
     [

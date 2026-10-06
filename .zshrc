@@ -192,6 +192,10 @@ if [[ "$OSTYPE" == darwin* ]]; then
 elif [[ "$OSTYPE" == linux* ]]; then
     # An empty --alternate-editor starts the Emacs daemon if none is running.
     export EDITOR='emacsclient --tty --alternate-editor='
+    # git and edit-command-line read VISUAL first, and .profile sets it to vi.
+    # Only here is EDITOR a terminal editor, which is what programs that prefer
+    # VISUAL, such as crontab and visudo, expect; the macOS one opens a GUI frame.
+    export VISUAL="$EDITOR"
 fi
 
 # Asking about the merge commit message is unnecessary, since in the
