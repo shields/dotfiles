@@ -281,6 +281,7 @@ def test_git_guard_denies(sandbox: Sandbox, hook: Hook, command: str) -> None:
     decision = decision_of(result)
     assert decision["hookEventName"] == "PreToolUse"
     assert decision["permissionDecision"] == "deny"
+    assert "Git policy check failed" not in decision["permissionDecisionReason"]
 
 
 @pytest.mark.parametrize("hook", GIT_GUARDS, ids=label)
@@ -324,6 +325,7 @@ def test_dependency_guard_asks_about_a_new_dependency(
     assert result.returncode == 0, result.stderr
     decision = decision_of(result)
     assert decision["permissionDecision"] == "ask"
+    assert "Dependency guard failed" not in decision["permissionDecisionReason"]
     edit["new_string"] = '    "pillow>=12.3.0",\n    # no new dependency'
     result = sandbox.run(["/bin/sh", "-c"], command, payload(hook, "Edit", edit))
     assert (result.returncode, result.stdout, result.stderr) == (0, "", "")

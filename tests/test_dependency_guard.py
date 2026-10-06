@@ -511,6 +511,7 @@ def check(payload: Mapping[str, object], *, ask: bool) -> None:
     wanted = "ask" if ask else "silence"
     got = f"ask ({reason})" if asked else "silence"
     assert asked == ask, f"expected {wanted}, got {got}"
+    assert "Dependency guard failed" not in reason, reason
 
 
 @pytest.mark.parametrize("case", CASES, ids=[case.label for case in CASES])
