@@ -139,13 +139,7 @@ HARNESS = r""";;; -*- lexical-binding: t -*-
         nil t t)
   (push file h-loaded))
 
-(let ((real (symbol-function 'file-executable-p)))
-  (cl-letf (((symbol-function 'file-executable-p)
-             (lambda (file)
-               (if (equal file "/opt/homebrew/opt/llvm/bin/clangd")
-                   h-macos
-                 (funcall real file)))))
-    (require 'eglot)))
+(require 'eglot)
 (require 'term/tmux)
 
 (defun h-vec (list)
@@ -283,7 +277,7 @@ def test_typst_opens_a_viewer_only_on_the_mac(reports: dict[str, Report]) -> Non
     assert reports["macos"]["typst_watch_options"] == ["--open"]
 
 
-def test_clangd_is_brews_only_where_it_exists(reports: dict[str, Report]) -> None:
+def test_clangd_is_brews_only_on_the_mac(reports: dict[str, Report]) -> None:
     assert reports["linux"]["clangd"] == ["clangd"]
     assert reports["macos"]["clangd"] == ["/opt/homebrew/opt/llvm/bin/clangd"]
 
