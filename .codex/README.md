@@ -40,8 +40,10 @@ The same run seeds hook trust. The script asks the app server for `hooks/list`,
 then writes `hooks.state.<key>.trusted_hash` for every hook that
 `~/.codex/hooks.json` defines, using the hash Codex computed for the installed
 definition. That re-trusts `git_guard.py` after a change to its command, and Lima
-clones and the Cloudflare image inherit the trust. The script fails if Codex lists
-no hook from that file, or reports that the file does not load.
+clones and the Cloudflare image inherit the trust. The script fails, showing any
+warnings that Codex reports, if Codex lists no hook from that file or says that
+the file does not load. With `features.hooks = false` in `config.toml` it skips
+this step, since Codex then lists no hooks.
 
 The script reads the existing TOML to preserve extra policy, then writes the
 settings through Codex's `config/batchWrite` app-server API. Other settings are

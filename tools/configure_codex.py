@@ -146,7 +146,13 @@ def hook_state(listing: Json, hooks_file: Path) -> Json:
             if Path(hook["sourcePath"]).resolve() == hooks_file:
                 state[hook["key"]] = {"trusted_hash": hook["currentHash"]}
     if not state:
-        msg = f"Codex lists no hooks from {hooks_file}"
+        warnings = [
+            warning
+            for entry in cast("list[Json]", listing["data"])
+            for warning in cast("list[str]", entry["warnings"])
+        ]
+        detail = f": {'; '.join(warnings)}" if warnings else ""
+        msg = f"Codex lists no hooks from {hooks_file}{detail}"
         raise RuntimeError(msg)
     return state
 
@@ -158,10 +164,10 @@ def edits(values: Json) -> list[Json]:
     ]
 
 
-async def write_config(config_file: Path, values: Json) -> None:
+async def write_config(config_file: Path, values: Json, *, hooks_enabled: bool) -> None:
     hooks_file = config_file.parent / "hooks.json"
     async with asyncio.timeout(30), app_server(config_file.parent) as server:
-        if hooks_file.exists():
+        if hooks_enabled and hooks_file.exists():
             listing = await server.request(
                 "hooks/list", {"cwds": [str(config_file.parent)]}
             )
@@ -175,11 +181,16 @@ async def write_config(config_file: Path, values: Json) -> None:
 def configure_codex(config_file: Path, home: Path) -> None:
     config_file = config_file.resolve()
     config = (
-        cast("Json", tomllib.loads(config_file.read_text()))
+        cast("Json", tomllib.loads(config_file.read_text(encoding="utf-8")))
         if config_file.exists()
         else {}
     )
-    asyncio.run(write_config(config_file, settings(config, home)))
+    # Codex lists no hooks while features.hooks is false, and hook_state rejects
+    # that.
+    hooks_enabled = table(config, "features").get("hooks") is not False
+    asyncio.run(
+        write_config(config_file, settings(config, home), hooks_enabled=hooks_enabled)
+    )
 
 
 if __name__ == "__main__":

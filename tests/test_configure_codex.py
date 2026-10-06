@@ -91,9 +91,20 @@ def hook(source: Path, key: str, current_hash: str) -> Json:
     }
 
 
-def listing(hooks: list[Json], errors: list[dict[str, str]] | None = None) -> Json:
+def listing(
+    hooks: list[Json],
+    errors: list[dict[str, str]] | None = None,
+    warnings: list[str] | None = None,
+) -> Json:
     return {
-        "data": [{"cwd": "/x", "hooks": hooks, "warnings": [], "errors": errors or []}]
+        "data": [
+            {
+                "cwd": "/x",
+                "hooks": hooks,
+                "warnings": warnings or [],
+                "errors": errors or [],
+            }
+        ]
     }
 
 
@@ -197,6 +208,13 @@ def test_hook_state_reports_a_hooks_file_that_does_not_load(tmp_path: Path) -> N
     errors = [{"path": str(installed), "message": "expected value at line 1"}]
     with pytest.raises(RuntimeError, match="expected value at line 1"):
         _ = tool.hook_state(listing([], errors), installed)
+
+
+def test_hook_state_shows_the_warnings_when_no_hook_is_listed(tmp_path: Path) -> None:
+    installed = tmp_path.resolve() / "hooks.json"
+    warnings = [f"failed to parse hooks config {installed}: key must be a string"]
+    with pytest.raises(RuntimeError, match="key must be a string"):
+        _ = tool.hook_state(listing([], warnings=warnings), installed)
 
 
 def test_hook_state_ignores_errors_in_other_files(tmp_path: Path) -> None:
@@ -327,6 +345,19 @@ def test_configure_without_installed_hooks_does_not_list_them(
     codex: StubCodex, codex_home: Path
 ) -> None:
     tool.configure_codex(codex_home / "config.toml", HOME)
+    assert codex.methods() == ["initialize", "initialized", "config/batchWrite"]
+    edits = cast("list[Json]", codex.batch_write()["edits"])
+    assert "hooks.state" not in [item["keyPath"] for item in edits]
+
+
+def test_configure_does_not_trust_hooks_that_are_disabled(
+    codex: StubCodex, codex_home: Path
+) -> None:
+    _ = codex_home.joinpath("hooks.json").write_text("{}")
+    config_file = codex_home / "config.toml"
+    _ = config_file.write_text("[features]\nhooks = false\n")
+    codex.script({"replies": {"hooks/list": {"result": listing([])}}})
+    tool.configure_codex(config_file, HOME)
     assert codex.methods() == ["initialize", "initialized", "config/batchWrite"]
     edits = cast("list[Json]", codex.batch_write()["edits"])
     assert "hooks.state" not in [item["keyPath"] for item in edits]
