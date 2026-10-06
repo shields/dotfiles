@@ -36,8 +36,9 @@ LGTMCP_POLICY = (
     "This authorization excludes credentials and unrelated private data."
 )
 
-# Codex trusts every directory below a "parent/*" project key.
-TRUSTED_PROJECTS = "src/github.com/shields/*"
+# Codex matches a project key against a repository's root exactly, so a
+# wildcard key trusts nothing.
+TRUSTED_PROJECT = "src/github.com/shields/dotfiles"
 
 
 @final
@@ -128,7 +129,7 @@ def settings(config: Json, home: Path) -> Json:
         "features.worktrees": True,
     }
     # A project key contains dots, so the whole table is the edit's key path.
-    project = str(home / TRUSTED_PROJECTS)
+    project = str(home / TRUSTED_PROJECT)
     if project not in table(config, "projects"):
         result["projects"] = {project: {"trust_level": "trusted"}}
     return result

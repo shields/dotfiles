@@ -30,7 +30,7 @@ type Json = dict[str, object]
 REPO = Path(__file__).resolve().parents[1]
 TOOL = REPO / "tools/configure_codex.py"
 HOME = Path("/home/me")
-PROJECTS = "/home/me/src/github.com/shields/*"
+PROJECTS = "/home/me/src/github.com/shields/dotfiles"
 
 STUB = """\
 #!PYTHON
@@ -140,7 +140,9 @@ def test_settings_keep_an_existing_project_entry(trust_level: str) -> None:
 
 def test_settings_follow_the_home_directory() -> None:
     projects = tool.settings({}, Path("/Users/someone"))["projects"]
-    assert list(cast("Json", projects)) == ["/Users/someone/src/github.com/shields/*"]
+    assert list(cast("Json", projects)) == [
+        "/Users/someone/src/github.com/shields/dotfiles"
+    ]
 
 
 @pytest.mark.parametrize(
@@ -431,5 +433,7 @@ def test_command_line_uses_the_home_directory(
     edits = cast("list[Json]", codex.batch_write()["edits"])
     (projects,) = [item for item in edits if item["keyPath"] == "projects"]
     assert projects["value"] == {
-        str(tmp_path / "home/src/github.com/shields/*"): {"trust_level": "trusted"}
+        str(tmp_path / "home/src/github.com/shields/dotfiles"): {
+            "trust_level": "trusted"
+        }
     }

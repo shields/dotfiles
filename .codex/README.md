@@ -33,8 +33,10 @@ miss, such as `/usr/bin/git push` and `env git push`.
 Provisioning runs `tools/configure_codex.py` to authorize LGTMCP's code transfers to
 Gemini in `auto_review.extra_policy` and preapprove its `review_only` and
 `review_and_commit` tools. It also sets `approvals_reviewer = "auto_review"` and
-`features.worktrees = true`, and trusts `~/src/github.com/shields/*` as a project
-unless the config already has an entry for that key.
+`features.worktrees = true`, and trusts `~/src/github.com/shields/dotfiles` as a
+project unless the config already has an entry for that key. Codex matches a
+project key against a repository's root exactly, so every other repository still
+gets its own trust prompt.
 
 The same run seeds hook trust. The script asks the app server for `hooks/list`,
 then writes `hooks.state.<key>.trusted_hash` for every hook that
