@@ -1,0 +1,245 @@
+#!/bin/bash
+
+# Copyright © 2026 Michael Shields
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+# Build and use throwaway Lima VMs. This runs on the Mac under bash 3.2, so no
+# mapfile, associative arrays, lowercase expansions or empty-array expansions.
+
+# The single-quoted scripts passed to sh -c expand in the guest.
+# shellcheck disable=SC2016
+
+set -euo pipefail
+
+base=${LIMAVM_BASE:-dotfiles-base}
+guest_repo=src/github.com/shields/dotfiles
+secret_names="GH_TOKEN CLAUDE_CODE_OAUTH_TOKEN"
+
+usage() {
+    cat <<EOF
+usage: limavm base [MODULE...]   build $base from lima/dev.yaml and the checkout in the current directory
+       limavm new [NAME]         clone $base, install secrets, open a shell
+       limavm rm NAME            delete a VM ($base is refused)
+       limavm list               list the VMs
+
+MODULE is a Brewfile module for provision.sh (dev by default).
+LIMAVM_CPUS and LIMAVM_MEMORY (in GiB) override the size in lima/dev.yaml, and
+LIMAVM_BASE replaces the name $base.
+EOF
+}
+
+die() {
+    printf 'limavm: %s\n' "$*" >&2
+    exit 1
+}
+
+need() {
+    command -v "$1" >/dev/null || die "$1 is not installed"
+}
+
+valid_name() {
+    [[ $1 =~ ^[A-Za-z0-9]+([._-][A-Za-z0-9]+)*$ ]] || die "invalid VM name: $1"
+}
+
+instance_exists() {
+    # limactl list exits non-zero when no instance matches the name.
+    limactl list -q "$1" >/dev/null 2>&1
+}
+
+size_args=()
+set_size_args() {
+    if [[ -n ${LIMAVM_CPUS:-} ]]; then
+        [[ $LIMAVM_CPUS =~ ^[1-9][0-9]*$ ]] || die "LIMAVM_CPUS must be a whole number"
+        size_args+=(--cpus "$LIMAVM_CPUS")
+    fi
+    if [[ -n ${LIMAVM_MEMORY:-} ]]; then
+        [[ $LIMAVM_MEMORY =~ ^[1-9][0-9]*$ ]] || die "LIMAVM_MEMORY must be a whole number of GiB"
+        size_args+=(--memory "$LIMAVM_MEMORY")
+    fi
+}
+
+stage=
+base_started=0
+base_finished=0
+base_cleanup() {
+    local status=$?
+    trap - EXIT
+    [[ -z $stage ]] || rm -rf "$stage"
+    if ((base_started && ! base_finished)); then
+        printf 'limavm: building %s failed; it is left for inspection (limactl shell %s), and limavm base replaces it\n' "$base" "$base" >&2
+    fi
+    exit "$status"
+}
+
+cmd_base() {
+    need limactl
+    need git
+    need tar
+    set_size_args
+    local root
+    root=$(git rev-parse --show-toplevel 2>/dev/null) || die "run this inside a dotfiles checkout"
+    [[ -f $root/lima/dev.yaml && -x $root/provision.sh && -x $root/tools/stage_tree.sh &&
+        -f $root/provision/throwaway.sh && -f $root/provision/reset-identity.sh ]] ||
+        die "$root is not a dotfiles checkout (a file under lima/, provision/ or tools/ is missing)"
+
+    trap base_cleanup EXIT
+    trap 'exit 130' INT
+    trap 'exit 143' TERM
+    stage=$(mktemp -d "${TMPDIR:-/tmp}/limavm.XXXXXX")
+    "$root/tools/stage_tree.sh" "$stage/tree"
+
+    if instance_exists "$base"; then
+        if [[ $(limactl list --format '{{.Protected}}' "$base") == true ]]; then
+            limactl unprotect "$base"
+        fi
+        limactl delete --tty=false --force "$base"
+    fi
+    base_started=1
+    limactl start --tty=false --name="$base" ${size_args[@]+"${size_args[@]}"} "$root/lima/dev.yaml" </dev/null
+
+    local mounts
+    mounts=$(limactl list --format '{{len .Config.Mounts}}' "$base")
+    [[ $mounts == 0 ]] || die "$base mounts $mounts host directories, which ~/.lima/_config adds; a throwaway VM mounts none"
+
+    local guest_home guest_dir
+    guest_home=$(limactl shell "$base" sh -c 'printf %s "$HOME"' </dev/null)
+    guest_dir=$guest_home/$guest_repo
+
+    COPYFILE_DISABLE=1 tar --no-xattrs --no-acls -C "$stage/tree" -cf - . |
+        limactl shell "$base" sh -c 'set -eu; rm -rf "$1"; mkdir -p "$1"; tar -xf - --no-same-owner -C "$1"' _ "$guest_dir"
+
+    # No modules is valid: provision.sh then uses its own default. bash 3.2
+    # accepts an empty "$@" under set -u, unlike an empty array.
+    limactl shell --workdir "$guest_dir" "$base" ./provision.sh "$@" </dev/null
+    limactl shell "$base" sudo "$guest_dir/provision/throwaway.sh" </dev/null
+
+    limactl shell "$base" sudo truncate -s 0 /etc/machine-id </dev/null
+    limactl shell "$base" "$guest_dir/provision/reset-identity.sh" </dev/null
+
+    limactl stop --tty=false "$base"
+    # limactl shell starts the instance's user.shell, not the passwd entry, and
+    # limactl edit has a --shell flag for it.
+    limactl edit --tty=false "$base" --shell /usr/bin/zsh
+    limactl protect "$base"
+    base_finished=1
+    printf 'limavm: %s is ready; make a VM with: limavm new [NAME]\n' "$base"
+}
+
+account=
+require_keychain_item() {
+    local item=$1
+    if ! security find-generic-password -a "$account" -s "$item" >/dev/null 2>&1; then
+        {
+            printf 'limavm: the Keychain item %s does not exist. Create it with this command, which\n' "$item"
+            printf 'prompts for the value so that it stays out of shell history:\n\n'
+            printf '    security add-generic-password -a "$USER" -s %s -w\n' "$item"
+        } >&2
+        exit 1
+    fi
+}
+
+created=
+new_cleanup() {
+    local status=$?
+    trap - EXIT
+    if [[ -n $created && $status -ne 0 ]]; then
+        printf 'limavm: removing %s after the failure\n' "$created" >&2
+        limactl delete --tty=false --force "$created" ||
+            printf 'limavm: could not delete %s; run: limactl delete --force %s\n' "$created" "$created" >&2
+    fi
+    exit "$status"
+}
+
+cmd_new() {
+    local name=${1-vm-$(date +%y%m%d-%H%M%S)}
+    valid_name "$name"
+    [[ $name != "$base" ]] || die "$name is the base VM; choose another name"
+    need limactl
+    need security
+    set_size_args
+    account=${USER:-$(id -un)}
+    instance_exists "$base" || die "$base does not exist; run limavm base in a dotfiles checkout first"
+    ! instance_exists "$name" || die "$name already exists"
+    local item lgtmcp_config=$HOME/.config/lgtmcp/config.yaml
+    for item in $secret_names; do
+        require_keychain_item "limavm-$item"
+    done
+    [[ -r $lgtmcp_config ]] || die "$lgtmcp_config does not exist; LGTMCP needs it in the VM"
+
+    trap new_cleanup EXIT
+    trap 'exit 130' INT
+    trap 'exit 143' TERM
+    created=$name
+    # limactl clone takes limactl edit's --cpus and --memory.
+    limactl clone --tty=false ${size_args[@]+"${size_args[@]}"} --start "$base" "$name" </dev/null
+
+    # The upgrade comes before any secret, so nothing it runs can read one.
+    # Homebrew on Linux has casks for both agents.
+    limactl shell "$name" /home/linuxbrew/.linuxbrew/bin/brew upgrade --cask claude-code@latest codex </dev/null
+
+    for item in $secret_names; do
+        security find-generic-password -a "$account" -s "limavm-$item" -w |
+            limactl shell "$name" sh -c 'exec "$HOME/bin/setup-secrets" "$1"' _ "$item"
+    done
+    limactl shell "$name" sh -c 'exec "$HOME/bin/setup-secrets" LGTMCP_CONFIG' <"$lgtmcp_config"
+
+    cat <<EOF
+limavm: $name is ready. Codex is not signed in; run
+
+    codex login --device-auth
+
+in the VM, after turning on device code login in ChatGPT's security settings.
+EOF
+    created=
+    trap - EXIT
+    exec limactl shell "$name"
+}
+
+cmd_rm() {
+    [[ $# -eq 1 ]] || die "usage: limavm rm NAME"
+    valid_name "$1"
+    [[ $1 != "$base" ]] || die "refusing to delete $base; limavm base rebuilds it"
+    need limactl
+    limactl delete --tty=false --force "$1"
+}
+
+cmd_list() {
+    need limactl
+    limactl list
+}
+
+valid_name "$base"
+if [[ $# -eq 0 ]]; then
+    usage >&2
+    exit 2
+fi
+command=$1
+shift
+case $command in
+base) cmd_base "$@" ;;
+new)
+    [[ $# -le 1 ]] || die "usage: limavm new [NAME]"
+    cmd_new "$@"
+    ;;
+rm) cmd_rm "$@" ;;
+list)
+    [[ $# -eq 0 ]] || die "usage: limavm list"
+    cmd_list
+    ;;
+-h | --help | help) usage ;;
+*)
+    usage >&2
+    exit 2
+    ;;
+esac
