@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-.PHONY: build test lint fmt run bench bench-startup
+.PHONY: build test test-linux lint fmt run bench bench-startup
 
 # Shell scripts to lint and format with shellcheck and shfmt. zsh files
 # (.zshrc, .zprofile, .zsh.d/*.zsh, tests/*.zsh) and vendored files
@@ -23,8 +23,12 @@ SHELL_SOURCES = \
 	.profile \
 	.claude/statusline.sh \
 	provision.sh \
+	provision/linux-system.sh \
+	provision/macos.sh \
+	provision/modules.sh \
 	tools/create_nerd_andale_mono.sh \
 	tools/create_nerd_commit_mono.sh \
+	tools/stage_tree.sh \
 	bin/$$ \
 	bin/docker-prune \
 	bin/ghfork \
@@ -40,6 +44,18 @@ test:
 	zsh tests/test_ghfork.zsh
 	zsh tests/test_wt.zsh
 	uv run pytest
+
+MODULES ?= dev
+LINUX_IMAGE ?= dotfiles-linux-test
+
+test-linux:
+	@set -eu; \
+	stage=$$(mktemp -d "$${TMPDIR:-/tmp}/dotfiles-test-linux.XXXXXX"); \
+	trap 'rm -rf "$$stage"' EXIT; \
+	trap 'exit 1' HUP INT TERM; \
+	tools/stage_tree.sh "$$stage/tree"; \
+	docker build --build-arg "MODULES=$(MODULES)" -t "$(LINUX_IMAGE)" -f cloudflare/Dockerfile "$$stage/tree"; \
+	docker run --rm "$(LINUX_IMAGE)" zsh -c 'bun install --frozen-lockfile && make test lint'
 
 lint:
 	bun run eslint .
