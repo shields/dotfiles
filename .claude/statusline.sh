@@ -117,9 +117,8 @@ fable_usage() {
     local cache_dir="$cache_root/claude-code-statusline"
     local cache="$cache_dir/usage.json"
     local mtime
-    # BSD and GNU stat take incompatible format flags. BSD date -r accepts a
-    # filename as well as seconds (see its usage line), and GNU date -r takes
-    # only a filename, so date -r FILE reads the mtime on both.
+    # date -r FILE prints a file's mtime on both BSD and GNU, whose stat
+    # commands take incompatible format flags.
     mtime=$(date -r "$cache" +%s 2>/dev/null) || mtime=0
     if ((now - mtime >= 600)); then
         local tok=''
