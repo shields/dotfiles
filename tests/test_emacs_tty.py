@@ -182,6 +182,13 @@ HARNESS = r""";;; -*- lexical-binding: t -*-
     (chatgpt_keys . ,(h-vec (list chatgpt-shell-anthropic-key
                                   chatgpt-shell-openai-key)))
     (tmux_capabilities . ,(h-vec xterm-tmux-extra-capabilities))
+    (backspace_keys . ,(h-vec (mapcar (lambda (sequence)
+                                        (let ((key (lookup-key xterm-function-map
+                                                               sequence)))
+                                          (if (vectorp key)
+                                              (key-description key)
+                                            "undecoded")))
+                                      '("\e[27;5;127~" "\e[27;2;127~"))))
     (keys . ,(mapcar (lambda (k) (cons k (h-key k)))
                      (split-string (getenv "DOTFILES_EMACS_KEYS") "|")))
     (region . ,(h-face 'region '(:background)))
@@ -288,6 +295,10 @@ def test_chatgpt_keys_are_set_only_when_authinfo_has_them(report: Report) -> Non
 
 def test_tmux_capabilities(report: Report) -> None:
     assert report["tmux_capabilities"] == ["modifyOtherKeys", "setSelection"]
+
+
+def test_backspace_keys_that_tmux_extends_are_decoded(report: Report) -> None:
+    assert report["backspace_keys"] == ["C-<backspace>", "S-<backspace>"]
 
 
 @pytest.mark.parametrize(("key", "command"), TERMINAL_KEYS.items())

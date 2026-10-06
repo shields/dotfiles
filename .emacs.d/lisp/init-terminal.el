@@ -44,5 +44,12 @@
 ;; `set-clipboard' options on.
 (setopt xterm-tmux-extra-capabilities '(modifyOtherKeys setSelection))
 
+;; xterm.el does not decode C-<backspace> and S-<backspace> as tmux's
+;; `extended-keys' sends them, and Emacs would insert the "7~" that ends the
+;; sequence.
+(with-eval-after-load 'term/xterm
+  (keymap-set xterm-function-map "ESC [ 2 7 ; 5 ; 1 2 7 ~" "C-<backspace>")
+  (keymap-set xterm-function-map "ESC [ 2 7 ; 2 ; 1 2 7 ~" "S-<backspace>"))
+
 (provide 'init-terminal)
 ;;; init-terminal.el ends here
