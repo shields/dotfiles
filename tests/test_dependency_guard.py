@@ -19,6 +19,7 @@
 # positive ones.
 
 import json
+import resource
 import subprocess
 import sys
 from pathlib import Path
@@ -483,16 +484,26 @@ BASH_CASES = (
 )
 
 
+# The hook has 10 s in settings.json and fails open past that, so a pattern whose
+# cost grows faster than its input must fail here. CPU time measures that, and a
+# loaded host stretches wall-clock time without changing it.
+CPU_LIMIT = 2.0
+
+
 def run_hook(payload: Mapping[str, object]) -> tuple[bool, str]:
     """Run the hook, returning (asked, reason)."""
+    before = resource.getrusage(resource.RUSAGE_CHILDREN)
     result = subprocess.run(
         [sys.executable, str(HOOK)],
         input=json.dumps(payload),
         capture_output=True,
         text=True,
         check=False,
-        timeout=5,
+        timeout=120,
     )
+    after = resource.getrusage(resource.RUSAGE_CHILDREN)
+    cpu = (after.ru_utime - before.ru_utime) + (after.ru_stime - before.ru_stime)
+    assert cpu < CPU_LIMIT, f"the hook used {cpu:.1f} s of CPU"
     # The hook only ever exits 0 (it prints an ask decision or nothing), so any
     # non-zero exit is a real failure — a syntax error or crash.
     assert result.returncode == 0, result.stderr.strip()
