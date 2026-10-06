@@ -1,0 +1,114 @@
+# Copyright © 2026 Michael Shields
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+# The throwaway development VM; bin/limavm builds and clones it.
+
+minimumLimaVersion: 2.2.1
+
+# Only the image list: the stock debian-13 template also mounts the home
+# directory.
+base: template:_images/debian-13
+
+vmType: vz
+cpus: 6
+memory: 16GiB
+
+# Lima appends mounts from ~/.lima/_config; bin/limavm checks that none arrived.
+mounts: []
+
+containerd:
+  system: false
+  user: false
+
+ssh:
+  forwardAgent: false
+
+propagateProxyEnv: false
+
+# The catch-all rule ends rule matching, so nothing a guest process listens on
+# is forwarded to the host.
+portForwards:
+  - guestIP: 0.0.0.0
+    guestIPMustBeZero: false
+    proto: any
+    ignore: true
+
+provision:
+  - mode: dependency
+    script: |
+      #!/bin/bash
+      set -eux -o pipefail
+      export DEBIAN_FRONTEND=noninteractive
+      missing=0
+      for command in nft zsh git rsync curl; do
+        command -v "$command" >/dev/null || missing=1
+      done
+      if [ "$missing" -eq 1 ]; then
+        # apt-get update takes the lists lock without waiting, and an
+        # apt-daily run can hold it at first boot.
+        attempts=0
+        until apt-get -o DPkg::Lock::Timeout=300 update; do
+          attempts=$((attempts + 1))
+          [ "$attempts" -lt 20 ] || exit 1
+          sleep 15
+        done
+        apt-get -o DPkg::Lock::Timeout=300 install -y --no-install-recommends \
+          nftables zsh git rsync curl ca-certificates
+      fi
+
+  # Egress filter. nftables.service loads the file before the network comes up,
+  # so the rules are in force from the start of every boot, and this script
+  # rewrites and reloads them in case the file changed. 192.168.5.2 is the
+  # host (host.lima.internal): its other ports reach the Mac's loopback. Lima
+  # also answers DNS and DHCP there, and those are the only ports the guest
+  # may use, so the accepts come before the reject of 192.168.0.0/16, which
+  # holds the host. Replies on connections the host opened, such as SSH, are
+  # accepted as established. The guest's IPv6 link has no neighbor, the host
+  # included, so fc00::/7 is the one IPv6 range that needs a rule.
+  - mode: system
+    script: |
+      #!/bin/bash
+      set -eux -o pipefail
+      cat >/etc/nftables.conf <<'EOF'
+      #!/usr/sbin/nft -f
+      table inet lima_isolation
+      delete table inet lima_isolation
+      table inet lima_isolation {
+        chain output {
+          type filter hook output priority filter; policy accept;
+          oifname "lo" accept
+          ct state established,related accept
+          ip daddr 192.168.5.2 udp dport 53 accept
+          ip daddr 192.168.5.2 tcp dport 53 accept
+          ip daddr 192.168.5.2 udp sport 68 udp dport 67 accept
+          ip daddr { 10.0.0.0/8, 172.16.0.0/12, 192.168.0.0/16, 100.64.0.0/10, 169.254.0.0/16 } reject
+          ip6 daddr fc00::/7 reject
+        }
+      }
+      EOF
+      systemctl enable nftables.service
+      systemctl restart nftables.service
+
+probes:
+  - mode: readiness
+    description: the egress filter, DNS behind it and the packages bin/limavm needs
+    script: |
+      #!/bin/bash
+      set -eux -o pipefail
+      sudo -n nft list table inet lima_isolation >/dev/null
+      getent hosts deb.debian.org >/dev/null
+      command -v zsh git rsync curl >/dev/null
+    hint: |
+      The firewall script or the package step failed, or the filter blocks the
+      DNS server. See /var/log/cloud-init-output.log in the guest.
