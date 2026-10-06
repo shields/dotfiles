@@ -12,8 +12,10 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+GH = ["gh", "/usr/bin/gh", "/opt/homebrew/bin/gh", "/usr/local/bin/gh", "/home/linuxbrew/.linuxbrew/bin/gh"]
+
 prefix_rule(
-    pattern = [["gh", "/usr/bin/gh", "/opt/homebrew/bin/gh", "/usr/local/bin/gh", "/home/linuxbrew/.linuxbrew/bin/gh"], "repo", ["archive", "create", "delete", "edit", "fork", "rename", "sync", "unarchive"]],
+    pattern = [GH, "repo", ["archive", "create", "delete", "edit", "fork", "rename", "sync", "unarchive"]],
     decision = "forbidden",
     justification = "The user manages GitHub repositories. Use read-only repo commands.",
     match = ["gh repo delete example/repo", "/usr/bin/gh repo delete example/repo", "/opt/homebrew/bin/gh repo edit --visibility public", "/home/linuxbrew/.linuxbrew/bin/gh repo fork"],
@@ -21,7 +23,7 @@ prefix_rule(
 )
 
 prefix_rule(
-    pattern = [["gh", "/usr/bin/gh", "/opt/homebrew/bin/gh", "/usr/local/bin/gh", "/home/linuxbrew/.linuxbrew/bin/gh"], "repo", "autolink", ["create", "delete"]],
+    pattern = [GH, "repo", "autolink", ["create", "delete"]],
     decision = "forbidden",
     justification = "The user manages repository autolinks.",
     match = ["gh repo autolink create TICKET https://example.com/tickets/", "gh repo autolink delete 123", "/usr/bin/gh repo autolink delete 123", "/home/linuxbrew/.linuxbrew/bin/gh repo autolink create TICKET https://example.com/tickets/"],
@@ -29,7 +31,7 @@ prefix_rule(
 )
 
 prefix_rule(
-    pattern = [["gh", "/usr/bin/gh", "/opt/homebrew/bin/gh", "/usr/local/bin/gh", "/home/linuxbrew/.linuxbrew/bin/gh"], "repo", "deploy-key", ["add", "delete"]],
+    pattern = [GH, "repo", "deploy-key", ["add", "delete"]],
     decision = "forbidden",
     justification = "The user manages repository deploy keys.",
     match = ["gh repo deploy-key add key.pub", "gh repo deploy-key delete 123", "/usr/bin/gh repo deploy-key add key.pub", "/home/linuxbrew/.linuxbrew/bin/gh repo deploy-key delete 123"],
