@@ -42,6 +42,7 @@ PACKAGES = {
     "ncurses-term",
     "unzip",
     "jq",
+    "openssh-client",
 }
 
 

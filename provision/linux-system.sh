@@ -61,7 +61,7 @@ done
 
 apt-get -o DPkg::Lock::Timeout=600 install -y --no-install-recommends \
     build-essential procps curl file git zsh vim locales ca-certificates \
-    bubblewrap socat tmux ncurses-term unzip jq
+    bubblewrap socat tmux ncurses-term unzip jq openssh-client
 
 locales=$(locale -a)
 if ! grep -qix 'en_US\.utf-\?8' <<<"$locales"; then
