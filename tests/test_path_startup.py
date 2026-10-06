@@ -103,7 +103,19 @@ def test_zshenv_skips_missing_go_directory(tmp_path: Path) -> None:
 def test_zshenv_keeps_the_first_occurrence_of_each_directory(tmp_path: Path) -> None:
     inherited = f"/usr/bin:{tmp_path}/.local/bin:/bin:/usr/bin"
     path = zshenv_path(tmp_path, "linux-gnu", inherited)
-    assert path == linux_path(tmp_path)
+    expected = [
+        f"{tmp_path}/bin",
+        *LINUXBREW,
+        "/usr/bin",
+        f"{tmp_path}/.local/bin",
+        "/bin",
+    ]
+    assert path == ":".join(expected)
+
+
+def test_zshenv_keeps_directories_the_parent_put_in_front(tmp_path: Path) -> None:
+    inherited = f"/venv/bin:{linux_path(tmp_path)}"
+    assert zshenv_path(tmp_path, "linux-gnu", inherited) == inherited
 
 
 @pytest.mark.parametrize("ostype", ["darwin25.4.0", "freebsd14.2", "msys"])

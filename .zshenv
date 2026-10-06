@@ -20,5 +20,10 @@
 # macOS gets its PATH from /etc/zprofile and .zshrc, so only Linux is touched.
 if [[ $OSTYPE == linux* ]]; then
     typeset -U path
-    path=(~/bin ~/.local/bin /home/linuxbrew/.linuxbrew/{bin,sbin}(N) $path ~/go/bin(N))
+    # Directories already on PATH keep their place, so entries that the parent
+    # put ahead of them, such as a venv's bin, stay ahead.
+    () {
+        local -a front=(~/bin ~/.local/bin /home/linuxbrew/.linuxbrew/{bin,sbin}(N))
+        path=(${front:|path} $path ~/go/bin(N))
+    }
 fi
