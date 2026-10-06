@@ -372,7 +372,7 @@ add_user_mcp_server() {
     codex mcp remove "$name" 2>/dev/null || true
     codex mcp add "$name" -- "$@"
 }
-add_user_mcp_server lgtmcp "$HOME/bin/lgtmcp"
+add_user_mcp_server lgtmcp "$HOME/bin/lgtmcp" -tools review_and_commit
 add_user_mcp_server playwright npx @playwright/mcp@latest --headless
 dotfiles_root="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 python3 "$dotfiles_root/tools/configure_codex.py" "$HOME/.codex/config.toml"
