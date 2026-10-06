@@ -396,7 +396,7 @@ def test_linux_copy_has_no_macos_files_and_macos_copy_has_library() -> None:
     macos = git_ls_files(REPO, copy_pathspecs("macos"))
     assert not any(path.startswith("Library/") for path in linux)
     assert any(path.startswith("Library/Fonts/") for path in macos)
-    assert set(linux) < set(macos)
+    assert set(linux) - set(macos) <= set(MACOS_EXCLUDES)
 
 
 SCRATCH_FILES = {

@@ -13,13 +13,16 @@
 # limitations under the License.
 
 # provision/linux-system.sh installs packages, edits /etc and changes login
-# shells, so these tests read it and run only its apt update loop, against a
-# stub apt-get.
+# shells, so these tests read it, run its apt update loop against a stub
+# apt-get, and run the whole script only with every command that changes the
+# machine replaced by a stub.
 
 import os
 import re
 import subprocess
 from pathlib import Path
+
+import pytest
 
 REPO = Path(__file__).resolve().parents[1]
 SCRIPT = REPO / "provision" / "linux-system.sh"
@@ -65,8 +68,7 @@ def update_loop() -> str:
 
 
 # The stub reports the lock error in English only when LC_ALL=C, as apt does
-# under another locale. It counts calls in $COUNT. The first $LOCKED calls fail
-# on the lists lock; with MODE=other every call fails differently.
+# under another locale.
 UPDATE_HARNESS = r"""
 set -euo pipefail
 apt-get() {
@@ -117,6 +119,42 @@ def run_update_loop(
     return result, int(count.read_text())
 
 
+# apt-get, chsh and install append their calls to $LOG. id knows root as well
+# as alice, so only the script's own guard can refuse root.
+SCRIPT_HARNESS = r"""
+set -euo pipefail
+log() { printf '%s\n' "$*" >>"$LOG"; }
+id() {
+    case $1,${2-} in
+    -u,*) echo 0 ;;
+    -gn,root | -gn,alice) echo "$2" ;;
+    *) return 1 ;;
+    esac
+}
+apt-get() { log apt-get "$@"; }
+locale() { echo en_US.utf8; }
+getent() { echo "$2:x:1000:1000::/home/$2:/bin/bash"; }
+chsh() { log chsh "$@"; }
+install() { log install "$@"; }
+"""
+
+
+def run_script(
+    tmp_path: Path, *args: str
+) -> tuple[subprocess.CompletedProcess[str], list[str]]:
+    log = tmp_path / "log"
+    result = subprocess.run(
+        ["/bin/bash", "-c", SCRIPT_HARNESS + TEXT, "linux-system.sh", *args],
+        env={"PATH": "/usr/bin:/bin", "LOG": str(log)},
+        stdin=subprocess.DEVNULL,
+        capture_output=True,
+        text=True,
+        timeout=15,
+        check=False,
+    )
+    return result, log.read_text().splitlines() if log.exists() else []
+
+
 def test_script_is_executable_bash() -> None:
     assert os.access(SCRIPT, os.X_OK)
     assert LINES[0] == "#!/bin/bash"
@@ -136,9 +174,38 @@ def test_non_root_callers_are_refused_before_anything_changes() -> None:
     assert all(root_check < i for i in changing)
 
 
-def test_root_and_missing_users_are_refused() -> None:
-    assert "$user == root" in TEXT
-    assert "no such user" in TEXT
+@pytest.mark.parametrize(
+    ("user", "message"),
+    [("root", "not root"), ("carol", "no such user: carol")],
+)
+def test_root_and_missing_users_are_refused(
+    tmp_path: Path, user: str, message: str
+) -> None:
+    result, calls = run_script(tmp_path, user)
+    assert result.returncode == 1
+    assert message in result.stderr
+    assert calls == []
+
+
+@pytest.mark.parametrize("args", [[], ["alice", "bob"]], ids=["none", "two"])
+def test_other_than_one_argument_is_refused(tmp_path: Path, args: list[str]) -> None:
+    result, calls = run_script(tmp_path, *args)
+    assert result.returncode == 2
+    assert "usage: sudo linux-system.sh USER" in result.stderr
+    assert calls == []
+
+
+def test_a_regular_user_is_provisioned_to_the_end(tmp_path: Path) -> None:
+    result, calls = run_script(tmp_path, "alice")
+    assert result.returncode == 0, result.stderr
+    assert [call.split()[0] for call in calls] == [
+        "apt-get",
+        "apt-get",
+        "chsh",
+        "install",
+        "install",
+    ]
+    assert calls[-1] == "install -d -m 755 -o alice -g alice /home/linuxbrew/.linuxbrew"
 
 
 def test_apt_runs_noninteractively_and_waits_for_the_dpkg_lock() -> None:
