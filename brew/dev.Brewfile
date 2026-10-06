@@ -70,7 +70,7 @@ cask "anthropics/tap/ant", trusted: true
 go "mvdan.cc/gofumpt"
 go "golang.org/x/tools/cmd/goimports"
 go "github.com/securego/gosec/v2/cmd/gosec"
-go "github.com/evilmartians/lefthook"
+go "github.com/evilmartians/lefthook/v2"
 go "msrl.dev/trackage/cmd/trackage"
 cargo "cargo-fuzz"
 cargo "cargo-llvm-cov"

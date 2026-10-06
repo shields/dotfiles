@@ -43,4 +43,4 @@ brew "zoxide"
 # module comes from anthropics/tap.
 cask "claude-code@latest"
 cask "codex"
-go "msrl.dev/lgtmcp/cmd/lgtmcp"
+go "msrl.dev/lgtmcp"
