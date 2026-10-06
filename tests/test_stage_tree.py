@@ -35,6 +35,9 @@ if TYPE_CHECKING:
 REPO = Path(__file__).resolve().parents[1]
 SCRIPT = REPO / "tools/stage_tree.sh"
 TAR_VARIANTS = ["tar", *(name for name in ("gtar", "bsdtar") if shutil.which(name))]
+# A variable, because a type checker that runs on Linux reports an inline
+# `if sys.platform == "darwin":` as unreachable code.
+ON_MACOS = sys.platform == "darwin"
 
 GLOBAL_CONFIG = """\
 [user]
@@ -252,7 +255,7 @@ def planted_secret() -> str:
 
 
 def set_xattr(path: Path, name: str) -> None:
-    if sys.platform == "darwin":
+    if ON_MACOS:
         _ = subprocess.run(
             ["xattr", "-w", name, "value", str(path)],
             capture_output=True,
@@ -261,7 +264,7 @@ def set_xattr(path: Path, name: str) -> None:
 
 
 def xattr_names(path: Path) -> set[str]:
-    if sys.platform != "darwin":
+    if not ON_MACOS:
         return set()
     result = subprocess.run(
         ["xattr", str(path)], capture_output=True, text=True, check=True
@@ -476,7 +479,7 @@ def test_a_non_ascii_name_is_kept_or_the_run_fails(
         timeout=15,
         check=True,
     ).stdout
-    if sys.platform == "darwin" and "GNU tar" not in version:
+    if ON_MACOS and "GNU tar" not in version:
         assert result.returncode != 0
         assert "differ from the source file names" in result.stderr
         assert not layout.dest.exists()
@@ -757,6 +760,16 @@ def test_unsafe_destinations_are_refused_and_nothing_changes(
     (layout.base / "users-alias").symlink_to("users")
     (layout.base / "work-alias").symlink_to("work")
     _ = (layout.base / "work/sentinel").write_text("work\n")
+    # A refusal removes nothing. This rm only records its arguments, so a guard
+    # that stopped refusing "/" fails the test instead of deleting the files of
+    # whoever runs it.
+    removed = layout.base / "removed"
+    rm_shim = tool_dir(
+        layout,
+        "rm-shim",
+        {},
+        {"rm": f'#!/bin/sh\nprintf "%s\\n" "$*" >>{shlex.quote(str(removed))}\n'},
+    )
     target = dest.format(
         home=layout.home,
         home_alias=layout.base / "users/me-alias",
@@ -767,12 +780,16 @@ def test_unsafe_destinations_are_refused_and_nothing_changes(
         link=layout.base / "link",
         link_to_repo=layout.base / "link-to-repo",
     )
-    environment = {"HOME": str(layout.base / "users/me-alias")}
+    environment = {
+        "HOME": str(layout.base / "users/me-alias"),
+        **path_with(layout, rm_shim),
+    }
     before = layout.state()
     result = layout.stage(target, env=environment)
     assert result.returncode != 0
     assert result.stderr.startswith("stage_tree: ")
     assert result.stdout == ""
+    assert not removed.exists()
     assert layout.state() == before
     assert list(layout.tmp.iterdir()) == []
 
