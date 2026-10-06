@@ -69,6 +69,28 @@ files that are not ignored) into a new git repository at `DEST` and fails if
 gitleaks finds a secret there. `make test-linux` builds `cloudflare/Dockerfile`
 from such a copy, which runs `./provision.sh` in a Debian 13 image.
 
+Throwaway Lima VMs (the README describes them for users):
+
+- `lima/dev.yaml` is the VM definition, and `bin/limavm` (Mac only, bash 3.2)
+  builds `dotfiles-base` from it and clones it. `bin/setup-secrets` runs in the
+  guest and reads a secret from stdin; no secret may reach an argument list, an
+  environment or a message.
+- `provision/throwaway.sh` (run as root, also by the Cloudflare image) makes a
+  machine a throwaway environment: `/etc/dotfiles-throwaway`, Claude Code's
+  managed settings (generated with jq from the deny rules, the `git_guard.py`
+  hook and the status line in `.claude/settings.json`, so add to that file, not
+  the output), and Codex's system config and rules. `.zshrc`'s `c` tests the
+  marker, which `DOTFILES_THROWAWAY_MARKER` can point elsewhere in a test, and
+  must stay a builtin-only test. `provision/reset-identity.sh` removes the
+  agents' installation identifiers before a base is cloned; add a key there when
+  an agent stores another.
+- Per-OS copy excludes are unchanged: macOS leaves out `bin/setup-secrets`, and
+  Linux leaves out `bin/limavm`.
+- `tests/test_limavm.zsh` and `tests/test_setup_secrets.zsh` use stubs and run
+  anywhere. `tests/test_lima_dev_yaml.py` needs `limactl`, so it skips in the
+  Linux image. No test covers what only a running VM shows: the network
+  isolation, and what the agents may do under the managed settings.
+
 Shared agent instructions live in `.agents/AGENTS.md`. The global
 `~/.claude/CLAUDE.md` imports them with `@../.agents/AGENTS.md` and adds
 Claude-specific instructions. Provisioning concatenates `.agents/AGENTS.md`
