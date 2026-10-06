@@ -136,6 +136,14 @@ def test_zshenv_exports_no_secrets(tmp_path: Path) -> None:
     assert "TOKEN" not in ZSHENV.read_text()
 
 
+def test_zshenv_runs_no_external_command(tmp_path: Path) -> None:
+    # With no program on PATH, any command that .zshenv ran would be reported
+    # on stderr, which run_zsh requires to be empty.
+    nowhere = tmp_path / "nowhere"
+    nowhere.mkdir()
+    assert zshenv_path(tmp_path, "linux-gnu", str(nowhere)).endswith(f":{nowhere}")
+
+
 def test_zshenv_starts_no_processes() -> None:
     code = [
         line

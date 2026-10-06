@@ -426,6 +426,9 @@ def test_missing_scheduler_falls_back_to_synchronous_startup(shell: Shell) -> No
 
 LINUX = "linux-gnu"
 DARWIN = "darwin25.4.0"
+# A variable that a child process cannot see is not exported, whatever the shell
+# itself holds, so these tests read variables through a child process.
+PRINTENV = "/usr/bin/printenv"
 
 EMACS_ALIASES = """
 alias emacs="plugin-launcher --no-wait"
@@ -542,7 +545,7 @@ def test_editor_and_text_encoding_follow_the_system(
 ) -> None:
     shell.set_ostype(ostype)
     values = shell.run_command(
-        'print -rl -- "$EDITOR" "${__CF_USER_TEXT_ENCODING-unset}"'
+        f"{PRINTENV} EDITOR; {PRINTENV} __CF_USER_TEXT_ENCODING || print unset"
     ).splitlines()
     assert values == [editor.format(home=shell.home), encoding]
 
@@ -550,7 +553,7 @@ def test_editor_and_text_encoding_follow_the_system(
 def test_visual_follows_editor_on_linux(shell: Shell) -> None:
     shell.set_ostype(LINUX)
     shell.env["VISUAL"] = "vi"  # What .profile exports in every login shell.
-    values = shell.run_command('print -rl -- "$EDITOR" "$VISUAL"').splitlines()
+    values = shell.run_command(f"{PRINTENV} EDITOR; {PRINTENV} VISUAL").splitlines()
     assert values == ["emacsclient --tty --alternate-editor="] * 2
 
 
@@ -568,7 +571,7 @@ def test_claude_token_is_exported_from_its_file_only_on_linux(
     shell.set_ostype(ostype)
     if token is not None:
         shell.write(".config/secrets/CLAUDE_CODE_OAUTH_TOKEN", token + "\n")
-    value = shell.run_command('print -r -- "${CLAUDE_CODE_OAUTH_TOKEN-unset}"')
+    value = shell.run_command(f"{PRINTENV} CLAUDE_CODE_OAUTH_TOKEN || print unset")
     assert value == expected
 
 
@@ -654,7 +657,7 @@ def test_sourcing_again_keeps_the_clipboard_commands(shell: Shell, ostype: str) 
 def test_gpg_tty_is_the_terminal(shell: Shell) -> None:
     shell.start()
     _ = shell.wait_for("first ")
-    command = 'print -r -- "gpg=$GPG_TTY tty=$TTY" >> "$ZDOTDIR/events"\n'
+    command = f'print -r -- "gpg=$({PRINTENV} GPG_TTY) tty=$TTY" >> "$ZDOTDIR/events"\n'
     _ = os.write(shell.fd, command.encode())
     records = shell.wait_for("gpg=")
     line = next(line for line in records.splitlines() if line.startswith("gpg="))
