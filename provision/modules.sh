@@ -162,8 +162,19 @@ modules_resolve() {
 }
 
 modules_persist() {
+    local tmp
     mkdir -p "$(dirname "$1")"
+    # An empty file reads as the selection none, so the file is replaced whole:
+    # a write that fails partway must not leave one.
+    tmp=$(mktemp "$1.XXXXXX") || return 1
     if [[ -n $2 ]]; then
-        printf '%s\n' "$2"
-    fi >"$1"
+        printf '%s\n' "$2" >"$tmp" || {
+            rm -f "$tmp"
+            return 1
+        }
+    fi
+    mv -f "$tmp" "$1" || {
+        rm -f "$tmp"
+        return 1
+    }
 }

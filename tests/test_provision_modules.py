@@ -487,6 +487,22 @@ def test_persist_writes_an_empty_file_for_no_modules(tmp_path: Path) -> None:
     assert target.read_text() == ""
 
 
+def test_persist_keeps_the_old_selection_when_the_write_fails(
+    tmp_path: Path,
+) -> None:
+    target = tmp_path / "brew-modules"
+    _ = target.write_text("cloud dev\n")
+    # A zero file-size limit with SIGXFSZ ignored makes every write fail.
+    result = bash(
+        'source "$1"; trap "" XFSZ; ulimit -f 0; modules_persist "$2" dev',
+        str(MODULES_SH),
+        str(target),
+    )
+    assert result.returncode != 0
+    assert target.read_text() == "cloud dev\n"
+    assert list(tmp_path.iterdir()) == [target]
+
+
 def test_persisted_selection_round_trips_through_resolve(tmp_path: Path) -> None:
     target = tmp_path / "config" / "brew-modules"
     assert call("modules_persist", str(target), "data dev").returncode == 0
