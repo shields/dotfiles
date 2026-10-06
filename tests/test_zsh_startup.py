@@ -36,6 +36,9 @@ DEFER = Path(
     os.environ.get("ZSH_DEFER_DIR", str(Path.home() / ".local/share/zsh-defer"))
 )
 HAS_DEFER = (DEFER / "zsh-defer.plugin.zsh").is_file()
+# An upper bound on a hung shell, not a speed requirement: a loaded host runs
+# these tests many times slower.
+TIMEOUT = 60
 
 pytestmark = pytest.mark.skipif(not ZSH, reason="zsh is required")
 needs_defer = pytest.mark.skipif(
@@ -206,7 +209,7 @@ class Shell:
         _ = os.write(self.fd, first_command.encode())
 
     def wait_for(self, prefix: str, count: int = 1) -> str:
-        deadline = time.monotonic() + 15
+        deadline = time.monotonic() + TIMEOUT
         while time.monotonic() < deadline:
             if select.select([self.fd], [], [], 0.02)[0]:
                 try:
@@ -227,7 +230,7 @@ class Shell:
             cwd=self.home,
             capture_output=True,
             text=True,
-            timeout=15,
+            timeout=TIMEOUT,
             check=False,
         )
 
@@ -511,7 +514,7 @@ def test_linuxbrew_is_probed_only_on_linux(
         stdin=subprocess.DEVNULL,
         capture_output=True,
         text=True,
-        timeout=15,
+        timeout=TIMEOUT,
         check=False,
     )
     assert result.returncode == 0, result.stderr
@@ -655,8 +658,9 @@ def test_sourcing_again_keeps_the_clipboard_commands(shell: Shell, ostype: str) 
 
 
 def test_gpg_tty_is_the_terminal(shell: Shell) -> None:
+    (shell.home / "continue").touch()
     shell.start()
-    _ = shell.wait_for("first ")
+    _ = shell.wait_for("done ")
     command = f'print -r -- "gpg=$({PRINTENV} GPG_TTY) tty=$TTY" >> "$ZDOTDIR/events"\n'
     _ = os.write(shell.fd, command.encode())
     records = shell.wait_for("gpg=")
