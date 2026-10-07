@@ -518,6 +518,20 @@ assert_eq "the record's access token lasts 8 hours" 1 \
 assert_eq "the record's refresh token lasts 6 months" 1 \
     "$(jq --argjson low $(( before + 15811200 )) --argjson high $(( after + 15811200 )) \
         '.refresh_expires_at >= $low and .refresh_expires_at <= $high' <<<"$record" | grep -c true)"
+assert_eq "the token manager accepts the record, and reads its fields the same way" \
+    "shields/dotfiles $CLIENT_ID $FAKE_URL $FAKE_URL/api/v3" \
+    "$(printf '%s\n' "$record" | python3 -c '
+import importlib.util
+import sys
+
+spec = importlib.util.spec_from_file_location("github_app_token", sys.argv[1])
+assert spec is not None and spec.loader is not None
+module = importlib.util.module_from_spec(spec)
+sys.modules["github_app_token"] = module
+spec.loader.exec_module(module)
+parsed = module.parse_record(sys.stdin.read())
+print(parsed.repository, parsed.client_id, parsed.web_url, parsed.api_url)
+' "$HERE/../bin/github_app_token.py")"
 assert_eq "the Claude token reaches setup-secrets on stdin, with a newline" same \
     "$(print -r -- "$FAKE_CLAUDE" | cmp -s - "$STATE/calls/6.stdin" && echo same || echo different)"
 assert_eq "the LGTMCP config reaches setup-secrets on stdin, byte for byte" same \
