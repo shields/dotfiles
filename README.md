@@ -218,13 +218,14 @@ sandboxed, prompting behavior.
 - What still holds, checked in a VM against the installed tools with a stub model
   server that makes each tool run chosen commands: `git push` (plain, by absolute
   path, through `env` and with `-C`) and `git commit --no-verify`, stopped by
-  `git_guard.py` in both agents; `gh api` with `-X` or `--method` anywhere, and
+  `git_guard.py` in both agents, which also stops `gh api` with `-X` or
+  `--method` anywhere in the command; `gh api` with `-X` or `--method` and
   `gh repo delete`, stopped by Claude's deny rules; `gh repo delete`, stopped by
   Codex's `.codex/rules`, which also stop `git push` when its hook is off.
-- A gap in Codex: its rules match only the words that start a command.
-  `/etc/codex/rules/throwaway.rules` forbids `gh api -X ...` and
-  `gh api --method ...`, but `gh api ENDPOINT -X POST` runs, and it is a write
-  that the token's scope permits. Claude denies that form.
+- What does not stop an agent: `gh api` with `-f`, `-F` or `--input` and no
+  `-X` is sent as a POST by default, and neither agent's rules nor the hook
+  catches it, because `gh api graphql` queries are read-only POSTs that have to
+  keep working. The token's scope is the limit on that.
 
 ## Checks to run once with real credentials
 

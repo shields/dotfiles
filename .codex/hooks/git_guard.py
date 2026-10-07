@@ -29,6 +29,9 @@ KEEP_HOOKS = (
     "Respect the configured Git hooks. "
     "Commit without bypass flags or configuration overrides."
 )
+NO_GITHUB_WRITES = (
+    "The user manages GitHub state. Do not pass --method or -X to gh api."
+)
 
 # Keep operators distinct from quoted arguments such as a commit message ';'.
 TOKEN = re.compile(
@@ -62,6 +65,9 @@ COMMIT_VALUE_OPTIONS = {
     "--trailer",
     "--pathspec-from-file",
 }
+# Every short option of gh api that takes a value (gh api has no -R); the rest
+# of a cluster is that value.
+GH_API_VALUE_FLAGS = "fFHqtp"
 
 
 def commands(script: str) -> Iterator[list[str]]:
@@ -163,6 +169,29 @@ def git_reason(args: list[str]) -> str | None:
     return None
 
 
+def gh_reason(args: list[str]) -> str | None:
+    index = 0
+    # gh's only root options are --help and --version; 'gh -R repo api' is an
+    # error, so nothing before the subcommand takes a value.
+    while index < len(args) and args[index].startswith("-"):
+        index += 1
+    if index >= len(args) or args[index] != "api":
+        return None
+    for arg in args[index + 1 :]:
+        if arg.startswith("--"):
+            # A prefix, like Claude's '--method*' deny glob, so this is never
+            # looser than that rule.
+            if arg.startswith("--method"):
+                return NO_GITHUB_WRITES
+        elif arg.startswith("-"):
+            for flag in arg[1:]:
+                if flag == "X":
+                    return NO_GITHUB_WRITES
+                if flag in GH_API_VALUE_FLAGS:
+                    break
+    return None
+
+
 def command_reason(words: list[str]) -> str | None:
     index = 0
     while index < len(words):
@@ -200,6 +229,8 @@ def command_reason(words: list[str]) -> str | None:
     args = words[index + 1 :]
     if executable == "git":
         return git_reason(args)
+    if executable == "gh":
+        return gh_reason(args)
     if executable in {"bash", "zsh", "sh"}:
         for position, arg in enumerate(args):
             if not arg.startswith("-"):

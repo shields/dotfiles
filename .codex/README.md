@@ -4,7 +4,12 @@ The rules prohibit pushes, GitHub repository mutations, removing Lefthook, and
 committing with leading hook-bypass flags. The Git hook also checks literal shell
 commands for pushes with global Git options (including `-C`, `-c`, `--git-dir`,
 and `--work-tree`) and commit bypass flags in other positions. Like the Claude
-permissions, it rejects commits with Git configuration overrides.
+permissions, it rejects commits with Git configuration overrides. It also rejects
+`gh api` with `-X` or `--method` anywhere in the command, in any spelling
+(`-XPOST`, `--method=PUT`, a cluster such as `-iX`), which the prefix rules can
+match only at the start of a command. A POST that `gh api` sends by default
+because of `-f`, `-F` or `--input` is not rejected, since GraphQL queries need
+that.
 
 `provision.sh` copies tracked files into `~/.codex/` and then trusts the hook
 definitions it installed, so `/hooks` shows `git_guard.py` as trusted after a
