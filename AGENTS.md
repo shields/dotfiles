@@ -42,7 +42,8 @@ starting with `.` (e.g. `.claude/`, `.zshrc`). Untracked files are not copied.
 Files are copied, not symlinked, so this repo is the source of truth; edits take
 effect only after running `./provision.sh`.
 
-- macOS also copies `Library/`, and leaves out `bin/setup-secrets`.
+- macOS also copies `Library/`, and leaves out `bin/setup-secrets` and
+  `bin/github_app_token.py`.
 - Linux leaves out the files that only a Mac can use. The list is `copy_paths`
   in `provision.sh`, and `tests/test_provision.py` checks it, so a new
   macOS-only file needs an entry in both.
@@ -74,7 +75,12 @@ Throwaway Lima VMs (the README describes them for users):
 - `lima/dev.yaml` is the VM definition, and `bin/limavm` (Mac only, bash 3.2)
   builds `dotfiles-base` from it and clones it. `bin/setup-secrets` runs in the
   guest and reads a secret from stdin; no secret may reach an argument list, an
-  environment or a message.
+  environment or a message. `limavm new --repo` runs the device flow of a GitHub
+  App (Ephemera, no private key) on the Mac and sends the record to
+  `setup-secrets GITHUB_APP_AUTH`. `bin/github_app_token.py` (Linux only; on
+  Python 3.13, which Debian's `python3` is) keeps the record fresh from a
+  systemd timer that `provision/throwaway.sh` installs and from git's credential
+  helper. The Mac keeps no GitHub secret, and `limavm` never calls `security`.
 - `provision/throwaway.sh` (run as root, also by the Cloudflare image) makes a
   machine a throwaway environment: `/etc/dotfiles-throwaway`, Claude Code's
   managed settings (generated with jq from the deny rules, the `git_guard.py`
@@ -84,12 +90,15 @@ Throwaway Lima VMs (the README describes them for users):
   must stay a builtin-only test. `provision/reset-identity.sh` removes the
   agents' installation identifiers before a base is cloned; add a key there when
   an agent stores another.
-- Per-OS copy excludes are unchanged: macOS leaves out `bin/setup-secrets`, and
-  Linux leaves out `bin/limavm`.
+- Per-OS copy excludes: macOS leaves out `bin/setup-secrets` and
+  `bin/github_app_token.py`, and Linux leaves out `bin/limavm`.
 - `tests/test_limavm.zsh` and `tests/test_setup_secrets.zsh` use stubs and run
-  anywhere. `tests/test_lima_dev_yaml.py` needs `limactl`, so it skips in the
-  Linux image. No test covers what only a running VM shows: the network
-  isolation, and what the agents may do under the managed settings.
+  anywhere, with `tests/fake_github.py` as the GitHub of the device flow.
+  `tests/test_github_app_token.py` runs the token manager and the real `gh` and
+  `git` against that fake, also in the Linux image. `tests/test_lima_dev_yaml.py`
+  needs `limactl`, so it skips in the Linux image. No test covers what only a
+  running VM shows: the network isolation, what the agents may do under the
+  managed settings, and the systemd timer.
 
 Shared agent instructions live in `.agents/AGENTS.md`. The global
 `~/.claude/CLAUDE.md` imports them with `@../.agents/AGENTS.md` and adds
