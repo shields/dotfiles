@@ -95,6 +95,7 @@ RC=0
 OUT="$(env HOME="$HOME_DIR" bash "$SCRIPT" --help 2>&1)" || RC=$?
 assert_eq "--help succeeds" 0 "$RC"
 assert_eq "--help names the secrets" 1 "$([[ "$OUT" == *CLAUDE_CODE_OAUTH_TOKEN* ]] && echo 1 || echo 0)"
+assert_eq "--help names the GitHub App authorization" 1 "$([[ "$OUT" == *GITHUB_APP_AUTH* ]] && echo 1 || echo 0)"
 
 # --- 2. Unknown names ---
 new_home unknown
@@ -108,7 +109,7 @@ assert_eq "unknown names write nothing" "" "$(ls -A "$HOME_DIR")"
 
 # --- 3. Empty input ---
 new_home empty
-for name in GH_TOKEN CLAUDE_CODE_OAUTH_TOKEN LGTMCP_CONFIG; do
+for name in GH_TOKEN GITHUB_APP_AUTH CLAUDE_CODE_OAUTH_TOKEN LGTMCP_CONFIG; do
     for input in '' $'\n' $'  \n\t\n'; do
         run "$name" "$input"
         assert_eq "$name with empty input fails" 1 "$RC"
@@ -199,6 +200,86 @@ OUT="$(printf '%s' "$SECRET" | env HOME="$HOME_DIR" GH_STUB_DIR="$GH_STUB_DIR" G
 assert_eq "gh failure fails" 1 "$RC"
 assert_eq "gh failure says so" 1 "$([[ "$OUT" == *"gh auth login failed"* ]] && echo 1 || echo 0)"
 assert_absent "gh failure does not echo the token" "$SECRET" "$OUT"
+
+# --- 8a. GITHUB_APP_AUTH ---
+# Every record here expires in the future, so the token manager never asks a
+# GitHub server to refresh it.
+ACCESS='ghu_FAKEaccessToken0123456789abcdef'
+REFRESH='ghr_FAKErefreshToken0123456789abcdef'
+NOW=$(date +%s)
+APP_RECORD="$(printf '{"client_id":"Iv-fake","repository":"shields/dotfiles","access_token":"%s","access_expires_at":%d,"refresh_token":"%s","refresh_expires_at":%d}' \
+    "$ACCESS" $(( NOW + 28800 )) "$REFRESH" $(( NOW + 15811200 )))"
+
+new_home app
+run GITHUB_APP_AUTH "$APP_RECORD"$'\n'
+auth="$HOME_DIR/.config/github-app/auth.json"
+assert_eq "app auth succeeds" 0 "$RC"
+assert_eq "app auth prints nothing" "" "$OUT"
+assert_eq "app auth file mode" 600 "$(mode_of "$auth")"
+assert_eq "app auth directory mode" 700 "$(mode_of "$HOME_DIR/.config/github-app")"
+assert_eq "app auth keeps the repository" 1 "$(grep -c '"repository": "shields/dotfiles"' "$auth")"
+assert_eq "app auth keeps the access token" 1 "$(grep -c "\"access_token\": \"$ACCESS\"" "$auth")"
+assert_eq "app auth keeps the refresh token" 1 "$(grep -c "\"refresh_token\": \"$REFRESH\"" "$auth")"
+assert_eq "app auth logs gh in" \
+    "auth login --with-token --insecure-storage" \
+    "$(tr '\n' ' ' < "$GH_STUB_DIR/argv" | sed 's/ $//')"
+assert_eq "gh receives the access token on stdin" "$ACCESS" "$(<"$GH_STUB_DIR/stdin")"
+assert_eq "gh is aimed at github.com" 1 "$(grep -c '^GH_HOST=github.com$' "$GH_STUB_DIR/env")"
+assert_absent "app auth keeps the access token out of gh's argv" "$ACCESS" "$(<"$GH_STUB_DIR/argv")"
+assert_absent "app auth keeps the access token out of gh's environment" "$ACCESS" "$(<"$GH_STUB_DIR/env")"
+assert_absent "app auth keeps the refresh token away from gh" "$REFRESH" "$(cat "$GH_STUB_DIR"/*)"
+assert_eq "only the record holds a token" "$auth" \
+    "$(grep -rl -e "$ACCESS" -e "$REFRESH" "$HOME_DIR")"
+git_config="$HOME_DIR/.config/git/config"
+helper="$(git config --file "$git_config" --get credential.https://github.com.helper)"
+assert_eq "git asks the token manager for github.com credentials" 1 \
+    "$([[ "$helper" == '!'*/github_app_token.py\ credential ]] && echo 1 || echo 0)"
+assert_eq "git sends the repository path to the helper" true \
+    "$(git config --file "$git_config" --get credential.https://github.com.useHttpPath)"
+assert_eq "the helper is the only one for github.com" 1 \
+    "$(git config --file "$git_config" --get-all credential.https://github.com.helper | wc -l | tr -d ' ')"
+
+new_home appreplace
+mkdir -p "$HOME_DIR/.config/git"
+git config --file "$HOME_DIR/.config/git/config" credential.https://github.com.helper '!gh auth git-credential'
+run GITHUB_APP_AUTH "$APP_RECORD"
+assert_eq "app auth replaces gh's credential helper" 1 \
+    "$(git config --file "$HOME_DIR/.config/git/config" --get-all credential.https://github.com.helper | grep -c 'github_app_token.py')"
+assert_eq "app auth leaves no other github.com helper" 1 \
+    "$(git config --file "$HOME_DIR/.config/git/config" --get-all credential.https://github.com.helper | wc -l | tr -d ' ')"
+
+new_home appbad
+bad_inputs=(
+    'not json'
+    '[]'
+    '{"client_id":"Iv-fake"}'
+    "{\"client_id\":\"Iv-fake\",\"repository\":\"$ACCESS\",\"access_token\":\"$ACCESS\",\"access_expires_at\":$(( NOW + 28800 )),\"refresh_token\":\"$REFRESH\",\"refresh_expires_at\":$(( NOW + 15811200 ))}"
+    "{\"client_id\":\"Iv-fake\",\"repository\":\"shields/dotfiles\",\"access_token\":\"$ACCESS\",\"access_expires_at\":$(( NOW + 28800 )),\"refresh_token\":\"$REFRESH\",\"refresh_expires_at\":$(( NOW + 15811200 )),\"extra\":\"$ACCESS\"}"
+    "{\"client_id\":\"Iv-fake\",\"repository\":\"shields/dotfiles\",\"access_token\":\"$ACCESS \$(id)\",\"access_expires_at\":$(( NOW + 28800 )),\"refresh_token\":\"$REFRESH\",\"refresh_expires_at\":$(( NOW + 15811200 ))}"
+    "{\"client_id\":\"Iv-fake\",\"repository\":\"shields/dotfiles\",\"access_token\":\"$ACCESS\",\"access_expires_at\":\"soon\",\"refresh_token\":\"$REFRESH\",\"refresh_expires_at\":$(( NOW + 15811200 ))}"
+    "{\"client_id\":\"Iv-fake\",\"repository\":\"shields/dotfiles\",\"access_token\":\"$ACCESS\",\"access_expires_at\":$(( NOW + 28800 )),\"refresh_token\":\"$REFRESH\",\"refresh_expires_at\":$(( NOW + 15811200 )),\"web_url\":\"https://user:$ACCESS@github.com\"}"
+)
+for input in "${bad_inputs[@]}"; do
+    run GITHUB_APP_AUTH "$input"
+    assert_eq "a bad app record fails: ${input:0:30}" 1 "$RC"
+    assert_absent "a bad app record is not echoed: ${input:0:30}" "$ACCESS" "$OUT"
+    assert_absent "a bad app record's refresh token is not echoed: ${input:0:30}" "$REFRESH" "$OUT"
+    assert_eq "a bad app record writes nothing: ${input:0:30}" "" "$(ls -A "$HOME_DIR")"
+done
+assert_eq "a bad app record never runs gh" 0 "$([[ -e "$GH_STUB_DIR/argv" ]] && echo 1 || echo 0)"
+
+new_home appghfail
+RC=0
+OUT="$(printf '%s' "$APP_RECORD" | env HOME="$HOME_DIR" GH_STUB_DIR="$GH_STUB_DIR" GH_STUB_RC=1 \
+    PATH="$STUBS:$PATH" bash "$SCRIPT" GITHUB_APP_AUTH 2>&1)" || RC=$?
+assert_eq "an app auth gh failure fails" 1 "$RC"
+assert_eq "an app auth gh failure says so" 1 "$([[ "$OUT" == *"gh auth login failed"* ]] && echo 1 || echo 0)"
+assert_absent "an app auth gh failure does not echo the access token" "$ACCESS" "$OUT"
+assert_absent "an app auth gh failure does not echo the refresh token" "$REFRESH" "$OUT"
+
+new_home ghgit
+run GH_TOKEN "$SECRET"
+assert_eq "gh token leaves git's configuration alone" "" "$(ls -A "$HOME_DIR")"
 
 # --- 9. No HOME ---
 RC=0
