@@ -84,7 +84,7 @@ LINUX_EXCLUDES = (
     ".agents/skills/transcribe",
     ".claude/skills/transcribe",
 )
-MACOS_EXCLUDES = ("bin/setup-secrets",)
+MACOS_EXCLUDES = ("bin/setup-secrets", "bin/github_app_token.py")
 
 COPY_COMMAND = (
     'git ls-files -z -- "${copy_paths[@]}"'
@@ -201,7 +201,7 @@ def selected(path: str, os_name: str) -> bool:
     """Which tracked paths each OS copies, written independently of the pathspecs."""
     if os_name == "macos":
         in_scope = path.startswith((".", "bin/", "Library/"))
-        return in_scope and path != "bin/setup-secrets"
+        return in_scope and path not in MACOS_EXCLUDES
     if not path.startswith((".", "bin/")):
         return False
     excluded = (
@@ -377,7 +377,7 @@ def test_copy_uses_git_ls_files_through_tar() -> None:
     assert "tar cf - -T - bin Library" not in TEXT
 
 
-def test_macos_copy_adds_library_and_leaves_out_setup_secrets() -> None:
+def test_macos_copy_adds_library_and_leaves_out_the_guest_only_scripts() -> None:
     assert copy_pathspecs("macos") == [
         ".*",
         "bin",
@@ -431,6 +431,7 @@ SCRATCH_FILES = {
     "bin/clean_downloads.py": "",
     "bin/limavm": "",
     "bin/setup-secrets": "",
+    "bin/github_app_token.py": "",
     "bin/zoom-toggle-audio.applescript": "",
     "Library/Fonts/f.otf": "",
     "Library/Application Support/with space.txt": "",
@@ -478,6 +479,7 @@ def test_scratch_repo_macos_copy_matches_the_independent_selection(
     actual = set(git_ls_files(repo, copy_pathspecs("macos"), env))
     assert actual == {path for path in tracked if selected(path, "macos")}
     assert "bin/setup-secrets" not in actual
+    assert "bin/github_app_token.py" not in actual
     assert "bin/scratch-untracked" not in actual
     assert {"bin/$", "Library/Application Support/with space.txt"} <= actual
     assert ".config/karabiner/karabiner.json" in actual
@@ -497,6 +499,7 @@ def test_scratch_repo_linux_copy_drops_every_excluded_path(
         "bin/ghfork",
         "bin/$",
         "bin/setup-secrets",
+        "bin/github_app_token.py",
     }
 
 

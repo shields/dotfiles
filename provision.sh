@@ -71,7 +71,7 @@ export HOMEBREW_DOTFILES_BREW_MODULES=${modules_selection:-none}
 copy_paths=('.*' bin)
 case $os in
 macos)
-    copy_paths+=(Library ':(exclude)bin/setup-secrets')
+    copy_paths+=(Library ':(exclude)bin/setup-secrets' ':(exclude)bin/github_app_token.py')
     ;;
 linux)
     copy_paths+=(
