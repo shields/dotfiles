@@ -159,12 +159,13 @@ for two.
 
 How it works:
 
-1. The access comes from a GitHub App called Ephemera (client ID
-   `Iv23lim5x4MdkNNgv28z`, which is public). It issues user access tokens through
-   the device flow. You created it once, at github.com/settings/apps: Device Flow
-   on, "Expire user authorization tokens" on, no webhook, repository permissions
-   Contents and Pull requests set to read and write and nothing else, and
-   installed on your account for all repositories. It has no private key, and
+1. The access comes from a GitHub App, which issues user access tokens through
+   the device flow. The client ID in `bin/limavm` (`Iv23lim5x4MdkNNgv28z`, which
+   is public) is the author's app; to use your own, make the app as follows and
+   set `LIMAVM_GITHUB_CLIENT_ID`. You create it once, at github.com/settings/apps:
+   Device Flow on, "Expire user authorization tokens" on, no webhook, repository
+   permissions Contents and Pull requests set to read and write and nothing else,
+   and installed on your account for all repositories. It has no private key, and
    none must ever be made: with a key anyone who held it could mint tokens for
    every repository the app is installed on, and this design needs none.
 2. `limavm` looks up the repository's id with your own `gh` login (one read-only
@@ -201,8 +202,8 @@ How it works:
    it was used elsewhere, since each is good once; the message says that, and
    suggests de-authorizing the app.
 
-Revoking: github.com/settings/apps/authorizations, "Revoke" on Ephemera, ends the
-tokens of every VM at once. GitHub can revoke one token only with the app's
+Revoking: github.com/settings/apps/authorizations, "Revoke" on the app (listed
+under the name you gave it), ends the tokens of every VM at once. GitHub can revoke one token only with the app's
 client secret, which this design does not have, so there is no per-VM revocation.
 `limavm rm` deletes a VM but does not revoke its tokens: they stop at their
 expiry, or when the VM's own refresh fails. To cut off a VM early, de-authorize the
@@ -309,7 +310,7 @@ type at the address it opens:
   that it renewed the token and `gh` still works. Waiting 8 hours does the same
   through the timer (`systemctl list-timers github-app-refresh.timer`).
 - `limavm github t1 OWNER/REPO` replaces the access in a running VM, and
-  de-authorizing Ephemera at github.com/settings/apps/authorizations makes the
+  de-authorizing the app at github.com/settings/apps/authorizations makes the
   next renewal in every VM fail with a message that names that command.
 - `claude` runs without a login (with the token pasted at the `limavm new`
   prompt), and `codex login --device-auth` signs Codex in.
