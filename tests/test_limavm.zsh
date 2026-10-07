@@ -22,9 +22,20 @@ for var in $(git rev-parse --local-env-vars); do
     unset "$var"
 done
 
-LIMAVM="${0:A:h}/../bin/limavm"
+HERE="${0:A:h}"
+LIMAVM="$HERE/../bin/limavm"
+FAKE_GITHUB="$HERE/fake_github.py"
+REAL_CURL="$(command -v curl)"
 TMPBASE="${$(mktemp -d):A}"
-trap 'rm -rf "$TMPBASE"' EXIT
+FAKE_PID=
+stop_fake() {
+    if [[ -n $FAKE_PID ]]; then
+        kill -KILL "$FAKE_PID" 2>/dev/null || true
+        wait "$FAKE_PID" 2>/dev/null || true
+        FAKE_PID=
+    fi
+}
+trap 'stop_fake; rm -rf "$TMPBASE"' EXIT
 export TMPDIR="$TMPBASE/tmp"
 mkdir -p "$TMPDIR"
 
@@ -88,6 +99,7 @@ list)
     --format)
         case $2 in
         '{{.Protected}}') [[ -e "$state/protected-$3" ]] && echo true || echo false ;;
+        '{{.Status}}') [[ -e "$state/stopped-$3" ]] && echo Stopped || echo Running ;;
         '{{len .Config.Mounts}}') cat "$state/mounts" 2>/dev/null || echo 0 ;;
         esac
         ;;
@@ -160,36 +172,57 @@ esac
 exit 0
 STUB
 
-# security knows the items listed in $LIMA_STUB_STATE/keychain, and prints a
-# fake secret that names its item for -w.
-cat > "$STUBS/security" <<'STUB'
+# gh answers the one read-only call limavm makes, with the id in
+# $LIMA_STUB_STATE/gh-id, and fails if $LIMA_STUB_STATE/gh-fail exists.
+cat > "$STUBS/gh" <<'STUB'
 #!/bin/bash
 state=$LIMA_STUB_STATE
-call=$(mktemp "$state/calls/security.XXXXXX")
+call=$(mktemp "$state/calls/gh.XXXXXX")
 printf '%s\n' "$@" > "$call.argv"
 env | sort > "$call.env"
-item=
-want_value=0
-while [[ $# -gt 0 ]]; do
-    case $1 in
-    -s)
-        item=$2
-        shift
-        ;;
-    -w) want_value=1 ;;
-    esac
-    shift
-done
-if ! grep -qx -- "$item" "$state/keychain"; then
-    echo "security: SecKeychainSearchCopyNext: The specified item could not be found in the keychain." >&2
-    exit 44
+printf '%s\n' "$*" >> "$state/gh.log"
+if [[ -e "$state/gh-fail" ]]; then
+    echo "gh: HTTP 404: Not Found" >&2
+    exit 1
 fi
-if ((want_value)); then
-    echo "FAKE-SECRET-${item#limavm-}-7f3c9a"
-else
-    echo 'keychain: "login.keychain-db"'
+if [[ $* == "api repos/"*" --jq .id" ]]; then
+    cat "$state/gh-id"
+    exit 0
 fi
+echo "gh stub: unexpected call: $*" >&2
+exit 2
 STUB
+
+# curl records its arguments and environment, so that the test can show that no
+# secret reaches them, and then runs the real curl.
+cat > "$STUBS/curl" <<'STUB'
+#!/bin/bash
+state=$LIMA_STUB_STATE
+call=$(mktemp "$state/calls/curl.XXXXXX")
+printf '%s\n' "$@" > "$call.argv"
+env | sort > "$call.env"
+exec "$REAL_CURL" "$@"
+STUB
+
+cat > "$STUBS/open" <<'STUB'
+#!/bin/bash
+printf '%s\n' "$*" >> "$LIMA_STUB_STATE/open.log"
+[[ ! -e $LIMA_STUB_STATE/open-fail ]]
+STUB
+
+cat > "$STUBS/sleep" <<'STUB'
+#!/bin/bash
+printf '%s\n' "$*" >> "$LIMA_STUB_STATE/sleep.log"
+STUB
+
+# limavm has no use for the macOS security command, so any call is a failure.
+cat > "$STUBS/security" <<'STUB'
+#!/bin/bash
+echo "called: $*" >> "$LIMA_STUB_STATE/security.log"
+echo "security: limavm must not call this" >&2
+exit 1
+STUB
+chmod +x "$STUBS"/*
 
 # stage_tree.sh stages one file into DEST, as the real script stages the tree.
 cat > "$TMPBASE/stage_tree.sh" <<'STUB'
@@ -202,7 +235,6 @@ fi
 mkdir -p "$1/provision"
 echo staged > "$1/provision.sh"
 STUB
-chmod +x "$STUBS/limactl" "$STUBS/security"
 
 CHECKOUT="$TMPBASE/checkout"
 mkdir -p "$CHECKOUT/lima" "$CHECKOUT/provision" "$CHECKOUT/tools"
@@ -215,17 +247,22 @@ cp "$TMPBASE/stage_tree.sh" "$CHECKOUT/tools/stage_tree.sh"
 chmod +x "$CHECKOUT/provision.sh" "$CHECKOUT/tools/stage_tree.sh"
 
 GUEST_DIR=/home/guest/src/github.com/shields/dotfiles
-FAKE_GH='FAKE-SECRET-GH_TOKEN-7f3c9a'
-FAKE_CLAUDE='FAKE-SECRET-CLAUDE_CODE_OAUTH_TOKEN-7f3c9a'
+CLIENT_ID=Iv23lim5x4MdkNNgv28z
+FAKE_CLAUDE='sk-ant-oat01-FAKEclaudeToken-7f3c9a'
 FAKE_LGTMCP='FAKE-LGTMCP-KEY-55'
 LGTMCP_YAML="gemini_api_key: $FAKE_LGTMCP"$'\n'
+# What the fake GitHub hands out, and the device code it expects back.
+GITHUB_SECRETS=(-e ghu_fake-access -e ghr_fake-refresh -e fake-device-code)
+SETUP='shell t1 sh -c exec "$HOME/bin/setup-secrets" "$1" _'
 
 CASE_N=0
 EXTRA_ENV=()
+FAKE_URL=
 
-# new_case [INSTANCE...]: a fresh state with a home, a Keychain and the
-# instances that exist.
+# new_case [INSTANCE...]: a fresh state with a home, a Claude token to type and
+# the instances that exist.
 new_case() {
+    stop_fake
     (( ++CASE_N ))
     STATE="$TMPBASE/state-$CASE_N"
     HOME_DIR="$TMPBASE/home-$CASE_N"
@@ -233,10 +270,33 @@ new_case() {
     print -rn -- "$LGTMCP_YAML" > "$HOME_DIR/.config/lgtmcp/config.yaml"
     : > "$STATE/instances"
     (( $# == 0 )) || printf '%s\n' "$@" >> "$STATE/instances"
-    printf '%s\n' limavm-GH_TOKEN limavm-CLAUDE_CODE_OAUTH_TOKEN > "$STATE/keychain"
     : > "$STATE/limactl.log"
+    echo 4242 > "$STATE/gh-id"
+    print -r -- "$FAKE_CLAUDE" > "$STATE/prompt"
     STAGE_ARGS_LOG="$STATE/stage-args"
-    EXTRA_ENV=()
+    FAKE_URL=
+    EXTRA_ENV=(LIMAVM_PROMPT_INPUT="$STATE/prompt")
+}
+
+# start_fake [JSON FIELDS]: a fake GitHub on a free port for the current case,
+# with the repositories shields/dotfiles (4242) and shields/other (77), and
+# limavm aimed at it. FAKE_CLIENT_ID is the client id it accepts.
+start_fake() {
+    local fields=${1:+, $1}
+    print -r -- "{\"port_file\": \"$STATE/fake.port\", \"log\": \"$STATE/fake.log\", \"client_id\": \"${FAKE_CLIENT_ID:-$CLIENT_ID}\", \"repo_ids\": {\"shields/dotfiles\": 4242, \"shields/other\": 77}$fields}" > "$STATE/fake.json"
+    python3 "$FAKE_GITHUB" "$STATE/fake.json" &
+    FAKE_PID=$!
+    local tries
+    for tries in {1..200}; do
+        [[ -s "$STATE/fake.port" ]] && break
+        sleep 0.05
+    done
+    if [[ ! -s "$STATE/fake.port" ]]; then
+        echo "the fake GitHub did not start" >&2
+        exit 1
+    fi
+    FAKE_URL="http://127.0.0.1:$(<"$STATE/fake.port")"
+    EXTRA_ENV+=(LIMAVM_GITHUB_WEB_URL="$FAKE_URL" LIMAVM_GITHUB_API_URL="$FAKE_URL/api/v3")
 }
 
 # run_limavm ARGS...: sets OUT (stdout and stderr) and RC.
@@ -244,6 +304,7 @@ run_limavm() {
     RC=0
     OUT="$(cd "$CHECKOUT" && env PATH="$STUBS:$PATH" HOME="$HOME_DIR" USER=shields \
         LIMA_STUB_STATE="$STATE" STAGE_ARGS_LOG="$STAGE_ARGS_LOG" LIMAVM_BASE=test-base \
+        REAL_CURL="$REAL_CURL" NO_PROXY=127.0.0.1 no_proxy=127.0.0.1 \
         "${EXTRA_ENV[@]}" /bin/bash "$LIMAVM" "$@" 2>&1 </dev/null)" || RC=$?
 }
 
@@ -263,15 +324,32 @@ staging_dirs_left() {
     ls "$TMPDIR" | grep -c '^limavm\.' || true
 }
 
-# No fake secret may show in what limactl or security was given as arguments
-# or environment, in limactl's log, or in what limavm printed.
+fake_requests() {
+    [[ -e "$STATE/fake.log" ]] || return 0
+    jq -r '"\(.method) \(.path)"' "$STATE/fake.log"
+}
+
+fake_form() {
+    [[ -e "$STATE/fake.log" ]] || return 0
+    jq -r --arg path "$1" --arg field "$2" 'select(.path == $path) | .form[$field] // empty' "$STATE/fake.log"
+}
+
+stub_calls() {
+    local name=$1
+    ls "$STATE/calls" | grep -c "^$name\\..*\\.argv\$" || true
+}
+
+# None of the secrets may show in what a stub was given as arguments or
+# environment, in the logs of the stubs, or in what limavm printed. They go over
+# stdin and nowhere else.
 assert_no_secret_leak() {
     local desc="$1" leaks
-    leaks="$(cat "$STATE"/calls/*.argv "$STATE"/calls/*.env "$STATE/limactl.log" 2>/dev/null |
-        grep -c -e "$FAKE_GH" -e "$FAKE_CLAUDE" -e "$FAKE_LGTMCP" || true)"
-    assert_eq "$desc: no secret in any recorded argv or environment" 0 "$leaks"
+    leaks="$(cat "$STATE"/calls/*.argv "$STATE"/calls/*.env "$STATE/limactl.log" \
+        "$STATE"/gh.log "$STATE"/open.log "$STATE"/sleep.log 2>/dev/null |
+        grep -c -e "$FAKE_CLAUDE" -e "$FAKE_LGTMCP" "${GITHUB_SECRETS[@]}" || true)"
+    assert_eq "$desc: no secret in any recorded argv, environment or log" 0 "$leaks"
     assert_eq "$desc: no secret in limavm's output" 0 \
-        "$(printf '%s' "$OUT" | grep -c -e "$FAKE_GH" -e "$FAKE_CLAUDE" -e "$FAKE_LGTMCP" || true)"
+        "$(printf '%s' "$OUT" | grep -c -e "$FAKE_CLAUDE" -e "$FAKE_LGTMCP" "${GITHUB_SECRETS[@]}" || true)"
 }
 
 # --- 1. Static checks ---
@@ -280,6 +358,7 @@ assert_eq "no bash 4 constructs" "" \
 assert_eq "limavm is run by the system bash" "#!/bin/bash" "$(head -1 "$LIMAVM")"
 assert_eq "no eval" 0 "$(grep -cE '(^|[^a-z_])eval ' "$LIMAVM" || true)"
 assert_eq "limavm is executable" yes "$([[ -x $LIMAVM ]] && echo yes || echo no)"
+assert_eq "limavm does not use the Keychain" 0 "$(grep -ciE 'keychain|need security|find-generic-password' "$LIMAVM" || true)"
 
 # --- 2. help and bad invocations ---
 new_case
@@ -287,6 +366,10 @@ run_limavm help
 assert_eq "help succeeds" 0 "$RC"
 assert_contains "help lists base" "limavm base" "$OUT"
 assert_contains "help lists new" "limavm new" "$OUT"
+assert_contains "help lists github" "limavm github NAME OWNER/REPO" "$OUT"
+assert_contains "help names --repo" "--repo OWNER/REPO" "$OUT"
+assert_contains "help names --no-claude-token" "--no-claude-token" "$OUT"
+assert_contains "help says rm does not revoke" "does not revoke" "$OUT"
 run_limavm
 assert_eq "no command fails" 2 "$RC"
 run_limavm frobnicate
@@ -327,17 +410,17 @@ run_limavm base dev data
 assert_contains "base passes the modules" "./provision.sh dev data" "$(limactl_log)"
 assert_eq "base without a size passes none" 0 "$(count_in_log '--cpus')"
 new_case
-EXTRA_ENV=(LIMAVM_CPUS=4 LIMAVM_MEMORY=8)
+EXTRA_ENV+=(LIMAVM_CPUS=4 LIMAVM_MEMORY=8)
 run_limavm base none
 assert_contains "base passes the size to start" \
     "start --tty=false --name=test-base --cpus 4 --memory 8 CHECKOUT/lima/dev.yaml" "$(limactl_log)"
 new_case
-EXTRA_ENV=(LIMAVM_CPUS=many)
+EXTRA_ENV+=(LIMAVM_CPUS=many)
 run_limavm base none
 assert_eq "a bad LIMAVM_CPUS fails" 1 "$RC"
 assert_eq "a bad LIMAVM_CPUS touches no VM" "" "$(limactl_log)"
 new_case
-EXTRA_ENV=(LIMAVM_MEMORY=8GiB)
+EXTRA_ENV+=(LIMAVM_MEMORY=8GiB)
 run_limavm base none
 assert_eq "a bad LIMAVM_MEMORY fails" 1 "$RC"
 
@@ -370,7 +453,7 @@ assert_eq "neither touched limactl" "" "$(limactl_log)"
 
 # --- 7. base failures ---
 new_case
-EXTRA_ENV=(STAGE_STUB_FAIL=1)
+EXTRA_ENV+=(STAGE_STUB_FAIL=1)
 run_limavm base none
 assert_eq "a staging failure fails base" 1 "$RC"
 assert_eq "a staging failure starts no VM" "" "$(limactl_log)"
@@ -384,7 +467,7 @@ assert_contains "a mounted base says why" "mounts 3 host directories" "$OUT"
 assert_eq "a mounted base runs no provisioning" 0 "$(count_in_log provision)"
 
 new_case
-EXTRA_ENV=(LIMA_STUB_FAIL=./provision.sh)
+EXTRA_ENV+=(LIMA_STUB_FAIL=./provision.sh)
 run_limavm base none
 assert_eq "a provisioning failure fails base" 1 "$RC"
 assert_eq "a provisioning failure stops before the identity reset and the protection" 0 \
@@ -393,43 +476,250 @@ assert_contains "a provisioning failure keeps the VM for inspection" "left for i
 assert_eq "a provisioning failure keeps the VM" 1 "$(grep -cx test-base "$STATE/instances")"
 assert_eq "a provisioning failure removes the staging directory" 0 "$(staging_dirs_left)"
 
-# --- 8. new ---
+# --- 8. new with a repository ---
 new_case test-base
-run_limavm new t1
-assert_eq "new succeeds" 0 "$RC"
-assert_eq "new call order" "list -q test-base
+start_fake
+before=$(date +%s)
+run_limavm new t1 --repo shields/dotfiles
+after=$(date +%s)
+assert_eq "new --repo succeeds" 0 "$RC"
+assert_eq "new --repo call order" "list -q test-base
 list -q t1
 clone --tty=false --start test-base t1
 shell t1 /home/linuxbrew/.linuxbrew/bin/brew upgrade --cask claude-code@latest codex
-shell t1 sh -c exec \"\$HOME/bin/setup-secrets\" \"\$1\" _ GH_TOKEN
-shell t1 sh -c exec \"\$HOME/bin/setup-secrets\" \"\$1\" _ CLAUDE_CODE_OAUTH_TOKEN
-shell t1 sh -c exec \"\$HOME/bin/setup-secrets\" LGTMCP_CONFIG
+$SETUP GITHUB_APP_AUTH
+$SETUP CLAUDE_CODE_OAUTH_TOKEN
+$SETUP LGTMCP_CONFIG
 shell t1" "$(limactl_log)"
-assert_eq "the GH_TOKEN reaches setup-secrets on stdin" "$FAKE_GH" "$(stdin_of 5)"
-assert_eq "the Claude token reaches setup-secrets on stdin" "$FAKE_CLAUDE" "$(stdin_of 6)"
+assert_eq "gh is asked for the repository's id, once" "api repos/shields/dotfiles --jq .id" "$(<"$STATE/gh.log")"
+assert_eq "the fake GitHub saw the device flow and one poll" "POST /login/device/code
+POST /login/oauth/access_token" "$(fake_requests)"
+assert_eq "the device flow starts with the client id of the app" "$CLIENT_ID" \
+    "$(fake_form /login/device/code client_id)"
+assert_eq "the poll names the repository by id" 4242 "$(fake_form /login/oauth/access_token repository_id)"
+assert_eq "the poll carries the device code" fake-device-code "$(fake_form /login/oauth/access_token device_code)"
+assert_eq "the poll uses the device grant" urn:ietf:params:oauth:grant-type:device_code \
+    "$(fake_form /login/oauth/access_token grant_type)"
+assert_eq "the poll names the client id" "$CLIENT_ID" "$(fake_form /login/oauth/access_token client_id)"
+assert_eq "limavm opens the verification page" "$FAKE_URL/login/device" "$(<"$STATE/open.log")"
+assert_contains "new shows the user code" "WDJB-MJHT" "$OUT"
+assert_contains "new shows the verification page" "$FAKE_URL/login/device" "$OUT"
+record="$(stdin_of 5)"
+assert_eq "the record is one JSON object on one line" 1 "$(printf '%s\n' "$record" | wc -l | tr -d ' ')"
+assert_eq "the record names the client id" "$CLIENT_ID" "$(jq -r .client_id <<<"$record")"
+assert_eq "the record names the repository" shields/dotfiles "$(jq -r .repository <<<"$record")"
+assert_eq "the record holds the access token" ghu_fake-access-1 "$(jq -r .access_token <<<"$record")"
+assert_eq "the record holds the refresh token" ghr_fake-refresh-1 "$(jq -r .refresh_token <<<"$record")"
+assert_eq "the record holds the web URL" "$FAKE_URL" "$(jq -r .web_url <<<"$record")"
+assert_eq "the record holds the API URL" "$FAKE_URL/api/v3" "$(jq -r .api_url <<<"$record")"
+assert_eq "the record's access token lasts 8 hours" 1 \
+    "$(jq --argjson low $(( before + 28800 )) --argjson high $(( after + 28800 )) \
+        '.access_expires_at >= $low and .access_expires_at <= $high' <<<"$record" | grep -c true)"
+assert_eq "the record's refresh token lasts 6 months" 1 \
+    "$(jq --argjson low $(( before + 15811200 )) --argjson high $(( after + 15811200 )) \
+        '.refresh_expires_at >= $low and .refresh_expires_at <= $high' <<<"$record" | grep -c true)"
+assert_eq "the Claude token reaches setup-secrets on stdin, with a newline" same \
+    "$(print -r -- "$FAKE_CLAUDE" | cmp -s - "$STATE/calls/6.stdin" && echo same || echo different)"
 assert_eq "the LGTMCP config reaches setup-secrets on stdin, byte for byte" same \
     "$(print -rn -- "$LGTMCP_YAML" | cmp -s - "$STATE/calls/7.stdin" && echo same || echo different)"
-assert_eq "a token on stdin ends with its newline" same \
-    "$(print -r -- "$FAKE_GH" | cmp -s - "$STATE/calls/5.stdin" && echo same || echo different)"
 assert_eq "the upgrade call has no stdin" 0 "$(wc -c < "$STATE/calls/4.stdin" | tr -d ' ')"
-assert_no_secret_leak "new"
-assert_contains "new asks the Keychain for the current user's item" "-a
-shields
--s
-limavm-GH_TOKEN
--w" "$(cat "$STATE"/calls/security.*.argv)"
+assert_no_secret_leak "new --repo"
+assert_eq "curl was run for the flow" 2 "$(stub_calls curl)"
+assert_eq "limavm never calls security" 0 "$(cat "$STATE/security.log" 2>/dev/null | wc -l | tr -d ' ')"
+assert_contains "new says what the VM can reach" "shields/dotfiles only" "$OUT"
 assert_contains "new reminds about the Codex login" "codex login --device-auth" "$OUT"
 assert_contains "new mentions the ChatGPT setting" "ChatGPT" "$OUT"
 
-# --- 9. new picks a name, and sizes ---
+# --- 9. new without a repository, and without a Claude token ---
 new_case test-base
-EXTRA_ENV=(LIMAVM_CPUS=2 LIMAVM_MEMORY=4)
+run_limavm new t1
+assert_eq "new without --repo succeeds" 0 "$RC"
+assert_eq "new without --repo installs no GitHub authorization" "list -q test-base
+list -q t1
+clone --tty=false --start test-base t1
+shell t1 /home/linuxbrew/.linuxbrew/bin/brew upgrade --cask claude-code@latest codex
+$SETUP CLAUDE_CODE_OAUTH_TOKEN
+$SETUP LGTMCP_CONFIG
+shell t1" "$(limactl_log)"
+assert_eq "new without --repo never runs gh" 0 "$(stub_calls gh)"
+assert_eq "new without --repo never runs curl" 0 "$(stub_calls curl)"
+assert_eq "new without --repo never opens a browser" 0 "$([[ -e "$STATE/open.log" ]] && echo 1 || echo 0)"
+assert_contains "new without --repo says the VM has no GitHub access" "no GitHub access" "$OUT"
+assert_contains "new without --repo says how to add some" "limavm github t1 OWNER/REPO" "$OUT"
+assert_no_secret_leak "new without --repo"
+
+new_case test-base
+EXTRA_ENV=(LIMAVM_PROMPT_INPUT="$STATE/does-not-exist")
+run_limavm new t1 --no-claude-token
+assert_eq "new --no-claude-token succeeds without a prompt" 0 "$RC"
+assert_eq "new --no-claude-token installs no Claude token" "list -q test-base
+list -q t1
+clone --tty=false --start test-base t1
+shell t1 /home/linuxbrew/.linuxbrew/bin/brew upgrade --cask claude-code@latest codex
+$SETUP LGTMCP_CONFIG
+shell t1" "$(limactl_log)"
+assert_contains "new --no-claude-token says to use claude auth login" "claude auth login" "$OUT"
+
+new_case test-base
+start_fake
+run_limavm new t1 --no-claude-token --repo=shields/dotfiles
+assert_eq "new --repo=OWNER/REPO --no-claude-token succeeds" 0 "$RC"
+assert_eq "the GitHub authorization is the only secret but the LGTMCP config" "$SETUP GITHUB_APP_AUTH
+$SETUP LGTMCP_CONFIG" \
+    "$(limactl_log | sed -n '5,6p')"
+
+# --- 10. The Claude token prompt ---
+new_case test-base
+printf '  %s \r\n' "$FAKE_CLAUDE" > "$STATE/prompt"
+run_limavm new t1
+assert_eq "a token with blanks around it is accepted" 0 "$RC"
+assert_eq "a token is trimmed before it is installed" same \
+    "$(print -r -- "$FAKE_CLAUDE" | cmp -s - "$STATE/calls/5.stdin" && echo same || echo different)"
+
+new_case test-base
+EXTRA_ENV+=(CLAUDE_CODE_OAUTH_TOKEN=from-the-environment-0a1b)
+run_limavm new t1
+assert_eq "a token in the environment is not used" same \
+    "$(print -r -- "$FAKE_CLAUDE" | cmp -s - "$STATE/calls/5.stdin" && echo same || echo different)"
+assert_eq "a token in the environment is not passed on" 0 \
+    "$(cat "$STATE"/calls/*.stdin "$STATE"/calls/*.argv | grep -c from-the-environment-0a1b || true)"
+
+for content in '' $'\n' $'  \r\n'; do
+    new_case test-base
+    start_fake
+    printf '%s' "$content" > "$STATE/prompt"
+    run_limavm new t1 --repo shields/dotfiles
+    assert_eq "an empty Claude token fails" 1 "$RC"
+    assert_contains "an empty Claude token says so" "the Claude token is empty" "$OUT"
+    assert_contains "an empty Claude token points to the flag" "--no-claude-token" "$OUT"
+    assert_eq "an empty Claude token comes before the clone" "list -q test-base
+list -q t1" "$(limactl_log)"
+    assert_eq "an empty Claude token never runs gh" 0 "$(stub_calls gh)"
+    assert_eq "an empty Claude token contacts no GitHub" "" "$(fake_requests)"
+done
+
+new_case test-base
+print -r -- 'sk-ant one two' > "$STATE/prompt"
+run_limavm new t1
+assert_eq "a Claude token with spaces in it fails" 1 "$RC"
+assert_eq "a Claude token with spaces in it clones nothing" 0 "$(count_in_log clone)"
+assert_eq "a Claude token with spaces in it is not echoed" 0 "$(printf '%s' "$OUT" | grep -c 'sk-ant' || true)"
+
+new_case test-base
+EXTRA_ENV=(LIMAVM_PROMPT_INPUT="$STATE/does-not-exist")
+run_limavm new t1
+assert_eq "an unreadable prompt file fails" 1 "$RC"
+assert_eq "an unreadable prompt file clones nothing" 0 "$(count_in_log clone)"
+
+cat > "$TMPBASE/tty_run.py" <<'PY'
+import json
+import os
+import pty
+import select
+import signal
+import subprocess
+import sys
+import termios
+import time
+
+mode, token, *argv = sys.argv[1:]
+if mode == "notty":
+    result = subprocess.run(
+        argv,
+        stdin=subprocess.DEVNULL,
+        capture_output=True,
+        text=True,
+        check=False,
+        start_new_session=True,
+        timeout=60,
+    )
+    print(json.dumps({"exit": result.returncode, "output": result.stdout + result.stderr}))
+    sys.exit(0)
+
+pid, master = pty.fork()
+if pid == 0:
+    os.execvp(argv[0], argv)
+prompt = b"press Enter: "
+transcript = b""
+sent = False
+deadline = time.monotonic() + 60
+while time.monotonic() < deadline:
+    ready, _, _ = select.select([master], [], [], 1)
+    if not ready:
+        continue
+    try:
+        data = os.read(master, 4096)
+    except OSError:
+        break
+    if not data:
+        break
+    transcript += data
+    if not sent and prompt in transcript:
+        # The prompt is printed before read turns the echo off. A person types
+        # later than that, so wait for it, but not for ever.
+        wait = time.monotonic() + 5
+        while termios.tcgetattr(master)[3] & termios.ECHO and time.monotonic() < wait:
+            time.sleep(0.01)
+        os.write(master, token.encode() + b"\n")
+        sent = True
+status = None
+while time.monotonic() < deadline:
+    done, status = os.waitpid(pid, os.WNOHANG)
+    if done:
+        break
+    time.sleep(0.05)
+else:
+    os.kill(pid, signal.SIGKILL)
+    _, status = os.waitpid(pid, 0)
+print(
+    json.dumps(
+        {
+            "exit": os.waitstatus_to_exitcode(status),
+            "prompted": prompt in transcript,
+            "echoed": token.encode() in transcript,
+            "output": transcript.decode(errors="replace"),
+        }
+    )
+)
+PY
+
+tty_run() {
+    local mode=$1 token=$2
+    shift 2
+    python3 "$TMPBASE/tty_run.py" "$mode" "$token" env PATH="$STUBS:$PATH" HOME="$HOME_DIR" USER=shields \
+        LIMA_STUB_STATE="$STATE" LIMAVM_BASE=test-base REAL_CURL="$REAL_CURL" /bin/bash "$LIMAVM" "$@" 2>&1
+}
+
+new_case test-base
+TTY_TOKEN='sk-ant-oat01-FAKEtypedToken-3d5e'
+RESULT="$(tty_run pty "$TTY_TOKEN" new t1 --no-claude-token)"
+assert_eq "--no-claude-token never prompts, even on a terminal" false "$(jq -r .prompted <<<"$RESULT")"
+
+new_case test-base
+RESULT="$(tty_run pty "$TTY_TOKEN" new t1)"
+assert_eq "new prompts on the terminal" true "$(jq -r .prompted <<<"$RESULT")"
+assert_eq "new succeeds with a token typed on the terminal" 0 "$(jq -r .exit <<<"$RESULT")"
+assert_eq "the typed token is not echoed" false "$(jq -r .echoed <<<"$RESULT")"
+assert_eq "the typed token reaches setup-secrets on stdin" same \
+    "$(print -r -- "$TTY_TOKEN" | cmp -s - "$STATE/calls/5.stdin" && echo same || echo different)"
+assert_eq "the typed token is in no argument list or environment" 0 \
+    "$(cat "$STATE"/calls/*.argv "$STATE"/calls/*.env "$STATE/limactl.log" | grep -c -e "$TTY_TOKEN" || true)"
+
+new_case test-base
+RESULT="$(tty_run notty x new t1)"
+assert_eq "new without a terminal fails" 1 "$(jq -r .exit <<<"$RESULT")"
+assert_contains "new without a terminal says what to do" "--no-claude-token" "$(jq -r .output <<<"$RESULT")"
+assert_eq "new without a terminal clones nothing" 0 "$(count_in_log clone)"
+
+# --- 11. new picks a name, and sizes ---
+new_case test-base
+EXTRA_ENV+=(LIMAVM_CPUS=2 LIMAVM_MEMORY=4)
 run_limavm new
 assert_eq "new without a name succeeds" 0 "$RC"
 assert_eq "new without a name makes a dated name" 1 \
     "$([[ "$(limactl_log | sed -n 3p)" == "clone --tty=false --cpus 2 --memory 4 --start test-base vm-"[0-9][0-9][0-9][0-9][0-9][0-9]-[0-9][0-9][0-9][0-9][0-9][0-9] ]] && echo 1 || echo 0)"
 
-# --- 10. new refuses before it makes anything ---
+# --- 12. new refuses before it makes anything ---
 new_case test-base
 run_limavm new test-base
 assert_eq "new refuses the base name" 1 "$RC"
@@ -453,25 +743,24 @@ for bad in -x ../x 'a b' .x 'x;y' ''; do
     assert_eq "the bad name '$bad' clones nothing" 0 "$(count_in_log clone)"
 done
 
-# --- 11. A missing Keychain item ---
-new_case test-base
-printf '%s\n' limavm-CLAUDE_CODE_OAUTH_TOKEN > "$STATE/keychain"
-run_limavm new t1
-assert_eq "a missing GH_TOKEN item fails" 1 "$RC"
-assert_contains "the message names the item" "limavm-GH_TOKEN" "$OUT"
-assert_contains "the message gives the prompting form" \
-    'security add-generic-password -a "$USER" -s limavm-GH_TOKEN -w' "$OUT"
-assert_eq "a missing item clones nothing" 0 "$(count_in_log clone)"
-assert_eq "a missing item reads no secret" 0 \
-    "$(cat "$STATE"/calls/security.*.argv | grep -c -x -e '-w' || true)"
+for bad in foo a/b/c ../x a/.. ./b 'a b/c' 'a/b;id' '/b' 'a/' ''; do
+    new_case test-base
+    start_fake
+    run_limavm new t1 --repo "$bad"
+    assert_eq "new rejects the repository '$bad'" 1 "$RC"
+    assert_contains "the bad repository '$bad' says what is expected" "OWNER/REPO" "$OUT"
+    assert_eq "the bad repository '$bad' touches no VM" "" "$(limactl_log)"
+    assert_eq "the bad repository '$bad' never runs gh" 0 "$(stub_calls gh)"
+    assert_eq "the bad repository '$bad' contacts no GitHub" "" "$(fake_requests)"
+done
 
 new_case test-base
-printf '%s\n' limavm-GH_TOKEN > "$STATE/keychain"
-run_limavm new t1
-assert_eq "a missing CLAUDE_CODE_OAUTH_TOKEN item fails" 1 "$RC"
-assert_contains "that message gives the prompting form" \
-    'security add-generic-password -a "$USER" -s limavm-CLAUDE_CODE_OAUTH_TOKEN -w' "$OUT"
-assert_eq "that failure clones nothing" 0 "$(count_in_log clone)"
+run_limavm new t1 --repo
+assert_eq "--repo without a value fails" 1 "$RC"
+run_limavm new t1 --frobnicate
+assert_eq "an unknown option fails" 1 "$RC"
+assert_contains "an unknown option is named" "--frobnicate" "$OUT"
+assert_eq "an unknown option touches no VM" "" "$(limactl_log)"
 
 new_case test-base
 rm "$HOME_DIR/.config/lgtmcp/config.yaml"
@@ -480,11 +769,105 @@ assert_eq "a missing LGTMCP config fails" 1 "$RC"
 assert_contains "that message names the file" ".config/lgtmcp/config.yaml" "$OUT"
 assert_eq "that failure clones nothing" 0 "$(count_in_log clone)"
 
-# --- 12. The clone is deleted after any later failure ---
+# --- 13. The device flow ---
+new_case test-base
+start_fake '"device_polls": ["pending", "pending", "success"]'
+run_limavm new t1 --repo shields/dotfiles
+assert_eq "a flow that waits for the browser succeeds" 0 "$RC"
+assert_eq "limavm polls until the code is entered" 3 "$(fake_requests | grep -c 'POST /login/oauth/access_token' || true)"
+assert_eq "a poll interval of zero sleeps not at all" 0 "$([[ -e "$STATE/sleep.log" ]] && echo 1 || echo 0)"
+
+new_case test-base
+start_fake '"device_interval": 2, "device_polls": ["pending", "slow_down", "success"]'
+run_limavm new t1 --repo shields/dotfiles
+assert_eq "a flow that is told to slow down succeeds" 0 "$RC"
+assert_eq "limavm waits the interval before each poll, and the longer one GitHub asks for" "2
+2
+7" "$(<"$STATE/sleep.log")"
+
+new_case test-base
+start_fake '"device_polls": ["slow_down", "success"]'
+run_limavm new t1 --repo shields/dotfiles
+assert_eq "limavm slows down even when the interval was zero" "5" "$(<"$STATE/sleep.log")"
+
+for failing in denied:denied expired:expired disabled:"not enabled"; do
+    poll=${failing%%:*}
+    message=${failing#*:}
+    new_case test-base
+    start_fake "\"device_polls\": [\"pending\", \"$poll\"]"
+    run_limavm new t1 --repo shields/dotfiles
+    assert_eq "a $poll code fails new" 1 "$RC"
+    assert_contains "a $poll code says so" "$message" "$OUT"
+    assert_eq "a $poll code creates no VM" "list -q test-base
+list -q t1" "$(limactl_log)"
+    assert_no_secret_leak "a $poll code"
+done
+
+new_case test-base
+start_fake '"device_expires_in": 0'
+run_limavm new t1 --repo shields/dotfiles
+assert_eq "a code that is out of time fails new" 1 "$RC"
+assert_contains "a code that is out of time says so" "expired" "$OUT"
+assert_eq "a code that is out of time polls nothing" "POST /login/device/code" "$(fake_requests)"
+
+new_case test-base
+FAKE_CLIENT_ID=Iv-somebody-else start_fake
+run_limavm new t1 --repo shields/dotfiles
+assert_eq "an unknown client id fails new" 1 "$RC"
+assert_contains "an unknown client id says what GitHub said" "incorrect_client_credentials" "$OUT"
+assert_eq "an unknown client id creates no VM" 0 "$(count_in_log clone)"
+
+new_case test-base
+FAKE_CLIENT_ID=Iv-custom start_fake
+EXTRA_ENV+=(LIMAVM_GITHUB_CLIENT_ID=Iv-custom)
+run_limavm new t1 --repo shields/dotfiles
+assert_eq "LIMAVM_GITHUB_CLIENT_ID replaces the client id" 0 "$RC"
+assert_eq "the record has the replaced client id" Iv-custom "$(stdin_of 5 | jq -r .client_id)"
+
+new_case test-base
+echo 99999 > "$STATE/gh-id"
+start_fake
+run_limavm new t1 --repo shields/dotfiles
+assert_eq "a refused authorization fails new" 1 "$RC"
+assert_contains "a refused authorization says what GitHub said" "bad_repository" "$OUT"
+assert_eq "a refused authorization creates no VM" 0 "$(count_in_log clone)"
+
+new_case test-base
+: > "$STATE/gh-fail"
+start_fake
+run_limavm new t1 --repo shields/dotfiles
+assert_eq "a repository gh cannot read fails new" 1 "$RC"
+assert_contains "that failure names the repository" "shields/dotfiles" "$OUT"
+assert_eq "that failure contacts no GitHub" "" "$(fake_requests)"
+assert_eq "that failure creates no VM" 0 "$(count_in_log clone)"
+
+new_case test-base
+echo notanumber > "$STATE/gh-id"
+start_fake
+run_limavm new t1 --repo shields/dotfiles
+assert_eq "an id that is not a number fails new" 1 "$RC"
+assert_eq "an id that is not a number contacts no GitHub" "" "$(fake_requests)"
+
+new_case test-base
+EXTRA_ENV+=(LIMAVM_GITHUB_WEB_URL=http://127.0.0.1:9)
+run_limavm new t1 --repo shields/dotfiles
+assert_eq "an unreachable GitHub fails new" 1 "$RC"
+assert_contains "an unreachable GitHub says so" "cannot reach http://127.0.0.1:9" "$OUT"
+assert_eq "an unreachable GitHub creates no VM" 0 "$(count_in_log clone)"
+
+new_case test-base
+start_fake
+: > "$STATE/open-fail"
+run_limavm new t1 --repo shields/dotfiles
+assert_eq "a failing open does not stop the flow" 0 "$RC"
+assert_contains "a failing open asks for the address to be opened by hand" "open that address yourself" "$OUT"
+
+# --- 14. The clone is deleted after any later failure ---
 for failing in clone brew setup-secrets; do
     new_case test-base
-    EXTRA_ENV=(LIMA_STUB_FAIL=$failing)
-    run_limavm new t1
+    start_fake
+    EXTRA_ENV+=(LIMA_STUB_FAIL=$failing)
+    run_limavm new t1 --repo shields/dotfiles
     assert_eq "a failing $failing fails new" 1 "$RC"
     assert_eq "a failing $failing deletes the clone last" "delete --tty=false --force t1" \
         "$(limactl_log | tail -1)"
@@ -494,17 +877,80 @@ for failing in clone brew setup-secrets; do
     assert_no_secret_leak "a failing $failing"
 done
 
+for failing in GITHUB_APP_AUTH CLAUDE_CODE_OAUTH_TOKEN LGTMCP_CONFIG; do
+    new_case test-base
+    start_fake
+    EXTRA_ENV+=(LIMA_STUB_FAIL=$failing)
+    run_limavm new t1 --repo shields/dotfiles
+    assert_eq "a failing $failing install fails new" 1 "$RC"
+    assert_eq "a failing $failing install deletes the clone" "delete --tty=false --force t1" \
+        "$(limactl_log | tail -1)"
+    assert_no_secret_leak "a failing $failing install"
+done
+
 new_case test-base
-EXTRA_ENV=(LIMA_STUB_FAIL=brew)
-run_limavm new t1
+start_fake
+EXTRA_ENV+=(LIMA_STUB_FAIL=brew)
+run_limavm new t1 --repo shields/dotfiles
 assert_eq "no secret is sent when the cask upgrade fails" 0 "$(count_in_log setup-secrets)"
 
-new_case test-base
-EXTRA_ENV=(LIMA_STUB_FAIL=LGTMCP_CONFIG)
-run_limavm new t1
-assert_eq "a failing LGTMCP install deletes the clone" "delete --tty=false --force t1" "$(limactl_log | tail -1)"
+# --- 15. github re-authorizes an existing VM ---
+new_case test-base t1
+start_fake
+run_limavm github t1 shields/dotfiles
+assert_eq "github succeeds" 0 "$RC"
+assert_eq "github call order" "list -q t1
+list --format {{.Status}} t1
+$SETUP GITHUB_APP_AUTH" "$(limactl_log)"
+assert_eq "github sends the record on stdin" shields/dotfiles "$(stdin_of 3 | jq -r .repository)"
+assert_eq "github sends tokens for that repository only" "ghu_fake-access-1" "$(stdin_of 3 | jq -r .access_token)"
+assert_eq "github narrows the token to the repository" 4242 "$(fake_form /login/oauth/access_token repository_id)"
+assert_contains "github says what the VM can reach" "shields/dotfiles" "$OUT"
+assert_eq "github keeps the VM" 1 "$(grep -cx t1 "$STATE/instances")"
+assert_no_secret_leak "github"
 
-# --- 13. rm ---
+new_case test-base t1
+start_fake
+: > "$STATE/stopped-t1"
+run_limavm github t1 shields/other
+assert_eq "github on a stopped VM succeeds" 0 "$RC"
+assert_eq "github starts a stopped VM first" "list -q t1
+list --format {{.Status}} t1
+start --tty=false t1
+$SETUP GITHUB_APP_AUTH" "$(limactl_log)"
+assert_eq "github asks gh for the other repository" "api repos/shields/other --jq .id" "$(<"$STATE/gh.log")"
+
+new_case test-base t1
+start_fake '"device_polls": ["denied"]'
+run_limavm github t1 shields/dotfiles
+assert_eq "a denied github fails" 1 "$RC"
+assert_eq "a denied github installs nothing" 0 "$(count_in_log setup-secrets)"
+assert_eq "a denied github keeps the VM" 1 "$(grep -cx t1 "$STATE/instances")"
+assert_eq "a denied github deletes nothing" 0 "$(count_in_log delete)"
+
+new_case test-base
+start_fake
+run_limavm github t1 shields/dotfiles
+assert_eq "github on a missing VM fails" 1 "$RC"
+assert_contains "github on a missing VM says so" "does not exist" "$OUT"
+assert_eq "github on a missing VM contacts no GitHub" "" "$(fake_requests)"
+
+new_case test-base
+start_fake
+run_limavm github test-base shields/dotfiles
+assert_eq "github refuses the base" 1 "$RC"
+assert_eq "github on the base touches no VM" "" "$(limactl_log)"
+
+for args in "" "t1" "t1 shields/dotfiles extra" "t1 notarepo" "../x shields/dotfiles"; do
+    new_case test-base t1
+    start_fake
+    run_limavm github ${=args}
+    assert_eq "github with '$args' fails" 1 "$RC"
+    assert_eq "github with '$args' contacts no GitHub" "" "$(fake_requests)"
+    assert_eq "github with '$args' installs nothing" 0 "$(count_in_log setup-secrets)"
+done
+
+# --- 16. rm ---
 new_case test-base t1
 run_limavm rm test-base
 assert_eq "rm refuses the base" 1 "$RC"
@@ -513,12 +959,18 @@ assert_eq "the refusal touches no VM" "" "$(limactl_log)"
 run_limavm rm t1
 assert_eq "rm succeeds" 0 "$RC"
 assert_eq "rm deletes just that VM" "delete --tty=false --force t1" "$(limactl_log)"
+assert_contains "rm says the tokens are not revoked" "not revoked" "$OUT"
+assert_contains "rm says how to end them" "https://github.com/settings/apps/authorizations" "$OUT"
+assert_contains "rm says the end is for every VM" "every VM" "$OUT"
 run_limavm rm
 assert_eq "rm without a name fails" 1 "$RC"
 run_limavm rm ../x
 assert_eq "rm with a bad name fails" 1 "$RC"
 run_limavm rm t1 t2
 assert_eq "rm with two names fails" 1 "$RC"
+
+# --- 17. No case ever called security ---
+assert_eq "no case called security" 0 "$(cat "$TMPBASE"/state-*/security.log(N) | wc -l | tr -d ' ')"
 
 echo ""
 echo "Results: $pass passed, $fail failed"

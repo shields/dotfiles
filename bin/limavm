@@ -24,18 +24,34 @@ set -euo pipefail
 
 base=${LIMAVM_BASE:-dotfiles-base}
 guest_repo=src/github.com/shields/dotfiles
-secret_names="GH_TOKEN CLAUDE_CODE_OAUTH_TOKEN"
+github_client_id=${LIMAVM_GITHUB_CLIENT_ID:-Iv23lim5x4MdkNNgv28z}
+github_web_url=${LIMAVM_GITHUB_WEB_URL:-https://github.com}
+github_api_url=${LIMAVM_GITHUB_API_URL:-https://api.github.com}
 
 usage() {
     cat <<EOF
 usage: limavm base [MODULE...]   build $base from lima/dev.yaml and the checkout in the current directory
-       limavm new [NAME]         clone $base, install secrets, open a shell
+       limavm new [NAME] [--repo OWNER/REPO] [--no-claude-token]
+                                 clone $base, install secrets, open a shell
+       limavm github NAME OWNER/REPO
+                                 run the device flow again, replacing the VM's GitHub access
        limavm rm NAME            delete a VM ($base is refused)
        limavm list               list the VMs
 
 MODULE is a Brewfile module for provision.sh (dev by default).
 LIMAVM_CPUS and LIMAVM_MEMORY (in GiB) override the size in lima/dev.yaml, and
-LIMAVM_BASE replaces the name $base.
+LIMAVM_BASE replaces the name $base. LIMAVM_GITHUB_WEB_URL, LIMAVM_GITHUB_API_URL
+and LIMAVM_GITHUB_CLIENT_ID replace GitHub's addresses and the app's client ID.
+
+--repo runs GitHub's device flow here: you type a code in the browser, and the VM
+gets a token that reaches only that repository, renewed inside the VM. Without
+--repo the VM has no GitHub access. No GitHub secret stays on this Mac, and
+limavm rm does not revoke the VM's tokens; de-authorizing the app at
+https://github.com/settings/apps/authorizations ends all of them.
+
+new asks, without echo, for the token that claude setup-token prints; run that
+in another terminal first. --no-claude-token skips it, for a VM that will use
+claude auth login.
 EOF
 }
 
@@ -50,6 +66,11 @@ need() {
 
 valid_name() {
     [[ $1 =~ ^[A-Za-z0-9]+([._-][A-Za-z0-9]+)*$ ]] || die "invalid VM name: $1"
+}
+
+valid_repository() {
+    [[ $1 =~ ^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$ && $1 != ./* && $1 != ../* && $1 != */. && $1 != */.. ]] ||
+        die "invalid repository, expected OWNER/REPO: $1"
 }
 
 instance_exists() {
@@ -136,17 +157,120 @@ cmd_base() {
     printf 'limavm: %s is ready; make a VM with: limavm new [NAME]\n' "$base"
 }
 
-account=
-require_keychain_item() {
-    local item=$1
-    if ! security find-generic-password -a "$account" -s "$item" >/dev/null 2>&1; then
-        {
-            printf 'limavm: the Keychain item %s does not exist. Create it with this command, which\n' "$item"
-            printf 'prompts for the value so that it stays out of shell history:\n\n'
-            printf '    security add-generic-password -a "$USER" -s %s -w\n' "$item"
-        } >&2
-        exit 1
+# The form goes over stdin, so that no device code reaches a process listing.
+github_post() {
+    curl --silent --show-error --max-time 30 --header 'Accept: application/json' --data @- "$1"
+}
+
+json_field() {
+    jq -r --arg field "$1" '.[$field] // empty' 2>/dev/null || true
+}
+
+# Nothing secret goes into an argument list, a file or the environment of a
+# process here.
+github_record=
+github_authorize() {
+    local repo=$1 repository_id reply error interval expires_in deadline started
+    local device_code user_code verification_uri
+    need curl
+    need jq
+    need gh
+    repository_id=$(gh api "repos/$repo" --jq .id) || die "gh cannot read $repo; check the name and your gh login"
+    [[ $repository_id =~ ^[1-9][0-9]*$ ]] || die "gh did not return a numeric id for $repo"
+
+    reply=$(printf 'client_id=%s' "$github_client_id" | github_post "$github_web_url/login/device/code") ||
+        die "cannot reach $github_web_url"
+    error=$(printf '%s' "$reply" | json_field error)
+    if [[ -n $error ]]; then
+        die "GitHub refused to start the device flow: $error $(printf '%s' "$reply" | json_field error_description)"
     fi
+    device_code=$(printf '%s' "$reply" | json_field device_code)
+    user_code=$(printf '%s' "$reply" | json_field user_code)
+    verification_uri=$(printf '%s' "$reply" | json_field verification_uri)
+    interval=$(printf '%s' "$reply" | json_field interval)
+    expires_in=$(printf '%s' "$reply" | json_field expires_in)
+    [[ $device_code =~ ^[A-Za-z0-9_-]+$ && -n $user_code && $verification_uri =~ ^https?:// &&
+        $interval =~ ^[0-9]+$ && $expires_in =~ ^[0-9]+$ ]] ||
+        die "GitHub's reply to the device flow request is not what limavm expects"
+
+    printf '\nlimavm: open %s and enter the code %s\n' "$verification_uri" "$user_code" >&2
+    printf 'limavm: authorize the app for the account that owns %s\n\n' "$repo" >&2
+    if command -v open >/dev/null 2>&1 && ! open "$verification_uri" >/dev/null 2>&1; then
+        printf 'limavm: could not open the browser; open that address yourself\n' >&2
+    fi
+
+    deadline=$(($(date +%s) + expires_in))
+    while :; do
+        ((interval > 0)) && sleep "$interval"
+        (($(date +%s) < deadline)) || die "the code expired before it was entered; run the command again"
+        started=$(date +%s)
+        reply=$(printf 'client_id=%s&device_code=%s&grant_type=urn%%3Aietf%%3Aparams%%3Aoauth%%3Agrant-type%%3Adevice_code&repository_id=%s' \
+            "$github_client_id" "$device_code" "$repository_id" | github_post "$github_web_url/login/oauth/access_token") ||
+            die "cannot reach $github_web_url"
+        error=$(printf '%s' "$reply" | json_field error)
+        case $error in
+        '') break ;;
+        authorization_pending) ;;
+        slow_down)
+            local advised
+            advised=$(printf '%s' "$reply" | json_field interval)
+            if [[ $advised =~ ^[0-9]+$ ]]; then
+                interval=$advised
+            else
+                interval=$((interval + 5))
+            fi
+            ;;
+        expired_token) die "the code expired before it was entered; run the command again" ;;
+        access_denied) die "authorization was denied in the browser" ;;
+        device_flow_disabled) die "device flow is not enabled for the GitHub App" ;;
+        *) die "GitHub refused the authorization: $error $(printf '%s' "$reply" | json_field error_description)" ;;
+        esac
+    done
+
+    github_record=$(printf '%s' "$reply" | jq -c \
+        --arg client_id "$github_client_id" --arg repository "$repo" \
+        --arg web_url "$github_web_url" --arg api_url "$github_api_url" \
+        --argjson started "$started" '
+        if (.access_token | type) == "string" and (.refresh_token | type) == "string" and
+           (.expires_in | type) == "number" and (.refresh_token_expires_in | type) == "number"
+        then {
+            client_id: $client_id,
+            repository: $repository,
+            access_token: .access_token,
+            access_expires_at: ($started + .expires_in),
+            refresh_token: .refresh_token,
+            refresh_expires_at: ($started + .refresh_token_expires_in),
+            web_url: $web_url,
+            api_url: $api_url
+        }
+        else error("incomplete") end') ||
+        die "GitHub's token reply lacks a token or an expiry"
+}
+
+# LIMAVM_PROMPT_INPUT names a file to read instead of the terminal, for tests.
+claude_token=
+prompt_claude_token() {
+    local line=
+    if [[ -n ${LIMAVM_PROMPT_INPUT:-} ]]; then
+        [[ -r $LIMAVM_PROMPT_INPUT ]] || die "cannot read LIMAVM_PROMPT_INPUT"
+        IFS= read -r line <"$LIMAVM_PROMPT_INPUT" || [[ -n $line ]] || true
+    else
+        { : </dev/tty; } 2>/dev/null ||
+            die "there is no terminal to ask for the Claude token; run in a terminal, or pass --no-claude-token"
+        printf 'Paste the output of claude setup-token (no echo), then press Enter: ' >/dev/tty
+        IFS= read -rs line </dev/tty || [[ -n $line ]] || true
+        printf '\n' >/dev/tty
+    fi
+    line=${line//$'\r'/}
+    line=${line#"${line%%[![:space:]]*}"}
+    line=${line%"${line##*[![:space:]]}"}
+    [[ -n $line ]] || die "the Claude token is empty; run claude setup-token in another terminal and paste its output, or pass --no-claude-token"
+    [[ $line != *[[:space:]]* ]] || die "the Claude token has spaces in it; paste only the token"
+    claude_token=$line
+}
+
+install_secret() {
+    limactl shell "$1" sh -c 'exec "$HOME/bin/setup-secrets" "$1"' _ "$2"
 }
 
 created=
@@ -162,20 +286,48 @@ new_cleanup() {
 }
 
 cmd_new() {
-    local name=${1-vm-$(date +%y%m%d-%H%M%S)}
+    local name='' named=0 repo='' no_claude_token=0 have_repo=0
+    while (($#)); do
+        case $1 in
+        --repo)
+            [[ $# -ge 2 ]] || die "--repo needs OWNER/REPO"
+            repo=$2
+            have_repo=1
+            shift 2
+            ;;
+        --repo=*)
+            repo=${1#--repo=}
+            have_repo=1
+            shift
+            ;;
+        --no-claude-token)
+            no_claude_token=1
+            shift
+            ;;
+        -*) die "unknown option $1" ;;
+        *)
+            ((! named)) || die "usage: limavm new [NAME] [--repo OWNER/REPO] [--no-claude-token]"
+            name=$1
+            named=1
+            shift
+            ;;
+        esac
+    done
+    ((named)) || name=vm-$(date +%y%m%d-%H%M%S)
     valid_name "$name"
     [[ $name != "$base" ]] || die "$name is the base VM; choose another name"
+    ((! have_repo)) || valid_repository "$repo"
     need limactl
-    need security
     set_size_args
-    account=${USER:-$(id -un)}
     instance_exists "$base" || die "$base does not exist; run limavm base in a dotfiles checkout first"
     ! instance_exists "$name" || die "$name already exists"
-    local item lgtmcp_config=$HOME/.config/lgtmcp/config.yaml
-    for item in $secret_names; do
-        require_keychain_item "limavm-$item"
-    done
+    local lgtmcp_config=$HOME/.config/lgtmcp/config.yaml
     [[ -r $lgtmcp_config ]] || die "$lgtmcp_config does not exist; LGTMCP needs it in the VM"
+
+    # What needs the person comes before the clone, so that waiting for them
+    # leaves no VM running.
+    ((no_claude_token)) || prompt_claude_token
+    [[ -z $repo ]] || github_authorize "$repo"
 
     trap new_cleanup EXIT
     trap 'exit 130' INT
@@ -188,14 +340,25 @@ cmd_new() {
     # Homebrew on Linux has casks for both agents.
     limactl shell "$name" /home/linuxbrew/.linuxbrew/bin/brew upgrade --cask claude-code@latest codex </dev/null
 
-    for item in $secret_names; do
-        security find-generic-password -a "$account" -s "limavm-$item" -w |
-            limactl shell "$name" sh -c 'exec "$HOME/bin/setup-secrets" "$1"' _ "$item"
-    done
-    limactl shell "$name" sh -c 'exec "$HOME/bin/setup-secrets" LGTMCP_CONFIG' <"$lgtmcp_config"
+    if [[ -n $repo ]]; then
+        printf '%s\n' "$github_record" | install_secret "$name" GITHUB_APP_AUTH
+    fi
+    if ((! no_claude_token)); then
+        printf '%s\n' "$claude_token" | install_secret "$name" CLAUDE_CODE_OAUTH_TOKEN
+    fi
+    install_secret "$name" LGTMCP_CONFIG <"$lgtmcp_config"
 
+    printf 'limavm: %s is ready.\n' "$name"
+    if [[ -n $repo ]]; then
+        printf 'limavm: GitHub access: %s only, with push and pull requests.\n' "$repo"
+    else
+        printf 'limavm: %s has no GitHub access; limavm github %s OWNER/REPO gives it some.\n' "$name" "$name"
+    fi
+    if ((no_claude_token)); then
+        printf 'limavm: no Claude token was installed; run claude auth login in the VM.\n'
+    fi
     cat <<EOF
-limavm: $name is ready. Codex is not signed in; run
+limavm: Codex is not signed in; run
 
     codex login --device-auth
 
@@ -206,12 +369,32 @@ EOF
     exec limactl shell "$name"
 }
 
+cmd_github() {
+    [[ $# -eq 2 ]] || die "usage: limavm github NAME OWNER/REPO"
+    local name=$1 repo=$2 status
+    valid_name "$name"
+    [[ $name != "$base" ]] || die "$name is the base VM; it gets no secrets"
+    valid_repository "$repo"
+    need limactl
+    instance_exists "$name" || die "$name does not exist"
+    github_authorize "$repo"
+    status=$(limactl list --format '{{.Status}}' "$name")
+    if [[ $status != Running ]]; then
+        limactl start --tty=false "$name" </dev/null
+    fi
+    printf '%s\n' "$github_record" | install_secret "$name" GITHUB_APP_AUTH
+    printf 'limavm: %s can now reach %s, and nothing else on GitHub.\n' "$name" "$repo"
+}
+
 cmd_rm() {
     [[ $# -eq 1 ]] || die "usage: limavm rm NAME"
     valid_name "$1"
     [[ $1 != "$base" ]] || die "refusing to delete $base; limavm base rebuilds it"
     need limactl
     limactl delete --tty=false --force "$1"
+    printf 'limavm: %s is deleted, but its GitHub tokens are not revoked: they work until they expire (the refresh token lasts 6 months).\n' "$1"
+    printf 'limavm: To end them now, de-authorize the app at https://github.com/settings/apps/authorizations, which ends\n'
+    printf 'limavm: the tokens of every VM; then run limavm github NAME OWNER/REPO for each VM you still use.\n'
 }
 
 cmd_list() {
@@ -228,10 +411,8 @@ command=$1
 shift
 case $command in
 base) cmd_base "$@" ;;
-new)
-    [[ $# -le 1 ]] || die "usage: limavm new [NAME]"
-    cmd_new "$@"
-    ;;
+new) cmd_new "$@" ;;
+github) cmd_github "$@" ;;
 rm) cmd_rm "$@" ;;
 list)
     [[ $# -eq 0 ]] || die "usage: limavm list"
