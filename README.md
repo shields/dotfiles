@@ -132,7 +132,9 @@ limavm list
 
 `limavm base` must run in a dotfiles checkout, and builds `dotfiles-base` from
 `lima/dev.yaml` and that checkout, including files that are not committed
-(`tools/stage_tree.sh` copies them, and gitleaks scans the copy). It runs
+(`tools/stage_tree.sh` copies them). The guest checkout retains the local
+branch, commit history and tags; local changes appear as unstaged or untracked
+files after provisioning. Gitleaks scans both the copy and its history. It runs
 `./provision.sh MODULE...` in the guest (`dev` by default), then
 `provision/throwaway.sh`, forgets the identifiers that the agents stored, stops
 the VM and protects it from deletion. `limavm new` clones the base (an APFS

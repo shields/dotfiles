@@ -108,17 +108,51 @@ cmd_base() {
     need git
     need tar
     set_size_args
-    local root
+    local root origin authority
     root=$(git rev-parse --show-toplevel 2>/dev/null) || die "run this inside a dotfiles checkout"
     [[ -f $root/lima/dev.yaml && -x $root/provision.sh && -x $root/tools/stage_tree.sh &&
         -f $root/provision/throwaway.sh && -f $root/provision/reset-identity.sh ]] ||
         die "$root is not a dotfiles checkout (a file under lima/, provision/ or tools/ is missing)"
+
+    origin=$(git -C "$root" config --default '' --get remote.origin.url)
+    case $origin in
+    git@github.com:*) origin=https://github.com/${origin#git@github.com:} ;;
+    ssh://git@github.com/*) origin=https://github.com/${origin#ssh://git@github.com/} ;;
+    esac
+    if [[ $origin == *://* ]]; then
+        authority=${origin#*://}
+        authority=${authority%%/*}
+        [[ $authority != *@* ]] || die "origin must not contain credentials"
+    fi
+    [[ $origin != *\?* && $origin != *\#* && $origin != *[[:cntrl:]]* ]] ||
+        die "origin must not contain query parameters, fragments or control characters"
 
     trap base_cleanup EXIT
     trap 'exit 130' INT
     trap 'exit 143' TERM
     stage=$(mktemp -d "${TMPDIR:-/tmp}/limavm.XXXXXX")
     "$root/tools/stage_tree.sh" "$stage/tree"
+
+    git clone --quiet --no-local --no-checkout --template= "$root" "$stage/history"
+    local head
+    head=$(git -C "$stage/history" rev-parse --verify HEAD)
+    if ! git -C "$root" symbolic-ref --quiet HEAD >/dev/null; then
+        git -C "$stage/history" update-ref --no-deref HEAD "$head"
+    fi
+    rm -rf "$stage/tree/.git"
+    mv "$stage/history/.git" "$stage/tree/.git"
+    git -C "$stage/tree" config core.ignorecase false
+    # Provisioning uses the index to include uncommitted files in the install.
+    git -C "$stage/tree" -c core.excludesFile=/dev/null add -Af .
+    # Removing a remote before scanning makes its unmerged branches unreachable.
+    gitleaks git --no-banner --no-color --redact --verbose --log-level warn \
+        --log-opts='--all -m' --gitleaks-ignore-path "$stage/tree" "$stage/tree" >&2 ||
+        die "gitleaks found secrets in the repository history, or failed"
+    if [[ -n $origin ]]; then
+        git -C "$stage/tree" remote set-url origin "$origin"
+    else
+        git -C "$stage/tree" remote remove origin
+    fi
 
     if instance_exists "$base"; then
         if [[ $(limactl list --format '{{.Protected}}' "$base") == true ]]; then
@@ -143,6 +177,7 @@ cmd_base() {
     # No modules is valid: provision.sh then uses its own default. bash 3.2
     # accepts an empty "$@" under set -u, unlike an empty array.
     limactl shell --workdir "$guest_dir" "$base" ./provision.sh "$@" </dev/null
+    limactl shell --workdir "$guest_dir" "$base" git reset --mixed --quiet HEAD </dev/null
     limactl shell "$base" sudo "$guest_dir/provision/throwaway.sh" </dev/null
 
     limactl shell "$base" sudo truncate -s 0 /etc/machine-id </dev/null

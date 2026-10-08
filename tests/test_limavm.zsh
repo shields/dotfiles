@@ -26,6 +26,8 @@ HERE="${0:A:h}"
 LIMAVM="$HERE/../bin/limavm"
 FAKE_GITHUB="$HERE/fake_github.py"
 REAL_CURL="$(command -v curl)"
+REAL_GIT="$(command -v git)"
+REAL_GITLEAKS="$(command -v gitleaks)"
 TMPBASE="${$(mktemp -d):A}"
 FAKE_PID=
 stop_fake() {
@@ -166,6 +168,11 @@ shell)
     shift
     case $* in
     'sh -c printf %s "$HOME"') printf '/home/guest' ;;
+    'sh -c set -eu; rm -rf '*'tar -xf - '*)
+        mkdir -p "$state/guest"
+        tar -xf "$state/calls/$call.stdin" -C "$state/guest"
+        ;;
+    'git '*) git -C "$state/guest" "${@:2}" || exit $? ;;
     esac
     ;;
 esac
@@ -222,9 +229,23 @@ echo "called: $*" >> "$LIMA_STUB_STATE/security.log"
 echo "security: limavm must not call this" >&2
 exit 1
 STUB
+cat > "$STUBS/gitleaks" <<'STUB'
+#!/bin/bash
+if [[ $1 == git && -n ${HISTORY_SCAN_FAIL:-} ]]; then
+    echo "gitleaks: injected history scan failure" >&2
+    exit 1
+fi
+exec "$REAL_GITLEAKS" "$@"
+STUB
+cat > "$STUBS/git" <<'STUB'
+#!/bin/bash
+call=$(mktemp "$LIMA_STUB_STATE/calls/git.XXXXXX")
+printf '%s\n' "$@" > "$call.argv"
+env | sort > "$call.env"
+exec "$REAL_GIT" "$@"
+STUB
 chmod +x "$STUBS"/*
 
-# stage_tree.sh stages one file into DEST, as the real script stages the tree.
 cat > "$TMPBASE/stage_tree.sh" <<'STUB'
 #!/bin/bash
 printf '%s\n' "$@" > "$STAGE_ARGS_LOG"
@@ -232,19 +253,28 @@ if [[ -n ${STAGE_STUB_FAIL:-} ]]; then
     echo "stage_tree: injected failure" >&2
     exit 1
 fi
-mkdir -p "$1/provision"
-echo staged > "$1/provision.sh"
+exec "$(dirname "$0")/stage_tree_real.sh" "$@"
 STUB
 
 CHECKOUT="$TMPBASE/checkout"
 mkdir -p "$CHECKOUT/lima" "$CHECKOUT/provision" "$CHECKOUT/tools"
-git -C "$CHECKOUT" init -q
+git -C "$CHECKOUT" init -q -b main
 : > "$CHECKOUT/lima/dev.yaml"
 printf '#!/bin/bash\n' > "$CHECKOUT/provision.sh"
 printf '#!/bin/bash\n' > "$CHECKOUT/provision/throwaway.sh"
 printf '#!/bin/bash\n' > "$CHECKOUT/provision/reset-identity.sh"
 cp "$TMPBASE/stage_tree.sh" "$CHECKOUT/tools/stage_tree.sh"
+cp "$HERE/../tools/stage_tree.sh" "$CHECKOUT/tools/stage_tree_real.sh"
 chmod +x "$CHECKOUT/provision.sh" "$CHECKOUT/tools/stage_tree.sh"
+git -C "$CHECKOUT" add .
+git -C "$CHECKOUT" -c user.name=Test -c user.email=test@example.com commit -qm initial
+git -C "$CHECKOUT" tag initial
+git -C "$CHECKOUT" branch other
+printf 'tracked\n' > "$CHECKOUT/tracked.txt"
+printf 'obsolete\n' > "$CHECKOUT/obsolete.txt"
+git -C "$CHECKOUT" add .
+git -C "$CHECKOUT" -c user.name=Test -c user.email=test@example.com commit -qm second
+git -C "$CHECKOUT" remote add origin git@github.com:shields/dotfiles.git
 
 GUEST_DIR=/home/guest/src/github.com/shields/dotfiles
 CLIENT_ID=Iv23lim5x4MdkNNgv28z
@@ -304,7 +334,8 @@ run_limavm() {
     RC=0
     OUT="$(cd "$CHECKOUT" && env PATH="$STUBS:$PATH" HOME="$HOME_DIR" USER=shields \
         LIMA_STUB_STATE="$STATE" STAGE_ARGS_LOG="$STAGE_ARGS_LOG" LIMAVM_BASE=test-base \
-        REAL_CURL="$REAL_CURL" NO_PROXY=127.0.0.1 no_proxy=127.0.0.1 \
+        REAL_CURL="$REAL_CURL" REAL_GIT="$REAL_GIT" REAL_GITLEAKS="$REAL_GITLEAKS" \
+        NO_PROXY=127.0.0.1 no_proxy=127.0.0.1 \
         "${EXTRA_ENV[@]}" /bin/bash "$LIMAVM" "$@" 2>&1 </dev/null)" || RC=$?
 }
 
@@ -390,6 +421,7 @@ list --format {{len .Config.Mounts}} test-base
 shell test-base sh -c printf %s \"\$HOME\"
 shell test-base sh -c set -eu; rm -rf \"\$1\"; mkdir -p \"\$1\"; tar -xf - --no-same-owner -C \"\$1\" _ $GUEST_DIR
 shell --workdir $GUEST_DIR test-base ./provision.sh none
+shell --workdir $GUEST_DIR test-base git reset --mixed --quiet HEAD
 shell test-base sudo $GUEST_DIR/provision/throwaway.sh
 shell test-base sudo truncate -s 0 /etc/machine-id
 shell test-base $GUEST_DIR/provision/reset-identity.sh
@@ -403,6 +435,146 @@ assert_eq "base streams the staged tree as a tar archive" "./provision.sh" \
 assert_eq "base removes its staging directory" 0 "$(staging_dirs_left)"
 assert_eq "base leaves the VM protected" 1 "$([[ -e "$STATE/protected-test-base" ]] && echo 1 || echo 0)"
 assert_contains "base says what to do next" "limavm new" "$OUT"
+assert_eq "base preserves the commit history" "$(git -C "$CHECKOUT" log --format=%H)" \
+    "$(git -C "$STATE/guest" log --format=%H 2>/dev/null || true)"
+assert_eq "base preserves the branch" main "$(git -C "$STATE/guest" branch --show-current)"
+assert_eq "base preserves tags" initial "$(git -C "$STATE/guest" tag)"
+assert_eq "base copies other branches" "$(git -C "$CHECKOUT" rev-parse other)" \
+    "$(git -C "$STATE/guest" rev-parse refs/remotes/origin/other)"
+assert_eq "base leaves a clean checkout clean" "" "$(git -C "$STATE/guest" status --porcelain)"
+assert_eq "base uses HTTPS for the guest's GitHub origin" https://github.com/shields/dotfiles.git \
+    "$(git -C "$STATE/guest" remote get-url origin 2>/dev/null || true)"
+
+new_case
+printf 'edited\n' > "$CHECKOUT/tracked.txt"
+printf 'untracked\n' > "$CHECKOUT/new.txt"
+rm "$CHECKOUT/obsolete.txt"
+run_limavm base none
+assert_eq "base with local changes succeeds" 0 "$RC"
+assert_eq "base keeps local edits" edited "$(<"$STATE/guest/tracked.txt")"
+assert_eq "base keeps untracked files" untracked "$(<"$STATE/guest/new.txt")"
+assert_eq "base reports only the local changes" " D obsolete.txt
+ M tracked.txt
+?? new.txt" "$(git -C "$STATE/guest" status --porcelain)"
+git -C "$CHECKOUT" checkout -- tracked.txt obsolete.txt
+rm "$CHECKOUT/new.txt"
+
+new_case
+git -C "$CHECKOUT" checkout -q --detach
+run_limavm base none
+assert_eq "base with a detached HEAD succeeds" 0 "$RC"
+assert_eq "base preserves a detached HEAD" "" "$(git -C "$STATE/guest" branch --show-current)"
+assert_eq "base preserves the detached commit" "$(git -C "$CHECKOUT" rev-parse HEAD)" \
+    "$(git -C "$STATE/guest" rev-parse HEAD)"
+git -C "$CHECKOUT" checkout -q main
+
+new_case
+git -C "$CHECKOUT" worktree add -q -b worktree "$TMPBASE/worktree"
+MAIN_CHECKOUT=$CHECKOUT
+CHECKOUT="$TMPBASE/worktree"
+printf 'worktree\n' > "$CHECKOUT/tracked.txt"
+run_limavm base none
+assert_eq "base from a linked worktree succeeds" 0 "$RC"
+assert_eq "base preserves the worktree branch" worktree "$(git -C "$STATE/guest" branch --show-current)"
+assert_eq "base preserves the worktree's changes" worktree "$(<"$STATE/guest/tracked.txt")"
+assert_eq "the guest has an independent Git directory" yes "$([[ -d "$STATE/guest/.git" ]] && echo yes || echo no)"
+assert_eq "the guest has no host object dependency" no "$([[ -e "$STATE/guest/.git/objects/info/alternates" ]] && echo yes || echo no)"
+CHECKOUT=$MAIN_CHECKOUT
+
+for origin in https://github.com/shields/dotfiles.git ssh://git@github.com/shields/dotfiles.git; do
+    new_case
+    git -C "$CHECKOUT" remote set-url origin "$origin"
+    run_limavm base none
+    assert_eq "base accepts a credential-free origin" 0 "$RC"
+    assert_eq "base configures the HTTPS origin" https://github.com/shields/dotfiles.git \
+        "$(git -C "$STATE/guest" remote get-url origin)"
+done
+
+origin_marker=LIMAVM_ORIGIN_CREDENTIAL
+for origin in \
+    "https://user:$origin_marker@github.com/shields/dotfiles.git" \
+    "https://$origin_marker@github.com/shields/dotfiles.git" \
+    "HTTPS://$origin_marker@github.com/shields/dotfiles.git" \
+    "ssh://git:$origin_marker@github.com/shields/dotfiles.git" \
+    "https://github.com/shields/dotfiles.git?token=$origin_marker" \
+    "https://github.com/shields/dotfiles.git#$origin_marker"; do
+    new_case test-base
+    git -C "$CHECKOUT" remote set-url origin "$origin"
+    run_limavm base none
+    assert_eq "base rejects an origin that can carry credentials" 1 "$RC"
+    assert_contains "base explains the origin rejection" "origin must not contain" "$OUT"
+    assert_eq "a rejected origin touches no VM" "" "$(limactl_log)"
+    assert_eq "origin credentials reach no command arguments or environment" no \
+        "$(grep -Fq "$origin_marker" "$STATE"/calls/*.argv "$STATE"/calls/*.env && echo yes || echo no)"
+    assert_eq "origin credentials are not printed" no "$([[ $OUT == *$origin_marker* ]] && echo yes || echo no)"
+    assert_eq "a rejected origin leaves no staging directory" 0 "$(staging_dirs_left)"
+done
+git -C "$CHECKOUT" remote set-url origin git@github.com:shields/dotfiles.git
+
+new_history_case() {
+    new_case test-base
+    CHECKOUT="$TMPBASE/history-$CASE_N"
+    git clone -q --no-local "$MAIN_CHECKOUT" "$CHECKOUT"
+    git -C "$CHECKOUT" config user.name Test
+    git -C "$CHECKOUT" config user.email test@example.com
+    git -C "$CHECKOUT" remote set-url origin git@github.com:shields/dotfiles.git
+    cat > "$STATE/gitleaks.toml" <<'EOF'
+[[rules]]
+id = "history-marker"
+description = "Lima history regression marker"
+regex = '''LIMAVM_HISTORY_SENTINEL'''
+EOF
+    EXTRA_ENV+=(GITLEAKS_CONFIG="$STATE/gitleaks.toml")
+}
+
+assert_history_rejected() {
+    local desc=$1 filename=$2
+    assert_eq "$desc fails base" 1 "$RC"
+    assert_contains "$desc names the affected file" "$filename" "$OUT"
+    assert_contains "$desc reports the history scan failure" "gitleaks found secrets in the repository history, or failed" "$OUT"
+    assert_eq "$desc touches no VM" "" "$(limactl_log)"
+    assert_eq "$desc leaves no staging directory" 0 "$(staging_dirs_left)"
+    assert_eq "$desc is redacted" no "$([[ $OUT == *LIMAVM_HISTORY_SENTINEL* ]] && echo yes || echo no)"
+}
+
+new_history_case
+git -C "$CHECKOUT" checkout -qb merge-side
+printf 'side\n' > "$CHECKOUT/side.txt"
+git -C "$CHECKOUT" add side.txt
+git -C "$CHECKOUT" commit -qm side
+git -C "$CHECKOUT" checkout -q main
+printf 'main\n' > "$CHECKOUT/main.txt"
+git -C "$CHECKOUT" add main.txt
+git -C "$CHECKOUT" commit -qm main
+git -C "$CHECKOUT" merge --no-ff --no-commit merge-side >/dev/null 2>&1
+printf 'LIMAVM_HISTORY_SENTINEL\n' > "$CHECKOUT/merge-only.txt"
+git -C "$CHECKOUT" add merge-only.txt
+git -C "$CHECKOUT" commit -qm merge
+git -C "$CHECKOUT" rm -q merge-only.txt
+git -C "$CHECKOUT" commit -qm remove
+run_limavm base none
+assert_history_rejected "a secret introduced only by a merge and then removed" merge-only.txt
+CHECKOUT=$MAIN_CHECKOUT
+
+new_history_case
+git -C "$CHECKOUT" checkout -qb unmerged
+printf 'LIMAVM_HISTORY_SENTINEL\n' > "$CHECKOUT/unmerged-only.txt"
+git -C "$CHECKOUT" add unmerged-only.txt
+git -C "$CHECKOUT" commit -qm unmerged
+git -C "$CHECKOUT" checkout -q main
+git -C "$CHECKOUT" remote remove origin
+run_limavm base none
+assert_history_rejected "a secret on an unmerged branch with no origin" unmerged-only.txt
+CHECKOUT=$MAIN_CHECKOUT
+
+new_case
+git -C "$CHECKOUT" remote remove origin
+run_limavm base none
+assert_eq "base accepts a safe repository without an origin" 0 "$RC"
+assert_eq "a source without an origin leaves no host remote in the guest" "" "$(git -C "$STATE/guest" remote)"
+assert_eq "base without an origin preserves history" "$(git -C "$CHECKOUT" log --format=%H)" \
+    "$(git -C "$STATE/guest" log --format=%H)"
+git -C "$CHECKOUT" remote add origin git@github.com:shields/dotfiles.git
 
 # --- 4. base passes modules and sizes through ---
 new_case
@@ -439,14 +611,14 @@ assert_eq "base leaves other VMs alone" 1 "$(grep -cx other "$STATE/instances")"
 new_case
 RC=0
 OUT="$(cd "$TMPBASE" && env PATH="$STUBS:$PATH" HOME="$HOME_DIR" LIMA_STUB_STATE="$STATE" \
-    LIMAVM_BASE=test-base /bin/bash "$LIMAVM" base 2>&1 </dev/null)" || RC=$?
+    REAL_GIT="$REAL_GIT" LIMAVM_BASE=test-base /bin/bash "$LIMAVM" base 2>&1 </dev/null)" || RC=$?
 assert_eq "base outside a repository fails" 1 "$RC"
 assert_contains "base outside a repository says so" "inside a dotfiles checkout" "$OUT"
 mkdir "$TMPBASE/other-repo"
 git -C "$TMPBASE/other-repo" init -q
 RC=0
 OUT="$(cd "$TMPBASE/other-repo" && env PATH="$STUBS:$PATH" HOME="$HOME_DIR" LIMA_STUB_STATE="$STATE" \
-    LIMAVM_BASE=test-base /bin/bash "$LIMAVM" base 2>&1 </dev/null)" || RC=$?
+    REAL_GIT="$REAL_GIT" LIMAVM_BASE=test-base /bin/bash "$LIMAVM" base 2>&1 </dev/null)" || RC=$?
 assert_eq "base in another repository fails" 1 "$RC"
 assert_contains "base in another repository says so" "is not a dotfiles checkout" "$OUT"
 assert_eq "neither touched limactl" "" "$(limactl_log)"
@@ -458,6 +630,14 @@ run_limavm base none
 assert_eq "a staging failure fails base" 1 "$RC"
 assert_eq "a staging failure starts no VM" "" "$(limactl_log)"
 assert_eq "a staging failure removes the staging directory" 0 "$(staging_dirs_left)"
+
+new_case test-base
+EXTRA_ENV+=(HISTORY_SCAN_FAIL=1)
+run_limavm base none
+assert_eq "a history scan failure fails base" 1 "$RC"
+assert_eq "a history scan failure touches no VM" "" "$(limactl_log)"
+assert_eq "a history scan failure removes the staging directory" 0 "$(staging_dirs_left)"
+assert_contains "a history scan failure says why" "gitleaks found secrets in the repository history, or failed" "$OUT"
 
 new_case
 echo 3 > "$STATE/mounts"
