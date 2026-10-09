@@ -242,8 +242,9 @@ prints (run that in another terminal first and paste the result) and keeps it in
 Mac: the file is the same one the VM gets, `.zshrc` exports it only on Linux,
 and Claude's sandbox on the Mac denies reads under `~/.config/secrets`.
 `limavm new` installs the token from that file when it exists, and fails, naming
-the file, when it is empty, unreadable or holds more than one word; without the
-file it asks the same way `claude-token` does and reminds you of `claude-token`.
+the file, when it is not a regular file, empty, unreadable or holds more than
+one word; without the file it asks the same way `claude-token` does and reminds
+you of `claude-token`.
 In the VM the token goes to the same path, which `.zshrc` exports in interactive
 shells. It is never taken from the command line or the environment. An empty
 answer is an error; `--no-claude-token` skips the token, file or prompt, for a

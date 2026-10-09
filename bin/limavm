@@ -28,6 +28,13 @@ guest_repo=src/github.com/$dotfiles_repo
 github_client_id=${LIMAVM_GITHUB_CLIENT_ID:-Iv23lim5x4MdkNNgv28z}
 github_web_url=${LIMAVM_GITHUB_WEB_URL:-https://github.com}
 github_api_url=${LIMAVM_GITHUB_API_URL:-https://api.github.com}
+
+die() {
+    printf 'limavm: %s\n' "$*" >&2
+    exit 1
+}
+
+[[ -n ${HOME:-} ]] || die "HOME is not set"
 claude_token_file=$HOME/.config/secrets/CLAUDE_CODE_OAUTH_TOKEN
 codex_auth_file=$HOME/.codex/auth.json
 
@@ -67,11 +74,6 @@ new copies this Mac's Codex login, $codex_auth_file, into the VM, and
 fails when there is none: run codex login here first. --no-codex-auth skips it,
 for a VM that will use codex login --device-auth.
 EOF
-}
-
-die() {
-    printf 'limavm: %s\n' "$*" >&2
-    exit 1
 }
 
 need() {
@@ -378,6 +380,7 @@ prompt_claude_token() {
 
 read_claude_token_file() {
     local content
+    [[ -f $claude_token_file ]] || die "$claude_token_file is not a regular file; remove it, or pass --no-claude-token"
     [[ -r $claude_token_file ]] || die "cannot read $claude_token_file; run limavm claude-token to replace it, or pass --no-claude-token"
     content=$(<"$claude_token_file")
     set_claude_token "$content" \
@@ -387,6 +390,7 @@ read_claude_token_file() {
 
 cmd_claude_token() {
     [[ $# -eq 0 ]] || die "usage: limavm claude-token"
+    [[ ! -e $claude_token_file || -f $claude_token_file ]] || die "$claude_token_file is not a regular file; remove it first"
     prompt_claude_token
     local dir tmp
     dir=$(dirname "$claude_token_file")
@@ -472,7 +476,7 @@ cmd_new() {
     instance_exists "$base" || die "$base does not exist; run limavm base in a dotfiles checkout first"
     ! instance_exists "$name" || die "$name already exists"
     local lgtmcp_config=$HOME/.config/lgtmcp/config.yaml
-    [[ -r $lgtmcp_config ]] || die "$lgtmcp_config does not exist; LGTMCP needs it in the VM"
+    [[ -f $lgtmcp_config && -r $lgtmcp_config ]] || die "cannot read $lgtmcp_config; LGTMCP needs it in the VM"
     if ((! no_codex_auth)); then
         need jq
         [[ -e $codex_auth_file ]] || die "$codex_auth_file does not exist; run codex login on this Mac, or pass --no-codex-auth"
@@ -488,7 +492,7 @@ cmd_new() {
     elif [[ -e $claude_token_file ]]; then
         read_claude_token_file
     else
-        prompt_claude_token ', or pass --no-claude-token'
+        prompt_claude_token ', run limavm claude-token once, or pass --no-claude-token'
         printf 'limavm: limavm claude-token keeps the token for next time\n' >&2
     fi
     [[ -z $repo ]] || github_authorize "$repo"

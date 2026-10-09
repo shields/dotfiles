@@ -89,7 +89,8 @@ Throwaway Lima VMs (the README describes them for users):
   `limavm claude-token` keeps the Claude token in
   `~/.config/secrets/CLAUDE_CODE_OAUTH_TOKEN` on the Mac (the path the guest
   uses; `.zshrc` exports it only on Linux, and the Mac sandbox denies reads
-  there), and `limavm new` installs it from that file instead of asking. It also
+  there), and `limavm new` installs it from that file when it exists, and
+  otherwise asks and points to `claude-token`. It also
   sends the Mac's `~/.codex/auth.json` to `setup-secrets CODEX_AUTH`, which
   requires a JSON object and writes the same path in the guest; `--no-codex-auth`
   leaves Codex to `codex login --device-auth` in the VM.

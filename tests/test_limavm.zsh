@@ -460,6 +460,10 @@ assert_contains "help lists claude-token" "limavm claude-token" "$OUT"
 assert_contains "help says rm does not revoke" "does not revoke" "$OUT"
 run_limavm
 assert_eq "no command fails" 2 "$RC"
+RC=0
+OUT="$(cd "$CHECKOUT" && env -u HOME PATH="$STUBS:$PATH" LIMA_STUB_STATE="$STATE" LIMAVM_BASE=test-base /bin/bash "$LIMAVM" help 2>&1)" || RC=$?
+assert_eq "help without HOME fails" 1 "$RC"
+assert_contains "help without HOME says so" "limavm: HOME is not set" "$OUT"
 run_limavm frobnicate
 assert_eq "unknown command fails" 2 "$RC"
 run_limavm new a b
@@ -1157,6 +1161,14 @@ assert_eq "an unreadable token file clones nothing" 0 "$(count_in_log clone)"
 chmod 600 "$HOME_DIR/$TOKEN_FILE_SUFFIX"
 
 new_case test-base
+mkdir -p "$HOME_DIR/$TOKEN_FILE_SUFFIX"
+run_limavm new t1
+assert_eq "a directory at the token file fails new" 1 "$RC"
+assert_contains "a directory at the token file is named" "$HOME_DIR/$TOKEN_FILE_SUFFIX is not a regular file" "$OUT"
+assert_eq "a directory at the token file is not called empty" 0 "$(printf '%s' "$OUT" | grep -c 'is empty' || true)"
+assert_eq "a directory at the token file clones nothing" 0 "$(count_in_log clone)"
+
+new_case test-base
 write_token_file 'sk-ant one two'
 EXTRA_ENV=(LIMAVM_PROMPT_INPUT="$STATE/does-not-exist")
 run_limavm new t1 --no-claude-token
@@ -1184,6 +1196,16 @@ assert_eq "claude-token replaces an existing file" 0 "$RC"
 assert_eq "claude-token's replacement content" "$FAKE_CLAUDE" "$(<"$HOME_DIR/$TOKEN_FILE_SUFFIX")"
 assert_eq "claude-token's replacement file mode" 600 "$(mode_of "$HOME_DIR/$TOKEN_FILE_SUFFIX")"
 assert_eq "claude-token's replacement directory mode" 700 "$(mode_of "$HOME_DIR/.config/secrets")"
+
+new_case test-base
+mkdir -p "$HOME_DIR/$TOKEN_FILE_SUFFIX"
+EXTRA_ENV=(LIMAVM_PROMPT_INPUT="$STATE/does-not-exist")
+run_limavm claude-token
+assert_eq "claude-token with a directory at the file fails" 1 "$RC"
+assert_contains "claude-token with a directory at the file names it" "$HOME_DIR/$TOKEN_FILE_SUFFIX is not a regular file" "$OUT"
+assert_eq "claude-token with a directory at the file asks for nothing" 0 "$(printf '%s' "$OUT" | grep -c LIMAVM_PROMPT_INPUT || true)"
+assert_eq "claude-token with a directory at the file writes nothing into it" "" "$(ls -A "$HOME_DIR/$TOKEN_FILE_SUFFIX")"
+assert_eq "claude-token with a directory at the file leaves no temporary file" CLAUDE_CODE_OAUTH_TOKEN "$(ls -A "$HOME_DIR/.config/secrets")"
 
 for content in '' $'\n' 'sk-ant one two'; do
     new_case test-base
@@ -1311,6 +1333,7 @@ new_case test-base
 RESULT="$(tty_run notty x new t1)"
 assert_eq "new without a terminal fails" 1 "$(jq -r .exit <<<"$RESULT")"
 assert_contains "new without a terminal says what to do" "--no-claude-token" "$(jq -r .output <<<"$RESULT")"
+assert_contains "new without a terminal points to claude-token" "limavm claude-token" "$(jq -r .output <<<"$RESULT")"
 assert_eq "new without a terminal clones nothing" 0 "$(count_in_log clone)"
 
 new_case test-base
@@ -1386,6 +1409,14 @@ run_limavm new t1
 assert_eq "a missing LGTMCP config fails" 1 "$RC"
 assert_contains "that message names the file" ".config/lgtmcp/config.yaml" "$OUT"
 assert_eq "that failure clones nothing" 0 "$(count_in_log clone)"
+
+new_case test-base
+rm "$HOME_DIR/.config/lgtmcp/config.yaml"
+mkdir "$HOME_DIR/.config/lgtmcp/config.yaml"
+run_limavm new t1
+assert_eq "a directory at the LGTMCP config fails" 1 "$RC"
+assert_contains "a directory at the LGTMCP config is named" "cannot read $HOME_DIR/.config/lgtmcp/config.yaml" "$OUT"
+assert_eq "a directory at the LGTMCP config clones nothing" 0 "$(count_in_log clone)"
 
 # --- 13. The device flow ---
 new_case test-base
