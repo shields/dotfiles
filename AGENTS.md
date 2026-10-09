@@ -91,9 +91,11 @@ Throwaway Lima VMs (the README describes them for users):
   uses; `.zshrc` exports it only on Linux, and the Mac sandbox denies reads
   there), and `limavm new` installs it from that file when it exists, and
   otherwise asks and points to `claude-token`. It also
-  sends the Mac's `~/.codex/auth.json` to `setup-secrets CODEX_AUTH`, which
-  requires a JSON object and writes the same path in the guest; `--no-codex-auth`
-  leaves Codex to `codex login --device-auth` in the VM.
+  sends the Mac's `~/.codex/auth.json` (which exists only with
+  `cli_auth_credentials_store = "file"`; the Keychain holds the login otherwise)
+  to `setup-secrets CODEX_AUTH`, which requires a JSON object and writes the
+  same path in the guest; `--no-codex-auth` leaves Codex to
+  `codex login --device-auth` in the VM.
 - `provision/throwaway.sh` (run as root, also by the Cloudflare image) makes a
   machine a throwaway environment: `/etc/dotfiles-throwaway`, Claude Code's
   managed settings (generated with jq from the deny rules, the `git_guard.py`

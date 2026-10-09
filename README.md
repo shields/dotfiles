@@ -257,10 +257,14 @@ VM where you will run `claude auth login`.
   copying to a headless machine), goes to `setup-secrets CODEX_AUTH` on stdin,
   which checks that it is a JSON object and writes it to the same path in the VM
   (directory 0700, file 0600). `limavm new` fails before it makes the VM when the
-  file is missing, unreadable or not a JSON object: run `codex login` on the Mac
-  first. `--no-codex-auth` skips it, and then says to run
-  `codex login --device-auth` in the VM, after you turn on device code login in
-  ChatGPT's security settings.
+  file is missing, not a regular file, unreadable, empty or not a JSON object.
+  The file exists only when `cli_auth_credentials_store` in
+  `~/.codex/config.toml` is `file`: with `keyring` or `auto` Codex keeps the
+  login in the Keychain, and OpenAI says the copy does not apply then. So set
+  `cli_auth_credentials_store = "file"` and run `codex login` on the Mac first.
+  `--no-codex-auth` skips it, and then says to run `codex login --device-auth`
+  in the VM, after you turn on device code login in ChatGPT's security
+  settings.
 
 ## What is isolated
 

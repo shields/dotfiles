@@ -456,6 +456,7 @@ assert_contains "help names --repo" "--repo OWNER/REPO" "$OUT"
 assert_contains "help names --no-repo" "--no-repo" "$OUT"
 assert_contains "help names --no-claude-token" "--no-claude-token" "$OUT"
 assert_contains "help names --no-codex-auth" "--no-codex-auth" "$OUT"
+assert_contains "help says where Codex keeps its login" 'cli_auth_credentials_store = "file"' "$OUT"
 assert_contains "help lists claude-token" "limavm claude-token" "$OUT"
 assert_contains "help says rm does not revoke" "does not revoke" "$OUT"
 run_limavm
@@ -1033,10 +1034,30 @@ new_case test-base
 rm "$HOME_DIR/.codex/auth.json"
 run_limavm new t1
 assert_eq "a missing Codex login fails new" 1 "$RC"
-assert_contains "a missing Codex login names the file" "$HOME_DIR/.codex/auth.json" "$OUT"
+assert_contains "a missing Codex login names the file" "$HOME_DIR/.codex/auth.json does not exist" "$OUT"
 assert_contains "a missing Codex login says what to run" "codex login" "$OUT"
+assert_contains "a missing Codex login says where Codex keeps it otherwise" 'cli_auth_credentials_store in ~/.codex/config.toml is keyring or auto: set it to "file"' "$OUT"
 assert_contains "a missing Codex login points to the flag" "--no-codex-auth" "$OUT"
 assert_eq "a missing Codex login comes before the clone" "list -q test-base
+list -q t1" "$(limactl_log)"
+
+new_case test-base
+rm "$HOME_DIR/.codex/auth.json"
+mkdir "$HOME_DIR/.codex/auth.json"
+run_limavm new t1
+assert_eq "a directory at the Codex login fails new" 1 "$RC"
+assert_contains "a directory at the Codex login is named" "$HOME_DIR/.codex/auth.json is not a regular file" "$OUT"
+assert_contains "a directory at the Codex login points to the flag" "--no-codex-auth" "$OUT"
+assert_eq "a directory at the Codex login comes before the clone" "list -q test-base
+list -q t1" "$(limactl_log)"
+
+new_case test-base
+: > "$HOME_DIR/.codex/auth.json"
+run_limavm new t1
+assert_eq "an empty Codex login fails new" 1 "$RC"
+assert_contains "an empty Codex login is named" "$HOME_DIR/.codex/auth.json is empty" "$OUT"
+assert_contains "an empty Codex login points to the flag" "--no-codex-auth" "$OUT"
+assert_eq "an empty Codex login comes before the clone" "list -q test-base
 list -q t1" "$(limactl_log)"
 
 new_case test-base
