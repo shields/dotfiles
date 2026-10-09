@@ -327,6 +327,7 @@ new_case() {
     STAGE_ARGS_LOG="$STATE/stage-args"
     FAKE_URL=
     RUN_PATH=
+    RUN_STDIN=
     EXTRA_ENV=(LIMAVM_PROMPT_INPUT="$STATE/prompt")
 }
 
@@ -377,14 +378,40 @@ no_pbcopy_path() {
 UNREACHABLE_GITHUB=http://127.0.0.1:9
 
 # run_limavm ARGS...: sets OUT (stdout and stderr) and RC. RUN_PATH replaces
-# the stubbed PATH for one case.
+# the stubbed PATH for one case, and RUN_STDIN names a file to give limavm on
+# stdin instead of nothing.
 run_limavm() {
     RC=0
     OUT="$(cd "$CHECKOUT" && env PATH="${RUN_PATH:-$STUBS:$PATH}" HOME="$HOME_DIR" USER=shields \
         LIMA_STUB_STATE="$STATE" STAGE_ARGS_LOG="$STAGE_ARGS_LOG" LIMAVM_BASE=test-base \
         REAL_CURL="$REAL_CURL" REAL_GIT="$REAL_GIT" REAL_GITLEAKS="$REAL_GITLEAKS" \
         NO_PROXY=127.0.0.1 no_proxy=127.0.0.1 LIMAVM_GITHUB_WEB_URL="$UNREACHABLE_GITHUB" \
-        "${EXTRA_ENV[@]}" /bin/bash "$LIMAVM" "$@" 2>&1 </dev/null)" || RC=$?
+        "${EXTRA_ENV[@]}" /bin/bash "$LIMAVM" "$@" 2>&1 <"${RUN_STDIN:-/dev/null}")" || RC=$?
+}
+
+# stdin_marker: a line that limavm's own stdin holds for the case, so that a
+# stub which reads it shows up; the stubs record what they are given.
+STDIN_MARKER='limavm-stdin-marker-9f3e'
+stdin_marker() {
+    RUN_STDIN="$STATE/stdin"
+    print -r -- "$STDIN_MARKER" > "$RUN_STDIN"
+}
+
+calls_reading_stdin() {
+    local recorded
+    for recorded in "$STATE"/calls/*.stdin(N); do
+        if grep -q -- "$STDIN_MARKER" "$recorded"; then
+            print -r -- "${recorded:t}"
+        fi
+    done
+    return 0
+}
+
+# The shell that new ends in is the one limactl call that may have limavm's
+# stdin; a lookup or a clone that read it would swallow what was meant for it.
+assert_only_the_shell_reads_stdin() {
+    assert_eq "only the final shell reads limavm's stdin: $1" \
+        "$(limactl_log | wc -l | tr -d ' ').stdin" "$(calls_reading_stdin)"
 }
 
 limactl_log() {
@@ -730,6 +757,7 @@ assert_eq "an unknown guest home in base removes the staging directory" 0 "$(sta
 # --- 8. new with a repository ---
 new_case test-base
 start_fake
+stdin_marker
 before=$(date +%s)
 run_limavm new t1 --repo shields/dotfiles
 after=$(date +%s)
@@ -798,7 +826,7 @@ assert_eq "the Codex login reaches setup-secrets on stdin, byte for byte" same \
     "$(print -rn -- "$CODEX_JSON" | cmp -s - "$STATE/calls/8.stdin" && echo same || echo different)"
 assert_eq "the LGTMCP config reaches setup-secrets on stdin, byte for byte" same \
     "$(print -rn -- "$LGTMCP_YAML" | cmp -s - "$STATE/calls/9.stdin" && echo same || echo different)"
-assert_eq "the upgrade call has no stdin" 0 "$(wc -c < "$STATE/calls/4.stdin" | tr -d ' ')"
+assert_only_the_shell_reads_stdin "new --repo"
 assert_no_secret_leak "new --repo"
 assert_eq "curl was run for the flow" 2 "$(stub_calls curl)"
 assert_eq "limavm never calls security" 0 "$(cat "$STATE/security.log" 2>/dev/null | wc -l | tr -d ' ')"
@@ -865,6 +893,7 @@ ORIGIN_CASES=(
 for origin in "${ORIGIN_CASES[@]}"; do
     new_case test-base
     start_fake
+    stdin_marker
     git -C "$CHECKOUT" remote set-url origin "$origin"
     run_limavm new t1
     assert_eq "new infers the repository from the origin $origin" 0 "$RC"
@@ -873,7 +902,7 @@ for origin in "${ORIGIN_CASES[@]}"; do
     assert_eq "the inferred repository is authorized and cloned: $origin" "$SETUP GITHUB_APP_AUTH
 shell t1 sh -c printf %s \"\$HOME\"
 shell t1 env GIT_TERMINAL_PROMPT=0 git clone --quiet $FAKE_URL/shields/other.git $OTHER_DIR" "$(limactl_log | sed -n '5,7p')"
-    assert_eq "the clone call has no stdin: $origin" 0 "$(wc -c < "$STATE/calls/7.stdin" | tr -d ' ')"
+    assert_only_the_shell_reads_stdin "$origin"
     assert_eq "the shell opens in the clone: $origin" "shell --workdir $OTHER_DIR t1" "$(limactl_log | tail -1)"
     assert_contains "new says where the repository is cloned: $origin" "cloned at $OTHER_DIR" "$OUT"
     assert_eq "the inferred repository is looked up by name: $origin" "api repos/shields/other --jq .id" "$(<"$STATE/gh.log")"
@@ -975,6 +1004,16 @@ assert_contains "a GitHub host that differs from the origin's only in case is in
 assert_contains "a GitHub host that differs only in case goes on to gh" "gh cannot read shields/other" "$OUT"
 assert_eq "a GitHub host that differs only in case touches no VM" "list -q test-base
 list -q t1" "$(limactl_log)"
+git -C "$CHECKOUT" remote set-url origin git@github.com:shields/dotfiles.git
+
+new_case test-base
+: > "$STATE/gh-fail"
+EXTRA_ENV+=(LIMAVM_GITHUB_WEB_URL=http://someone@localhost:9)
+git -C "$CHECKOUT" remote set-url origin git@localhost:shields/other.git
+run_limavm new t1
+assert_contains "a GitHub address with a user in it is matched by host" \
+    "GitHub access for shields/other, from the origin of this checkout" "$OUT"
+assert_contains "a GitHub address with a user in it goes on to gh" "gh cannot read shields/other" "$OUT"
 git -C "$CHECKOUT" remote set-url origin git@github.com:shields/dotfiles.git
 
 # An empty LIMAVM_GITHUB_WEB_URL leaves limavm its default, https://github.com;
@@ -1676,7 +1715,7 @@ run_limavm github test-base shields/dotfiles
 assert_eq "github refuses the base" 1 "$RC"
 assert_eq "github on the base touches no VM" "" "$(limactl_log)"
 
-for args in "" "t1" "t1 shields/dotfiles extra" "t1 notarepo" "../x shields/dotfiles"; do
+for args in "" "t1 shields/dotfiles extra" "t1 notarepo" "../x shields/dotfiles"; do
     new_case test-base t1
     start_fake
     run_limavm github ${=args}
@@ -1687,7 +1726,10 @@ done
 new_case test-base t1
 start_fake
 run_limavm github t1
+assert_eq "github without a repository, outside a GitHub checkout, fails" 1 "$RC"
 assert_contains "github without a repository, outside a GitHub checkout, asks for one" "limavm github t1 OWNER/REPO" "$OUT"
+assert_eq "github without a repository, outside a GitHub checkout, contacts no GitHub" "" "$(fake_requests)"
+assert_eq "github without a repository, outside a GitHub checkout, installs nothing" 0 "$(count_in_log setup-secrets)"
 
 new_case test-base t1
 : > "$STATE/gh-fail"

@@ -136,7 +136,7 @@ origin_repository() {
 
 instance_exists() {
     # limactl list exits non-zero when no instance matches the name.
-    limactl list -q "$1" >/dev/null 2>&1
+    limactl list -q "$1" >/dev/null 2>&1 </dev/null
 }
 
 guest_home_of() {
