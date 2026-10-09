@@ -38,6 +38,7 @@
       "mcp__cupertino"
     ],
     "deny": [
+      "Bash(bunx:*)",
       "Bash(git commit --no-verify *)",
       "Bash(git commit -n*)",
       "Bash(git commit *--no-verify*)",
@@ -67,7 +68,9 @@
       "Bash(gh repo unarchive*)",
       "Bash(kubectl get secret *)",
       "Bash(kubectl get secrets *)",
-      "Bash(lefthook uninstall)"
+      "Bash(lefthook uninstall)",
+      "Bash(npx:*)",
+      "Bash(uvx:*)"
     ],
     "ask": [
       "Bash(apt * install *)",
@@ -84,7 +87,6 @@
       "Bash(bun install:*)",
       "Bash(bundle add:*)",
       "Bash(bundle install:*)",
-      "Bash(bunx:*)",
       "Bash(cargo add *)",
       "Bash(cargo install *)",
       "Bash(composer require:*)",
@@ -101,7 +103,6 @@
       "Bash(npm add:*)",
       "Bash(npm i:*)",
       "Bash(npm install:*)",
-      "Bash(npx:*)",
       "Bash(pip install:*)",
       "Bash(pip3 install:*)",
       "Bash(pipx install:*)",
@@ -123,7 +124,6 @@
       "Bash(uv pip install *)",
       "Bash(uv run --with:*)",
       "Bash(uv tool install *)",
-      "Bash(uvx:*)",
       "Bash(yarn add:*)",
       "Edit(//**/Brewfile)",
       "Edit(//**/*.Brewfile)",
