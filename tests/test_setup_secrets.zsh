@@ -96,6 +96,7 @@ OUT="$(env HOME="$HOME_DIR" bash "$SCRIPT" --help 2>&1)" || RC=$?
 assert_eq "--help succeeds" 0 "$RC"
 assert_eq "--help names the secrets" 1 "$([[ "$OUT" == *CLAUDE_CODE_OAUTH_TOKEN* ]] && echo 1 || echo 0)"
 assert_eq "--help names the GitHub App authorization" 1 "$([[ "$OUT" == *GITHUB_APP_AUTH* ]] && echo 1 || echo 0)"
+assert_eq "--help names the Codex login" 1 "$([[ "$OUT" == *CODEX_AUTH* ]] && echo 1 || echo 0)"
 
 # --- 2. Unknown names ---
 new_home unknown
@@ -109,7 +110,7 @@ assert_eq "unknown names write nothing" "" "$(ls -A "$HOME_DIR")"
 
 # --- 3. Empty input ---
 new_home empty
-for name in GH_TOKEN GITHUB_APP_AUTH CLAUDE_CODE_OAUTH_TOKEN LGTMCP_CONFIG; do
+for name in GH_TOKEN GITHUB_APP_AUTH CLAUDE_CODE_OAUTH_TOKEN CODEX_AUTH LGTMCP_CONFIG; do
     for input in '' $'\n' $'  \n\t\n'; do
         run "$name" "$input"
         assert_eq "$name with empty input fails" 1 "$RC"
@@ -165,6 +166,41 @@ assert_eq "claude token replacement succeeds" 0 "$RC"
 assert_eq "claude token replacement content" "second-value" "$(<"$file")"
 assert_eq "claude token replacement file mode" 600 "$(mode_of "$file")"
 assert_eq "claude token replacement directory mode" 700 "$(mode_of "$HOME_DIR/.config/secrets")"
+
+# --- 5a. CODEX_AUTH ---
+CODEX_ACCESS='FAKE-codex-access-token-4c8e'
+CODEX_JSON=$'{\n  "OPENAI_API_KEY": null,\n  "tokens": {\n    "access_token": "'"$CODEX_ACCESS"$'",\n    "refresh_token": "FAKE-codex-refresh-9d1a"\n  },\n  "last_refresh": "2026-10-08T00:00:00Z"\n}'
+new_home codex
+run CODEX_AUTH "$CODEX_JSON"$'\n'
+file="$HOME_DIR/.codex/auth.json"
+assert_eq "codex auth succeeds" 0 "$RC"
+assert_eq "codex auth prints nothing" "" "$OUT"
+assert_eq "codex auth keeps the JSON intact, line by line" same \
+    "$(printf '%s\n' "$CODEX_JSON" | cmp -s - "$file" && echo same || echo different)"
+assert_eq "codex auth file mode" 600 "$(mode_of "$file")"
+assert_eq "codex auth directory mode" 700 "$(mode_of "$HOME_DIR/.codex")"
+assert_eq "codex auth leaves no temporary file" auth.json "$(ls -A "$HOME_DIR/.codex")"
+assert_eq "codex auth never runs gh" 0 "$([[ -e "$GH_STUB_DIR/argv" ]] && echo 1 || echo 0)"
+
+new_home codexreplace
+mkdir -p "$HOME_DIR/.codex"
+printf '{"old": true}\n' > "$HOME_DIR/.codex/auth.json"
+printf 'model = "x"\n' > "$HOME_DIR/.codex/config.toml"
+chmod 755 "$HOME_DIR/.codex"
+run CODEX_AUTH '{"new": true}'
+assert_eq "codex auth replacement succeeds" 0 "$RC"
+assert_eq "codex auth replacement content" '{"new": true}' "$(<"$HOME_DIR/.codex/auth.json")"
+assert_eq "codex auth replacement directory mode" 700 "$(mode_of "$HOME_DIR/.codex")"
+assert_eq "codex auth leaves the other Codex files alone" 'model = "x"' "$(<"$HOME_DIR/.codex/config.toml")"
+
+new_home codexbad
+for input in "\"$CODEX_ACCESS\"" '[]' "[\"$CODEX_ACCESS\"]" 'null' '42' 'not json' "{\"tokens\": \"$CODEX_ACCESS\"" '{} {}'; do
+    run CODEX_AUTH "$input"
+    assert_eq "a Codex value that is not an object fails: $input" 1 "$RC"
+    assert_eq "a Codex value that is not an object says so: $input" 1 "$([[ "$OUT" == *"not a JSON object"* ]] && echo 1 || echo 0)"
+    assert_absent "a Codex value that is not an object is not echoed: $input" "$CODEX_ACCESS" "$OUT"
+    assert_eq "a Codex value that is not an object writes nothing: $input" "" "$(ls -A "$HOME_DIR")"
+done
 
 # --- 6. LGTMCP_CONFIG ---
 new_home lgtmcp
@@ -290,6 +326,8 @@ assert_eq "no HOME says so" 1 "$([[ "$OUT" == *"HOME is not set"* ]] && echo 1 |
 # --- 10. Nothing under any HOME holds the gh token or the unknown-name input ---
 assert_eq "no secret is stored where it should not be" 0 \
     "$(grep -rl --exclude=CLAUDE_CODE_OAUTH_TOKEN "$SECRET" "$TMPBASE"/home-* 2>/dev/null | wc -l | tr -d ' ')"
+assert_eq "only the Codex record holds the Codex token" "$TMPBASE/home-codex/.codex/auth.json" \
+    "$(grep -rl "$CODEX_ACCESS" "$TMPBASE"/home-* 2>/dev/null)"
 
 echo ""
 echo "Results: $pass passed, $fail failed"

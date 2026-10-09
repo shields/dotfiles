@@ -282,6 +282,8 @@ CLIENT_ID=Iv23lim5x4MdkNNgv28z
 FAKE_CLAUDE='sk-ant-oat01-FAKEclaudeToken-7f3c9a'
 FAKE_LGTMCP='FAKE-LGTMCP-KEY-55'
 LGTMCP_YAML="gemini_api_key: $FAKE_LGTMCP"$'\n'
+FAKE_CODEX='FAKE-codex-access-token-4c8e'
+CODEX_JSON=$'{\n  "OPENAI_API_KEY": null,\n  "tokens": {\n    "access_token": "'"$FAKE_CODEX"$'",\n    "refresh_token": "FAKE-codex-refresh-9d1a"\n  }\n}\n'
 # What the fake GitHub hands out, and the device code it expects back.
 GITHUB_SECRETS=(-e ghu_fake-access -e ghr_fake-refresh -e fake-device-code)
 SETUP='shell t1 sh -c exec "$HOME/bin/setup-secrets" "$1" _'
@@ -290,15 +292,16 @@ CASE_N=0
 EXTRA_ENV=()
 FAKE_URL=
 
-# new_case [INSTANCE...]: a fresh state with a home, a Claude token to type and
-# the instances that exist.
+# new_case [INSTANCE...]: a fresh state with a home that holds a Codex login, a
+# Claude token to type and the instances that exist.
 new_case() {
     stop_fake
     (( ++CASE_N ))
     STATE="$TMPBASE/state-$CASE_N"
     HOME_DIR="$TMPBASE/home-$CASE_N"
-    mkdir -p "$STATE/calls" "$HOME_DIR/.config/lgtmcp"
+    mkdir -p "$STATE/calls" "$HOME_DIR/.config/lgtmcp" "$HOME_DIR/.codex"
     print -rn -- "$LGTMCP_YAML" > "$HOME_DIR/.config/lgtmcp/config.yaml"
+    print -rn -- "$CODEX_JSON" > "$HOME_DIR/.codex/auth.json"
     : > "$STATE/instances"
     (( $# == 0 )) || printf '%s\n' "$@" >> "$STATE/instances"
     : > "$STATE/limactl.log"
@@ -384,10 +387,10 @@ assert_no_secret_leak() {
     local desc="$1" leaks
     leaks="$(cat "$STATE"/calls/*.argv(N) "$STATE"/calls/*.env(N) "$STATE/limactl.log" \
         "$STATE"/gh.log "$STATE"/open.log "$STATE"/sleep.log 2>/dev/null |
-        grep -c -e "$FAKE_CLAUDE" -e "$FAKE_LGTMCP" "${GITHUB_SECRETS[@]}" || true)"
+        grep -c -e "$FAKE_CLAUDE" -e "$FAKE_LGTMCP" -e "$FAKE_CODEX" "${GITHUB_SECRETS[@]}" || true)"
     assert_eq "$desc: no secret in any recorded argv, environment or log" 0 "$leaks"
     assert_eq "$desc: no secret in limavm's output" 0 \
-        "$(printf '%s' "$OUT" | grep -c -e "$FAKE_CLAUDE" -e "$FAKE_LGTMCP" "${GITHUB_SECRETS[@]}" || true)"
+        "$(printf '%s' "$OUT" | grep -c -e "$FAKE_CLAUDE" -e "$FAKE_LGTMCP" -e "$FAKE_CODEX" "${GITHUB_SECRETS[@]}" || true)"
 }
 
 # --- 1. Static checks ---
@@ -407,6 +410,7 @@ assert_contains "help lists new" "limavm new" "$OUT"
 assert_contains "help lists github" "limavm github NAME OWNER/REPO" "$OUT"
 assert_contains "help names --repo" "--repo OWNER/REPO" "$OUT"
 assert_contains "help names --no-claude-token" "--no-claude-token" "$OUT"
+assert_contains "help names --no-codex-auth" "--no-codex-auth" "$OUT"
 assert_contains "help lists claude-token" "limavm claude-token" "$OUT"
 assert_contains "help says rm does not revoke" "does not revoke" "$OUT"
 run_limavm
@@ -677,6 +681,7 @@ clone --tty=false --start test-base t1
 shell t1 /home/linuxbrew/.linuxbrew/bin/brew upgrade --cask claude-code@latest codex
 $SETUP GITHUB_APP_AUTH
 $SETUP CLAUDE_CODE_OAUTH_TOKEN
+$SETUP CODEX_AUTH
 $SETUP LGTMCP_CONFIG
 shell t1" "$(limactl_log)"
 assert_eq "gh is asked for the repository's id, once" "api repos/shields/dotfiles --jq .id" "$(<"$STATE/gh.log")"
@@ -722,15 +727,16 @@ print(parsed.repository, parsed.client_id, parsed.web_url, parsed.api_url)
 ' "$HERE/../bin/github_app_token.py")"
 assert_eq "the Claude token reaches setup-secrets on stdin, with a newline" same \
     "$(print -r -- "$FAKE_CLAUDE" | cmp -s - "$STATE/calls/6.stdin" && echo same || echo different)"
+assert_eq "the Codex login reaches setup-secrets on stdin, byte for byte" same \
+    "$(print -rn -- "$CODEX_JSON" | cmp -s - "$STATE/calls/7.stdin" && echo same || echo different)"
 assert_eq "the LGTMCP config reaches setup-secrets on stdin, byte for byte" same \
-    "$(print -rn -- "$LGTMCP_YAML" | cmp -s - "$STATE/calls/7.stdin" && echo same || echo different)"
+    "$(print -rn -- "$LGTMCP_YAML" | cmp -s - "$STATE/calls/8.stdin" && echo same || echo different)"
 assert_eq "the upgrade call has no stdin" 0 "$(wc -c < "$STATE/calls/4.stdin" | tr -d ' ')"
 assert_no_secret_leak "new --repo"
 assert_eq "curl was run for the flow" 2 "$(stub_calls curl)"
 assert_eq "limavm never calls security" 0 "$(cat "$STATE/security.log" 2>/dev/null | wc -l | tr -d ' ')"
 assert_contains "new says what the VM can reach" "shields/dotfiles only" "$OUT"
-assert_contains "new reminds about the Codex login" "codex login --device-auth" "$OUT"
-assert_contains "new mentions the ChatGPT setting" "ChatGPT" "$OUT"
+assert_eq "new with a Codex login does not ask for a Codex login" 0 "$(printf '%s' "$OUT" | grep -c 'codex login' || true)"
 
 # --- 9. new without a repository, and without a Claude token ---
 new_case test-base
@@ -741,6 +747,7 @@ list -q t1
 clone --tty=false --start test-base t1
 shell t1 /home/linuxbrew/.linuxbrew/bin/brew upgrade --cask claude-code@latest codex
 $SETUP CLAUDE_CODE_OAUTH_TOKEN
+$SETUP CODEX_AUTH
 $SETUP LGTMCP_CONFIG
 shell t1" "$(limactl_log)"
 assert_eq "new without --repo never runs gh" 0 "$(stub_calls gh)"
@@ -759,6 +766,7 @@ assert_eq "new --no-claude-token installs no Claude token" "list -q test-base
 list -q t1
 clone --tty=false --start test-base t1
 shell t1 /home/linuxbrew/.linuxbrew/bin/brew upgrade --cask claude-code@latest codex
+$SETUP CODEX_AUTH
 $SETUP LGTMCP_CONFIG
 shell t1" "$(limactl_log)"
 assert_contains "new --no-claude-token says to use claude auth login" "claude auth login" "$OUT"
@@ -767,9 +775,62 @@ new_case test-base
 start_fake
 run_limavm new t1 --no-claude-token --repo=shields/dotfiles
 assert_eq "new --repo=OWNER/REPO --no-claude-token succeeds" 0 "$RC"
-assert_eq "the GitHub authorization is the only secret but the LGTMCP config" "$SETUP GITHUB_APP_AUTH
+assert_eq "the GitHub authorization is the only secret but the Codex login and the LGTMCP config" "$SETUP GITHUB_APP_AUTH
+$SETUP CODEX_AUTH
 $SETUP LGTMCP_CONFIG" \
-    "$(limactl_log | sed -n '5,6p')"
+    "$(limactl_log | sed -n '5,7p')"
+
+# --- 9a. The Codex login ---
+new_case test-base
+EXTRA_ENV=(LIMAVM_PROMPT_INPUT="$STATE/does-not-exist")
+run_limavm new t1 --no-claude-token --no-codex-auth
+assert_eq "new --no-codex-auth succeeds" 0 "$RC"
+assert_eq "new --no-codex-auth installs no Codex login" "list -q test-base
+list -q t1
+clone --tty=false --start test-base t1
+shell t1 /home/linuxbrew/.linuxbrew/bin/brew upgrade --cask claude-code@latest codex
+$SETUP LGTMCP_CONFIG
+shell t1" "$(limactl_log)"
+assert_contains "new --no-codex-auth says how to sign Codex in" "codex login --device-auth" "$OUT"
+assert_contains "new --no-codex-auth mentions the ChatGPT setting" "ChatGPT" "$OUT"
+assert_no_secret_leak "new --no-codex-auth"
+
+new_case test-base
+rm "$HOME_DIR/.codex/auth.json"
+run_limavm new t1 --no-codex-auth
+assert_eq "new --no-codex-auth needs no Codex login on the Mac" 0 "$RC"
+
+new_case test-base
+rm "$HOME_DIR/.codex/auth.json"
+run_limavm new t1
+assert_eq "a missing Codex login fails new" 1 "$RC"
+assert_contains "a missing Codex login names the file" "$HOME_DIR/.codex/auth.json" "$OUT"
+assert_contains "a missing Codex login says what to run" "codex login" "$OUT"
+assert_contains "a missing Codex login points to the flag" "--no-codex-auth" "$OUT"
+assert_eq "a missing Codex login comes before the clone" "list -q test-base
+list -q t1" "$(limactl_log)"
+
+new_case test-base
+chmod 000 "$HOME_DIR/.codex/auth.json"
+run_limavm new t1
+assert_eq "an unreadable Codex login fails new" 1 "$RC"
+assert_contains "an unreadable Codex login names the file" "cannot read $HOME_DIR/.codex/auth.json" "$OUT"
+assert_eq "an unreadable Codex login clones nothing" 0 "$(count_in_log clone)"
+chmod 600 "$HOME_DIR/.codex/auth.json"
+
+for content in "\"$FAKE_CODEX\"" '[]' 'not json' '' "{\"tokens\": \"$FAKE_CODEX\"" '{} {}'; do
+    new_case test-base
+    start_fake
+    printf '%s\n' "$content" > "$HOME_DIR/.codex/auth.json"
+    run_limavm new t1 --repo shields/dotfiles
+    assert_eq "a Codex login that is not a JSON object fails new: $content" 1 "$RC"
+    assert_contains "a Codex login that is not a JSON object is named: $content" "$HOME_DIR/.codex/auth.json" "$OUT"
+    assert_contains "a Codex login that is not a JSON object points to the flag: $content" "--no-codex-auth" "$OUT"
+    assert_eq "a Codex login that is not a JSON object comes before the clone: $content" "list -q test-base
+list -q t1" "$(limactl_log)"
+    assert_eq "a Codex login that is not a JSON object contacts no GitHub: $content" "" "$(fake_requests)"
+    assert_no_secret_leak "a Codex login that is not a JSON object: $content"
+done
 
 # --- 10. The Claude token prompt ---
 new_case test-base
@@ -1208,7 +1269,7 @@ for failing in clone brew setup-secrets; do
     assert_no_secret_leak "a failing $failing"
 done
 
-for failing in GITHUB_APP_AUTH CLAUDE_CODE_OAUTH_TOKEN LGTMCP_CONFIG; do
+for failing in GITHUB_APP_AUTH CLAUDE_CODE_OAUTH_TOKEN CODEX_AUTH LGTMCP_CONFIG; do
     new_case test-base
     start_fake
     EXTRA_ENV+=(LIMA_STUB_FAIL=$failing)

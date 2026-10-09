@@ -28,11 +28,12 @@ github_client_id=${LIMAVM_GITHUB_CLIENT_ID:-Iv23lim5x4MdkNNgv28z}
 github_web_url=${LIMAVM_GITHUB_WEB_URL:-https://github.com}
 github_api_url=${LIMAVM_GITHUB_API_URL:-https://api.github.com}
 claude_token_file=$HOME/.config/secrets/CLAUDE_CODE_OAUTH_TOKEN
+codex_auth_file=$HOME/.codex/auth.json
 
 usage() {
     cat <<EOF
 usage: limavm base [MODULE...]   build $base from lima/dev.yaml and the checkout in the current directory
-       limavm new [NAME] [--repo OWNER/REPO] [--no-claude-token]
+       limavm new [NAME] [--repo OWNER/REPO] [--no-claude-token] [--no-codex-auth]
                                  clone $base, install secrets, open a shell
        limavm github NAME OWNER/REPO
                                  run the device flow again, replacing the VM's GitHub access
@@ -56,6 +57,10 @@ when that file exists, and otherwise asks for it without echo: run claude
 setup-token in another terminal first. claude-token asks the same way and writes
 the file (mode 600), so that new never asks again. --no-claude-token skips the
 token, for a VM that will use claude auth login.
+
+new copies this Mac's Codex login, $codex_auth_file, into the VM, and
+fails when there is none: run codex login here first. --no-codex-auth skips it,
+for a VM that will use codex login --device-auth.
 EOF
 }
 
@@ -357,7 +362,8 @@ new_cleanup() {
 }
 
 cmd_new() {
-    local name='' named=0 repo='' no_claude_token=0 have_repo=0
+    local name='' named=0 repo='' no_claude_token=0 no_codex_auth=0 have_repo=0
+    local new_usage="usage: limavm new [NAME] [--repo OWNER/REPO] [--no-claude-token] [--no-codex-auth]"
     while (($#)); do
         case $1 in
         --repo)
@@ -375,9 +381,13 @@ cmd_new() {
             no_claude_token=1
             shift
             ;;
+        --no-codex-auth)
+            no_codex_auth=1
+            shift
+            ;;
         -*) die "unknown option $1" ;;
         *)
-            ((! named)) || die "usage: limavm new [NAME] [--repo OWNER/REPO] [--no-claude-token]"
+            ((! named)) || die "$new_usage"
             name=$1
             named=1
             shift
@@ -394,6 +404,13 @@ cmd_new() {
     ! instance_exists "$name" || die "$name already exists"
     local lgtmcp_config=$HOME/.config/lgtmcp/config.yaml
     [[ -r $lgtmcp_config ]] || die "$lgtmcp_config does not exist; LGTMCP needs it in the VM"
+    if ((! no_codex_auth)); then
+        need jq
+        [[ -e $codex_auth_file ]] || die "$codex_auth_file does not exist; run codex login on this Mac, or pass --no-codex-auth"
+        [[ -r $codex_auth_file ]] || die "cannot read $codex_auth_file; run codex login on this Mac again, or pass --no-codex-auth"
+        jq -es 'length == 1 and (.[0] | type) == "object"' "$codex_auth_file" >/dev/null 2>&1 ||
+            die "$codex_auth_file is not a JSON object; run codex login on this Mac again, or pass --no-codex-auth"
+    fi
 
     # What needs the person comes before the clone, so that waiting for them
     # leaves no VM running.
@@ -424,6 +441,9 @@ cmd_new() {
     if ((! no_claude_token)); then
         printf '%s\n' "$claude_token" | install_secret "$name" CLAUDE_CODE_OAUTH_TOKEN
     fi
+    if ((! no_codex_auth)); then
+        install_secret "$name" CODEX_AUTH <"$codex_auth_file"
+    fi
     install_secret "$name" LGTMCP_CONFIG <"$lgtmcp_config"
 
     printf 'limavm: %s is ready.\n' "$name"
@@ -435,13 +455,15 @@ cmd_new() {
     if ((no_claude_token)); then
         printf 'limavm: no Claude token was installed; run claude auth login in the VM.\n'
     fi
-    cat <<EOF
+    if ((no_codex_auth)); then
+        cat <<EOF
 limavm: Codex is not signed in; run
 
     codex login --device-auth
 
 in the VM, after turning on device code login in ChatGPT's security settings.
 EOF
+    fi
     created=
     trap - EXIT
     exec limactl shell "$name"
