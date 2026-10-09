@@ -101,7 +101,7 @@ Nothing secret is in the repository, so log in once on each machine:
   credential helper.
 - Claude Code: `claude auth login`, or run `claude setup-token` and put the
   token in `~/.config/secrets/CLAUDE_CODE_OAUTH_TOKEN` (mode 0600). Interactive
-  zsh shells export it from there.
+  zsh shells on Linux export it from there.
 - Codex: `codex login --device-auth`
 
 Login shells set `LANG` to `en_US.UTF-8` when the SSH client did not send one,
@@ -126,6 +126,7 @@ limavm base [MODULE...]   # once, and again to refresh the base: tens of minutes
 limavm new [NAME] [--repo OWNER/REPO] [--no-claude-token]
                           # a clone of the base, with secrets, and a shell in it
 limavm github NAME OWNER/REPO   # authorize an existing VM for a repository again
+limavm claude-token       # once: keep the Claude token on the Mac for every later new
 limavm rm NAME
 limavm list
 ```
@@ -147,9 +148,11 @@ replaces the name `dotfiles-base`.
 
 ## Secrets
 
-Nothing that works as a credential is stored on the Mac for the VMs. Each secret
-reaches a VM over stdin, when the VM is made, and exists on the Mac only in
-`limavm`'s memory (and in your head, or in a terminal you pasted it into).
+No GitHub credential is stored on the Mac for the VMs. Each secret reaches a VM
+over stdin, when the VM is made, and exists on the Mac only in `limavm`'s memory
+(and in your head, or in a terminal you pasted it into), except for the Claude
+token that `limavm claude-token` keeps and the LGTMCP config the Mac has anyway,
+both below.
 
 ### GitHub
 
@@ -219,12 +222,19 @@ repository scope is also the only limit on `gh api` calls that are POSTs without
 
 ### Claude Code
 
-`limavm new` asks for the token that `claude setup-token` prints, without echo.
-Run that in another terminal first and paste the result at the prompt. The token
-goes to `~/.config/secrets/CLAUDE_CODE_OAUTH_TOKEN` (mode 0600), which `.zshrc`
-exports in interactive shells. It is never taken from the command line or the
-environment. An empty answer is an error; `--no-claude-token` skips the prompt
-for a VM where you will run `claude auth login`.
+`limavm claude-token` asks, without echo, for the token that `claude setup-token`
+prints (run that in another terminal first and paste the result) and keeps it in
+`~/.config/secrets/CLAUDE_CODE_OAUTH_TOKEN` on the Mac (directory 0700, file
+0600, written atomically). That is the one exception to "nothing on the Mac": the
+file is the same one the VM gets, `.zshrc` exports it only on Linux, and Claude's
+sandbox on the Mac denies reads under `~/.config/secrets`. `limavm new` installs
+the token from that file when it exists, and fails, naming the file, when it is
+empty, unreadable or holds more than one word; without the file it asks the same
+way `claude-token` does and reminds you of `claude-token`. In the VM the token
+goes to the same path, which `.zshrc` exports in interactive shells. It is never
+taken from the command line or the environment. An empty answer is an error;
+`--no-claude-token` skips the token, file or prompt, for a VM where you will run
+`claude auth login`.
 
 ### The rest
 
@@ -314,8 +324,8 @@ type at the address it opens:
 - `limavm github t1 OWNER/REPO` replaces the access in a running VM, and
   de-authorizing the app at github.com/settings/apps/authorizations makes the
   next renewal in every VM fail with a message that names that command.
-- `claude` runs without a login (with the token pasted at the `limavm new`
-  prompt), and `codex login --device-auth` signs Codex in.
+- `claude` runs without a login (with the token from `limavm claude-token` or
+  the `limavm new` prompt), and `codex login --device-auth` signs Codex in.
 - An LGTMCP `review_only` call works, and `emacs -nw` starts and exits.
 - From the VM, `curl -m3 host.lima.internal:PORT` fails at once for a server on
   the Mac, and `lsof -nP -iTCP -sTCP:LISTEN` on the Mac shows only Lima's

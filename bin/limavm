@@ -27,6 +27,7 @@ guest_repo=src/github.com/shields/dotfiles
 github_client_id=${LIMAVM_GITHUB_CLIENT_ID:-Iv23lim5x4MdkNNgv28z}
 github_web_url=${LIMAVM_GITHUB_WEB_URL:-https://github.com}
 github_api_url=${LIMAVM_GITHUB_API_URL:-https://api.github.com}
+claude_token_file=$HOME/.config/secrets/CLAUDE_CODE_OAUTH_TOKEN
 
 usage() {
     cat <<EOF
@@ -35,6 +36,7 @@ usage: limavm base [MODULE...]   build $base from lima/dev.yaml and the checkout
                                  clone $base, install secrets, open a shell
        limavm github NAME OWNER/REPO
                                  run the device flow again, replacing the VM's GitHub access
+       limavm claude-token       keep the token that claude setup-token prints, for every later new
        limavm rm NAME            delete a VM ($base is refused)
        limavm list               list the VMs
 
@@ -49,9 +51,11 @@ gets a token that reaches only that repository, renewed inside the VM. Without
 limavm rm does not revoke the VM's tokens; de-authorizing the app at
 https://github.com/settings/apps/authorizations ends all of them.
 
-new asks, without echo, for the token that claude setup-token prints; run that
-in another terminal first. --no-claude-token skips it, for a VM that will use
-claude auth login.
+new installs the Claude token from $claude_token_file
+when that file exists, and otherwise asks for it without echo: run claude
+setup-token in another terminal first. claude-token asks the same way and writes
+the file (mode 600), so that new never asks again. --no-claude-token skips the
+token, for a VM that will use claude auth login.
 EOF
 }
 
@@ -282,26 +286,58 @@ github_authorize() {
         die "GitHub's token reply lacks a token or an expiry"
 }
 
-# LIMAVM_PROMPT_INPUT names a file to read instead of the terminal, for tests.
 claude_token=
+set_claude_token() {
+    local line=$1 empty=$2 spaces=$3
+    line=${line//$'\r'/}
+    line=${line#"${line%%[![:space:]]*}"}
+    line=${line%"${line##*[![:space:]]}"}
+    [[ -n $line ]] || die "$empty"
+    [[ $line != *[[:space:]]* ]] || die "$spaces"
+    claude_token=$line
+}
+
+# LIMAVM_PROMPT_INPUT names a file to read instead of the terminal, for tests.
 prompt_claude_token() {
-    local line=
+    local or_else=${1:-} line=
     if [[ -n ${LIMAVM_PROMPT_INPUT:-} ]]; then
         [[ -r $LIMAVM_PROMPT_INPUT ]] || die "cannot read LIMAVM_PROMPT_INPUT"
         IFS= read -r line <"$LIMAVM_PROMPT_INPUT" || [[ -n $line ]] || true
     else
         { : </dev/tty; } 2>/dev/null ||
-            die "there is no terminal to ask for the Claude token; run in a terminal, or pass --no-claude-token"
+            die "there is no terminal to ask for the Claude token; run in a terminal$or_else"
         printf 'Paste the output of claude setup-token (no echo), then press Enter: ' >/dev/tty
         IFS= read -rs line </dev/tty || [[ -n $line ]] || true
         printf '\n' >/dev/tty
     fi
-    line=${line//$'\r'/}
-    line=${line#"${line%%[![:space:]]*}"}
-    line=${line%"${line##*[![:space:]]}"}
-    [[ -n $line ]] || die "the Claude token is empty; run claude setup-token in another terminal and paste its output, or pass --no-claude-token"
-    [[ $line != *[[:space:]]* ]] || die "the Claude token has spaces in it; paste only the token"
-    claude_token=$line
+    set_claude_token "$line" \
+        "the Claude token is empty; run claude setup-token in another terminal and paste its output$or_else" \
+        "the Claude token has spaces in it; paste only the token"
+}
+
+read_claude_token_file() {
+    local content
+    [[ -r $claude_token_file ]] || die "cannot read $claude_token_file; run limavm claude-token to replace it, or pass --no-claude-token"
+    content=$(<"$claude_token_file")
+    set_claude_token "$content" \
+        "$claude_token_file is empty; run limavm claude-token to replace it, or pass --no-claude-token" \
+        "$claude_token_file holds more than one token; run limavm claude-token to replace it"
+}
+
+cmd_claude_token() {
+    [[ $# -eq 0 ]] || die "usage: limavm claude-token"
+    prompt_claude_token
+    local dir tmp
+    dir=$(dirname "$claude_token_file")
+    umask 077
+    mkdir -p "$dir"
+    chmod 700 "$dir"
+    tmp=$(mktemp "$dir/.CLAUDE_CODE_OAUTH_TOKEN.XXXXXX")
+    if ! printf '%s\n' "$claude_token" >"$tmp" || ! chmod 600 "$tmp" || ! mv -f "$tmp" "$claude_token_file"; then
+        rm -f "$tmp"
+        die "cannot write $claude_token_file"
+    fi
+    printf 'limavm: the Claude token is in %s; limavm new installs it from there\n' "$claude_token_file"
 }
 
 install_secret() {
@@ -361,7 +397,14 @@ cmd_new() {
 
     # What needs the person comes before the clone, so that waiting for them
     # leaves no VM running.
-    ((no_claude_token)) || prompt_claude_token
+    if ((no_claude_token)); then
+        :
+    elif [[ -e $claude_token_file ]]; then
+        read_claude_token_file
+    else
+        prompt_claude_token ', or pass --no-claude-token'
+        printf 'limavm: limavm claude-token keeps the token for next time\n' >&2
+    fi
     [[ -z $repo ]] || github_authorize "$repo"
 
     trap new_cleanup EXIT
@@ -448,6 +491,7 @@ case $command in
 base) cmd_base "$@" ;;
 new) cmd_new "$@" ;;
 github) cmd_github "$@" ;;
+claude-token) cmd_claude_token "$@" ;;
 rm) cmd_rm "$@" ;;
 list)
     [[ $# -eq 0 ]] || die "usage: limavm list"

@@ -16,6 +16,7 @@
 
 set -euo pipefail
 umask 022
+zmodload zsh/stat
 
 # A git hook's environment would aim the fixture's git at the hook's repository.
 for var in $(git rev-parse --local-env-vars); do
@@ -355,6 +356,12 @@ staging_dirs_left() {
     ls "$TMPDIR" | grep -c '^limavm\.' || true
 }
 
+mode_of() {
+    local -a mode
+    zstat -A mode +mode "$1"
+    printf '%o' $(( mode[1] & 8#7777 ))
+}
+
 fake_requests() {
     [[ -e "$STATE/fake.log" ]] || return 0
     jq -r '"\(.method) \(.path)"' "$STATE/fake.log"
@@ -375,7 +382,7 @@ stub_calls() {
 # stdin and nowhere else.
 assert_no_secret_leak() {
     local desc="$1" leaks
-    leaks="$(cat "$STATE"/calls/*.argv "$STATE"/calls/*.env "$STATE/limactl.log" \
+    leaks="$(cat "$STATE"/calls/*.argv(N) "$STATE"/calls/*.env(N) "$STATE/limactl.log" \
         "$STATE"/gh.log "$STATE"/open.log "$STATE"/sleep.log 2>/dev/null |
         grep -c -e "$FAKE_CLAUDE" -e "$FAKE_LGTMCP" "${GITHUB_SECRETS[@]}" || true)"
     assert_eq "$desc: no secret in any recorded argv, environment or log" 0 "$leaks"
@@ -400,6 +407,7 @@ assert_contains "help lists new" "limavm new" "$OUT"
 assert_contains "help lists github" "limavm github NAME OWNER/REPO" "$OUT"
 assert_contains "help names --repo" "--repo OWNER/REPO" "$OUT"
 assert_contains "help names --no-claude-token" "--no-claude-token" "$OUT"
+assert_contains "help lists claude-token" "limavm claude-token" "$OUT"
 assert_contains "help says rm does not revoke" "does not revoke" "$OUT"
 run_limavm
 assert_eq "no command fails" 2 "$RC"
@@ -740,6 +748,7 @@ assert_eq "new without --repo never runs curl" 0 "$(stub_calls curl)"
 assert_eq "new without --repo never opens a browser" 0 "$([[ -e "$STATE/open.log" ]] && echo 1 || echo 0)"
 assert_contains "new without --repo says the VM has no GitHub access" "no GitHub access" "$OUT"
 assert_contains "new without --repo says how to add some" "limavm github t1 OWNER/REPO" "$OUT"
+assert_contains "new without a token file says how to keep the token" "limavm claude-token" "$OUT"
 assert_no_secret_leak "new without --repo"
 
 new_case test-base
@@ -804,6 +813,118 @@ EXTRA_ENV=(LIMAVM_PROMPT_INPUT="$STATE/does-not-exist")
 run_limavm new t1
 assert_eq "an unreadable prompt file fails" 1 "$RC"
 assert_eq "an unreadable prompt file clones nothing" 0 "$(count_in_log clone)"
+
+# --- 10a. The Claude token file on the Mac ---
+TOKEN_FILE_SUFFIX=.config/secrets/CLAUDE_CODE_OAUTH_TOKEN
+FILE_CLAUDE='sk-ant-oat01-FAKEfileToken-9b2d'
+write_token_file() {
+    mkdir -p "$HOME_DIR/.config/secrets"
+    printf '%s' "$1" > "$HOME_DIR/$TOKEN_FILE_SUFFIX"
+}
+
+new_case test-base
+write_token_file "$FILE_CLAUDE"$'\n'
+EXTRA_ENV=(LIMAVM_PROMPT_INPUT="$STATE/does-not-exist")
+run_limavm new t1
+assert_eq "a token file means no prompt" 0 "$RC"
+assert_eq "the token file's token reaches setup-secrets on stdin, with a newline" same \
+    "$(print -r -- "$FILE_CLAUDE" | cmp -s - "$STATE/calls/5.stdin" && echo same || echo different)"
+assert_eq "the token file's token is in no argument list, environment or log" 0 \
+    "$(cat "$STATE"/calls/*.argv "$STATE"/calls/*.env "$STATE/limactl.log" | grep -c "$FILE_CLAUDE" || true)"
+assert_eq "the token file's token is not printed" 0 "$(printf '%s' "$OUT" | grep -c "$FILE_CLAUDE" || true)"
+assert_eq "a token file means no hint about keeping the token" 0 "$(printf '%s' "$OUT" | grep -c 'limavm claude-token' || true)"
+
+new_case test-base
+write_token_file $'  \r\n'"$FILE_CLAUDE"$'  \r\n\n'
+EXTRA_ENV=(LIMAVM_PROMPT_INPUT="$STATE/does-not-exist")
+run_limavm new t1
+assert_eq "a token file with blanks around the token is accepted" 0 "$RC"
+assert_eq "a token file's token is trimmed before it is installed" same \
+    "$(print -r -- "$FILE_CLAUDE" | cmp -s - "$STATE/calls/5.stdin" && echo same || echo different)"
+
+for content in '' $'\n' $'  \r\n'; do
+    new_case test-base
+    write_token_file "$content"
+    run_limavm new t1
+    assert_eq "an empty token file fails" 1 "$RC"
+    assert_contains "an empty token file is named" "$HOME_DIR/$TOKEN_FILE_SUFFIX is empty" "$OUT"
+    assert_contains "an empty token file points to claude-token" "limavm claude-token" "$OUT"
+    assert_eq "an empty token file comes before the clone" "list -q test-base
+list -q t1" "$(limactl_log)"
+done
+
+new_case test-base
+write_token_file 'sk-ant one two'
+run_limavm new t1
+assert_eq "a token file with two words fails" 1 "$RC"
+assert_contains "a token file with two words is named" "$HOME_DIR/$TOKEN_FILE_SUFFIX" "$OUT"
+assert_eq "a token file with two words clones nothing" 0 "$(count_in_log clone)"
+assert_eq "a token file with two words is not echoed" 0 "$(printf '%s' "$OUT" | grep -c 'sk-ant' || true)"
+
+new_case test-base
+write_token_file "$FILE_CLAUDE"
+chmod 000 "$HOME_DIR/$TOKEN_FILE_SUFFIX"
+run_limavm new t1
+assert_eq "an unreadable token file fails" 1 "$RC"
+assert_contains "an unreadable token file is named" "cannot read $HOME_DIR/$TOKEN_FILE_SUFFIX" "$OUT"
+assert_eq "an unreadable token file clones nothing" 0 "$(count_in_log clone)"
+chmod 600 "$HOME_DIR/$TOKEN_FILE_SUFFIX"
+
+new_case test-base
+write_token_file 'sk-ant one two'
+EXTRA_ENV=(LIMAVM_PROMPT_INPUT="$STATE/does-not-exist")
+run_limavm new t1 --no-claude-token
+assert_eq "--no-claude-token ignores the token file" 0 "$RC"
+assert_eq "--no-claude-token with a token file installs no Claude token" 0 "$(count_in_log CLAUDE_CODE_OAUTH_TOKEN)"
+
+new_case test-base
+run_limavm claude-token
+assert_eq "claude-token succeeds" 0 "$RC"
+assert_eq "claude-token writes the token with a newline" same \
+    "$(print -r -- "$FAKE_CLAUDE" | cmp -s - "$HOME_DIR/$TOKEN_FILE_SUFFIX" && echo same || echo different)"
+assert_eq "claude-token's file mode" 600 "$(mode_of "$HOME_DIR/$TOKEN_FILE_SUFFIX")"
+assert_eq "claude-token's directory mode" 700 "$(mode_of "$HOME_DIR/.config/secrets")"
+assert_eq "claude-token leaves no temporary file" CLAUDE_CODE_OAUTH_TOKEN "$(ls -A "$HOME_DIR/.config/secrets")"
+assert_contains "claude-token says where it wrote" "$HOME_DIR/$TOKEN_FILE_SUFFIX" "$OUT"
+assert_eq "claude-token touches no VM" "" "$(limactl_log)"
+assert_no_secret_leak "claude-token"
+
+new_case test-base
+write_token_file 'old-token'
+chmod 644 "$HOME_DIR/$TOKEN_FILE_SUFFIX"
+chmod 755 "$HOME_DIR/.config/secrets"
+run_limavm claude-token
+assert_eq "claude-token replaces an existing file" 0 "$RC"
+assert_eq "claude-token's replacement content" "$FAKE_CLAUDE" "$(<"$HOME_DIR/$TOKEN_FILE_SUFFIX")"
+assert_eq "claude-token's replacement file mode" 600 "$(mode_of "$HOME_DIR/$TOKEN_FILE_SUFFIX")"
+assert_eq "claude-token's replacement directory mode" 700 "$(mode_of "$HOME_DIR/.config/secrets")"
+
+for content in '' $'\n' 'sk-ant one two'; do
+    new_case test-base
+    printf '%s' "$content" > "$STATE/prompt"
+    run_limavm claude-token
+    assert_eq "claude-token with the input '$content' fails" 1 "$RC"
+    assert_eq "claude-token with the input '$content' writes nothing" no \
+        "$([[ -e "$HOME_DIR/.config/secrets" ]] && echo yes || echo no)"
+    assert_eq "claude-token with the input '$content' is not echoed" 0 "$(printf '%s' "$OUT" | grep -c 'sk-ant' || true)"
+    assert_eq "claude-token with the input '$content' suggests no --no-claude-token" 0 \
+        "$(printf '%s' "$OUT" | grep -c -- '--no-claude-token' || true)"
+done
+
+new_case test-base
+run_limavm claude-token extra
+assert_eq "claude-token with an argument fails" 1 "$RC"
+assert_eq "claude-token with an argument writes nothing" no \
+    "$([[ -e "$HOME_DIR/.config/secrets" ]] && echo yes || echo no)"
+
+new_case test-base
+run_limavm claude-token
+EXTRA_ENV=(LIMAVM_PROMPT_INPUT="$STATE/does-not-exist")
+run_limavm new t1
+assert_eq "new after claude-token succeeds without a prompt" 0 "$RC"
+assert_eq "new after claude-token gives no hint about keeping the token" 0 "$(printf '%s' "$OUT" | grep -c 'limavm claude-token' || true)"
+assert_eq "new after claude-token installs the kept token" same \
+    "$(print -r -- "$FAKE_CLAUDE" | cmp -s - "$STATE/calls/5.stdin" && echo same || echo different)"
 
 cat > "$TMPBASE/tty_run.py" <<'PY'
 import json
@@ -904,6 +1025,22 @@ RESULT="$(tty_run notty x new t1)"
 assert_eq "new without a terminal fails" 1 "$(jq -r .exit <<<"$RESULT")"
 assert_contains "new without a terminal says what to do" "--no-claude-token" "$(jq -r .output <<<"$RESULT")"
 assert_eq "new without a terminal clones nothing" 0 "$(count_in_log clone)"
+
+new_case test-base
+RESULT="$(tty_run pty "$TTY_TOKEN" claude-token)"
+assert_eq "claude-token prompts on the terminal" true "$(jq -r .prompted <<<"$RESULT")"
+assert_eq "claude-token succeeds with a token typed on the terminal" 0 "$(jq -r .exit <<<"$RESULT")"
+assert_eq "claude-token does not echo the typed token" false "$(jq -r .echoed <<<"$RESULT")"
+assert_eq "claude-token keeps the typed token" "$TTY_TOKEN" "$(<"$HOME_DIR/$TOKEN_FILE_SUFFIX")"
+
+new_case test-base
+RESULT="$(tty_run notty x claude-token)"
+assert_eq "claude-token without a terminal fails" 1 "$(jq -r .exit <<<"$RESULT")"
+assert_contains "claude-token without a terminal says what to do" "run in a terminal" "$(jq -r .output <<<"$RESULT")"
+assert_eq "claude-token without a terminal suggests no --no-claude-token" 0 \
+    "$(jq -r .output <<<"$RESULT" | grep -c -- '--no-claude-token' || true)"
+assert_eq "claude-token without a terminal writes nothing" no \
+    "$([[ -e "$HOME_DIR/.config/secrets" ]] && echo yes || echo no)"
 
 # --- 11. new picks a name, and sizes ---
 new_case test-base
