@@ -92,6 +92,8 @@ and travel with the code.
 - Never bypass precommit hooks; respect configured git hooks.
 - Don't use Conventional Commits (`feat:`, `fix:`) unless the repo already does;
   match the existing history.
+- No `Validation:` line or other test-run report in a commit message; the
+  message says what changed and why.
 - Before committing, list the comment lines the diff adds (e.g.
   `git diff -U0 | grep -E '^\+\s*(//|#)'`) and hold each to the comment rule
   above: out of context they show what reads as reasonable inline. Do this
