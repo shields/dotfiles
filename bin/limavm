@@ -23,7 +23,8 @@
 set -euo pipefail
 
 base=${LIMAVM_BASE:-dotfiles-base}
-guest_repo=src/github.com/shields/dotfiles
+dotfiles_repo=shields/dotfiles
+guest_repo=src/github.com/$dotfiles_repo
 github_client_id=${LIMAVM_GITHUB_CLIENT_ID:-Iv23lim5x4MdkNNgv28z}
 github_web_url=${LIMAVM_GITHUB_WEB_URL:-https://github.com}
 github_api_url=${LIMAVM_GITHUB_API_URL:-https://api.github.com}
@@ -33,9 +34,9 @@ codex_auth_file=$HOME/.codex/auth.json
 usage() {
     cat <<EOF
 usage: limavm base [MODULE...]   build $base from lima/dev.yaml and the checkout in the current directory
-       limavm new [NAME] [--repo OWNER/REPO] [--no-claude-token] [--no-codex-auth]
-                                 clone $base, install secrets, open a shell
-       limavm github NAME OWNER/REPO
+       limavm new [NAME] [--repo OWNER/REPO | --no-repo] [--no-claude-token] [--no-codex-auth]
+                                 clone $base, install secrets, clone the repository, open a shell
+       limavm github NAME [OWNER/REPO]
                                  run the device flow again, replacing the VM's GitHub access
        limavm claude-token       keep the token that claude setup-token prints, for every later new
        limavm rm NAME            delete a VM ($base is refused)
@@ -46,12 +47,15 @@ LIMAVM_CPUS and LIMAVM_MEMORY (in GiB) override the size in lima/dev.yaml, and
 LIMAVM_BASE replaces the name $base. LIMAVM_GITHUB_WEB_URL, LIMAVM_GITHUB_API_URL
 and LIMAVM_GITHUB_CLIENT_ID replace GitHub's addresses and the app's client ID.
 
---repo runs GitHub's device flow here: you paste a code, which is on the
-clipboard, in the browser, and the VM gets a token that reaches only that
-repository, renewed inside the VM. Without --repo the VM has no GitHub access.
-No GitHub secret stays on this Mac, and limavm rm does not revoke the VM's
-tokens; de-authorizing the app at
-https://github.com/settings/apps/authorizations ends all of them.
+The repository is --repo's, or else the one that the git origin of the current
+directory names, when it is on $github_web_url. new and github run GitHub's
+device flow here: you paste a code, which is on the clipboard, in the browser,
+and the VM gets a token that reaches only that repository, renewed inside the
+VM. new then clones the repository in the VM, at ~/src/github.com/OWNER/REPO
+($dotfiles_repo is there already, from $base), and opens the shell there. With
+no repository, or with --no-repo, the VM has no GitHub access. No GitHub secret
+stays on this Mac, and limavm rm does not revoke the VM's tokens; de-authorizing
+the app at https://github.com/settings/apps/authorizations ends all of them.
 
 new installs the Claude token from $claude_token_file
 when that file exists, and otherwise asks for it without echo: run claude
@@ -83,9 +87,54 @@ valid_repository() {
         die "invalid repository, expected OWNER/REPO: $1"
 }
 
+github_host() {
+    local host=${github_web_url#*://}
+    host=${host%%/*}
+    host=${host##*@}
+    printf '%s\n' "${host%%:*}"
+}
+
+# The caller validates the result, since a die here would end only the $(...)
+# subshell that reads it.
+origin_repository() {
+    local url rest authority path
+    git rev-parse --show-toplevel >/dev/null 2>&1 || return 1
+    url=$(git remote get-url origin 2>/dev/null) || return 1
+    case $url in
+    git@*:*)
+        rest=${url#git@}
+        authority=${rest%%:*}
+        path=${rest#*:}
+        ;;
+    ssh://git@*/*)
+        rest=${url#ssh://git@}
+        authority=${rest%%/*}
+        path=${rest#*/}
+        ;;
+    https://*/*)
+        rest=${url#https://}
+        authority=${rest%%/*}
+        path=${rest#*/}
+        ;;
+    *) return 1 ;;
+    esac
+    authority=$(printf '%s' "${authority%%:*}" | tr '[:upper:]' '[:lower:]')
+    [[ $authority == "$(github_host)" ]] || return 1
+    path=${path%/}
+    path=${path%.git}
+    printf '%s\n' "$path"
+}
+
 instance_exists() {
     # limactl list exits non-zero when no instance matches the name.
     limactl list -q "$1" >/dev/null 2>&1
+}
+
+guest_home_of() {
+    local home
+    home=$(limactl shell "$1" sh -c 'printf %s "$HOME"' </dev/null)
+    [[ $home == /* ]] || die "cannot tell the home directory in $1"
+    printf '%s\n' "$home"
 }
 
 size_args=()
@@ -177,9 +226,8 @@ cmd_base() {
     mounts=$(limactl list --format '{{len .Config.Mounts}}' "$base")
     [[ $mounts == 0 ]] || die "$base mounts $mounts host directories, which ~/.lima/_config adds; a throwaway VM mounts none"
 
-    local guest_home guest_dir
-    guest_home=$(limactl shell "$base" sh -c 'printf %s "$HOME"' </dev/null)
-    guest_dir=$guest_home/$guest_repo
+    local guest_dir
+    guest_dir=$(guest_home_of "$base")/$guest_repo
 
     COPYFILE_DISABLE=1 tar --no-xattrs --no-acls -C "$stage/tree" -cf - . |
         limactl shell "$base" sh -c 'set -eu; rm -rf "$1"; mkdir -p "$1"; tar -xf - --no-same-owner -C "$1"' _ "$guest_dir"
@@ -370,8 +418,8 @@ new_cleanup() {
 }
 
 cmd_new() {
-    local name='' named=0 repo='' no_claude_token=0 no_codex_auth=0 have_repo=0
-    local new_usage="usage: limavm new [NAME] [--repo OWNER/REPO] [--no-claude-token] [--no-codex-auth]"
+    local name='' named=0 repo='' no_claude_token=0 no_codex_auth=0 have_repo=0 no_repo=0
+    local new_usage="usage: limavm new [NAME] [--repo OWNER/REPO | --no-repo] [--no-claude-token] [--no-codex-auth]"
     while (($#)); do
         case $1 in
         --repo)
@@ -383,6 +431,10 @@ cmd_new() {
         --repo=*)
             repo=${1#--repo=}
             have_repo=1
+            shift
+            ;;
+        --no-repo)
+            no_repo=1
             shift
             ;;
         --no-claude-token)
@@ -405,7 +457,16 @@ cmd_new() {
     ((named)) || name=vm-$(date +%y%m%d-%H%M%S)
     valid_name "$name"
     [[ $name != "$base" ]] || die "$name is the base VM; choose another name"
-    ((! have_repo)) || valid_repository "$repo"
+    ((! have_repo || ! no_repo)) || die "--repo and --no-repo exclude each other"
+    if ((have_repo)); then
+        valid_repository "$repo"
+    elif ((! no_repo)); then
+        need git
+        if repo=$(origin_repository); then
+            printf 'limavm: GitHub access for %s, from the origin of this checkout (--no-repo gives none)\n' "$repo" >&2
+            valid_repository "$repo"
+        fi
+    fi
     need limactl
     set_size_args
     instance_exists "$base" || die "$base does not exist; run limavm base in a dotfiles checkout first"
@@ -443,8 +504,15 @@ cmd_new() {
     # Homebrew on Linux has casks for both agents.
     limactl shell "$name" /home/linuxbrew/.linuxbrew/bin/brew upgrade --cask claude-code@latest codex </dev/null
 
+    local guest_dir='' cloned=0
     if [[ -n $repo ]]; then
         printf '%s\n' "$github_record" | install_secret "$name" GITHUB_APP_AUTH
+        guest_dir=$(guest_home_of "$name")/src/github.com/$repo
+        # The base holds that checkout already, with the Mac's local changes.
+        if [[ $repo != "$dotfiles_repo" ]]; then
+            limactl shell "$name" git clone --quiet "$github_web_url/$repo.git" "$guest_dir" </dev/null
+            cloned=1
+        fi
     fi
     if ((! no_claude_token)); then
         printf '%s\n' "$claude_token" | install_secret "$name" CLAUDE_CODE_OAUTH_TOKEN
@@ -455,8 +523,10 @@ cmd_new() {
     install_secret "$name" LGTMCP_CONFIG <"$lgtmcp_config"
 
     printf 'limavm: %s is ready.\n' "$name"
-    if [[ -n $repo ]]; then
-        printf 'limavm: GitHub access: %s only, with push and pull requests.\n' "$repo"
+    if ((cloned)); then
+        printf 'limavm: GitHub access: %s only, with push and pull requests; it is cloned at %s.\n' "$repo" "$guest_dir"
+    elif [[ -n $repo ]]; then
+        printf 'limavm: GitHub access: %s only, with push and pull requests; the checkout from %s is at %s.\n' "$repo" "$base" "$guest_dir"
     else
         printf 'limavm: %s has no GitHub access; limavm github %s OWNER/REPO gives it some.\n' "$name" "$name"
     fi
@@ -474,14 +544,23 @@ EOF
     fi
     created=
     trap - EXIT
+    if [[ -n $guest_dir ]]; then
+        exec limactl shell --workdir "$guest_dir" "$name"
+    fi
     exec limactl shell "$name"
 }
 
 cmd_github() {
-    [[ $# -eq 2 ]] || die "usage: limavm github NAME OWNER/REPO"
-    local name=$1 repo=$2 status
+    [[ $# -eq 1 || $# -eq 2 ]] || die "usage: limavm github NAME [OWNER/REPO]"
+    local name=$1 repo=${2:-} status
     valid_name "$name"
     [[ $name != "$base" ]] || die "$name is the base VM; it gets no secrets"
+    if [[ -z $repo ]]; then
+        need git
+        repo=$(origin_repository) ||
+            die "the current directory has no git origin on $(github_host); run limavm github $name OWNER/REPO"
+        printf 'limavm: GitHub access for %s, from the origin of this checkout\n' "$repo" >&2
+    fi
     valid_repository "$repo"
     need limactl
     instance_exists "$name" || die "$name does not exist"

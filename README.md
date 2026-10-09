@@ -123,9 +123,9 @@ takes about a minute, and `limavm rm` discards it.
 
 ```
 limavm base [MODULE...]   # once, and again to refresh the base: tens of minutes
-limavm new [NAME] [--repo OWNER/REPO] [--no-claude-token] [--no-codex-auth]
-                          # a clone of the base, with secrets, and a shell in it
-limavm github NAME OWNER/REPO   # authorize an existing VM for a repository again
+limavm new [NAME] [--repo OWNER/REPO | --no-repo] [--no-claude-token] [--no-codex-auth]
+                          # a clone of the base, with secrets, the repository, and a shell in it
+limavm github NAME [OWNER/REPO] # authorize an existing VM for a repository again
 limavm claude-token       # once: keep the Claude token on the Mac for every later new
 limavm rm NAME
 limavm list
@@ -157,9 +157,19 @@ config the Mac has anyway, all below.
 ### GitHub
 
 `limavm new NAME --repo OWNER/REPO` gives the VM access to that one repository,
-as you, with push and pull requests. `limavm github NAME OWNER/REPO` does the
-same for a VM that exists, and replaces what it had. Without `--repo` a VM has no
-GitHub access, and `limavm` says so. A VM reaches one repository: use two VMs
+as you, with push and pull requests, clones it over HTTPS into
+`~/src/github.com/OWNER/REPO` in the VM (through the VM's git credential helper,
+so no token is in the command) and opens the shell there. The base holds
+`shields/dotfiles` there already, with the checkout's local changes, so for that
+repository nothing is cloned and the shell opens in that checkout. Run inside a
+checkout, `limavm new` takes the repository from the checkout's `origin` when
+that is on github.com (`git@`, `ssh://git@` with or without a port, or
+`https://`, with or without `.git`), and says so; `--repo` wins over the origin,
+and `--no-repo` ignores it. `limavm github NAME [OWNER/REPO]` authorizes a VM
+that exists the same way, infers the repository the same way, replaces what the
+VM had, and does not clone. Outside a checkout, with no origin or with an origin
+elsewhere, a VM made without `--repo` has no GitHub access, and `limavm` says so;
+`limavm github` then needs `OWNER/REPO`. A VM reaches one repository: use two VMs
 for two.
 
 How it works:

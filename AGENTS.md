@@ -75,9 +75,14 @@ Throwaway Lima VMs (the README describes them for users):
 - `lima/dev.yaml` is the VM definition, and `bin/limavm` (Mac only, bash 3.2)
   builds `dotfiles-base` from it and clones it. `bin/setup-secrets` runs in the
   guest and reads a secret from stdin; no secret may reach an argument list, an
-  environment or a message. `limavm new --repo` runs the device flow of a GitHub
-  App (no private key) on the Mac and sends the record to
-  `setup-secrets GITHUB_APP_AUTH`. `bin/github_app_token.py` (Linux only; on
+  environment or a message. `limavm new` runs the device flow of a GitHub App
+  (no private key) on the Mac for `--repo`'s repository, or for the one that the
+  current checkout's `origin` names when it is on GitHub's host (`--no-repo`
+  turns that off), sends the record to `setup-secrets GITHUB_APP_AUTH`, clones
+  the repository in the guest at `~/src/github.com/OWNER/REPO` through the
+  guest's credential helper (not `shields/dotfiles`, which the base holds there
+  already), and opens the shell there with `--workdir`.
+  `bin/github_app_token.py` (Linux only; on
   Python 3.13, which Debian's `python3` is) keeps the record fresh from a
   systemd timer that `provision/throwaway.sh` installs and from git's credential
   helper. The Mac keeps no GitHub secret, and `limavm` never calls `security`.

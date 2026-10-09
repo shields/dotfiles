@@ -168,11 +168,12 @@ shell)
     fi
     shift
     case $* in
-    'sh -c printf %s "$HOME"') printf '/home/guest' ;;
+    'sh -c printf %s "$HOME"') [[ -e "$state/guest-home-unknown" ]] || printf '/home/guest' ;;
     'sh -c set -eu; rm -rf '*'tar -xf - '*)
         mkdir -p "$state/guest"
         tar -xf "$state/calls/$call.stdin" -C "$state/guest"
         ;;
+    'git clone '*) ;;
     'git '*) git -C "$state/guest" "${@:2}" || exit $? ;;
     esac
     ;;
@@ -293,6 +294,7 @@ git -C "$CHECKOUT" -c user.name=Test -c user.email=test@example.com commit -qm s
 git -C "$CHECKOUT" remote add origin git@github.com:shields/dotfiles.git
 
 GUEST_DIR=/home/guest/src/github.com/shields/dotfiles
+OTHER_DIR=/home/guest/src/github.com/shields/other
 CLIENT_ID=Iv23lim5x4MdkNNgv28z
 FAKE_CLAUDE='sk-ant-oat01-FAKEclaudeToken-7f3c9a'
 FAKE_LGTMCP='FAKE-LGTMCP-KEY-55'
@@ -369,6 +371,11 @@ no_pbcopy_path() {
     print -r -- "$result"
 }
 
+# Every run gets a GitHub that nothing listens on, so that the checkout's origin
+# never leads a case to the real one; start_fake replaces it, later in the
+# environment.
+UNREACHABLE_GITHUB=http://127.0.0.1:9
+
 # run_limavm ARGS...: sets OUT (stdout and stderr) and RC. RUN_PATH replaces
 # the stubbed PATH for one case.
 run_limavm() {
@@ -376,7 +383,7 @@ run_limavm() {
     OUT="$(cd "$CHECKOUT" && env PATH="${RUN_PATH:-$STUBS:$PATH}" HOME="$HOME_DIR" USER=shields \
         LIMA_STUB_STATE="$STATE" STAGE_ARGS_LOG="$STAGE_ARGS_LOG" LIMAVM_BASE=test-base \
         REAL_CURL="$REAL_CURL" REAL_GIT="$REAL_GIT" REAL_GITLEAKS="$REAL_GITLEAKS" \
-        NO_PROXY=127.0.0.1 no_proxy=127.0.0.1 \
+        NO_PROXY=127.0.0.1 no_proxy=127.0.0.1 LIMAVM_GITHUB_WEB_URL="$UNREACHABLE_GITHUB" \
         "${EXTRA_ENV[@]}" /bin/bash "$LIMAVM" "$@" 2>&1 </dev/null)" || RC=$?
 }
 
@@ -444,8 +451,9 @@ run_limavm help
 assert_eq "help succeeds" 0 "$RC"
 assert_contains "help lists base" "limavm base" "$OUT"
 assert_contains "help lists new" "limavm new" "$OUT"
-assert_contains "help lists github" "limavm github NAME OWNER/REPO" "$OUT"
+assert_contains "help lists github" "limavm github NAME [OWNER/REPO]" "$OUT"
 assert_contains "help names --repo" "--repo OWNER/REPO" "$OUT"
+assert_contains "help names --no-repo" "--no-repo" "$OUT"
 assert_contains "help names --no-claude-token" "--no-claude-token" "$OUT"
 assert_contains "help names --no-codex-auth" "--no-codex-auth" "$OUT"
 assert_contains "help lists claude-token" "limavm claude-token" "$OUT"
@@ -705,6 +713,15 @@ assert_contains "a provisioning failure keeps the VM for inspection" "left for i
 assert_eq "a provisioning failure keeps the VM" 1 "$(grep -cx test-base "$STATE/instances")"
 assert_eq "a provisioning failure removes the staging directory" 0 "$(staging_dirs_left)"
 
+new_case
+: > "$STATE/guest-home-unknown"
+run_limavm base none
+assert_eq "an unknown guest home fails base" 1 "$RC"
+assert_contains "an unknown guest home in base says so" "cannot tell the home directory in test-base" "$OUT"
+assert_eq "an unknown guest home in base runs no provisioning" 0 "$(count_in_log provision)"
+assert_contains "an unknown guest home in base keeps the VM for inspection" "left for inspection" "$OUT"
+assert_eq "an unknown guest home in base removes the staging directory" 0 "$(staging_dirs_left)"
+
 # --- 8. new with a repository ---
 new_case test-base
 start_fake
@@ -717,10 +734,13 @@ list -q t1
 clone --tty=false --start test-base t1
 shell t1 /home/linuxbrew/.linuxbrew/bin/brew upgrade --cask claude-code@latest codex
 $SETUP GITHUB_APP_AUTH
+shell t1 sh -c printf %s \"\$HOME\"
 $SETUP CLAUDE_CODE_OAUTH_TOKEN
 $SETUP CODEX_AUTH
 $SETUP LGTMCP_CONFIG
-shell t1" "$(limactl_log)"
+shell --workdir $GUEST_DIR t1" "$(limactl_log)"
+assert_eq "the repository the base holds is not cloned again" 0 "$(count_in_log 'git clone')"
+assert_contains "new says the shell opens in the base's checkout" "the checkout from test-base is at $GUEST_DIR" "$OUT"
 assert_eq "gh is asked for the repository's id, once" "api repos/shields/dotfiles --jq .id" "$(<"$STATE/gh.log")"
 assert_eq "the fake GitHub saw the device flow and one poll" "POST /login/device/code
 POST /login/oauth/access_token" "$(fake_requests)"
@@ -768,11 +788,11 @@ parsed = module.parse_record(sys.stdin.read())
 print(parsed.repository, parsed.client_id, parsed.web_url, parsed.api_url)
 ' "$HERE/../bin/github_app_token.py")"
 assert_eq "the Claude token reaches setup-secrets on stdin, with a newline" same \
-    "$(print -r -- "$FAKE_CLAUDE" | cmp -s - "$STATE/calls/6.stdin" && echo same || echo different)"
+    "$(print -r -- "$FAKE_CLAUDE" | cmp -s - "$STATE/calls/7.stdin" && echo same || echo different)"
 assert_eq "the Codex login reaches setup-secrets on stdin, byte for byte" same \
-    "$(print -rn -- "$CODEX_JSON" | cmp -s - "$STATE/calls/7.stdin" && echo same || echo different)"
+    "$(print -rn -- "$CODEX_JSON" | cmp -s - "$STATE/calls/8.stdin" && echo same || echo different)"
 assert_eq "the LGTMCP config reaches setup-secrets on stdin, byte for byte" same \
-    "$(print -rn -- "$LGTMCP_YAML" | cmp -s - "$STATE/calls/8.stdin" && echo same || echo different)"
+    "$(print -rn -- "$LGTMCP_YAML" | cmp -s - "$STATE/calls/9.stdin" && echo same || echo different)"
 assert_eq "the upgrade call has no stdin" 0 "$(wc -c < "$STATE/calls/4.stdin" | tr -d ' ')"
 assert_no_secret_leak "new --repo"
 assert_eq "curl was run for the flow" 2 "$(stub_calls curl)"
@@ -820,7 +840,170 @@ assert_eq "new --repo=OWNER/REPO --no-claude-token succeeds" 0 "$RC"
 assert_eq "the GitHub authorization is the only secret but the Codex login and the LGTMCP config" "$SETUP GITHUB_APP_AUTH
 $SETUP CODEX_AUTH
 $SETUP LGTMCP_CONFIG" \
-    "$(limactl_log | sed -n '5,7p')"
+    "$(limactl_log | sed -n '5p;7,8p')"
+
+# --- 9b. The repository comes from the checkout's origin ---
+# The fake GitHub is on 127.0.0.1, so an origin there is on GitHub's host, and
+# the checkout's usual github.com origin is not.
+ORIGIN_CASES=(
+    'git@127.0.0.1:shields/other.git'
+    'git@127.0.0.1:shields/other'
+    'ssh://git@127.0.0.1/shields/other.git'
+    'ssh://git@127.0.0.1/shields/other/'
+    'ssh://git@127.0.0.1:2222/shields/other.git'
+    'ssh://git@127.0.0.1:2222/shields/other'
+    'https://127.0.0.1/shields/other.git'
+    'https://127.0.0.1/shields/other'
+    'https://127.0.0.1/shields/other.git/'
+)
+for origin in "${ORIGIN_CASES[@]}"; do
+    new_case test-base
+    start_fake
+    git -C "$CHECKOUT" remote set-url origin "$origin"
+    run_limavm new t1
+    assert_eq "new infers the repository from the origin $origin" 0 "$RC"
+    assert_contains "new says where the repository came from: $origin" \
+        "GitHub access for shields/other, from the origin of this checkout" "$OUT"
+    assert_eq "the inferred repository is authorized and cloned: $origin" "$SETUP GITHUB_APP_AUTH
+shell t1 sh -c printf %s \"\$HOME\"
+shell t1 git clone --quiet $FAKE_URL/shields/other.git $OTHER_DIR" "$(limactl_log | sed -n '5,7p')"
+    assert_eq "the clone call has no stdin: $origin" 0 "$(wc -c < "$STATE/calls/7.stdin" | tr -d ' ')"
+    assert_eq "the shell opens in the clone: $origin" "shell --workdir $OTHER_DIR t1" "$(limactl_log | tail -1)"
+    assert_contains "new says where the repository is cloned: $origin" "cloned at $OTHER_DIR" "$OUT"
+    assert_eq "the inferred repository is looked up by name: $origin" "api repos/shields/other --jq .id" "$(<"$STATE/gh.log")"
+    assert_eq "the record names the inferred repository: $origin" shields/other "$(stdin_of 5 | jq -r .repository)"
+    assert_no_secret_leak "an inferred repository: $origin"
+done
+git -C "$CHECKOUT" remote set-url origin git@github.com:shields/dotfiles.git
+
+new_case test-base
+start_fake
+git -C "$CHECKOUT" remote set-url origin git@127.0.0.1:shields/dotfiles.git
+run_limavm new t1
+assert_eq "new infers the repository the base holds" 0 "$RC"
+assert_eq "the repository the base holds is authorized, not cloned" "$SETUP GITHUB_APP_AUTH
+shell t1 sh -c printf %s \"\$HOME\"
+$SETUP CLAUDE_CODE_OAUTH_TOKEN" "$(limactl_log | sed -n '5,7p')"
+assert_eq "the shell opens in the base's checkout" "shell --workdir $GUEST_DIR t1" "$(limactl_log | tail -1)"
+assert_contains "new says the shell opens in the base's checkout" "the checkout from test-base is at $GUEST_DIR" "$OUT"
+assert_eq "the record names the repository the base holds" shields/dotfiles "$(stdin_of 5 | jq -r .repository)"
+git -C "$CHECKOUT" remote set-url origin git@github.com:shields/dotfiles.git
+
+new_case test-base
+start_fake
+git -C "$CHECKOUT" remote set-url origin git@127.0.0.1:shields/dotfiles.git
+run_limavm new t1 --no-repo
+assert_eq "new --no-repo succeeds" 0 "$RC"
+assert_eq "new --no-repo installs no GitHub authorization" 0 "$(count_in_log GITHUB_APP_AUTH)"
+assert_eq "new --no-repo clones nothing in the VM" 0 "$(count_in_log 'git clone')"
+assert_eq "new --no-repo never runs gh" 0 "$(stub_calls gh)"
+assert_eq "new --no-repo contacts no GitHub" "" "$(fake_requests)"
+assert_eq "new --no-repo opens the shell at home" "shell t1" "$(limactl_log | tail -1)"
+assert_contains "new --no-repo says the VM has no GitHub access" "no GitHub access" "$OUT"
+
+new_case test-base
+start_fake
+git -C "$CHECKOUT" remote set-url origin git@127.0.0.1:shields/dotfiles.git
+run_limavm new t1 --repo shields/other
+assert_eq "--repo wins over the origin" 0 "$RC"
+assert_eq "--repo's repository is the one looked up" "api repos/shields/other --jq .id" "$(<"$STATE/gh.log")"
+assert_eq "--repo's repository is the one cloned" 1 "$(count_in_log "git clone --quiet $FAKE_URL/shields/other.git /home/guest/src/github.com/shields/other")"
+assert_eq "--repo's repository is in the record" shields/other "$(stdin_of 5 | jq -r .repository)"
+assert_eq "the origin's repository is not mentioned" 0 "$(printf '%s' "$OUT" | grep -c 'from the origin' || true)"
+
+new_case test-base
+start_fake
+git -C "$CHECKOUT" remote set-url origin git@127.0.0.1:shields/dotfiles.git
+run_limavm new t1 --repo shields/other --no-repo
+assert_eq "--repo with --no-repo fails" 1 "$RC"
+assert_contains "--repo with --no-repo says they exclude each other" "exclude each other" "$OUT"
+assert_eq "--repo with --no-repo touches no VM" "" "$(limactl_log)"
+
+for origin in \
+    'git@github.com:shields/dotfiles.git' \
+    'ssh://git@gitlab.com/shields/dotfiles.git' \
+    'https://127.0.0.2/shields/dotfiles.git' \
+    'https://127.0.0.1.example.com/shields/dotfiles.git' \
+    'https://user@127.0.0.1/shields/dotfiles.git' \
+    '/srv/git/shields/dotfiles.git'; do
+    new_case test-base
+    start_fake
+    git -C "$CHECKOUT" remote set-url origin "$origin"
+    run_limavm new t1
+    assert_eq "an origin elsewhere gives no GitHub access: $origin" 0 "$RC"
+    assert_eq "an origin elsewhere installs no GitHub authorization: $origin" 0 "$(count_in_log GITHUB_APP_AUTH)"
+    assert_eq "an origin elsewhere never runs gh: $origin" 0 "$(stub_calls gh)"
+    assert_eq "an origin elsewhere contacts no GitHub: $origin" "" "$(fake_requests)"
+    assert_eq "an origin elsewhere is not mentioned: $origin" 0 "$(printf '%s' "$OUT" | grep -c 'from the origin' || true)"
+done
+git -C "$CHECKOUT" remote set-url origin git@github.com:shields/dotfiles.git
+
+new_case test-base
+: > "$STATE/gh-fail"
+EXTRA_ENV+=(LIMAVM_GITHUB_WEB_URL=http://localhost:9)
+git -C "$CHECKOUT" remote set-url origin git@LOCALHOST:shields/other.git
+run_limavm new t1
+assert_contains "an origin host that differs from GitHub's only in case is inferred" \
+    "GitHub access for shields/other, from the origin of this checkout" "$OUT"
+assert_contains "an origin host that differs only in case goes on to gh" "gh cannot read shields/other" "$OUT"
+assert_eq "an origin host that differs only in case touches no VM" "list -q test-base
+list -q t1" "$(limactl_log)"
+git -C "$CHECKOUT" remote set-url origin git@github.com:shields/dotfiles.git
+
+for origin in 'https://127.0.0.1/shields/dotfiles/more.git' 'ssh://git@127.0.0.1:2222/shields/dotfiles.git/extra'; do
+    new_case test-base
+    start_fake
+    git -C "$CHECKOUT" remote set-url origin "$origin"
+    run_limavm new t1
+    assert_eq "a GitHub origin whose path is not OWNER/REPO fails new: $origin" 1 "$RC"
+    assert_contains "a GitHub origin whose path is not OWNER/REPO says where the value came from: $origin" \
+        "from the origin of this checkout (--no-repo gives none)" "$OUT"
+    assert_contains "a GitHub origin whose path is not OWNER/REPO says what is expected: $origin" "OWNER/REPO" "$OUT"
+    assert_eq "a GitHub origin whose path is not OWNER/REPO touches no VM: $origin" "" "$(limactl_log)"
+    assert_eq "a GitHub origin whose path is not OWNER/REPO contacts no GitHub: $origin" "" "$(fake_requests)"
+done
+git -C "$CHECKOUT" remote set-url origin git@github.com:shields/dotfiles.git
+
+new_case test-base
+start_fake
+git -C "$CHECKOUT" remote remove origin
+run_limavm new t1
+assert_eq "a checkout without an origin gives no GitHub access" 0 "$RC"
+assert_eq "a checkout without an origin installs no GitHub authorization" 0 "$(count_in_log GITHUB_APP_AUTH)"
+assert_eq "a checkout without an origin contacts no GitHub" "" "$(fake_requests)"
+git -C "$CHECKOUT" remote add origin git@github.com:shields/dotfiles.git
+
+new_case test-base
+start_fake
+mkdir -p "$TMPBASE/not-a-repo"
+MAIN_CHECKOUT=$CHECKOUT
+CHECKOUT="$TMPBASE/not-a-repo"
+run_limavm new t1
+assert_eq "new outside a work tree gives no GitHub access" 0 "$RC"
+assert_eq "new outside a work tree installs no GitHub authorization" 0 "$(count_in_log GITHUB_APP_AUTH)"
+assert_eq "new outside a work tree contacts no GitHub" "" "$(fake_requests)"
+CHECKOUT=$MAIN_CHECKOUT
+
+new_case test-base
+start_fake
+EXTRA_ENV+=(LIMA_STUB_FAIL='git clone')
+run_limavm new t1 --repo shields/other
+assert_eq "a failing clone in the VM fails new" 1 "$RC"
+assert_eq "a failing clone in the VM sends no later secret" "$SETUP GITHUB_APP_AUTH" "$(limactl_log | grep setup-secrets)"
+assert_eq "a failing clone in the VM deletes the VM last" "delete --tty=false --force t1" "$(limactl_log | tail -1)"
+assert_eq "a failing clone in the VM leaves no t1" 0 "$(grep -cx t1 "$STATE/instances")"
+assert_no_secret_leak "a failing clone in the VM"
+
+new_case test-base
+start_fake
+: > "$STATE/guest-home-unknown"
+run_limavm new t1 --repo shields/other
+assert_eq "an unknown guest home fails new" 1 "$RC"
+assert_contains "an unknown guest home in new says so" "cannot tell the home directory in t1" "$OUT"
+assert_eq "an unknown guest home in new clones nothing and sends no later secret" "$SETUP GITHUB_APP_AUTH" \
+    "$(limactl_log | grep -e setup-secrets -e 'git clone')"
+assert_eq "an unknown guest home in new deletes the VM last" "delete --tty=false --force t1" "$(limactl_log | tail -1)"
+assert_no_secret_leak "an unknown guest home in new"
 
 # --- 9a. The Codex login ---
 new_case test-base
@@ -1104,8 +1287,9 @@ PY
 tty_run() {
     local mode=$1 token=$2
     shift 2
-    python3 "$TMPBASE/tty_run.py" "$mode" "$token" env PATH="$STUBS:$PATH" HOME="$HOME_DIR" USER=shields \
-        LIMA_STUB_STATE="$STATE" LIMAVM_BASE=test-base REAL_CURL="$REAL_CURL" /bin/bash "$LIMAVM" "$@" 2>&1
+    (cd "$CHECKOUT" && python3 "$TMPBASE/tty_run.py" "$mode" "$token" env PATH="$STUBS:$PATH" HOME="$HOME_DIR" USER=shields \
+        LIMA_STUB_STATE="$STATE" LIMAVM_BASE=test-base REAL_CURL="$REAL_CURL" REAL_GIT="$REAL_GIT" \
+        LIMAVM_GITHUB_WEB_URL="$UNREACHABLE_GITHUB" /bin/bash "$LIMAVM" "$@" 2>&1)
 }
 
 new_case test-base
@@ -1361,6 +1545,7 @@ assert_eq "github succeeds" 0 "$RC"
 assert_eq "github call order" "list -q t1
 list --format {{.Status}} t1
 $SETUP GITHUB_APP_AUTH" "$(limactl_log)"
+assert_eq "github clones nothing" 0 "$(count_in_log 'git clone')"
 assert_eq "github sends the record on stdin" shields/dotfiles "$(stdin_of 3 | jq -r .repository)"
 assert_eq "github sends tokens for that repository only" "ghu_fake-access-1" "$(stdin_of 3 | jq -r .access_token)"
 assert_eq "github narrows the token to the repository" 4242 "$(fake_form /login/oauth/access_token repository_id)"
@@ -1408,6 +1593,31 @@ for args in "" "t1" "t1 shields/dotfiles extra" "t1 notarepo" "../x shields/dotf
     assert_eq "github with '$args' contacts no GitHub" "" "$(fake_requests)"
     assert_eq "github with '$args' installs nothing" 0 "$(count_in_log setup-secrets)"
 done
+new_case test-base t1
+start_fake
+run_limavm github t1
+assert_contains "github without a repository, outside a GitHub checkout, asks for one" "limavm github t1 OWNER/REPO" "$OUT"
+
+new_case test-base t1
+start_fake
+git -C "$CHECKOUT" remote set-url origin https://127.0.0.1/shields/other.git
+run_limavm github t1
+assert_eq "github infers the repository from the origin" 0 "$RC"
+assert_contains "github says where the repository came from" "GitHub access for shields/other, from the origin of this checkout" "$OUT"
+assert_eq "github asks gh for the inferred repository" "api repos/shields/other --jq .id" "$(<"$STATE/gh.log")"
+assert_eq "github installs the inferred repository's record" shields/other "$(stdin_of 3 | jq -r .repository)"
+assert_eq "github with an inferred repository clones nothing" 0 "$(count_in_log 'git clone')"
+git -C "$CHECKOUT" remote set-url origin git@github.com:shields/dotfiles.git
+
+new_case test-base t1
+start_fake
+MAIN_CHECKOUT=$CHECKOUT
+CHECKOUT="$TMPBASE/not-a-repo"
+run_limavm github t1
+assert_eq "github outside a work tree fails" 1 "$RC"
+assert_contains "github outside a work tree asks for the repository" "limavm github t1 OWNER/REPO" "$OUT"
+assert_eq "github outside a work tree contacts no GitHub" "" "$(fake_requests)"
+CHECKOUT=$MAIN_CHECKOUT
 
 # --- 16. rm ---
 new_case test-base t1
