@@ -218,6 +218,21 @@ printf '%s\n' "$*" >> "$LIMA_STUB_STATE/open.log"
 [[ ! -e $LIMA_STUB_STATE/open-fail ]]
 STUB
 
+# pbcopy records what it was given, and fails if $LIMA_STUB_STATE/pbcopy-fail
+# exists.
+cat > "$STUBS/pbcopy" <<'STUB'
+#!/bin/bash
+state=$LIMA_STUB_STATE
+call=$(mktemp "$state/calls/pbcopy.XXXXXX")
+printf '%s\n' "$@" > "$call.argv"
+env | sort > "$call.env"
+if [[ -e $state/pbcopy-fail ]]; then
+    echo "pbcopy: injected failure" >&2
+    exit 1
+fi
+cat > "$state/pbcopy.stdin"
+STUB
+
 cat > "$STUBS/sleep" <<'STUB'
 #!/bin/bash
 printf '%s\n' "$*" >> "$LIMA_STUB_STATE/sleep.log"
@@ -309,6 +324,7 @@ new_case() {
     print -r -- "$FAKE_CLAUDE" > "$STATE/prompt"
     STAGE_ARGS_LOG="$STATE/stage-args"
     FAKE_URL=
+    RUN_PATH=
     EXTRA_ENV=(LIMAVM_PROMPT_INPUT="$STATE/prompt")
 }
 
@@ -333,10 +349,31 @@ start_fake() {
     EXTRA_ENV+=(LIMAVM_GITHUB_WEB_URL="$FAKE_URL" LIMAVM_GITHUB_API_URL="$FAKE_URL/api/v3")
 }
 
-# run_limavm ARGS...: sets OUT (stdout and stderr) and RC.
+# no_pbcopy_path: the test PATH with every pbcopy removed, each directory that
+# holds one replaced by a directory of links to its other commands.
+no_pbcopy_path() {
+    local dir farm cmd result= stubbed_path="$STUBS:$PATH"
+    for dir in ${(s<:>)stubbed_path}; do
+        if [[ -e $dir/pbcopy ]]; then
+            farm="$TMPBASE/no-pbcopy$dir"
+            if [[ ! -d $farm ]]; then
+                mkdir -p "$farm"
+                for cmd in "$dir"/*(N); do
+                    [[ ${cmd:t} == pbcopy ]] || ln -s "$cmd" "$farm/${cmd:t}"
+                done
+            fi
+            dir=$farm
+        fi
+        result+="${result:+:}$dir"
+    done
+    print -r -- "$result"
+}
+
+# run_limavm ARGS...: sets OUT (stdout and stderr) and RC. RUN_PATH replaces
+# the stubbed PATH for one case.
 run_limavm() {
     RC=0
-    OUT="$(cd "$CHECKOUT" && env PATH="$STUBS:$PATH" HOME="$HOME_DIR" USER=shields \
+    OUT="$(cd "$CHECKOUT" && env PATH="${RUN_PATH:-$STUBS:$PATH}" HOME="$HOME_DIR" USER=shields \
         LIMA_STUB_STATE="$STATE" STAGE_ARGS_LOG="$STAGE_ARGS_LOG" LIMAVM_BASE=test-base \
         REAL_CURL="$REAL_CURL" REAL_GIT="$REAL_GIT" REAL_GITLEAKS="$REAL_GITLEAKS" \
         NO_PROXY=127.0.0.1 no_proxy=127.0.0.1 \
@@ -697,6 +734,11 @@ assert_eq "the poll names the client id" "$CLIENT_ID" "$(fake_form /login/oauth/
 assert_eq "limavm opens the verification page" "$FAKE_URL/login/device" "$(<"$STATE/open.log")"
 assert_contains "new shows the user code" "WDJB-MJHT" "$OUT"
 assert_contains "new shows the verification page" "$FAKE_URL/login/device" "$OUT"
+assert_eq "the user code goes to the clipboard, with no newline" same \
+    "$(printf '%s' WDJB-MJHT | cmp -s - "$STATE/pbcopy.stdin" && echo same || echo different)"
+assert_eq "pbcopy is run once" 1 "$(stub_calls pbcopy)"
+assert_eq "pbcopy gets no arguments" "" "$(cat "$STATE"/calls/pbcopy.*.argv)"
+assert_contains "new says the code is on the clipboard" "the code is on the clipboard" "$OUT"
 record="$(stdin_of 5)"
 assert_eq "the record is one JSON object on one line" 1 "$(printf '%s\n' "$record" | wc -l | tr -d ' ')"
 assert_eq "the record names the client id" "$CLIENT_ID" "$(jq -r .client_id <<<"$record")"
@@ -1253,6 +1295,31 @@ start_fake
 run_limavm new t1 --repo shields/dotfiles
 assert_eq "a failing open does not stop the flow" 0 "$RC"
 assert_contains "a failing open asks for the address to be opened by hand" "open that address yourself" "$OUT"
+
+new_case test-base
+start_fake
+: > "$STATE/pbcopy-fail"
+run_limavm new t1 --repo shields/dotfiles
+assert_eq "a failing pbcopy does not stop the flow" 0 "$RC"
+assert_eq "a failing pbcopy still installs the authorization" 1 "$(count_in_log GITHUB_APP_AUTH)"
+assert_contains "a failing pbcopy still shows the user code" "WDJB-MJHT" "$OUT"
+assert_contains "a failing pbcopy asks for the code to be typed" "type it" "$OUT"
+assert_eq "a failing pbcopy does not claim the clipboard" 0 "$(printf '%s' "$OUT" | grep -c 'the code is on the clipboard' || true)"
+
+new_case test-base
+start_fake
+RUN_PATH=$(no_pbcopy_path)
+assert_eq "the PATH without pbcopy has none" no "$(env PATH="$RUN_PATH" sh -c 'command -v pbcopy' >/dev/null 2>&1 && echo yes || echo no)"
+run_limavm new t1 --repo shields/dotfiles
+assert_eq "no pbcopy on the PATH does not stop the flow" 0 "$RC"
+assert_eq "no pbcopy on the PATH still installs the authorization" 1 "$(count_in_log GITHUB_APP_AUTH)"
+assert_contains "no pbcopy on the PATH still shows the user code" "WDJB-MJHT" "$OUT"
+assert_eq "no pbcopy on the PATH says nothing about the clipboard" 0 "$(printf '%s' "$OUT" | grep -c 'clipboard' || true)"
+assert_eq "no pbcopy on the PATH runs none" 0 "$(stub_calls pbcopy)"
+
+new_case test-base
+run_limavm new t1
+assert_eq "new without --repo never runs pbcopy" 0 "$(stub_calls pbcopy)"
 
 # --- 14. The clone is deleted after any later failure ---
 for failing in clone brew setup-secrets; do

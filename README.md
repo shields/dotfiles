@@ -174,12 +174,15 @@ How it works:
    none must ever be made: with a key anyone who held it could mint tokens for
    every repository the app is installed on, and this design needs none.
 2. `limavm` looks up the repository's id with your own `gh` login (one read-only
-   API call), asks GitHub for a device code, prints it with the address to open
-   (and opens it), and polls while you type the code and authorize. The token
-   request names the repository by its id (`repository_id`), which limits the
-   user access token, and the refresh token that comes with it, to that one
-   repository, with push. GitHub keeps that limit when the token is refreshed;
-   the design stands on that, so recheck it if GitHub changes the device flow.
+   API call), asks GitHub for a device code, prints it with the address to open,
+   puts the code on the clipboard with `pbcopy` and opens the address, and polls
+   while you paste the code and authorize. The code is shown on the screen, so
+   the clipboard holds nothing secret, and a failing `pbcopy` or `open` just
+   says what to do by hand. The token request names the repository by its id
+   (`repository_id`), which limits the user access token, and the refresh token
+   that comes with it, to that one repository, with push. GitHub keeps that
+   limit when the token is refreshed; the design stands on that, so recheck it
+   if GitHub changes the device flow.
 3. The result goes to `setup-secrets GITHUB_APP_AUTH` in the VM on stdin: an
    access token (`ghu_`, valid 8 hours) and a refresh token (`ghr_`, valid 6
    months, and replaced by a new one every time it is used). It is kept in
@@ -314,8 +317,8 @@ sandboxed, prompting behavior.
 
 ## Checks to run once with real credentials
 
-After `limavm base` and `limavm new t1 --repo OWNER/REPO`, which shows a code to
-type at the address it opens:
+After `limavm base` and `limavm new t1 --repo OWNER/REPO`, which shows a code,
+puts it on the clipboard and opens the address to paste it at:
 
 - `zsh -ic exit` prints nothing, `git --version` is 2.54 or later, and
   `git hook list pre-commit` lists gitleaks.

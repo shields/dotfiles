@@ -46,10 +46,11 @@ LIMAVM_CPUS and LIMAVM_MEMORY (in GiB) override the size in lima/dev.yaml, and
 LIMAVM_BASE replaces the name $base. LIMAVM_GITHUB_WEB_URL, LIMAVM_GITHUB_API_URL
 and LIMAVM_GITHUB_CLIENT_ID replace GitHub's addresses and the app's client ID.
 
---repo runs GitHub's device flow here: you type a code in the browser, and the VM
-gets a token that reaches only that repository, renewed inside the VM. Without
---repo the VM has no GitHub access. No GitHub secret stays on this Mac, and
-limavm rm does not revoke the VM's tokens; de-authorizing the app at
+--repo runs GitHub's device flow here: you paste a code, which is on the
+clipboard, in the browser, and the VM gets a token that reaches only that
+repository, renewed inside the VM. Without --repo the VM has no GitHub access.
+No GitHub secret stays on this Mac, and limavm rm does not revoke the VM's
+tokens; de-authorizing the app at
 https://github.com/settings/apps/authorizations ends all of them.
 
 new installs the Claude token from $claude_token_file
@@ -239,6 +240,13 @@ github_authorize() {
 
     printf '\nlimavm: open %s and enter the code %s\n' "$verification_uri" "$user_code" >&2
     printf 'limavm: authorize the app for the account that owns %s\n\n' "$repo" >&2
+    if command -v pbcopy >/dev/null 2>&1; then
+        if printf '%s' "$user_code" | pbcopy >/dev/null 2>&1; then
+            printf 'limavm: the code is on the clipboard\n' >&2
+        else
+            printf 'limavm: could not put the code on the clipboard; type it\n' >&2
+        fi
+    fi
     if command -v open >/dev/null 2>&1 && ! open "$verification_uri" >/dev/null 2>&1; then
         printf 'limavm: could not open the browser; open that address yourself\n' >&2
     fi
