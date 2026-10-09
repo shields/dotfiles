@@ -173,7 +173,7 @@ shell)
         mkdir -p "$state/guest"
         tar -xf "$state/calls/$call.stdin" -C "$state/guest"
         ;;
-    'git clone '*) ;;
+    'env GIT_TERMINAL_PROMPT=0 git clone '*) ;;
     'git '*) git -C "$state/guest" "${@:2}" || exit $? ;;
     esac
     ;;
@@ -853,6 +853,7 @@ $SETUP LGTMCP_CONFIG" \
 ORIGIN_CASES=(
     'git@127.0.0.1:shields/other.git'
     'git@127.0.0.1:shields/other'
+    'git@127.0.0.1:/shields/other.git'
     'ssh://git@127.0.0.1/shields/other.git'
     'ssh://git@127.0.0.1/shields/other/'
     'ssh://git@127.0.0.1:2222/shields/other.git'
@@ -871,7 +872,7 @@ for origin in "${ORIGIN_CASES[@]}"; do
         "GitHub access for shields/other, from the origin of this checkout" "$OUT"
     assert_eq "the inferred repository is authorized and cloned: $origin" "$SETUP GITHUB_APP_AUTH
 shell t1 sh -c printf %s \"\$HOME\"
-shell t1 git clone --quiet $FAKE_URL/shields/other.git $OTHER_DIR" "$(limactl_log | sed -n '5,7p')"
+shell t1 env GIT_TERMINAL_PROMPT=0 git clone --quiet $FAKE_URL/shields/other.git $OTHER_DIR" "$(limactl_log | sed -n '5,7p')"
     assert_eq "the clone call has no stdin: $origin" 0 "$(wc -c < "$STATE/calls/7.stdin" | tr -d ' ')"
     assert_eq "the shell opens in the clone: $origin" "shell --workdir $OTHER_DIR t1" "$(limactl_log | tail -1)"
     assert_contains "new says where the repository is cloned: $origin" "cloned at $OTHER_DIR" "$OUT"
@@ -896,6 +897,15 @@ git -C "$CHECKOUT" remote set-url origin git@github.com:shields/dotfiles.git
 
 new_case test-base
 start_fake
+run_limavm new t1 --repo Shields/Dotfiles
+assert_eq "the repository the base holds is known in any case" 0 "$RC"
+assert_eq "the repository the base holds, named in another case, is not cloned" 0 "$(count_in_log 'git clone')"
+assert_eq "the shell opens in the base's checkout for the name in another case" "shell --workdir $GUEST_DIR t1" "$(limactl_log | tail -1)"
+assert_contains "new names the base's checkout for the name in another case" "the checkout from test-base is at $GUEST_DIR" "$OUT"
+assert_eq "the record keeps the name as given" Shields/Dotfiles "$(stdin_of 5 | jq -r .repository)"
+
+new_case test-base
+start_fake
 git -C "$CHECKOUT" remote set-url origin git@127.0.0.1:shields/dotfiles.git
 run_limavm new t1 --no-repo
 assert_eq "new --no-repo succeeds" 0 "$RC"
@@ -912,7 +922,7 @@ git -C "$CHECKOUT" remote set-url origin git@127.0.0.1:shields/dotfiles.git
 run_limavm new t1 --repo shields/other
 assert_eq "--repo wins over the origin" 0 "$RC"
 assert_eq "--repo's repository is the one looked up" "api repos/shields/other --jq .id" "$(<"$STATE/gh.log")"
-assert_eq "--repo's repository is the one cloned" 1 "$(count_in_log "git clone --quiet $FAKE_URL/shields/other.git /home/guest/src/github.com/shields/other")"
+assert_eq "--repo's repository is the one cloned" 1 "$(count_in_log "env GIT_TERMINAL_PROMPT=0 git clone --quiet $FAKE_URL/shields/other.git /home/guest/src/github.com/shields/other")"
 assert_eq "--repo's repository is in the record" shields/other "$(stdin_of 5 | jq -r .repository)"
 assert_eq "the origin's repository is not mentioned" 0 "$(printf '%s' "$OUT" | grep -c 'from the origin' || true)"
 
@@ -953,6 +963,35 @@ assert_contains "an origin host that differs from GitHub's only in case is infer
 assert_contains "an origin host that differs only in case goes on to gh" "gh cannot read shields/other" "$OUT"
 assert_eq "an origin host that differs only in case touches no VM" "list -q test-base
 list -q t1" "$(limactl_log)"
+git -C "$CHECKOUT" remote set-url origin git@github.com:shields/dotfiles.git
+
+new_case test-base
+: > "$STATE/gh-fail"
+EXTRA_ENV+=(LIMAVM_GITHUB_WEB_URL=http://LOCALHOST:9)
+git -C "$CHECKOUT" remote set-url origin git@localhost:shields/other.git
+run_limavm new t1
+assert_contains "a GitHub host that differs from the origin's only in case is inferred" \
+    "GitHub access for shields/other, from the origin of this checkout" "$OUT"
+assert_contains "a GitHub host that differs only in case goes on to gh" "gh cannot read shields/other" "$OUT"
+assert_eq "a GitHub host that differs only in case touches no VM" "list -q test-base
+list -q t1" "$(limactl_log)"
+git -C "$CHECKOUT" remote set-url origin git@github.com:shields/dotfiles.git
+
+# An empty LIMAVM_GITHUB_WEB_URL leaves limavm its default, https://github.com;
+# the failing gh stub ends the run before anything would be sent there.
+for origin in git@github.com:shields/other.git https://github.com/shields/other.git; do
+    new_case test-base
+    : > "$STATE/gh-fail"
+    EXTRA_ENV+=(LIMAVM_GITHUB_WEB_URL=)
+    git -C "$CHECKOUT" remote set-url origin "$origin"
+    run_limavm new t1
+    assert_contains "an origin on github.com is inferred with the default address: $origin" \
+        "GitHub access for shields/other, from the origin of this checkout" "$OUT"
+    assert_contains "an origin on github.com goes on to gh with the default address: $origin" "gh cannot read shields/other" "$OUT"
+    assert_eq "an origin on github.com with the default address runs no curl: $origin" 0 "$(stub_calls curl)"
+    assert_eq "an origin on github.com with the default address touches no VM: $origin" "list -q test-base
+list -q t1" "$(limactl_log)"
+done
 git -C "$CHECKOUT" remote set-url origin git@github.com:shields/dotfiles.git
 
 for origin in 'https://127.0.0.1/shields/dotfiles/more.git' 'ssh://git@127.0.0.1:2222/shields/dotfiles.git/extra'; do
@@ -1649,6 +1688,16 @@ new_case test-base t1
 start_fake
 run_limavm github t1
 assert_contains "github without a repository, outside a GitHub checkout, asks for one" "limavm github t1 OWNER/REPO" "$OUT"
+
+new_case test-base t1
+: > "$STATE/gh-fail"
+EXTRA_ENV+=(LIMAVM_GITHUB_WEB_URL=)
+run_limavm github t1
+assert_contains "github infers the checkout's github.com origin with the default address" \
+    "GitHub access for shields/dotfiles, from the origin of this checkout" "$OUT"
+assert_contains "github with the default address goes on to gh" "gh cannot read shields/dotfiles" "$OUT"
+assert_eq "github with the default address runs no curl" 0 "$(stub_calls curl)"
+assert_eq "github with the default address installs nothing" 0 "$(count_in_log setup-secrets)"
 
 new_case test-base t1
 start_fake

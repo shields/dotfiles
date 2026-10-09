@@ -91,11 +91,15 @@ valid_repository() {
         die "invalid repository, expected OWNER/REPO: $1"
 }
 
+lowercase() {
+    printf '%s' "$1" | tr '[:upper:]' '[:lower:]'
+}
+
 github_host() {
     local host=${github_web_url#*://}
     host=${host%%/*}
     host=${host##*@}
-    printf '%s\n' "${host%%:*}"
+    lowercase "${host%%:*}"
 }
 
 # The caller validates the result, since a die here would end only the $(...)
@@ -122,8 +126,9 @@ origin_repository() {
         ;;
     *) return 1 ;;
     esac
-    authority=$(printf '%s' "${authority%%:*}" | tr '[:upper:]' '[:lower:]')
+    authority=$(lowercase "${authority%%:*}")
     [[ $authority == "$(github_host)" ]] || return 1
+    path=${path#/}
     path=${path%/}
     path=${path%.git}
     printf '%s\n' "$path"
@@ -515,10 +520,12 @@ cmd_new() {
     local guest_dir='' cloned=0
     if [[ -n $repo ]]; then
         printf '%s\n' "$github_record" | install_secret "$name" GITHUB_APP_AUTH
-        guest_dir=$(guest_home_of "$name")/src/github.com/$repo
         # The base holds that checkout already, with the Mac's local changes.
-        if [[ $repo != "$dotfiles_repo" ]]; then
-            limactl shell "$name" git clone --quiet "$github_web_url/$repo.git" "$guest_dir" </dev/null
+        if [[ $(lowercase "$repo") == "$dotfiles_repo" ]]; then
+            guest_dir=$(guest_home_of "$name")/$guest_repo
+        else
+            guest_dir=$(guest_home_of "$name")/src/github.com/$repo
+            limactl shell "$name" env GIT_TERMINAL_PROMPT=0 git clone --quiet "$github_web_url/$repo.git" "$guest_dir" </dev/null
             cloned=1
         fi
     fi
