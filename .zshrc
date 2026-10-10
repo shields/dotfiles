@@ -545,6 +545,12 @@ _startup_completion() {
         eval "compdef $definition"
     done
     unset _startup_compdefs
+    if (( $+commands[ghist] )); then
+        local completion
+        completion=$(_startup_cached ghist-completion "$commands[ghist]" -- \
+            command ghist --completions zsh) || return
+        eval "$completion"
+    fi
 }
 
 _startup_plugin() {
