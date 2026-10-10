@@ -95,7 +95,6 @@
       "Bash(dpkg --install *)",
       "Bash(dpkg -i *)",
       "Bash(gem install:*)",
-      "Bash(git commit *)",
       "Bash(go get *)",
       "Bash(go install *)",
       "Bash(go mod edit:*)",
