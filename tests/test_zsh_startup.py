@@ -91,7 +91,7 @@ zshexit_functions+=(_git_prompt_watcher_exit)
 TRAPUSR1() { print SIGNAL >> "$ZDOTDIR/events"; }
 """,
     "kubectl": "compdef _files kubectl-test",
-    "zoxide": "j() { :; }",
+    "zoxide": 'j() { builtin cd -- "$@"; }',
 }
 
 ZSHRC = f"""
@@ -107,7 +107,7 @@ _test_snapshot() {{
         "space=${{snapshot_comps[command with spaces]-}}"
         "cloud=${{snapshot_comps[cloud-test]-}}"
         "tab=$(bindkey '^I')" "trap=${{+functions[TRAPUSR1]}}"
-        "j=${{+functions[j]}}"
+        "j=${{+functions[j]}}" "cwd=$PWD"
     )
     print -r -- "${{(j: :)state}}" >> "$ZDOTDIR/events"
 }}
@@ -294,7 +294,7 @@ def shell(tmp_path: Path) -> Iterator[Shell]:
 
 @needs_defer
 def test_commands_run_before_and_between_plugin_loads(shell: Shell) -> None:
-    shell.start()
+    shell.start('j "$ZDOTDIR/.oh-my-zsh"; _test_snapshot first\n')
     _ = shell.wait_for("first ")
     _ = shell.wait_for("colorize-waiting")
     _ = os.write(shell.fd, b"_test_snapshot midway\n")
@@ -306,12 +306,15 @@ def test_commands_run_before_and_between_plugin_loads(shell: Shell) -> None:
     assert "pending=1" in first
     assert "env=ready" in first
     assert "gc=gcloud" in first
+    assert f"cwd={shell.home / '.oh-my-zsh'}" in first
     assert records.index(first) < records.index("load:aws")
+    assert records.index(first) < records.index("load:gcloud")
     assert records.index("load:colorize") < records.index(midway)
     assert records.index(midway) < records.index("load:docker"), records
     assert "pending=1" in midway
     assert "BAD-FZF-ORDER" not in records
     assert records.count("FETCH") == 1
+    assert records.count("load:zoxide") == 1
     assert_complete(next(line for line in records if line.startswith("done ")))
     # Check the trap after returning from the deferred loader's scope.
     _ = os.write(shell.fd, b"kill -USR1 $$; _test_snapshot after\n")

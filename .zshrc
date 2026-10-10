@@ -397,10 +397,10 @@ done
 unset _startup_file _startup_libs _startup_name
 [[ -z "$LS_COLORS" ]] || zstyle ':completion:*' list-colors "${(s.:.)LS_COLORS}"
 
-# Environment changes must precede the first command. The cached Starship
-# initialization is small; keeping it and iTerm together avoids swapping out
-# a prompt while a command is being entered.
-for _startup_name in direnv gcloud starship; do
+# Environment changes and navigation must be ready for the first command.
+# The cached Starship initialization is small; keeping it and iTerm together
+# avoids swapping out a prompt while a command is being entered.
+for _startup_name in direnv starship zoxide; do
     _startup_source "plugins/$_startup_name/$_startup_name.plugin.zsh"
 done
 unset _startup_name
@@ -605,7 +605,7 @@ _startup_pending=1
 _startup_enqueue _startup_completion
 for _startup_name in $plugins; do
     case "$_startup_name" in
-        direnv|gcloud|starship|iterm2) continue ;;
+        direnv|starship|iterm2|zoxide) continue ;;
     esac
     _startup_enqueue _startup_plugin "$_startup_name"
 done
