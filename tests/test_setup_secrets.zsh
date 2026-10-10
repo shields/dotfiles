@@ -18,6 +18,8 @@ set -euo pipefail
 umask 022
 zmodload zsh/stat
 
+PYTHON="$(uv run --project "${0:A:h}/.." python -c 'import sys; print(sys.executable)')"
+export PATH="${PYTHON:h}:$PATH"
 SCRIPT="${0:A:h}/../bin/setup-secrets"
 TMPBASE="$(mktemp -d)"
 trap 'rm -rf "$TMPBASE"' EXIT

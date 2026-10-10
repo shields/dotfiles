@@ -24,6 +24,8 @@ for var in $(git rev-parse --local-env-vars); do
 done
 
 HERE="${0:A:h}"
+PYTHON="$(uv run --project "$HERE/.." python -c 'import sys; print(sys.executable)')"
+export PATH="${PYTHON:h}:$PATH"
 LIMAVM="$HERE/../bin/limavm"
 FAKE_GITHUB="$HERE/fake_github.py"
 REAL_CURL="$(command -v curl)"
