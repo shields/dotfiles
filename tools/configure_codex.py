@@ -120,12 +120,34 @@ def settings(config: Json, home: Path) -> Json:
         extra_policy = (
             f"{extra_policy}\n\n{LGTMCP_POLICY}" if extra_policy else LGTMCP_POLICY
         )
+    development = table(table(config, "permissions"), "dev")
+    network = table(development, "network")
     result: Json = {
         "auto_review.extra_policy": extra_policy,
         "mcp_servers.lgtmcp.tools.review_only.approval_mode": "approve",
         "mcp_servers.lgtmcp.tools.review_and_commit.approval_mode": "approve",
         "approvals_reviewer": "auto_review",
         "features.worktrees": True,
+        "features.network_proxy": True,
+        "default_permissions": "dev",
+        "permissions.dev": {
+            **development,
+            "extends": ":workspace",
+            "filesystem": {
+                **table(development, "filesystem"),
+                "~/.cache/uv": "write",
+            },
+            "network": {
+                **network,
+                "enabled": True,
+                "allow_local_binding": True,
+                "domains": {
+                    **table(network, "domains"),
+                    "localhost": "allow",
+                    "127.0.0.1": "allow",
+                },
+            },
+        },
     }
     # A project key contains dots, so the whole table is the edit's key path.
     project = str(home / TRUSTED_PROJECT)

@@ -33,6 +33,15 @@ REPO = Path(__file__).resolve().parents[1]
 TOOL = REPO / "tools/configure_codex.py"
 HOME = Path("/home/me")
 PROJECTS = "/home/me/src/github.com/shields/dotfiles"
+DEVELOPMENT_PERMISSIONS: Json = {
+    "extends": ":workspace",
+    "filesystem": {"~/.cache/uv": "write"},
+    "network": {
+        "enabled": True,
+        "allow_local_binding": True,
+        "domains": {"localhost": "allow", "127.0.0.1": "allow"},
+    },
+}
 
 STUB = """\
 #!PYTHON
@@ -117,6 +126,9 @@ def test_settings_for_an_empty_config() -> None:
         "mcp_servers.lgtmcp.tools.review_and_commit.approval_mode": "approve",
         "approvals_reviewer": "auto_review",
         "features.worktrees": True,
+        "features.network_proxy": True,
+        "default_permissions": "dev",
+        "permissions.dev": DEVELOPMENT_PERMISSIONS,
         "projects": {PROJECTS: {"trust_level": "trusted"}},
     }
 
@@ -147,12 +159,46 @@ def test_settings_follow_the_home_directory() -> None:
     ]
 
 
+def test_settings_keep_existing_permission_rules() -> None:
+    development: Json = {
+        "description": "Custom development rules",
+        "workspace_roots": {"~/src/shared": True},
+        "filesystem": {"~/.ssh": "deny"},
+        "network": {
+            "allow_upstream_proxy": False,
+            "domains": {"example.com": "deny"},
+            "unix_sockets": {"/var/run/docker.sock": "deny"},
+        },
+    }
+    original = json.dumps(development)
+    result = cast(
+        "Json",
+        tool.settings({"permissions": {"dev": development}}, HOME)["permissions.dev"],
+    )
+    assert result["description"] == development["description"]
+    assert result["workspace_roots"] == development["workspace_roots"]
+    assert result["filesystem"] == {"~/.ssh": "deny", "~/.cache/uv": "write"}
+    assert result["network"] == {
+        "allow_upstream_proxy": False,
+        "enabled": True,
+        "allow_local_binding": True,
+        "domains": {"example.com": "deny", "localhost": "allow", "127.0.0.1": "allow"},
+        "unix_sockets": {"/var/run/docker.sock": "deny"},
+    }
+    assert json.dumps(development) == original
+
+
 @pytest.mark.parametrize(
     "config",
     [
         {"auto_review": "text"},
         {"auto_review": {"extra_policy": ["a"]}},
         {"projects": "text"},
+        {"permissions": "text"},
+        {"permissions": {"dev": "text"}},
+        {"permissions": {"dev": {"filesystem": "text"}}},
+        {"permissions": {"dev": {"network": "text"}}},
+        {"permissions": {"dev": {"network": {"domains": "text"}}}},
     ],
 )
 def test_settings_reject_malformed_config(config: Json) -> None:
@@ -329,6 +375,9 @@ def test_configure_trusts_the_installed_hooks(
             edit("mcp_servers.lgtmcp.tools.review_and_commit.approval_mode", "approve"),
             edit("approvals_reviewer", "auto_review"),
             edit("features.worktrees", True),  # noqa: FBT003
+            edit("features.network_proxy", True),  # noqa: FBT003
+            edit("default_permissions", "dev"),
+            edit("permissions.dev", DEVELOPMENT_PERMISSIONS),
             edit("projects", {PROJECTS: {"trust_level": "trusted"}}),
             edit("hooks.state", {key: {"trusted_hash": "sha256:new"}}),
         ],
@@ -359,6 +408,56 @@ def test_configure_accepts_a_legacy_tui_setting(codex_home: Path) -> None:
     assert config["tui"]["whimsy"] is False
     assert config["approvals_reviewer"] == "auto_review"
     assert config["auto_review"]["extra_policy"] == tool.LGTMCP_POLICY
+
+
+@pytest.mark.parametrize("sandbox_mode", [None, "danger-full-access"])
+def test_configure_permissions_with_the_real_cli(
+    codex_home: Path, sandbox_mode: str | None
+) -> None:
+    if shutil.which("codex") is None:
+        pytest.skip("Codex CLI is not installed")
+    config_file = codex_home / "config.toml"
+    config_text = (
+        'default_permissions = "audit"\n'
+        '[mcp_servers.lgtmcp]\ncommand = "lgtmcp"\n'
+        "[features]\nhooks = false\n"
+        '[permissions.dev]\ndescription = "Keep this"\n'
+        '[permissions.dev.filesystem]\n"~/.ssh" = "deny"\n'
+        '[permissions.dev.network.domains]\n"example.com" = "deny"\n'
+        '[permissions.audit]\nextends = ":read-only"\n'
+    )
+    if sandbox_mode:
+        config_text = f'sandbox_mode = "{sandbox_mode}"\n{config_text}'
+    _ = config_file.write_text(config_text)
+
+    tool.configure_codex(config_file, HOME)
+
+    config = tomllib.loads(config_file.read_text())
+    assert config.get("sandbox_mode") == sandbox_mode
+    assert config["default_permissions"] == "dev"
+    assert config["features"] == {
+        "hooks": False,
+        "worktrees": True,
+        "network_proxy": True,
+    }
+    assert config["permissions"]["audit"] == {"extends": ":read-only"}
+    assert config["permissions"]["dev"] == {
+        "description": "Keep this",
+        "extends": ":workspace",
+        "filesystem": {"~/.ssh": "deny", "~/.cache/uv": "write"},
+        "network": {
+            "enabled": True,
+            "allow_local_binding": True,
+            "domains": {
+                "example.com": "deny",
+                "localhost": "allow",
+                "127.0.0.1": "allow",
+            },
+        },
+    }
+    first = config_file.read_bytes()
+    tool.configure_codex(config_file, HOME)
+    assert config_file.read_bytes() == first
 
 
 def test_configure_without_installed_hooks_does_not_list_them(

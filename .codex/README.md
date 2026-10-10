@@ -43,6 +43,13 @@ project unless the config already has an entry for that key. Codex matches a
 project key against a repository's root exactly, so every other repository still
 gets its own trust prompt.
 
+It selects a `dev` permission profile extending `:workspace`, grants writes to
+`~/.cache/uv`, and enables the network proxy with localhost and `127.0.0.1`
+allowed. Local binding is enabled so tests can start local servers. Other
+filesystem and network rules in that profile are preserved. Older `sandbox_mode`
+settings take precedence over permission profiles, including the full-access
+settings in throwaway environments.
+
 The same run seeds hook trust. The script asks the app server for `hooks/list`,
 then writes `hooks.state.<key>.trusted_hash` for every hook that
 `~/.codex/hooks.json` defines, using the hash Codex computed for the installed
@@ -70,9 +77,11 @@ each registered command with fake interpreters and a decoy `python3` on `PATH`.
 Rule tests use `codex execpolicy check` and skip when the Codex CLI is
 unavailable; none of the test commands are executed.
 `tests/test_configure_codex.py` drives `tools/configure_codex.py` against a stub
-`codex` that speaks just enough of the app-server protocol, and checks a legacy
-setting against the real CLI when installed. All configuration files stay in
-temporary test directories, so these tests never touch `~/.codex`.
+`codex` that speaks just enough of the app-server protocol, and checks legacy
+settings and permission profiles against the real CLI when installed. All
+configuration files stay in temporary test directories, so these tests never
+touch `~/.codex`.
 
-References: [Codex rules](https://learn.chatgpt.com/docs/agent-configuration/rules)
+References: [Codex permissions](https://learn.chatgpt.com/docs/permissions),
+[Codex rules](https://learn.chatgpt.com/docs/agent-configuration/rules)
 and [Codex hooks](https://learn.chatgpt.com/docs/hooks).
