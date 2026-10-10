@@ -20,9 +20,11 @@ limitations under the License.
 
 ## Git and commits
 
-- After a code change, run `/code-review max --fix` before review/commit. Then,
-  after applying its fixes or any later small or straightforward change to the
-  reviewed code, look over just what changed; don't start another full sweep.
+- After a code change, run `/code-review --fix` before review/commit: `max` for
+  changes to logic or behavior, `high` for small or mechanical ones (constants,
+  renames, test-only or documentation edits). Then, after applying its fixes or
+  any later small or straightforward change to the reviewed code, look over just
+  what changed; don't start another full sweep.
 
 ## Web access
 
