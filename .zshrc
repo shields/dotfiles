@@ -456,6 +456,9 @@ _startup_overrides() {
     alias gc='gcloud'
 
     alias gdi='git diff refs/remotes/origin/HEAD'
+    alias gg='ghist'
+    alias ggp='ghist --patch'
+    alias ggs='ghist --stat'
     alias glf='git ls-files'
     alias gmf='git merge --ff-only'
 
