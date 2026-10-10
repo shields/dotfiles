@@ -82,7 +82,6 @@ async def app_server(codex_home: Path) -> AsyncGenerator[AppServer]:
     process = await asyncio.create_subprocess_exec(
         "codex",
         "app-server",
-        "--strict-config",
         stdin=asyncio.subprocess.PIPE,
         stdout=asyncio.subprocess.PIPE,
         env={**os.environ, "CODEX_HOME": str(codex_home)},

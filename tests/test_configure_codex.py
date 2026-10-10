@@ -15,8 +15,10 @@
 import importlib.util
 import json
 import os
+import shutil
 import subprocess
 import sys
+import tomllib
 from pathlib import Path
 from typing import TYPE_CHECKING, Protocol, cast, final
 
@@ -339,8 +341,24 @@ def test_configure_points_the_app_server_at_the_config_directory(
     tool.configure_codex(codex_home / "config.toml", HOME)
     launch = codex.launch()
     argv = cast("list[str]", launch["argv"])
-    assert argv == ["app-server", "--strict-config"]
+    assert argv == ["app-server"]
     assert launch["codex_home"] == str(codex_home)
+
+
+def test_configure_accepts_a_legacy_tui_setting(codex_home: Path) -> None:
+    if shutil.which("codex") is None:
+        pytest.skip("Codex CLI is not installed")
+    config_file = codex_home / "config.toml"
+    _ = config_file.write_text(
+        '[mcp_servers.lgtmcp]\ncommand = "lgtmcp"\n\n[tui]\nwhimsy = false\n'
+    )
+
+    tool.configure_codex(config_file, HOME)
+
+    config = tomllib.loads(config_file.read_text())
+    assert config["tui"]["whimsy"] is False
+    assert config["approvals_reviewer"] == "auto_review"
+    assert config["auto_review"]["extra_policy"] == tool.LGTMCP_POLICY
 
 
 def test_configure_without_installed_hooks_does_not_list_them(

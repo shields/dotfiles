@@ -54,7 +54,8 @@ this step, since Codex then lists no hooks.
 
 The script reads the existing TOML to preserve extra policy, then writes the
 settings through Codex's `config/batchWrite` app-server API. Other settings are
-preserved. Restart Codex after applying these settings.
+preserved. The server uses normal configuration loading to support Codex's
+compatibility aliases. Restart Codex after applying these settings.
 
 Prefix rules match literal argument prefixes. The hook supplements those rules
 for ordinary shell invocations, command chains, and `sh`/`bash`/`zsh -c` wrappers.
@@ -69,8 +70,9 @@ each registered command with fake interpreters and a decoy `python3` on `PATH`.
 Rule tests use `codex execpolicy check` and skip when the Codex CLI is
 unavailable; none of the test commands are executed.
 `tests/test_configure_codex.py` drives `tools/configure_codex.py` against a stub
-`codex` that speaks just enough of the app-server protocol, so it never touches
-`~/.codex`.
+`codex` that speaks just enough of the app-server protocol, and checks a legacy
+setting against the real CLI when installed. All configuration files stay in
+temporary test directories, so these tests never touch `~/.codex`.
 
 References: [Codex rules](https://learn.chatgpt.com/docs/agent-configuration/rules)
 and [Codex hooks](https://learn.chatgpt.com/docs/hooks).
