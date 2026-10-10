@@ -294,7 +294,7 @@ else
     sudo -v
     sudo env DEBIAN_FRONTEND=noninteractive PATH="/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:$HOMEBREW_PREFIX/bin" npx -y -p "@playwright/mcp@$playwright_version" playwright install-deps chromium
 fi
-python3 "$dotfiles_root/tools/configure_codex.py" "$HOME/.codex/config.toml"
+uv run --project "$dotfiles_root" --no-dev python "$dotfiles_root/tools/configure_codex.py" "$HOME/.codex/config.toml"
 
 if [[ $os == linux ]]; then
     mkdir -p "$HOME/.config/git"

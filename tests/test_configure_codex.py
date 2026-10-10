@@ -554,3 +554,31 @@ def test_command_line_uses_the_home_directory(
             "trust_level": "trusted"
         }
     }
+
+
+def test_provision_uses_project_python_when_python3_is_incompatible(
+    codex: StubCodex, codex_home: Path, tmp_path: Path
+) -> None:
+    incompatible_python = shutil.which("false")
+    assert incompatible_python is not None
+    tmp_path.joinpath("bin/python3").symlink_to(incompatible_python)
+    command = next(
+        line
+        for line in (REPO / "provision.sh").read_text().splitlines()
+        if '"$dotfiles_root/tools/configure_codex.py"' in line
+    )
+    result = subprocess.run(
+        ["/bin/bash", "-c", "set -euo pipefail\n" + command],
+        cwd=tmp_path,
+        env={
+            **os.environ,
+            "HOME": str(codex_home.parent),
+            "dotfiles_root": str(REPO),
+        },
+        capture_output=True,
+        text=True,
+        check=False,
+        timeout=30,
+    )
+    assert result.returncode == 0, result.stderr
+    assert codex.batch_write()["filePath"] == str(codex_home / "config.toml")

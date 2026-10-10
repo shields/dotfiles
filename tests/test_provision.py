@@ -710,10 +710,11 @@ def test_playwright_is_registered_per_os() -> None:
 
 
 def test_configure_codex_runs_after_registration() -> None:
-    assert (
-        'python3 "$dotfiles_root/tools/configure_codex.py" "$HOME/.codex/config.toml"'
-        in LINES
+    command = (
+        'uv run --project "$dotfiles_root" --no-dev python '
+        '"$dotfiles_root/tools/configure_codex.py" "$HOME/.codex/config.toml"'
     )
+    assert command in LINES
     assert find(r"^add_user_mcp_server lgtmcp") < find(r"configure_codex\.py")
 
 
@@ -867,7 +868,10 @@ MACOS_SPINE = (
     "go telemetry on",
     'add_user_mcp_server lgtmcp "$lgtmcp" -tools review_and_commit',
     "add_user_mcp_server playwright npx @playwright/mcp@latest --headless",
-    'python3 "$dotfiles_root/tools/configure_codex.py" "$HOME/.codex/config.toml"',
+    (
+        'uv run --project "$dotfiles_root" --no-dev python '
+        '"$dotfiles_root/tools/configure_codex.py" "$HOME/.codex/config.toml"'
+    ),
     "macos_finish",
 )
 
