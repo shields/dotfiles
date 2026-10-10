@@ -47,6 +47,12 @@ reintroducing a bug when it's likely to come back without the warning.
 
 - If a dependency change is refused, don't work around it—stop and report.
 
+## Other repositories
+
+- Before working in a repository outside the session's own, read its
+  `AGENTS.md`, `CLAUDE.md`, and `CONTRIBUTING.md`, and the files they point to.
+  They are not loaded automatically.
+
 ## Memory
 
 The memory system is only for facts specific to this machine: its sandbox,
