@@ -457,6 +457,7 @@ _startup_overrides() {
 
     alias gdi='git diff refs/remotes/origin/HEAD'
     alias glf='git ls-files'
+    alias gmf='git merge --ff-only'
 
     alias kc='kubectl'
     alias kcy='kubectl -o yaml'
