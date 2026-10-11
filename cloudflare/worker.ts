@@ -146,8 +146,11 @@ export class AgentContainer extends DurableObject<Env> {
       Outbound: (options: { props: { instanceId: string } }) => Fetcher;
     };
     const outbound = exports.Outbound({ props: { instanceId } });
+    console.log("configuring HTTP outbound interception", instanceId);
     await container.interceptAllOutboundHttp(outbound);
+    console.log("configuring HTTPS outbound interception", instanceId);
     await container.interceptOutboundHttps("*", outbound);
+    console.log("outbound interception configured", instanceId);
     if (!container.running) {
       const image = container.images.base;
       if (!image) {
@@ -157,7 +160,7 @@ export class AgentContainer extends DurableObject<Env> {
         image,
         instance: { vcpu: 1, memoryMib: 4096, diskMb: 20_000 },
         enableInternet: false,
-        labels: { dotfiles_instance: instanceId },
+        labels: { vm_id: instanceId },
         entrypoint: [
           "/home/shields/src/github.com/shields/dotfiles/cloudflare/entrypoint.sh",
         ],

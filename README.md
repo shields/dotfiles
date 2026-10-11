@@ -351,6 +351,8 @@ from `~/.config/secrets/vm-access/cloudflare-admin-token`. It adds this Mac's
 `~/.ssh/id_ed25519.pub` to the staged Wrangler configuration for SSH access.
 The Worker URL appears in Wrangler's deployment output. Save it once with
 `bun run cloudflare/admin.ts config https://NAME.SUBDOMAIN.workers.dev`.
+For Worker-only changes, `cloudflare/deploy.sh --worker-only` reuses the
+deployed image without building or rolling out containers.
 
 Use `bun run cloudflare/admin.ts` for management:
 

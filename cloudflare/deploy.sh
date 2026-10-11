@@ -2,6 +2,14 @@
 
 set -euo pipefail
 
+worker_only=0
+if [[ $# -eq 1 && $1 == --worker-only ]]; then
+    worker_only=1
+elif [[ $# -ne 0 ]]; then
+    printf '%s\n' 'Usage: cloudflare/deploy.sh [--worker-only]' >&2
+    exit 2
+fi
+
 root=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd -P)
 secret_dir=$HOME/.config/secrets/vm-access
 token_file=$secret_dir/cloudflare-admin-token
@@ -38,4 +46,8 @@ umask 077
     printf 'ADMIN_TOKEN='
     cat "$token_file"
 } >"$stage/admin.env"
-bunx wrangler deploy --config cloudflare/wrangler.jsonc --secrets-file "$stage/admin.env"
+set -- --config cloudflare/wrangler.jsonc --secrets-file "$stage/admin.env"
+if [[ $worker_only == 1 ]]; then
+    set -- "$@" --containers-rollout=none
+fi
+bunx wrangler deploy "$@"
