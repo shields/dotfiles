@@ -74,6 +74,12 @@ that are selected.
   arranges.
 - Do not run `brew bundle dump`: it would replace the loader with a flat list.
 
+Provisioning upgrades formulae through Bundle, which also manages services
+declared with `restart_service: :changed` in a Brewfile. Cask upgrades run
+separately and exclude Chrome. After the first signed bottle is published, add
+`shields/tap/mute-on-lock` to the macOS Brewfile with
+`restart_service: :changed` to start its login service and restart it on upgrades.
+
 # Persistent Linux box
 
 A Linux machine that you reach over SSH gets the same shell, git, Emacs (in the

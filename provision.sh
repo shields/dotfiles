@@ -206,11 +206,12 @@ fi
 
 # Homebrew bundle sync. Edit brew/*.Brewfile to change what is installed, or
 # use `brew bundle add --file=brew/<module>.Brewfile`.
-# Keep upgrades below so Chrome can be excluded from cask upgrades.
-brew bundle --force --no-upgrade | (grep -v '^Using ' || true)
+# Bundle's --upgrade-formulae keeps casks in the Chrome-filtered step below:
+# https://docs.brew.sh/Manpage#bundle-subcommand
+# Upgrade selection checks both full and short formula names.
+brew_formulae=$(brew bundle list --formula | awk -F/ '{print $0; if (NF > 1) print $NF}' | paste -sd, -)
+brew bundle --force --no-upgrade --upgrade-formulae="$brew_formulae" | (grep -v '^Using ' || true)
 brew bundle cleanup --force
-# Homebrew upgrades. Run formulas and casks separately to prevent whiny messages.
-brew upgrade --formula --yes
 # Suppress upgrade of Chrome since it doesn't like to be upgraded while running.
 brew outdated --greedy-auto-updates --cask --quiet | sed '/^google-chrome$/d' | xargs -r brew upgrade --cask --yes
 brew autoremove

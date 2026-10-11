@@ -634,14 +634,103 @@ def test_rustup_is_ready_before_bundle_on_dev_only() -> None:
 def test_bundle_steps_and_comment() -> None:
     assert "brew bundle dump" not in TEXT
     assert "Edit brew/*.Brewfile" in TEXT
-    bundle = find(
-        r"^brew bundle --force --no-upgrade \| \(grep -v '\^Using ' \|\| true\)$"
-    )
+    bundle = find(r"^brew bundle --force --no-upgrade --upgrade-formulae=")
     assert LINES[bundle + 1] == "brew bundle cleanup --force"
-    assert find(r"^brew upgrade --formula --yes") == bundle + 3
+    assert "brew upgrade --formula" not in TEXT
     assert find(r"^uv cache prune") > bundle
     assert LINES[find(r"^go clean -modcache")] == "go clean -modcache"
     assert find(r"^\s+bin/docker-prune$") > find(r"^go clean -modcache")
+
+
+def test_homebrew_supports_selective_formula_upgrades() -> None:
+    result = subprocess.run(
+        [
+            "brew",
+            "bundle",
+            "install",
+            "--no-upgrade",
+            "--upgrade-formulae=git",
+            "--help",
+        ],
+        env=os.environ | {"HOMEBREW_NO_AUTO_UPDATE": "1"},
+        capture_output=True,
+        text=True,
+        check=False,
+        timeout=30,
+    )
+    assert result.returncode == 0, result.stderr
+    assert "--upgrade-formulae" in result.stdout
+
+
+@pytest.mark.parametrize(
+    "scenario", ["success", "no_casks", "list_failure", "bundle_failure"]
+)
+def test_bundle_upgrades_formulae_and_preserves_cask_policy(
+    tmp_path: Path, scenario: str
+) -> None:
+    stub = tmp_path / "brew"
+    _ = stub.write_text(
+        r"""#!/bin/bash
+# Copyright © 2026 Michael Shields
+# SPDX-License-Identifier: Apache-2.0
+set -euo pipefail
+printf '%s\n' "$*" >>"$LOG"
+case "$*" in
+    'bundle list --formula')
+        [[ $SCENARIO != list_failure ]] || exit 7
+        printf '%s\n' git shields/tap/mute-on-lock
+        ;;
+    'bundle --force --no-upgrade --upgrade-formulae='*)
+        expected='git,shields/tap/mute-on-lock,mute-on-lock'
+        [[ $4 == "--upgrade-formulae=$expected" ]] || exit 64
+        [[ $SCENARIO != bundle_failure ]] || exit 8
+        printf '%s\n' 'Using git' 'Upgrading mute-on-lock'
+        ;;
+    'bundle cleanup --force' | autoremove) ;;
+    'outdated --greedy-auto-updates --cask --quiet')
+        if [[ $SCENARIO != no_casks ]]; then
+            printf '%s\n' google-chrome ghostty
+        fi
+        ;;
+    'upgrade --cask --yes ghostty') ;;
+    *) exit 64 ;;
+esac
+"""
+    )
+    stub.chmod(0o755)
+    log = tmp_path / "calls"
+    start = find(r"^brew_formulae=")
+    stop = find(r"^brew autoremove$", start) + 1
+    script = "set -euo pipefail\n" + "\n".join(LINES[start:stop]) + "\necho finished\n"
+    result = subprocess.run(
+        ["/bin/bash", "-c", script],
+        env={
+            "PATH": f"{tmp_path}:/usr/bin:/bin",
+            "SCENARIO": scenario,
+            "LOG": str(log),
+        },
+        capture_output=True,
+        text=True,
+        check=False,
+        timeout=10,
+    )
+    calls = log.read_text().splitlines()
+    if scenario == "list_failure":
+        assert result.returncode == 7
+        assert calls == ["bundle list --formula"]
+    elif scenario == "bundle_failure":
+        assert result.returncode == 8
+        assert len(calls) == 2
+        assert "finished" not in result.stdout
+    else:
+        assert result.returncode == 0, result.stderr
+        assert "Upgrading mute-on-lock" in result.stdout
+        assert "Using git" not in result.stdout
+        assert calls[-1] == "autoremove"
+        assert ("upgrade --cask --yes ghostty" in calls) == (scenario == "success")
+        assert not any(
+            call.startswith("upgrade") and "google-chrome" in call for call in calls
+        )
 
 
 def test_the_image_build_keeps_homebrew_downloads_and_other_runs_prune_them() -> None:
@@ -858,9 +947,11 @@ MACOS_SPINE = (
     '(cd "$HOME/.oh-my-zsh/custom/plugins/fzf-tab" && git pull)',
     '(cd "$HOME/.oh-my-zsh/custom/plugins/git-prompt-watcher" && git pull)',
     "brew update",
-    "brew bundle --force --no-upgrade | (grep -v '^Using ' || true)",
+    (
+        'brew bundle --force --no-upgrade --upgrade-formulae="$brew_formulae" | '
+        "(grep -v '^Using ' || true)"
+    ),
     "brew bundle cleanup --force",
-    "brew upgrade --formula --yes",
     f"{BREW_OUTDATED} | sed '/^google-chrome$/d' | xargs -r brew upgrade --cask --yes",
     "brew autoremove",
     "brew cleanup --prune=all",
