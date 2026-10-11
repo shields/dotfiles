@@ -57,6 +57,10 @@ void test("device flow requests one repository and checks the resulting token", 
   };
   try {
     const auth = new AppAuth(path.join(directory, "secrets"));
+    const issued = await auth.issue("shields/dotfiles");
+    assert.equal(issued.access_token, "ghu_scoped");
+    assert.equal(auth.has("shields/dotfiles"), false);
+    requests.length = 0;
     await auth.authorize("shields/dotfiles");
     assert.equal(auth.load("shields/dotfiles").access_token, "ghu_scoped");
     assert.deepEqual(

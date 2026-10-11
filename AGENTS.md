@@ -101,6 +101,16 @@ Throwaway Lima VMs (the README describes them for users):
   to `setup-secrets CODEX_AUTH`, which requires a JSON object and writes the
   same path in the guest; `--no-codex-auth` leaves Codex to
   `codex login --device-auth` in the VM.
+- `cloudflare/wrangler.jsonc` deploys `cloudflare/worker.ts` and the agent
+  image through `cloudflare/deploy.sh`, which stages and scans the tree, adds
+  this Mac's SSH public key, and installs an admin secret through Wrangler.
+  `cloudflare/authority.ts` holds GitHub App authorizations, live grants and
+  audit records in one SQLite Durable Object. `cloudflare/outbound.ts` applies
+  `gateway/policy.ts` to intercepted container traffic. The container receives
+  no GitHub token; `provision/cloudflare-agent.sh` installs its dummy credential
+  helper and `cloudflare/entrypoint.sh` installs Cloudflare's runtime CA.
+  `bun run cloudflare/admin.ts` manages authorization, VMs, grants and logs.
+  Its device flow issues a separate authorization from Lima's Mac gateway.
 - `provision/throwaway.sh` (run as root, also by the Cloudflare image) makes a
   machine a throwaway environment: `/etc/dotfiles-throwaway`, Claude Code's
   managed settings (generated with jq from the deny rules, the `git_guard.py`

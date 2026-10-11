@@ -1,0 +1,41 @@
+{
+  "$schema": "../node_modules/wrangler/config-schema.json",
+  "name": "dotfiles-agent",
+  "main": "./worker.ts",
+  "compatibility_date": "2026-10-11",
+  "workers_dev": true,
+  "observability": { "enabled": true },
+  "vars": {
+    "GITHUB_CLIENT_ID": "Iv23lim5x4MdkNNgv28z"
+  },
+  "durable_objects": {
+    "bindings": [
+      { "name": "AUTHORITY", "class_name": "AuthorityDO" },
+      { "name": "AGENTS", "class_name": "AgentContainer" }
+    ]
+  },
+  "exports": {
+    "AuthorityDO": { "type": "durable-object", "storage": "sqlite" },
+    "AgentContainer": {
+      "type": "durable-object",
+      "storage": "sqlite",
+      "container": "dotfiles-agent"
+    },
+    "Outbound": { "type": "worker" }
+  },
+  "containers": [
+    {
+      "name": "dotfiles-agent",
+      "class_name": "AgentContainer",
+      "scheduling_policy": "durable_object",
+      "ssh": { "enabled": true },
+      "images": {
+        "base": {
+          "dockerfile": "./Dockerfile",
+          "build_context": "..",
+          "build_vars": { "CLOUDFLARE_AGENT": "1", "MODULES": "dev" }
+        }
+      }
+    }
+  ]
+}

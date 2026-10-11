@@ -28,5 +28,7 @@ if [[ $OSTYPE == linux* ]]; then
     }
     if [[ -f /etc/dotfiles-github-gateway ]]; then
         export SSL_CERT_FILE=/etc/ssl/certs/ca-certificates.crt
+        export NODE_EXTRA_CA_CERTS=/etc/ssl/certs/ca-certificates.crt
+        export REQUESTS_CA_BUNDLE=/etc/ssl/certs/ca-certificates.crt
     fi
 fi

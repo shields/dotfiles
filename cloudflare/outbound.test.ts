@@ -38,14 +38,17 @@ function authority(events: string[]): OutboundAuthority {
 
 function push(destination: string): Uint8Array {
   const line = `${"1".repeat(40)} ${"2".repeat(40)} ${destination}\0report-status\n`;
-  const packet = Buffer.from(line);
-  return new Uint8Array(
-    Buffer.concat([
-      Buffer.from((packet.length + 4).toString(16).padStart(4, "0")),
-      packet,
-      Buffer.from("0000PACK"),
-    ]),
+  const encoder = new TextEncoder();
+  const packet = encoder.encode(line);
+  const prefix = encoder.encode(
+    (packet.length + 4).toString(16).padStart(4, "0"),
   );
+  const suffix = encoder.encode("0000PACK");
+  const body = new Uint8Array(prefix.length + packet.length + suffix.length);
+  body.set(prefix);
+  body.set(packet, prefix.length);
+  body.set(suffix, prefix.length + packet.length);
+  return body;
 }
 
 void test("GitHub reads inject a token without forwarding guest credentials", async () => {

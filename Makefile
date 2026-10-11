@@ -28,6 +28,9 @@ SHELL_SOURCES = \
 	provision/modules.sh \
 	provision/reset-identity.sh \
 	provision/throwaway.sh \
+	provision/cloudflare-agent.sh \
+	cloudflare/deploy.sh \
+	cloudflare/entrypoint.sh \
 	tools/create_nerd_andale_mono.sh \
 	tools/create_nerd_commit_mono.sh \
 	tools/stage_tree.sh \
@@ -44,6 +47,7 @@ SHELL_SOURCES = \
 
 build:
 	bun run tsc --noEmit
+	bun run tsc --noEmit -p cloudflare/tsconfig.json
 
 test:
 	node --test gateway/*.test.ts cloudflare/*.test.ts

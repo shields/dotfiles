@@ -13,6 +13,7 @@
 # limitations under the License.
 
 node_modules
+cloudflare/.dev.vars*
 .mypy_cache
 __pycache__/
 *.pyc

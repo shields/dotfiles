@@ -34,6 +34,7 @@ COPY --chown=1000:1000 . /home/shields/src/github.com/shields/dotfiles
 WORKDIR /home/shields/src/github.com/shields/dotfiles
 
 ARG MODULES=dev
+ARG CLOUDFLARE_AGENT=0
 ARG TARGETARCH
 # Homebrew's cleanup deletes downloads that another build is still using, so
 # each architecture has its own cache and a build holds it exclusively. The
@@ -48,5 +49,10 @@ RUN --mount=type=cache,target=/home/shields/.cache/Homebrew,id=homebrew-${TARGET
 # The cache mount hides Homebrew's API data, which the oh-my-zsh aws plugin
 # (brew --prefix awscli) makes the first interactive shell fetch.
 RUN /home/linuxbrew/.linuxbrew/bin/brew --prefix awscli >/dev/null
+
+RUN if [ "$CLOUDFLARE_AGENT" = 1 ]; then \
+        sudo provision/throwaway.sh --user shields --no-github-timer \
+        && sudo provision/cloudflare-agent.sh; \
+    fi
 
 CMD ["sleep", "infinity"]

@@ -13,12 +13,12 @@
     "erasableSyntaxOnly": true,
     "skipLibCheck": true,
     "esModuleInterop": true,
+    "types": ["node"],
     "forceConsistentCasingInFileNames": true
   },
   "include": [
     "tools/**/*.ts",
     "gateway/**/*.ts",
-    "cloudflare/**/*.ts",
     "eslint.config.ts"
   ]
 }

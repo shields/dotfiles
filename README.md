@@ -343,6 +343,49 @@ OWNER/REPO`, which shows a device code and authorization URL on the Mac:
   the Mac, and `lsof -nP -iTCP -sTCP:LISTEN` on the Mac shows only Lima's
   `127.0.0.1` ports.
 
+# Throwaway Cloudflare VMs
+
+`cloudflare/deploy.sh` stages the checkout, scans it for secrets, builds the
+agent image, deploys the Worker, and installs a randomly generated admin secret
+from `~/.config/secrets/vm-access/cloudflare-admin-token`. It adds this Mac's
+`~/.ssh/id_ed25519.pub` to the staged Wrangler configuration for SSH access.
+The Worker URL appears in Wrangler's deployment output. Save it once with
+`bun run cloudflare/admin.ts config https://NAME.SUBDOMAIN.workers.dev`.
+
+Use `bun run cloudflare/admin.ts` for management:
+
+```sh
+bun run cloudflare/admin.ts authorize OWNER/REPO
+bun run cloudflare/admin.ts new NAME
+bun run cloudflare/admin.ts grant VM-ID OWNER/REPO task
+bun run cloudflare/admin.ts start VM-ID
+bun run cloudflare/admin.ts show VM-ID
+bun run cloudflare/admin.ts logs VM-ID
+bun run cloudflare/admin.ts events VM-ID
+bun run cloudflare/admin.ts revoke VM-ID OWNER/REPO
+bun run cloudflare/admin.ts delete VM-ID
+```
+
+`authorize` starts a separate GitHub App device flow for the cloud authority;
+it does not save that authorization on the Mac. A grant uses the same `read`
+and `task` profiles as Lima, and a revision check prevents overwriting another
+policy edit. Grants and revocations take effect for the next GitHub request
+without restarting the VM. `list` shows registered VM IDs. `containers`,
+`instances APPLICATION-ID`, and `ssh CONTAINER-ID` wrap the corresponding
+Wrangler commands. After connecting, clone a granted repository with Git and
+log in to the agents in the disposable VM as needed.
+
+The VM receives only a dummy GitHub credential. Its outbound HTTP and HTTPS
+requests pass through the Worker, which checks GitHub operations against the
+current VM grants and supplies the repository's short-lived token. The refresh
+token stays in Durable Object storage. GitHub access logs record the VM,
+repository, operation, refs, decision, policy revision, upstream status, and
+duration without credentials; policy events record before and after grants.
+Access logs are retained for 30 days and policy events for 365 days. The
+container's filesystem is disposable. The current image uses a 1-vCPU,
+4-GiB, 20-GB instance to leave workspace room around the installed toolchain;
+its inactivity timeout is six hours.
+
 # Testing on Linux
 
 `make test-linux` needs Docker. It copies the checkout into a temporary

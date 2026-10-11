@@ -268,7 +268,7 @@ export class AppAuth {
     });
   }
 
-  async authorize(repository: string): Promise<void> {
+  async issue(repository: string): Promise<AuthRecord> {
     const key = normalizeRepository(repository);
     const gh = spawnSync("gh", ["api", `repos/${key}`, "--jq", ".id"], {
       encoding: "utf8",
@@ -363,20 +363,24 @@ export class AppAuth {
           `GitHub App token returned the wrong repository for ${key}`,
         );
       }
-      await this.locked(key, () => {
-        this.save({
-          client_id: this.clientId,
-          repository: key,
-          access_token: tokens.access_token,
-          access_expires_at: now + tokens.expires_in,
-          refresh_token: tokens.refresh_token,
-          refresh_expires_at: now + tokens.refresh_token_expires_in,
-          web_url: this.webUrl,
-          api_url: this.apiUrl,
-        });
-      });
-      return;
+      return {
+        client_id: this.clientId,
+        repository: key,
+        access_token: tokens.access_token,
+        access_expires_at: now + tokens.expires_in,
+        refresh_token: tokens.refresh_token,
+        refresh_expires_at: now + tokens.refresh_token_expires_in,
+        web_url: this.webUrl,
+        api_url: this.apiUrl,
+      };
     }
     throw new Error(`GitHub device code for ${key} expired`);
+  }
+
+  async authorize(repository: string): Promise<void> {
+    const record = await this.issue(repository);
+    await this.locked(record.repository, () => {
+      this.save(record);
+    });
   }
 }
