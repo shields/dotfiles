@@ -119,8 +119,24 @@ void test("REST reads require a grant and API writes have no classification", ()
   );
   assert.equal(read.repository, "shields/dotfiles");
   assert.equal(read.operation, "api.read");
+  assert.equal(
+    classify(
+      {
+        host: "api.github.com",
+        method: "GET",
+        target: "/__vm_access__/health",
+      },
+      id,
+    ).operation,
+    "public.read",
+  );
+  assert.equal(
+    classify({ host: "api.github.com", method: "GET", target: "/user" }, id)
+      .operation,
+    "identity.read",
+  );
   assert.doesNotThrow(() => {
-    authorize("read", read.operation);
+    authorize({ read: true, pushTaskBranches: false }, read.operation);
   });
   assert.throws(() => {
     authorize(null, read.operation);
@@ -136,9 +152,9 @@ void test("REST reads require a grant and API writes have no classification", ()
     );
   }, /unsupported/);
   assert.throws(() => {
-    authorize("read", "git.push");
+    authorize({ read: true, pushTaskBranches: false }, "git.push");
   }, /not granted/);
   assert.doesNotThrow(() => {
-    authorize("task", "git.push");
+    authorize({ read: true, pushTaskBranches: true }, "git.push");
   });
 });

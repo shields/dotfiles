@@ -1,0 +1,17 @@
+#!/bin/bash
+
+set -euo pipefail
+
+bundle=$HOME/.local/share/vm-access/main.mjs
+[[ -f $bundle ]] || {
+    printf 'vm-access: %s is missing; run ./provision.sh dev\n' "$bundle" >&2
+    exit 1
+}
+
+for node in /opt/homebrew/bin/node /usr/local/bin/node; do
+    if [[ -x $node ]]; then
+        exec "$node" "$bundle" "$@"
+    fi
+done
+printf 'vm-access: Node is missing; run ./provision.sh dev\n' >&2
+exit 1

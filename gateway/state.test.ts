@@ -10,45 +10,61 @@ void test("live grants are additive, conflict checked, and tied to immutable VM 
   const state = new State(directory);
   try {
     const instance = state.register(
-      "work",
+      "lima:work",
       path.join(directory, "work.sock"),
       "tester",
     );
     assert.equal(
-      state.update("work", 0, { "shields/dotfiles": "task" }, "tester"),
+      state.update(
+        "lima:work",
+        0,
+        { "shields/dotfiles": { read: true, pushTaskBranches: true } },
+        "tester",
+      ),
       1,
     );
     assert.equal(
       state.update(
-        "work",
+        "lima:work",
         1,
-        { ...state.grants(instance.id), "shields/library": "read" },
+        {
+          ...state.grants(instance.id),
+          "shields/library": { read: true, pushTaskBranches: false },
+        },
         "tester",
       ),
       2,
     );
-    assert.equal(state.profile(instance.id, "SHIELDS/LIBRARY"), "read");
+    assert.deepEqual(state.grant(instance.id, "SHIELDS/LIBRARY"), {
+      read: true,
+      pushTaskBranches: false,
+    });
     assert.throws(
-      () => state.update("work", 1, {}, "tester"),
+      () => state.update("lima:work", 1, {}, "tester"),
       /policy changed/,
     );
     assert.deepEqual(state.grants(instance.id), {
-      "shields/dotfiles": "task",
-      "shields/library": "read",
+      "shields/dotfiles": { read: true, pushTaskBranches: true },
+      "shields/library": { read: true, pushTaskBranches: false },
     });
     assert.throws(
       () =>
         state.update(
-          "work",
+          "lima:work",
           2,
-          { "shields/new": "invalid" as "task" },
+          {
+            "shields/new": "invalid" as unknown as {
+              read: true;
+              pushTaskBranches: true;
+            },
+          },
           "tester",
         ),
-      /invalid profile/,
+      /invalid grant/,
     );
-    state.disable("work", "tester");
+    state.disable("lima:work", "tester");
     const replacement = state.register(
-      "work",
+      "lima:work",
       path.join(directory, "new.sock"),
       "tester",
     );
@@ -65,7 +81,7 @@ void test("audit record precedes a request and an interrupted request retains an
   const state = new State(directory);
   try {
     const instance = state.register(
-      "work",
+      "lima:work",
       path.join(directory, "work.sock"),
       "tester",
     );

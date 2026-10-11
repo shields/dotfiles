@@ -2,7 +2,7 @@ import { randomUUID } from "node:crypto";
 import { chmodSync, mkdirSync } from "node:fs";
 import path from "node:path";
 import { DatabaseSync } from "node:sqlite";
-import { normalizeRepository, type Operation, type Profile } from "./policy.ts";
+import { normalizeRepository, type Grant, type Operation } from "./policy.ts";
 
 export interface Instance {
   id: string;
@@ -27,6 +27,16 @@ export interface AccessLog {
   outcome: string;
 }
 
+export interface PolicyEvent {
+  id: string;
+  createdAt: number;
+  actor: string;
+  instanceId: string;
+  oldRevision: number;
+  newRevision: number;
+  changes: Record<string, unknown>;
+}
+
 interface InstanceRow {
   id: string;
   name: string;
@@ -37,7 +47,7 @@ interface InstanceRow {
 
 interface GrantRow {
   repository: string;
-  profile: Profile;
+  capabilities: string;
 }
 
 export class State {
@@ -48,7 +58,9 @@ export class State {
     chmodSync(directory, 0o700);
     this.db = new DatabaseSync(path.join(directory, "state.sqlite"));
     chmodSync(path.join(directory, "state.sqlite"), 0o600);
-    this.db.exec("PRAGMA foreign_keys = ON; PRAGMA journal_mode = WAL;");
+    this.db.exec(
+      "PRAGMA foreign_keys = ON; PRAGMA journal_mode = WAL; PRAGMA busy_timeout = 5000;",
+    );
     this.db.exec(`
       CREATE TABLE IF NOT EXISTS instances (
         id TEXT PRIMARY KEY,
@@ -62,7 +74,7 @@ export class State {
       CREATE TABLE IF NOT EXISTS grants (
         instance_id TEXT NOT NULL REFERENCES instances(id),
         repository TEXT NOT NULL,
-        profile TEXT NOT NULL CHECK (profile IN ('read', 'task')),
+        capabilities TEXT NOT NULL,
         PRIMARY KEY (instance_id, repository)
       );
       CREATE TABLE IF NOT EXISTS policy_events (
@@ -152,8 +164,8 @@ export class State {
 
   register(name: string, socket: string, actor: string): Instance {
     if (
-      !/^[A-Za-z0-9]+(?:[._-][A-Za-z0-9]+)*$/.test(name) ||
-      name === "dotfiles-base"
+      !/^lima:[A-Za-z0-9]+(?:[._-][A-Za-z0-9]+)*$/.test(name) ||
+      name === "lima:dotfiles-base"
     ) {
       throw new Error("invalid VM name");
     }
@@ -199,30 +211,35 @@ export class State {
     });
   }
 
-  grants(instanceId: string): Record<string, Profile> {
+  grants(instanceId: string): Record<string, Grant> {
     const rows = this.db
       .prepare(
-        "SELECT repository, profile FROM grants WHERE instance_id = ? ORDER BY repository",
+        "SELECT repository, capabilities FROM grants WHERE instance_id = ? ORDER BY repository",
       )
       .all(instanceId) as unknown as GrantRow[];
-    return Object.fromEntries(rows.map((row) => [row.repository, row.profile]));
+    return Object.fromEntries(
+      rows.map((row) => [
+        row.repository,
+        JSON.parse(row.capabilities) as Grant,
+      ]),
+    );
   }
 
-  profile(instanceId: string, repository: string): Profile | null {
+  grant(instanceId: string, repository: string): Grant | null {
     const row = this.db
       .prepare(
-        "SELECT profile FROM grants WHERE instance_id = ? AND repository = ?",
+        "SELECT capabilities FROM grants WHERE instance_id = ? AND repository = ?",
       )
       .get(instanceId, normalizeRepository(repository)) as unknown as
-      | { profile: Profile }
+      | { capabilities: string }
       | undefined;
-    return row?.profile ?? null;
+    return row ? (JSON.parse(row.capabilities) as Grant) : null;
   }
 
   update(
     name: string,
     expectedRevision: number | null,
-    nextGrants: Record<string, Profile>,
+    nextGrants: Record<string, Grant>,
     actor: string,
   ): number {
     return this.transaction(() => {
@@ -235,23 +252,39 @@ export class State {
           `policy changed while editing: expected revision ${String(expectedRevision)}, now ${String(instance.revision)}`,
         );
       }
-      const normalized: Record<string, Profile> = {};
-      for (const [repository, profile] of Object.entries(
+      const normalized: Record<string, Grant> = {};
+      for (const [repository, rawGrant] of Object.entries(
         nextGrants as Record<string, unknown>,
       )) {
-        if (profile !== "read" && profile !== "task") {
-          throw new Error(`invalid profile for ${repository}`);
+        if (
+          !rawGrant ||
+          typeof rawGrant !== "object" ||
+          Array.isArray(rawGrant)
+        ) {
+          throw new Error(`invalid grant for ${repository}`);
+        }
+        const grant = rawGrant as Record<string, unknown>;
+        if (
+          Object.keys(grant).toSorted().join(",") !== "pushTaskBranches,read" ||
+          grant.read !== true ||
+          typeof grant.pushTaskBranches !== "boolean"
+        ) {
+          throw new Error(`invalid grant for ${repository}`);
         }
         const key = normalizeRepository(repository);
         if (Object.hasOwn(normalized, key)) {
           throw new Error(`duplicate repository ${repository}`);
         }
-        normalized[key] = profile;
+        normalized[key] = {
+          read: true,
+          pushTaskBranches: grant.pushTaskBranches,
+        };
       }
       const old = this.grants(instance.id);
       const added = Object.fromEntries(
         Object.entries(normalized).filter(
-          ([repository, profile]) => old[repository] !== profile,
+          ([repository, grant]) =>
+            JSON.stringify(old[repository]) !== JSON.stringify(grant),
         ),
       );
       const removed = Object.fromEntries(
@@ -270,10 +303,10 @@ export class State {
         .prepare("DELETE FROM grants WHERE instance_id = ?")
         .run(instance.id);
       const insert = this.db.prepare(
-        "INSERT INTO grants(instance_id, repository, profile) VALUES (?, ?, ?)",
+        "INSERT INTO grants(instance_id, repository, capabilities) VALUES (?, ?, ?)",
       );
-      for (const [repository, profile] of Object.entries(normalized)) {
-        insert.run(instance.id, repository, profile);
+      for (const [repository, grant] of Object.entries(normalized)) {
+        insert.run(instance.id, repository, JSON.stringify(grant));
       }
       this.db
         .prepare("UPDATE instances SET revision = ? WHERE id = ?")
@@ -367,6 +400,23 @@ export class State {
         row.upstream_status === null ? null : Number(row.upstream_status),
       durationMs: row.duration_ms === null ? null : Number(row.duration_ms),
       outcome: String(row.outcome),
+    }));
+  }
+
+  events(instanceId: string, limit = 100): PolicyEvent[] {
+    const rows = this.db
+      .prepare(
+        "SELECT id, created_at, actor, instance_id, old_revision, new_revision, changes FROM policy_events WHERE instance_id = ? ORDER BY created_at DESC LIMIT ?",
+      )
+      .all(instanceId, limit) as unknown as Record<string, unknown>[];
+    return rows.map((row) => ({
+      id: row.id as string,
+      createdAt: Number(row.created_at),
+      actor: row.actor as string,
+      instanceId: row.instance_id as string,
+      oldRevision: Number(row.old_revision),
+      newRevision: Number(row.new_revision),
+      changes: JSON.parse(row.changes as string) as Record<string, unknown>,
     }));
   }
 

@@ -10,10 +10,15 @@ import {
 } from "graphql";
 
 export type Profile = "read" | "task";
+export interface Grant {
+  read: boolean;
+  pushTaskBranches: boolean;
+}
 export type Operation =
   | "git.read"
   | "git.push"
   | "api.read"
+  | "identity.read"
   | "graphql.read"
   | "public.read";
 
@@ -231,9 +236,7 @@ export function graphqlRepository(body: Buffer): string {
       continue;
     }
     if (field.name.value !== "repository") {
-      throw new PolicyError(
-        `unsupported GraphQL root field: ${field.name.value}`,
-      );
+      throw new PolicyError("unsupported GraphQL root field");
     }
     repositories.add(
       normalizeRepository(
@@ -303,6 +306,13 @@ export function classify(
     throw new PolicyError("unsupported GitHub web operation");
   }
   if (
+    url.pathname === "/__vm_access__/health" &&
+    method === "GET" &&
+    !url.search
+  ) {
+    return { repository: null, operation: "public.read", refs: [] };
+  }
+  if (
     url.pathname === "/graphql" &&
     method === "POST" &&
     !url.search &&
@@ -313,6 +323,9 @@ export function classify(
       operation: "graphql.read",
       refs: [],
     };
+  }
+  if (url.pathname === "/user" && method === "GET" && !url.search) {
+    return { repository: null, operation: "identity.read", refs: [] };
   }
   const match = restRoute.exec(url.pathname);
   if (match && method === "GET") {
@@ -325,14 +338,14 @@ export function classify(
   throw new PolicyError("unsupported GitHub API operation");
 }
 
-export function authorize(profile: Profile | null, operation: Operation): void {
+export function authorize(grant: Grant | null, operation: Operation): void {
   if (operation === "public.read") {
     return;
   }
-  if (!profile) {
+  if (!grant?.read) {
     throw new PolicyError("repository is not granted to this VM");
   }
-  if (operation === "git.push" && profile !== "task") {
+  if (operation === "git.push" && !grant.pushTaskBranches) {
     throw new PolicyError(
       "task-branch pushes are not granted for this repository",
     );
