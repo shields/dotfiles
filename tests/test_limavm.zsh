@@ -197,6 +197,7 @@ fi
 case $1 in
 register)
     name=${2#lima:}
+    [[ -d "$HOME/.lima/$name/sock" ]] || exit 1
     printf '{"id":"01234567-89ab-4cde-8fab-0123456789ab","socket":"%s"}\n' "$HOME/.lima/$name/sock/github-01234567-89ab-4cde-8fab-0123456789ab.sock"
     ;;
 ca-path) echo "$state/gateway-ca.pem" ;;

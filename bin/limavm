@@ -422,6 +422,7 @@ cmd_new() {
     local registration vm_id host_socket socket_name port_rule guest_home ca_path lima_dir
     lima_dir=$(limactl list --format '{{.Dir}}' "$name") || die "cannot find the Lima directory of $name"
     [[ $lima_dir == /* ]] || die "invalid Lima directory for $name"
+    install -d -m 700 "$lima_dir/sock"
     registration=$(vm-access register "lima:$name" --lima-dir "$lima_dir") || die "cannot register $name with the GitHub gateway"
     registered=1
     vm_id=$(printf '%s' "$registration" | jq -er .id) || die "the GitHub gateway returned no VM identity"
