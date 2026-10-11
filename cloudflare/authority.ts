@@ -133,7 +133,7 @@ export class CloudAuthority {
   constructor(
     storage: DurableObjectStorage,
     clientId: string,
-    request: typeof fetch = fetch,
+    request: typeof fetch = (input, init) => fetch(input, init),
   ) {
     this.storage = storage;
     this.clientId = clientId;
