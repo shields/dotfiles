@@ -152,6 +152,16 @@ void test("REST reads require a grant and API writes have no classification", ()
     );
   }, /unsupported/);
   assert.throws(() => {
+    classify(
+      {
+        host: "api.github.com",
+        method: "POST",
+        target: "/repos/shields/dotfiles/pulls",
+      },
+      id,
+    );
+  }, /unsupported/);
+  assert.throws(() => {
     authorize({ read: true, pushTaskBranches: false }, "git.push");
   }, /not granted/);
   assert.doesNotThrow(() => {
