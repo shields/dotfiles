@@ -16,6 +16,7 @@ tap "cupertinohq/tap", "https://codeberg.org/CupertinoHQ/homebrew-tap.git"
 tap "d12frosted/emacs-plus"
 tap "gimlet-io/capacitor"
 tap "openai/tools", trusted: { formulae: ["softnet"] }
+tap "shields/tap"
 brew "blueutil"
 brew "coreutils"
 brew "diffutils"
@@ -46,6 +47,7 @@ brew "cupertinohq/tap/cupertino", trusted: true
 brew "d12frosted/emacs-plus/emacs-plus@31", trusted: true
 brew "gimlet-io/capacitor/capacitor", trusted: true
 brew "openai/tools/tart", trusted: true
+brew "shields/tap/mute-on-lock", trusted: true, restart_service: :changed
 cask "agentsview"
 cask "airfoil"
 cask "anki"

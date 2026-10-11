@@ -76,9 +76,9 @@ that are selected.
 
 Provisioning upgrades formulae through Bundle, which also manages services
 declared with `restart_service: :changed` in a Brewfile. Cask upgrades run
-separately and exclude Chrome. After the first signed bottle is published, add
-`shields/tap/mute-on-lock` to the macOS Brewfile with
-`restart_service: :changed` to start its login service and restart it on upgrades.
+separately and exclude Chrome. The macOS Brewfile installs
+`shields/tap/mute-on-lock` with `restart_service: :changed` to start its login
+service and restart it on upgrades.
 
 # Persistent Linux box
 
