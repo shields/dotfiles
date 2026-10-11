@@ -26,4 +26,7 @@ if [[ $OSTYPE == linux* ]]; then
         local -a front=(~/bin ~/.local/bin /home/linuxbrew/.linuxbrew/{bin,sbin}(N))
         path=(${front:|path} $path ~/go/bin(N))
     }
+    if [[ -f /etc/dotfiles-github-gateway ]]; then
+        export SSL_CERT_FILE=/etc/ssl/certs/ca-certificates.crt
+    fi
 fi
