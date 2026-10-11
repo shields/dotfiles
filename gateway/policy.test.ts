@@ -41,6 +41,9 @@ void test("task branch creation and force updates are both accepted", () => {
   assert.deepEqual(parsePushCommands(created, id)?.refs, [
     `refs/heads/task/${id}/new`,
   ]);
+  assert.deepEqual(parsePushCommands(new Uint8Array(created), id)?.refs, [
+    `refs/heads/task/${id}/new`,
+  ]);
   assert.deepEqual(parsePushCommands(forced, id)?.refs, [
     `refs/heads/task/${id}/new`,
   ]);

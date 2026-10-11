@@ -26,7 +26,7 @@ export interface RequestInfo {
   host: string;
   method: string;
   target: string;
-  body?: Buffer;
+  body?: Uint8Array;
 }
 
 export interface Classification {
@@ -47,6 +47,7 @@ const hexSha = /^(?:[0-9a-f]{40}|[0-9a-f]{64})$/;
 const gitRoute =
   /^\/([A-Za-z0-9_.-]+)\/([A-Za-z0-9_.-]+)\.git\/(info\/refs|git-upload-pack|git-receive-pack)$/;
 const restRoute = /^\/repos\/([A-Za-z0-9_.-]+)\/([A-Za-z0-9_.-]+)(?:\/|$)/;
+const decoder = new TextDecoder();
 
 export function normalizeRepository(repository: string): string {
   if (
@@ -66,14 +67,14 @@ export function taskPrefix(instanceId: string): string {
 }
 
 export function parsePushCommands(
-  body: Buffer,
+  body: Uint8Array,
   instanceId: string,
 ): { refs: string[]; bytes: number } | null {
   const refs: string[] = [];
   let offset = 0;
   let first = true;
   while (offset + 4 <= body.length) {
-    const sizeText = body.toString("ascii", offset, offset + 4);
+    const sizeText = decoder.decode(body.subarray(offset, offset + 4));
     if (!/^[0-9a-fA-F]{4}$/.test(sizeText)) {
       throw new PolicyError("invalid Git push packet");
     }
@@ -90,7 +91,7 @@ export function parsePushCommands(
     if (offset + size > body.length) {
       return null;
     }
-    const line = body.toString("utf8", offset + 4, offset + size);
+    const line = decoder.decode(body.subarray(offset + 4, offset + size));
     const [command, capabilities] = line.split("\0", 2);
     if (first && capabilities?.split(/[\s\n]+/).includes("push-options")) {
       throw new PolicyError("Git push options are unsupported");
@@ -180,13 +181,13 @@ function rootFields(
   return fields;
 }
 
-export function graphqlRepository(body: Buffer): string {
+export function graphqlRepository(body: Uint8Array): string {
   if (body.length > 1_048_576) {
     throw new PolicyError("GraphQL request is too large");
   }
   let input: unknown;
   try {
-    input = JSON.parse(body.toString("utf8")) as unknown;
+    input = JSON.parse(decoder.decode(body)) as unknown;
   } catch {
     throw new PolicyError("invalid GraphQL JSON");
   }
