@@ -52,6 +52,8 @@ RUN /home/linuxbrew/.linuxbrew/bin/brew --prefix awscli >/dev/null
 
 RUN if [ "$CLOUDFLARE_AGENT" = 1 ]; then \
         sudo provision/throwaway.sh --user shields --no-github-timer \
+        && PATH="/home/linuxbrew/.linuxbrew/bin:$PATH" /home/linuxbrew/.linuxbrew/bin/uv run --no-dev python tools/configure_codex.py "$HOME/.codex/config.toml" \
+        && provision/reset-identity.sh \
         && sudo provision/cloudflare-agent.sh; \
     fi
 

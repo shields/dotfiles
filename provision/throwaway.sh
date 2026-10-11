@@ -101,7 +101,10 @@ jq '
 cat >"$work/config.toml" <<'EOF'
 # Written by provision/throwaway.sh. ~/.codex/config.toml overrides these.
 approval_policy = "never"
-sandbox_mode = "danger-full-access"
+default_permissions = ":danger-full-access"
+
+[features]
+network_proxy = false
 EOF
 
 # Codex parses a rules file as Starlark, so every prose line in this one

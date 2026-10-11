@@ -537,6 +537,7 @@ shell test-base sh -c set -eu; rm -rf \"\$1\"; mkdir -p \"\$1\"; tar -xf - --no-
 shell --workdir $GUEST_DIR test-base ./provision.sh none
 shell --workdir $GUEST_DIR test-base git reset --mixed --quiet HEAD
 shell test-base sudo $GUEST_DIR/provision/throwaway.sh --no-github-timer
+shell --workdir $GUEST_DIR test-base env PATH=/home/linuxbrew/.linuxbrew/bin:/usr/local/bin:/usr/bin:/bin uv run --no-dev python tools/configure_codex.py /home/guest/.codex/config.toml
 shell test-base sudo truncate -s 0 /etc/machine-id
 shell test-base $GUEST_DIR/provision/reset-identity.sh
 stop --tty=false test-base

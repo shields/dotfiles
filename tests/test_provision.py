@@ -750,6 +750,14 @@ def test_docker_prune_runs_only_on_macos() -> None:
     assert sum("bin/docker-prune" in line for _, line in code_lines()) == 1
 
 
+def test_cloudflare_reconfigures_codex_after_installing_the_throwaway_policy() -> None:
+    dockerfile = (REPO / "cloudflare/Dockerfile").read_text()
+    throwaway = dockerfile.index("sudo provision/throwaway.sh")
+    configure = dockerfile.index("python tools/configure_codex.py", throwaway)
+    reset = dockerfile.index("provision/reset-identity.sh", configure)
+    assert throwaway < configure < reset
+
+
 def test_the_plugin_tools_come_from_the_modules_that_update_them() -> None:
     data = (REPO / "brew" / "data.Brewfile").read_text()
     assert 'brew "datasette"' in data

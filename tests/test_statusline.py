@@ -131,6 +131,7 @@ class Statusline:
         shims = home / "shims"
         shims.mkdir()
         self.env = dict(os.environ)
+        _ = self.env.pop("CLAUDE_CODE_OAUTH_TOKEN", None)
         self.env.update(
             PATH=f"{shims}:{os.environ['PATH']}",
             HOME=str(home),
@@ -383,6 +384,29 @@ def test_first_run_fetches_usage(statusline: Statusline) -> None:
     assert TOKEN not in argv
     assert f"Authorization: Bearer {TOKEN}" in statusline.headers()
     assert "anthropic-beta: oauth-2025-04-20" in statusline.headers()
+
+
+@pytest.mark.parametrize("credentials_file", [False, True])
+def test_vm_oauth_token_supplies_usage(
+    statusline: Statusline, *, credentials_file: bool
+) -> None:
+    statusline.env["CLAUDE_CODE_OAUTH_TOKEN"] = TOKEN
+    if credentials_file:
+        statusline.credentials({"claudeAiOauth": {"accessToken": "unused-token"}})
+    statusline.curl("ok", FABLE_USAGE)
+    assert statusline.line(SUBSCRIBER) == f" {LEFT} · 100h 60% · {FABLE_SEGMENT}"
+    assert statusline.calls() == ["curl"]
+    assert f"Authorization: Bearer {TOKEN}" in statusline.headers()
+    assert TOKEN not in (statusline.log / "curl.argv").read_text()
+
+
+def test_empty_vm_oauth_token_uses_credentials(statusline: Statusline) -> None:
+    statusline.env["CLAUDE_CODE_OAUTH_TOKEN"] = ""
+    statusline.credentials(CREDENTIALS)
+    statusline.curl("ok", FABLE_USAGE)
+    assert statusline.line(SUBSCRIBER) == f" {LEFT} · 100h 60% · {FABLE_SEGMENT}"
+    assert statusline.calls() == ["curl"]
+    assert f"Authorization: Bearer {TOKEN}" in statusline.headers()
 
 
 @pytest.mark.parametrize(

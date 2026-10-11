@@ -12,6 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import asyncio
 import importlib.util
 import json
 import os
@@ -26,6 +27,7 @@ import pytest
 
 if TYPE_CHECKING:
     from collections.abc import Mapping
+    from contextlib import AbstractAsyncContextManager
 
 type Json = dict[str, object]
 
@@ -33,6 +35,17 @@ REPO = Path(__file__).resolve().parents[1]
 TOOL = REPO / "tools/configure_codex.py"
 HOME = Path("/home/me")
 PROJECTS = "/home/me/src/github.com/shields/dotfiles"
+STATUS_LINE = [
+    "model-with-reasoning",
+    "project-name",
+    "git-branch",
+    "permissions",
+    "approval-mode",
+    "context-used",
+    "five-hour-limit",
+    "weekly-limit",
+    "fast-mode",
+]
 DEVELOPMENT_PERMISSIONS: Json = {
     "extends": ":workspace",
     "filesystem": {"~/.cache/uv": "write"},
@@ -69,10 +82,19 @@ for line in sys.stdin:
 """
 
 
+class Server(Protocol):
+    async def request(self, method: str, params: Json) -> Json: ...
+
+
 class Tool(Protocol):
     LGTMCP_POLICY: str
+    THROWAWAY_MARKER: Path
 
-    def settings(self, config: Mapping[str, object], home: Path) -> Json: ...
+    def settings(
+        self, config: Mapping[str, object], home: Path, *, throwaway: bool = False
+    ) -> Json: ...
+
+    def app_server(self, codex_home: Path) -> AbstractAsyncContextManager[Server]: ...
 
     def hook_state(self, listing: Mapping[str, object], hooks_file: Path) -> Json: ...
 
@@ -89,6 +111,26 @@ def load_tool() -> Tool:
 
 
 tool = load_tool()
+
+
+@pytest.fixture(autouse=True)
+def throwaway_marker(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
+    marker = tmp_path / "dotfiles-throwaway"
+    monkeypatch.setattr(tool, "THROWAWAY_MARKER", marker)
+    return marker
+
+
+async def effective_sandbox(codex_home: Path) -> Json:
+    async with asyncio.timeout(30), tool.app_server(codex_home) as server:
+        result = await server.request(
+            "thread/start",
+            {
+                "cwd": str(codex_home.parent),
+                "ephemeral": True,
+                "config": {"mcp_servers.lgtmcp.enabled": False},
+            },
+        )
+    return cast("Json", result["sandbox"])
 
 
 def hook(source: Path, key: str, current_hash: str) -> Json:
@@ -127,6 +169,8 @@ def test_settings_for_an_empty_config() -> None:
         "approvals_reviewer": "auto_review",
         "features.worktrees": True,
         "features.network_proxy": True,
+        "tui.status_line": STATUS_LINE,
+        "tui.status_line_use_colors": False,
         "default_permissions": "dev",
         "permissions.dev": DEVELOPMENT_PERMISSIONS,
         "projects": {PROJECTS: {"trust_level": "trusted"}},
@@ -376,6 +420,8 @@ def test_configure_trusts_the_installed_hooks(
             edit("approvals_reviewer", "auto_review"),
             edit("features.worktrees", True),  # noqa: FBT003
             edit("features.network_proxy", True),  # noqa: FBT003
+            edit("tui.status_line", STATUS_LINE),
+            edit("tui.status_line_use_colors", False),  # noqa: FBT003
             edit("default_permissions", "dev"),
             edit("permissions.dev", DEVELOPMENT_PERMISSIONS),
             edit("projects", {PROJECTS: {"trust_level": "trusted"}}),
@@ -394,25 +440,35 @@ def test_configure_points_the_app_server_at_the_config_directory(
     assert launch["codex_home"] == str(codex_home)
 
 
-def test_configure_accepts_a_legacy_tui_setting(codex_home: Path) -> None:
+@pytest.mark.parametrize("tui", ["", "[tui]\nwhimsy = false\nstatus_line = []\n"])
+def test_configure_status_line_with_the_real_cli(codex_home: Path, tui: str) -> None:
     if shutil.which("codex") is None:
         pytest.skip("Codex CLI is not installed")
     config_file = codex_home / "config.toml"
-    _ = config_file.write_text(
-        '[mcp_servers.lgtmcp]\ncommand = "lgtmcp"\n\n[tui]\nwhimsy = false\n'
-    )
+    _ = config_file.write_text(f'[mcp_servers.lgtmcp]\ncommand = "lgtmcp"\n\n{tui}')
 
     tool.configure_codex(config_file, HOME)
 
     config = tomllib.loads(config_file.read_text())
-    assert config["tui"]["whimsy"] is False
+    assert config["tui"]["status_line"] == STATUS_LINE
+    assert config["tui"]["status_line_use_colors"] is False
+    if tui:
+        assert config["tui"]["whimsy"] is False
     assert config["approvals_reviewer"] == "auto_review"
     assert config["auto_review"]["extra_policy"] == tool.LGTMCP_POLICY
+    first = config_file.read_bytes()
+    tool.configure_codex(config_file, HOME)
+    assert config_file.read_bytes() == first
 
 
 @pytest.mark.parametrize("sandbox_mode", [None, "danger-full-access"])
+@pytest.mark.parametrize("throwaway", [False, True])
 def test_configure_permissions_with_the_real_cli(
-    codex_home: Path, sandbox_mode: str | None
+    codex_home: Path,
+    sandbox_mode: str | None,
+    throwaway_marker: Path,
+    *,
+    throwaway: bool,
 ) -> None:
     if shutil.which("codex") is None:
         pytest.skip("Codex CLI is not installed")
@@ -429,16 +485,20 @@ def test_configure_permissions_with_the_real_cli(
     if sandbox_mode:
         config_text = f'sandbox_mode = "{sandbox_mode}"\n{config_text}'
     _ = config_file.write_text(config_text)
+    if throwaway:
+        throwaway_marker.touch()
 
     tool.configure_codex(config_file, HOME)
 
     config = tomllib.loads(config_file.read_text())
     assert config.get("sandbox_mode") == sandbox_mode
-    assert config["default_permissions"] == "dev"
+    assert config["default_permissions"] == (
+        ":danger-full-access" if throwaway else "dev"
+    )
     assert config["features"] == {
         "hooks": False,
         "worktrees": True,
-        "network_proxy": True,
+        "network_proxy": not throwaway,
     }
     assert config["permissions"]["audit"] == {"extends": ":read-only"}
     assert config["permissions"]["dev"] == {
@@ -458,6 +518,29 @@ def test_configure_permissions_with_the_real_cli(
     first = config_file.read_bytes()
     tool.configure_codex(config_file, HOME)
     assert config_file.read_bytes() == first
+    sandbox = asyncio.run(effective_sandbox(codex_home))
+    assert sandbox["type"] == ("dangerFullAccess" if throwaway else "workspaceWrite")
+
+
+def test_configure_after_becoming_throwaway(
+    codex_home: Path, throwaway_marker: Path
+) -> None:
+    if shutil.which("codex") is None:
+        pytest.skip("Codex CLI is not installed")
+    config_file = codex_home / "config.toml"
+    _ = config_file.write_text('[mcp_servers.lgtmcp]\ncommand = "lgtmcp"\n')
+    tool.configure_codex(config_file, HOME)
+    before = tomllib.loads(config_file.read_text())
+    assert before["features"]["network_proxy"] is True
+    assert before["default_permissions"] == "dev"
+
+    throwaway_marker.touch()
+    tool.configure_codex(config_file, HOME)
+    after = tomllib.loads(config_file.read_text())
+    before["features"]["network_proxy"] = False
+    before["default_permissions"] = ":danger-full-access"
+    assert after == before
+    assert asyncio.run(effective_sandbox(codex_home))["type"] == "dangerFullAccess"
 
 
 def test_configure_without_installed_hooks_does_not_list_them(

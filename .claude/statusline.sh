@@ -121,8 +121,8 @@ fable_usage() {
     # commands take incompatible format flags.
     mtime=$(date -r "$cache" +%s 2>/dev/null) || mtime=0
     if ((now - mtime >= 600)); then
-        local tok=''
-        if [[ -f "$HOME/.claude/.credentials.json" ]]; then
+        local tok=${CLAUDE_CODE_OAUTH_TOKEN:-}
+        if [[ -z "$tok" && -f "$HOME/.claude/.credentials.json" ]]; then
             tok=$(jq -r '.claudeAiOauth.accessToken // empty' \
                 "$HOME/.claude/.credentials.json" 2>/dev/null) || tok=''
         fi

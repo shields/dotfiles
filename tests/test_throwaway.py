@@ -191,7 +191,8 @@ def test_codex_runs_without_approvals_or_a_sandbox(etc: Path) -> None:
     config = tomllib.loads((etc / "codex/config.toml").read_text())
     assert config == {
         "approval_policy": "never",
-        "sandbox_mode": "danger-full-access",
+        "default_permissions": ":danger-full-access",
+        "features": {"network_proxy": False},
     }
 
 

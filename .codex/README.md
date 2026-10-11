@@ -44,12 +44,20 @@ project unless the config already has an entry for that key. Codex matches a
 project key against a repository's root exactly, so every other repository still
 gets its own trust prompt.
 
+It also configures the CLI status line with the model and reasoning effort,
+project, branch, permissions, approval mode, context usage, five-hour and weekly
+limits, and fast mode, with status-line colors disabled. These settings are
+provisioned on both macOS and Linux, including VM bases.
+
 It selects a `dev` permission profile extending `:workspace`, grants writes to
 `~/.cache/uv`, and enables the network proxy with localhost and `127.0.0.1`
 allowed. Local binding is enabled so tests can start local servers. Other
-filesystem and network rules in that profile are preserved. Older `sandbox_mode`
-settings take precedence over permission profiles, including the full-access
-settings in throwaway environments.
+filesystem and network rules in that profile are preserved. On machines marked
+by `/etc/dotfiles-throwaway`, it selects `:danger-full-access` and disables the
+Codex network proxy. Lima and Cloudflare provisioning run the configuration step
+again after installing that marker, so the user-level `dev` selection cannot
+override the system's throwaway defaults. After converting an existing machine
+to a throwaway environment, rerun `tools/configure_codex.py` and restart Codex.
 
 The same run seeds hook trust. The script asks the app server for `hooks/list`,
 then writes `hooks.state.<key>.trusted_hash` for every hook that
