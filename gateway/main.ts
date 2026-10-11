@@ -405,9 +405,13 @@ async function command(arguments_: string[]): Promise<void> {
         if (
           args.length < 1 ||
           args.length > 2 ||
-          (args[1] !== undefined && args[1] !== "--follow")
+          (args[1] !== undefined &&
+            args[1] !== "--follow" &&
+            args[1] !== "--all")
         ) {
-          throw new Error("usage: vm-access logs lima:NAME|VM-ID [--follow]");
+          throw new Error(
+            "usage: vm-access logs lima:NAME|VM-ID [--follow|--all]",
+          );
         }
         const selector = required(args[0], "VM name or ID");
         const instance = state.byName(selector) ?? state.byId(selector);
@@ -415,13 +419,14 @@ async function command(arguments_: string[]): Promise<void> {
           throw new Error(`${selector} is not a known VM`);
         }
         const seen = new Set<string>();
+        const limit = args[1] === "--all" ? -1 : 100;
         for (;;) {
           const logs = [
             ...state
-              .logs(instance.id)
+              .logs(instance.id, limit)
               .map((entry) => ({ kind: "request", ...entry })),
             ...state
-              .events(instance.id)
+              .events(instance.id, limit)
               .map((entry) => ({ kind: "policy", ...entry })),
           ].toSorted((left, right) => left.createdAt - right.createdAt);
           for (const entry of logs) {

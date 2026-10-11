@@ -187,7 +187,7 @@ vm-access show lima:NAME
 vm-access grant lima:NAME OWNER/REPO --profile read|task
 vm-access revoke lima:NAME OWNER/REPO
 vm-access edit lima:NAME
-vm-access logs lima:NAME [--follow]
+vm-access logs lima:NAME [--follow|--all]
 ```
 
 `edit` opens the full YAML policy in `$VISUAL`, `$EDITOR` or `vi`; it rejects a
@@ -217,7 +217,8 @@ and raw queries are not logged. Policy changes are separately audited with the
 actor and old/new revision. Request logs are kept for 30 days and policy
 events for one year; requests fail closed if the audit database cannot be
 written. The state and admin socket are under `~/.local/state/vm-access/` on
-the Mac. `vm-access logs lima:NAME --follow` streams both event types.
+the Mac. `vm-access logs lima:NAME --follow` streams recent entries, and
+`--all` prints the retained history.
 
 ## Other secrets
 

@@ -12,6 +12,7 @@ import http from "node:http";
 import path from "node:path";
 import test from "node:test";
 import YAML from "yaml";
+import { State } from "./state.ts";
 
 void test("CLI grants and edits apply live and disabled VM logs stay addressable by ID", async () => {
   const root = mkdtempSync("/tmp/vma-");
@@ -113,13 +114,31 @@ void test("CLI grants and edits apply live and disabled VM logs stay addressable
     };
     assert.equal(edited.repositories[repository]?.pushTaskBranches, false);
     call(["disable", "lima:trial"]);
-    const history = call(["logs", instance.id])
+    const state = new State(path.join(root, "state"));
+    try {
+      for (let index = 0; index < 101; index++) {
+        state.logDecision({
+          id: `request-${String(index)}`,
+          instanceId: instance.id,
+          repository,
+          operation: "git.read",
+          refs: [],
+          allowed: true,
+          reason: "granted",
+          revision: 2,
+        });
+      }
+    } finally {
+      state.close();
+    }
+    assert.equal(call(["logs", instance.id]).trim().split("\n").length, 104);
+    const history = call(["logs", instance.id, "--all"])
       .trim()
       .split("\n")
       .map((line) => JSON.parse(line) as { kind: string; vm: string });
-    assert.equal(history.length, 4);
+    assert.equal(history.length, 105);
     assert.ok(history.every((entry) => entry.vm === "lima:trial"));
-    assert.ok(history.every((entry) => entry.kind === "policy"));
+    assert.equal(history.filter((entry) => entry.kind === "policy").length, 4);
   } finally {
     if (service.exitCode === null && service.signalCode === null) {
       const exited = once(service, "exit");
