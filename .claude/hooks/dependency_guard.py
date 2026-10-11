@@ -1,4 +1,4 @@
-#!/usr/bin/env python3.14
+#!/usr/bin/env python3
 
 # Copyright © 2026 Michael Shields
 #
@@ -32,12 +32,10 @@
 # CLAUDE.md: a hook cannot deliver it on the path that needs it, because on a
 # denial the tool call short-circuits before hook output reaches the model.
 #
-# This file needs Python 3.14 (PEP 758 syntax below). A PreToolUse hook that
-# exits 1 is a *non-blocking* error, so an interpreter that cannot run the file
-# would let the edit proceed unguarded. The command in settings.json therefore
-# has to run it under an absolute python3.14 path, never a PATH lookup, and exit
-# 2 when that interpreter is missing, which blocks the tool call. The shebang
-# matters only when the file is run directly.
+# A PreToolUse hook that exits 1 is a non-blocking error, so an incompatible
+# interpreter would let edits proceed unguarded. settings.json checks the
+# version of Homebrew's absolute python3 paths and exits 2 if none meets the
+# project minimum; a PATH lookup could run an older or untrusted interpreter.
 
 import json
 import re

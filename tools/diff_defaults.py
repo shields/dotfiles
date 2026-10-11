@@ -18,7 +18,7 @@
 # This allows you to change settings in System Preferences and find
 # the commands to create the same changes.
 
-import datetime
+import datetime as dt
 import plistlib
 import re
 import shlex
@@ -37,7 +37,7 @@ type PlistValue = (
     | float
     | str
     | bytes
-    | datetime.datetime
+    | dt.datetime
     | list[PlistValue]
     | dict[str, PlistValue]
 )
@@ -59,7 +59,7 @@ def _plist_typed(x: PlistValue) -> tuple[str, ...]:
             return "-bool", "true" if x else "false"
         case bytes():
             return "-data", x.hex()
-        case datetime.datetime():
+        case dt.datetime():
             # The ISO date contains a space, so quote it as a single shell
             # argument; print_diff emits these values without re-quoting.
             return "-date", shlex.quote(x.isoformat(sep=" "))

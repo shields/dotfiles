@@ -27,7 +27,7 @@ again with the new access token, because the old one stops working at once.
 
 This must run on the system Python of Debian 13 (3.13) as well as Homebrew's,
 which a PATH without Homebrew first selects. ruff format rewrites
-"except (A, B):" as "except A, B:", which only Python 3.14 parses, so catch
+"except (A, B):" as "except A, B:", which needs Python 3.14+, so catch
 one exception type or use "as". No token is ever printed, except by
 "credential get" to git.
 """

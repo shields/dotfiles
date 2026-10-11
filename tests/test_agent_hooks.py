@@ -36,9 +36,9 @@ CLAUDE_SETTINGS = REPO / ".claude/settings.json"
 CODEX_HOOKS = REPO / ".codex/hooks.json"
 
 INTERPRETERS = (
-    "/opt/homebrew/bin/python3.14",
-    "/usr/local/bin/python3.14",
-    "/home/linuxbrew/.linuxbrew/bin/python3.14",
+    "/opt/homebrew/bin/python3",
+    "/usr/local/bin/python3",
+    "/home/linuxbrew/.linuxbrew/bin/python3",
 )
 
 DEPENDENCY_GUARD = ".claude/hooks/dependency_guard.py"
@@ -141,25 +141,42 @@ class Sandbox:
             link.symlink_to(REPO / script)
         decoys = root / "decoys"
         decoys.mkdir()
-        for name in ("python3", "python3.14", "python"):
+        for name in ("python3", "python3.15", "python"):
             self.fake(decoys / name, "decoy")
         self.path = f"{decoys}:/usr/bin:/bin"
 
-    def fake(self, path: Path, name: str, *, mode: int = 0o755) -> None:
+    def fake(
+        self,
+        path: Path,
+        name: str,
+        *,
+        mode: int = 0o755,
+        version: tuple[int, int, int] = (3, 15, 0),
+    ) -> None:
         path.parent.mkdir(parents=True, exist_ok=True)
         _ = path.write_text(
-            f'#!/bin/sh\necho {name} >> "$FAKE_LOG"\nexec "$REAL_PYTHON" "$@"\n'
+            f"""#!/bin/sh
+if [ "$1" = -c ]; then
+  exec "$REAL_PYTHON" -c "import sys; sys.version_info = {version}; $2"
+fi
+echo {name} >> "$FAKE_LOG"
+exec "$REAL_PYTHON" "$@"
+"""
         )
         path.chmod(mode)
 
     def install(self, states: tuple[str, ...]) -> list[str]:
         paths: list[str] = []
         for index, state in enumerate(states):
-            path = self.root / f"slot{index}" / "python3.14"
+            path = self.root / f"slot{index}" / "python3"
             paths.append(str(path))
             match state:
                 case "exec":
                     self.fake(path, f"slot{index}")
+                case "outdated":
+                    self.fake(path, f"slot{index}", version=(3, 14, 99))
+                case "newer":
+                    self.fake(path, f"slot{index}", version=(3, 16, 0))
                 case "not-executable":
                     self.fake(path, f"slot{index}", mode=0o644)
                 case "dangling":
@@ -217,7 +234,7 @@ def test_registered_hooks() -> None:
 
 @pytest.mark.parametrize("hook", HOOKS, ids=label)
 def test_command_lists_the_expected_interpreters(hook: Hook) -> None:
-    candidates = re.findall(r"/[\w/.+-]*/python3\.14\b", hook.command)
+    candidates = re.findall(r"/[\w/.+-]*/python[\w.]*\b", hook.command)
     assert candidates == list(INTERPRETERS)
     assert hook.command.rstrip().endswith("exit 2")
     for lookup in ("/usr/bin/env", "PATH", ".local"):
@@ -230,14 +247,17 @@ def test_command_lists_the_expected_interpreters(hook: Hook) -> None:
     ("states", "expected"),
     [
         (("exec", "exec", "exec"), "slot0"),
+        (("newer", "exec", "exec"), "slot0"),
         (("missing", "exec", "exec"), "slot1"),
+        (("outdated", "exec", "exec"), "slot1"),
         (("not-executable", "exec", "missing"), "slot1"),
         (("dangling", "missing", "exec"), "slot2"),
         (("missing", "missing", "exec"), "slot2"),
         (("missing", "missing", "missing"), None),
+        (("outdated", "outdated", "outdated"), None),
     ],
 )
-def test_first_existing_interpreter_runs(
+def test_first_compatible_interpreter_runs(
     sandbox: Sandbox,
     hook: Hook,
     shell: list[str],
@@ -250,7 +270,7 @@ def test_first_existing_interpreter_runs(
     if expected is None:
         assert result.returncode == 2
         assert sandbox.resolved() == []
-        assert "Python 3.14 not found" in result.stderr
+        assert "Python 3.15+ not found" in result.stderr
         assert Path(hook.script).name in result.stderr
     else:
         assert result.returncode == 0, result.stderr

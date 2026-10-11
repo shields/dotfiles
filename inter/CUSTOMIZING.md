@@ -268,7 +268,7 @@ italic fonts. The feature tags, weight, and tracking amount below are
 placeholders; substitute your own.
 
 ```sh
-uv venv .venv --python 3.14
+uv venv .venv --python 3.15
 uv pip install --python .venv/bin/python 'fonttools[woff]==4.65.0' 'opentype-feature-freezer==1.32.2'
 curl -LO https://github.com/rsms/inter/releases/download/v4.1/Inter-4.1.zip
 unzip -q Inter-4.1.zip -d Inter-4.1

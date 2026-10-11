@@ -19,13 +19,14 @@ until provisioning runs again or you review it there. Hooks are enabled by
 default; an explicit `features.hooks = false` setting disables this additional
 check.
 
-The hook command runs `git_guard.py` with the first `python3.14` that exists in
-`/opt/homebrew/bin`, `/usr/local/bin`, and `/home/linuxbrew/.linuxbrew/bin`, in
-that order. It never searches `PATH`, so neither a hijacked `PATH` nor an older
-Python in `~/.local/bin` can stand in for it. When none exists, the command prints
-a recovery hint to stderr and exits 2, which Codex treats as a block with the hint
-as its reason: a missing interpreter stops Bash tool calls rather than silently
-turning the check off. Only the lookup fails closed; Codex treats any other
+The hook command runs `git_guard.py` with the first executable `python3` that
+reports Python 3.15 or newer in `/opt/homebrew/bin`, `/usr/local/bin`, and
+`/home/linuxbrew/.linuxbrew/bin`, in that order. It never searches `PATH`, so
+neither a hijacked `PATH` nor an older Python in `~/.local/bin` can stand in for
+it. When none qualifies, the command prints a recovery hint to stderr and exits
+2, which Codex treats as a block with the hint as its reason: a missing or
+incompatible interpreter stops Bash tool calls rather than silently turning the
+check off. Only the lookup fails closed; Codex treats any other
 nonzero exit as a non-blocking hook failure and runs the command anyway. Codex
 runs the command with `$SHELL -lc` and Claude Code with `sh -c`, so keep it valid
 in both.

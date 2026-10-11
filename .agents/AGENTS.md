@@ -22,7 +22,7 @@ Don't trust memory for version numbers—check current versions, as they may hav
 changed since the knowledge cutoff. Current versions (update as needed):
 
 - Debian: 13 (trixie)
-- Python: 3.14
+- Python: 3.15
 - Go: 1.27
 
 Do not add, remove, or modify license, copyright, or authorship information in
