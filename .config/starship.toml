@@ -65,6 +65,9 @@ detect_extensions = []
 format = "[ $duration]($style) "
 style = "black dimmed"
 
+[jobs]
+symbol = "⏾"
+
 [status]
 format = "[ $symbol$status]($style) "
 symbol = ""
