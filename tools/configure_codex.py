@@ -39,6 +39,7 @@ LGTMCP_POLICY = (
 # Codex matches a project key against a repository's root exactly, so a
 # wildcard key trusts nothing.
 TRUSTED_PROJECT = "src/github.com/shields/dotfiles"
+THROWAWAY_MARKER = Path("/etc/dotfiles-throwaway")
 
 
 @final
@@ -111,7 +112,7 @@ def table(config: Json, name: str) -> Json:
     return cast("Json", value)
 
 
-def settings(config: Json, home: Path) -> Json:
+def settings(config: Json, home: Path, *, throwaway: bool = False) -> Json:
     extra_policy = table(config, "auto_review").get("extra_policy", "")
     if not isinstance(extra_policy, str):
         msg = "auto_review.extra_policy must be a string"
@@ -128,7 +129,7 @@ def settings(config: Json, home: Path) -> Json:
         "mcp_servers.lgtmcp.tools.review_and_commit.approval_mode": "approve",
         "approvals_reviewer": "auto_review",
         "features.worktrees": True,
-        "features.network_proxy": True,
+        "features.network_proxy": not throwaway,
         "default_permissions": "dev",
         "permissions.dev": {
             **development,
@@ -211,7 +212,11 @@ def configure_codex(config_file: Path, home: Path) -> None:
     # that.
     hooks_enabled = table(config, "features").get("hooks") is not False
     asyncio.run(
-        write_config(config_file, settings(config, home), hooks_enabled=hooks_enabled)
+        write_config(
+            config_file,
+            settings(config, home, throwaway=THROWAWAY_MARKER.exists()),
+            hooks_enabled=hooks_enabled,
+        )
     )
 
 

@@ -71,8 +71,11 @@ for line in sys.stdin:
 
 class Tool(Protocol):
     LGTMCP_POLICY: str
+    THROWAWAY_MARKER: Path
 
-    def settings(self, config: Mapping[str, object], home: Path) -> Json: ...
+    def settings(
+        self, config: Mapping[str, object], home: Path, *, throwaway: bool = False
+    ) -> Json: ...
 
     def hook_state(self, listing: Mapping[str, object], hooks_file: Path) -> Json: ...
 
@@ -89,6 +92,13 @@ def load_tool() -> Tool:
 
 
 tool = load_tool()
+
+
+@pytest.fixture(autouse=True)
+def throwaway_marker(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
+    marker = tmp_path / "dotfiles-throwaway"
+    monkeypatch.setattr(tool, "THROWAWAY_MARKER", marker)
+    return marker
 
 
 def hook(source: Path, key: str, current_hash: str) -> Json:
@@ -455,6 +465,29 @@ def test_configure_permissions_with_the_real_cli(
             },
         },
     }
+    first = config_file.read_bytes()
+    tool.configure_codex(config_file, HOME)
+    assert config_file.read_bytes() == first
+
+
+def test_configure_disables_the_proxy_after_becoming_throwaway(
+    codex_home: Path, throwaway_marker: Path
+) -> None:
+    if shutil.which("codex") is None:
+        pytest.skip("Codex CLI is not installed")
+    config_file = codex_home / "config.toml"
+    _ = config_file.write_text('[mcp_servers.lgtmcp]\ncommand = "lgtmcp"\n')
+    tool.configure_codex(config_file, HOME)
+    before = tomllib.loads(config_file.read_text())
+    assert before["features"]["network_proxy"] is True
+
+    throwaway_marker.touch()
+    tool.configure_codex(config_file, HOME)
+    after = tomllib.loads(config_file.read_text())
+    assert after["features"]["network_proxy"] is False
+    before["features"]["network_proxy"] = False
+    assert after == before
+
     first = config_file.read_bytes()
     tool.configure_codex(config_file, HOME)
     assert config_file.read_bytes() == first

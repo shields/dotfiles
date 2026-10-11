@@ -750,6 +750,19 @@ def test_docker_prune_runs_only_on_macos() -> None:
     assert sum("bin/docker-prune" in line for _, line in code_lines()) == 1
 
 
+def test_cloudflare_agent_refreshes_codex_after_installing_throwaway_policy() -> None:
+    dockerfile = (REPO / "cloudflare" / "Dockerfile").read_text()
+    guard = dockerfile.index('RUN if [ "$CLOUDFLARE_AGENT" = 1 ]; then')
+    policy = dockerfile.index("sudo provision/throwaway.sh", guard)
+    configure = dockerfile.index(
+        "tools/configure_codex.py /home/shields/.codex/config.toml",
+        guard,
+    )
+    end = dockerfile.index("\n    fi", guard)
+    assert guard < policy < configure < end
+    assert 'PATH="/home/linuxbrew/.linuxbrew/bin:$PATH"' in dockerfile[policy:configure]
+
+
 def test_the_plugin_tools_come_from_the_modules_that_update_them() -> None:
     data = (REPO / "brew" / "data.Brewfile").read_text()
     assert 'brew "datasette"' in data

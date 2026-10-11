@@ -315,7 +315,11 @@ sandboxed, prompting behavior.
   settings.
 - Codex gets `/etc/codex/config.toml` with `approval_policy = "never"` and
   `sandbox_mode = "danger-full-access"`. `~/.codex/config.toml` overrides any key
-  it sets, and `provision.sh` does not set these. `cx` is plain `codex`.
+  it sets, and `provision.sh` does not set these. The network proxy is disabled
+  in both configs: `tools/configure_codex.py` detects `/etc/dotfiles-throwaway`,
+  and Lima bases and Cloudflare agent images run it after installing the
+  throwaway policy. Re-provisioning keeps the proxy disabled. `cx` is plain
+  `codex`.
 - In a gateway VM, `git_guard.py` and the installed deny rules allow `git push`;
   the gateway checks the destinations against `task/VM-ID/*`. The hook still
   stops `git commit --no-verify`, and the agent policies still refuse the

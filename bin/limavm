@@ -231,8 +231,9 @@ cmd_base() {
     mounts=$(limactl list --format '{{len .Config.Mounts}}' "$base")
     [[ $mounts == 0 ]] || die "$base mounts $mounts host directories, which ~/.lima/_config adds; a throwaway VM mounts none"
 
-    local guest_dir
-    guest_dir=$(guest_home_of "$base")/$guest_repo
+    local guest_home guest_dir
+    guest_home=$(guest_home_of "$base")
+    guest_dir=$guest_home/$guest_repo
 
     COPYFILE_DISABLE=1 tar --no-xattrs --no-acls -C "$stage/tree" -cf - . |
         limactl shell "$base" sh -c 'set -eu; rm -rf "$1"; mkdir -p "$1"; tar -xf - --no-same-owner -C "$1"' _ "$guest_dir"
@@ -242,6 +243,7 @@ cmd_base() {
     limactl shell --workdir "$guest_dir" "$base" ./provision.sh "$@" </dev/null
     limactl shell --workdir "$guest_dir" "$base" git reset --mixed --quiet HEAD </dev/null
     limactl shell "$base" sudo "$guest_dir/provision/throwaway.sh" --no-github-timer </dev/null
+    limactl shell --workdir "$guest_dir" "$base" uv run --no-dev python tools/configure_codex.py "$guest_home/.codex/config.toml" </dev/null
 
     limactl shell "$base" sudo truncate -s 0 /etc/machine-id </dev/null
     limactl shell "$base" "$guest_dir/provision/reset-identity.sh" </dev/null

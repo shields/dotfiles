@@ -192,6 +192,7 @@ def test_codex_runs_without_approvals_or_a_sandbox(etc: Path) -> None:
     assert config == {
         "approval_policy": "never",
         "sandbox_mode": "danger-full-access",
+        "features": {"network_proxy": False},
     }
 
 

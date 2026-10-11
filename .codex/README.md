@@ -51,6 +51,11 @@ filesystem and network rules in that profile are preserved. Older `sandbox_mode`
 settings take precedence over permission profiles, including the full-access
 settings in throwaway environments.
 
+On machines with `/etc/dotfiles-throwaway`, the script disables the network
+proxy, which otherwise filters destinations even with full sandbox access.
+Lima bases and Cloudflare agent images run it again after installing the
+throwaway policy, and subsequent provisioning keeps the proxy disabled.
+
 The same run seeds hook trust. The script asks the app server for `hooks/list`,
 then writes `hooks.state.<key>.trusted_hash` for every hook that
 `~/.codex/hooks.json` defines, using the hash Codex computed for the installed
