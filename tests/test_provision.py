@@ -932,3 +932,119 @@ MACOS_SH_PLAIN_COMMANDS = (
 def test_macos_sh_commands_that_must_stop_the_run_are_plain() -> None:
     stripped = {line.strip() for line in MACOS.read_text().splitlines()}
     assert [c for c in MACOS_SH_PLAIN_COMMANDS if c not in stripped] == []
+
+
+GATEWAY_INSTALL_HARNESS = r"""
+set -euo pipefail
+source "$1"
+state=$2
+remaining=$3
+modules_selection=dev
+modules_has() { [[ $2 == dev ]]; }
+bun() { printf 'bun %s\n' "$*" >>"$LOG"; }
+sleep() {
+    printf 'wait\n' >>"$LOG"
+    remaining=$((remaining - 1))
+}
+launchctl() {
+    printf '%s\n' "$1" >>"$LOG"
+    case $1 in
+        print)
+            if [[ $state == unloading && $remaining -le 0 ]]; then
+                state=absent
+            fi
+            [[ $state != absent ]] || return 113
+            ;;
+        bootout)
+            [[ $BOOTOUT_STATUS -eq 0 ]] || return "$BOOTOUT_STATUS"
+            state=unloading
+            ;;
+        bootstrap)
+            if [[ $state != absent ]]; then
+                echo 'Bootstrap failed: 5: Input/output error' >&2
+                return 5
+            fi
+            state=loaded
+            ;;
+        *) return 64 ;;
+    esac
+}
+macos_vm_access_install
+echo finished
+"""
+
+
+def run_gateway_install(
+    tmp_path: Path,
+    *,
+    state: str = "loaded",
+    delay: int = 0,
+    bootout_status: int = 0,
+) -> tuple[subprocess.CompletedProcess[str], list[str]]:
+    home = tmp_path / "home"
+    (home / "bin").mkdir(parents=True)
+    command = home / "bin/vm-access"
+    _ = command.write_text('#!/bin/sh\nprintf "init\\n" >>"$LOG"\n')
+    command.chmod(0o755)
+    log = tmp_path / "calls"
+    result = subprocess.run(
+        [
+            "/bin/bash",
+            "-c",
+            GATEWAY_INSTALL_HARNESS,
+            "bash",
+            str(MACOS),
+            state,
+            str(delay),
+        ],
+        env={
+            "HOME": str(home),
+            "PATH": "/usr/bin:/bin",
+            "LOG": str(log),
+            "BOOTOUT_STATUS": str(bootout_status),
+        },
+        capture_output=True,
+        text=True,
+        check=False,
+        timeout=10,
+    )
+    return result, log.read_text().splitlines()
+
+
+@pytest.mark.parametrize("delay", [0, 3])
+def test_gateway_reload_waits_for_launchd_to_release_the_label(
+    tmp_path: Path, delay: int
+) -> None:
+    result, calls = run_gateway_install(tmp_path, delay=delay)
+    assert result.returncode == 0, result.stderr
+    assert result.stdout == "finished\n"
+    assert calls.count("bootstrap") == 1
+    assert calls.index("bootout") < calls.index("bootstrap")
+    if delay:
+        assert "wait" in calls
+
+
+def test_gateway_first_install_loads_without_waiting(tmp_path: Path) -> None:
+    result, calls = run_gateway_install(tmp_path, state="absent")
+    assert result.returncode == 0, result.stderr
+    assert calls.count("bootstrap") == 1
+    assert "bootout" not in calls
+    assert "wait" not in calls
+
+
+def test_gateway_reload_fails_if_launchd_does_not_release_the_label(
+    tmp_path: Path,
+) -> None:
+    result, calls = run_gateway_install(tmp_path, delay=1000)
+    assert result.returncode != 0
+    assert "timed out" in result.stderr
+    assert "finished" not in result.stdout
+    assert "bootstrap" not in calls
+
+
+def test_gateway_reload_stops_if_bootout_fails(tmp_path: Path) -> None:
+    result, calls = run_gateway_install(tmp_path, bootout_status=7)
+    assert result.returncode == 7
+    assert "finished" not in result.stdout
+    assert "bootstrap" not in calls
+    assert "wait" not in calls

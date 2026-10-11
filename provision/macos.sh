@@ -43,6 +43,16 @@ macos_vm_access_install() {
         "$HOME/bin/vm-access" init
         if launchctl print "gui/$UID/com.msrl.dotfiles.vm-access" >/dev/null 2>&1; then
             launchctl bootout "gui/$UID/com.msrl.dotfiles.vm-access"
+            # bootout returns before launchd releases the service label.
+            local attempts=0
+            while launchctl print "gui/$UID/com.msrl.dotfiles.vm-access" >/dev/null 2>&1; do
+                attempts=$((attempts + 1))
+                if [[ $attempts -ge 100 ]]; then
+                    echo "provision.sh: timed out waiting for the vm-access LaunchAgent to unload" >&2
+                    return 1
+                fi
+                sleep 0.1
+            done
         fi
         launchctl bootstrap "gui/$UID" "$HOME/Library/LaunchAgents/com.msrl.dotfiles.vm-access.plist"
     fi
