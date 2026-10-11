@@ -44,7 +44,9 @@ LINES = TEXT.splitlines()
 MACOS_GUARD = "if [[ $os == macos ]]; then"
 LINUX_GUARD = "if [[ $os == linux ]]; then"
 MACOS_FUNCTIONS = (
+    "macos_vm_access_cleanup",
     "macos_preflight",
+    "macos_vm_access_install",
     "macos_xcode",
     "macos_login_shell",
     "macos_defaults",
@@ -81,10 +83,16 @@ LINUX_EXCLUDES = (
     "bin/*.applescript",
     "bin/clean_downloads.py",
     "bin/limavm",
+    "bin/vm-access",
     ".agents/skills/transcribe",
     ".claude/skills/transcribe",
 )
-MACOS_EXCLUDES = ("bin/setup-secrets", "bin/github_app_token.py")
+MACOS_EXCLUDES = (
+    "bin/setup-secrets",
+    "bin/github_app_token.py",
+    "bin/setup-github-gateway",
+    "bin/github-gateway-credential",
+)
 
 COPY_COMMAND = (
     'git ls-files -z -- "${copy_paths[@]}"'
@@ -222,6 +230,7 @@ def selected(path: str, os_name: str) -> bool:
             "bin/chrome-tabs-to-markdown",
             "bin/clean_downloads.py",
             "bin/limavm",
+            "bin/vm-access",
             ".claude/skills/transcribe",
         }
         or (path.startswith("bin/") and path.endswith(".applescript"))
@@ -315,10 +324,10 @@ def test_macos_functions_are_called_as_plain_statements_in_the_guard() -> None:
 def test_macos_functions_are_called_in_the_original_order() -> None:
     calls = [find(rf"^\s+{name}$") for name in MACOS_FUNCTIONS]
     assert calls == sorted(calls)
-    preflight, xcode, login_shell, defaults, emacs_app, finish = calls
+    cleanup, preflight, install, xcode, login_shell, defaults, emacs_app, finish = calls
     analytics = find(r"^brew analytics off")
     oh_my_zsh = find(r"Oh My Zsh installation")
-    assert analytics < preflight < oh_my_zsh
+    assert cleanup < analytics < preflight < oh_my_zsh < install < xcode
     assert find(r"^\s+bin/docker-prune$") < xcode
     assert login_shell == xcode + 1
     assert find(r"gcloud --quiet components update") < defaults
@@ -430,8 +439,11 @@ SCRATCH_FILES = {
     "bin/chrome-tabs-to-markdown": "",
     "bin/clean_downloads.py": "",
     "bin/limavm": "",
+    "bin/vm-access": "",
     "bin/setup-secrets": "",
     "bin/github_app_token.py": "",
+    "bin/setup-github-gateway": "",
+    "bin/github-gateway-credential": "",
     "bin/zoom-toggle-audio.applescript": "",
     "Library/Fonts/f.otf": "",
     "Library/Application Support/with space.txt": "",
@@ -480,6 +492,8 @@ def test_scratch_repo_macos_copy_matches_the_independent_selection(
     assert actual == {path for path in tracked if selected(path, "macos")}
     assert "bin/setup-secrets" not in actual
     assert "bin/github_app_token.py" not in actual
+    assert "bin/setup-github-gateway" not in actual
+    assert "bin/github-gateway-credential" not in actual
     assert "bin/scratch-untracked" not in actual
     assert {"bin/$", "Library/Application Support/with space.txt"} <= actual
     assert ".config/karabiner/karabiner.json" in actual
@@ -500,6 +514,8 @@ def test_scratch_repo_linux_copy_drops_every_excluded_path(
         "bin/$",
         "bin/setup-secrets",
         "bin/github_app_token.py",
+        "bin/setup-github-gateway",
+        "bin/github-gateway-credential",
     }
 
 

@@ -1,0 +1,68 @@
+#!/bin/bash
+
+set -euo pipefail
+
+die() {
+    printf 'setup-github-gateway: %s\n' "$*" >&2
+    exit 1
+}
+
+[[ $# -eq 1 && $1 =~ ^[0-9a-f]{8}(-[0-9a-f]{4}){3}-[0-9a-f]{12}$ ]] || die "expected the VM instance ID"
+[[ $(id -u) -eq 0 ]] || die "run as root"
+[[ ! -t 0 ]] || die "the gateway CA certificate is read from stdin"
+[[ -n ${SUDO_USER:-} && $SUDO_USER != root ]] || die "cannot identify the guest user"
+command -v socat >/dev/null || die "socat is not installed"
+command -v jq >/dev/null || die "jq is not installed"
+
+guest_home=$(getent passwd "$SUDO_USER" | cut -d: -f6)
+[[ $guest_home == /* && -x $guest_home/bin/github-gateway-credential ]] || die "guest credential helper is missing"
+
+ca=$(mktemp /usr/local/share/ca-certificates/.dotfiles-github-gateway.XXXXXX)
+managed=$(mktemp /etc/claude-code/.managed-settings.XXXXXX)
+trap 'rm -f "$ca" "$managed"' EXIT
+cat >"$ca"
+openssl x509 -noout -in "$ca" >/dev/null || die "invalid gateway CA certificate"
+chmod 644 "$ca"
+mv -f "$ca" /usr/local/share/ca-certificates/dotfiles-github-gateway.crt
+update-ca-certificates >/dev/null
+
+if ! grep -qx '127.0.0.1 github.com api.github.com # dotfiles-vm-access' /etc/hosts; then
+    printf '%s\n' '127.0.0.1 github.com api.github.com # dotfiles-vm-access' >>/etc/hosts
+fi
+
+cat >/etc/systemd/system/dotfiles-github-gateway.service <<'EOF'
+[Unit]
+Description=Relay GitHub HTTPS through the Lima gateway
+After=network-online.target
+
+[Service]
+Type=simple
+ExecStart=/usr/bin/socat TCP-LISTEN:443,bind=127.0.0.1,reuseaddr,fork UNIX-CONNECT:/tmp/vm-access-github.sock
+Restart=always
+RestartSec=1
+NoNewPrivileges=yes
+ProtectSystem=full
+
+[Install]
+WantedBy=multi-user.target
+EOF
+
+settings=/etc/claude-code/managed-settings.json
+[[ -f $settings ]] || die "Claude managed settings are missing"
+jq '.permissions.deny |= map(select(. as $entry | [
+    "Bash(git push*)",
+    "Bash(git -C * push*)",
+    "Bash(git -c * push*)",
+    "Bash(git --git-dir* push*)",
+    "Bash(git --work-tree* push*)"
+  ] | index($entry) | not))' "$settings" >"$managed"
+chmod 644 "$managed"
+mv -f "$managed" "$settings"
+
+rm -f "$guest_home/.codex/rules/no-push.rules"
+sudo -H -u "$SUDO_USER" git config --global credential.https://github.com.helper "!$guest_home/bin/github-gateway-credential"
+printf '%s\n' "$1" >/etc/dotfiles-github-gateway
+chmod 644 /etc/dotfiles-github-gateway
+
+systemctl daemon-reload
+systemctl enable --now dotfiles-github-gateway.service

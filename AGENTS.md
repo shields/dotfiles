@@ -75,17 +75,22 @@ Throwaway Lima VMs (the README describes them for users):
 - `lima/dev.yaml` is the VM definition, and `bin/limavm` (Mac only, bash 3.2)
   builds `dotfiles-base` from it and clones it. `bin/setup-secrets` runs in the
   guest and reads a secret from stdin; no secret may reach an argument list, an
-  environment or a message. `limavm new` runs the device flow of a GitHub App
-  (no private key) on the Mac for `--repo`'s repository, or for the one that the
-  current checkout's `origin` names when it is on GitHub's host (`--no-repo`
-  turns that off), sends the record to `setup-secrets GITHUB_APP_AUTH`, clones
-  the repository in the guest at `~/src/github.com/OWNER/REPO` through the
-  guest's credential helper (not `shields/dotfiles`, which the base holds there
-  already), and opens the shell there with `--workdir`.
-  `bin/github_app_token.py` (Linux only; on
-  Python 3.13, which Debian's `python3` is) keeps the record fresh from a
-  systemd timer that `provision/throwaway.sh` installs and from git's credential
-  helper. The Mac keeps no GitHub secret, and `limavm` never calls `security`.
+  environment or a message. `limavm new` asks the Mac's `vm-access` gateway to
+  authorize the selected repository, registers an immutable VM ID and reverse
+  Unix socket, installs the gateway CA and local relay in the guest, and grants
+  the repository. `--no-repo` skips the grant. The Mac keeps GitHub App tokens
+  and refreshes them on demand; the guest gets only a dummy credential helper,
+  a dummy `GH_TOKEN`, the CA and its ID. The gateway inspects Git push commands,
+  allows only `task/VM-ID/*`, and applies live per-VM/repository grants to REST
+  and GraphQL reads. `limavm github` adds a grant and `limavm rm` disables the
+  VM before deletion. `gateway/` contains the shared policy, service, state,
+  authorization and CLI. `.config/vm-access/profiles.yaml` defines templates;
+  edits affect future grants only. On the Mac, `provision.sh dev` bundles the
+  service and loads its launchd agent. The agent's `main.mjs` is built from this
+  checkout, not copied by `provision.sh`.
+  `bin/github_app_token.py` remains for non-gateway throwaway machines; Lima
+  bases run `provision/throwaway.sh --no-github-timer`. `limavm` never calls
+  `security`.
   `limavm claude-token` keeps the Claude token in
   `~/.config/secrets/CLAUDE_CODE_OAUTH_TOKEN` on the Mac (the path the guest
   uses; `.zshrc` exports it only on Linux, and the Mac sandbox denies reads
@@ -105,15 +110,17 @@ Throwaway Lima VMs (the README describes them for users):
   must stay a builtin-only test. `provision/reset-identity.sh` removes the
   agents' installation identifiers before a base is cloned; add a key there when
   an agent stores another.
-- Per-OS copy excludes: macOS leaves out `bin/setup-secrets` and
-  `bin/github_app_token.py`, and Linux leaves out `bin/limavm`.
+- Per-OS copy excludes: macOS leaves out `bin/setup-secrets`,
+  `bin/github_app_token.py`, `bin/setup-github-gateway` and
+  `bin/github-gateway-credential`; Linux leaves out `bin/limavm` and
+  `bin/vm-access`.
 - `tests/test_limavm.zsh` and `tests/test_setup_secrets.zsh` use stubs and run
-  anywhere, with `tests/fake_github.py` as the GitHub of the device flow.
-  `tests/test_github_app_token.py` runs the token manager and the real `gh` and
-  `git` against that fake, also in the Linux image. `tests/test_lima_dev_yaml.py`
-  needs `limactl`, so it skips in the Linux image. No test covers what only a
-  running VM shows: the network isolation, what the agents may do under the
-  managed settings, and the systemd timer.
+  anywhere. `gateway/*.test.ts` cover the policy, token refresh, live grants,
+  audit and HTTPS Unix socket. `tests/fake_github.py` and
+  `tests/test_github_app_token.py` still cover the non-gateway token manager.
+  `tests/test_lima_dev_yaml.py` needs `limactl`, so it skips in the Linux image.
+  No automated test covers what only a running VM shows: the network
+  isolation, relay and agent behavior under the installed managed settings.
 
 Shared agent instructions live in `.agents/AGENTS.md`. The global
 `~/.claude/CLAUDE.md` imports them with `@../.agents/AGENTS.md` and adds

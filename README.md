@@ -115,9 +115,8 @@ sends it (`SendEnv LANG`). The system `ssh_config` of Debian and of macOS's own
 A throwaway VM is a Debian 13 machine on this Mac (Lima 2.2.1 or later, vz, arm64)
 where Claude Code and Codex run with no sandbox and no permission prompts. The
 restrictions that remain are the ones on state outside the VM: the deny rules,
-the `git_guard.py` hook and the network isolation below. You push from inside the
-VM yourself, with a GitHub token that reaches one repository and that you
-authorize for it. A VM comes from a base image
+the `git_guard.py` hook, the GitHub gateway and the network isolation below.
+A VM comes from a base image
 that has the same shell, git, Emacs and agent setup as the Mac, so making one
 takes about a minute, and `limavm rm` discards it.
 
@@ -125,7 +124,7 @@ takes about a minute, and `limavm rm` discards it.
 limavm base [MODULE...]   # once, and again to refresh the base: tens of minutes
 limavm new [NAME] [--repo OWNER/REPO | --no-repo] [--no-claude-token] [--no-codex-auth]
                           # a clone of the base, with secrets, the repository, and a shell in it
-limavm github NAME [OWNER/REPO] # authorize an existing VM for a repository again
+limavm github NAME [OWNER/REPO] # add a repository grant to an existing VM
 limavm claude-token       # once: keep the Claude token on the Mac for every later new
 limavm rm NAME
 limavm list
@@ -146,92 +145,81 @@ works, through `~/.lima/*/ssh.config`. `LIMAVM_CPUS` and `LIMAVM_MEMORY` (in GiB
 override the size in `lima/dev.yaml` (6 CPUs and 16 GiB), and `LIMAVM_BASE`
 replaces the name `dotfiles-base`.
 
-## Secrets
+## GitHub access
 
-No GitHub credential is stored on the Mac for the VMs. Each secret reaches a VM
-over stdin, when the VM is made, and exists on the Mac only in `limavm`'s memory
-(and in your head, or in a terminal you pasted it into), except for the Claude
-token that `limavm claude-token` keeps, and the Codex login and the LGTMCP
-config the Mac has anyway, all below.
+Run `./provision.sh dev` on the Mac to build and start the `vm-access` launchd
+service. It holds the GitHub App access and refresh tokens under
+`~/.config/secrets/vm-access/`. A Lima guest receives only a public CA
+certificate and an immutable VM ID, never a GitHub token. Its HTTPS requests
+for `github.com` and `api.github.com` go through a per-VM Unix socket to the
+Mac. The gateway chooses the repository's token after checking the current
+grant and request. It refreshes tokens on demand; a refresh failure denies the
+request. The VM's git credential helper and `GH_TOKEN` use a fixed dummy value
+that the gateway discards.
 
-### GitHub
+`limavm new NAME --repo OWNER/REPO` grants repository reads, including pull
+request reads, and pushes to `task/VM-ID/*`. It then clones the repository over
+HTTPS into `~/src/github.com/OWNER/REPO` and opens a shell there. The base
+already holds `shields/dotfiles` with the checkout's local changes, so it
+reuses that checkout. With no explicit repository, `limavm new` infers one
+from a GitHub `origin`; `--no-repo` creates a VM with no grants. `limavm github
+NAME [OWNER/REPO]` adds another repository without stopping the VM or removing
+its existing grants. It infers the repository from the current checkout if the
+argument is omitted.
 
-`limavm new NAME --repo OWNER/REPO` gives the VM access to that one repository,
-as you, with push and pull requests, clones it over HTTPS into
-`~/src/github.com/OWNER/REPO` in the VM (through the VM's git credential helper,
-so no token is in the command) and opens the shell there. The base holds
-`shields/dotfiles` there already, with the checkout's local changes, so for that
-repository nothing is cloned and the shell opens in that checkout. Run inside a
-checkout, `limavm new` takes the repository from the checkout's `origin` when
-that is on github.com (`git@`, `ssh://git@` with or without a port, or
-`https://`, with or without `.git`), and says so; `--repo` wins over the origin,
-and `--no-repo` ignores it. `limavm github NAME [OWNER/REPO]` authorizes a VM
-that exists the same way, infers the repository the same way, replaces what the
-VM had, and does not clone. Outside a checkout, with no origin or with an origin
-elsewhere, a VM made without `--repo` has no GitHub access, and `limavm` says so;
-`limavm github` then needs `OWNER/REPO`. A VM reaches one repository: use two VMs
-for two.
+The gateway accepts Git fetches and pushes to the VM's task branch namespace,
+including force pushes. It checks every ref update before forwarding a push;
+deletions and push options are denied. GitHub REST GET requests and GraphQL
+queries for exactly one granted repository are allowed. The `/user` identity
+read uses a granted repository token. GitHub API writes, PR creation and
+updates, cross-repository GraphQL queries, search queries and other unlisted
+operations are denied. `gh pr list` with search filters may therefore fail;
+basic repository and PR reads work through the supported routes. There is no
+approval queue.
 
-How it works:
+The version-controlled profiles in `.config/vm-access/profiles.yaml` define
+capability templates. A grant stores a copy of its profile, so editing the
+profile changes future grants only. Use these commands on the Mac to change a
+running VM immediately:
 
-1. The access comes from a GitHub App, which issues user access tokens through
-   the device flow. The client ID in `bin/limavm` (`Iv23lim5x4MdkNNgv28z`, which
-   is public) is the author's app; to use your own, make the app as follows and
-   set `LIMAVM_GITHUB_CLIENT_ID`. You create it once, at github.com/settings/apps:
-   Device Flow on, "Expire user authorization tokens" on, no webhook, repository
-   permissions Contents and Pull requests set to read and write and nothing else,
-   and installed on your account for all repositories. It has no private key, and
-   none must ever be made: with a key anyone who held it could mint tokens for
-   every repository the app is installed on, and this design needs none.
-2. `limavm` looks up the repository's id with your own `gh` login (one read-only
-   API call), asks GitHub for a device code, prints it with the address to open,
-   puts the code on the clipboard with `pbcopy` and opens the address, and polls
-   while you paste the code and authorize. The code is shown on the screen, so
-   the clipboard holds nothing secret, and a failing `pbcopy` or `open` just
-   says what to do by hand. The token request names the repository by its id
-   (`repository_id`), which limits the user access token, and the refresh token
-   that comes with it, to that one repository, with push. GitHub keeps that
-   limit when the token is refreshed; the design stands on that, so recheck it
-   if GitHub changes the device flow.
-3. The result goes to `setup-secrets GITHUB_APP_AUTH` in the VM on stdin: an
-   access token (`ghu_`, valid 8 hours) and a refresh token (`ghr_`, valid 6
-   months, and replaced by a new one every time it is used). It is kept in
-   `~/.config/github-app/auth.json` (directory 0700, file 0600, written
-   atomically). `setup-secrets` also points git's credential helper for
-   `github.com` at `bin/github_app_token.py`, which answers only for that
-   repository's path (any other repository gets nothing, and so fails to
-   authenticate), and logs `gh` in.
-4. The VM renews its own token, with no help from the Mac, which could not be
-   reached anyway. `github-app-refresh.timer` (installed by
-   `provision/throwaway.sh`, so every clone has it) runs
-   `github_app_token.py refresh-if-needed` as the VM user a minute after boot and
-   every 5 minutes; it renews when less than 10 minutes remain, and does nothing
-   when no `auth.json` exists. The git credential helper renews on demand too.
-   Each renewal takes an exclusive file lock and saves the new pair before it
-   hands out the new access token, because the old refresh token and access
-   token stop working at once. It then logs `gh` in again, so `gh` keeps
-   working without action. `gh` keeps the access token (not the refresh token) in
-   `~/.config/gh/hosts.yml`, mode 0600.
-5. After a long suspension the token is stale for at most 5 minutes: git renews it
-   the moment it needs it, `gh` fails until the next timer run, and then works
-   again. If the refresh token expired (6 months without a renewal) or GitHub
-   rejects it, the command says so and tells you to run
-   `limavm github NAME OWNER/REPO`. A rejected token can also mean that a copy of
-   it was used elsewhere, since each is good once; the message says that, and
-   suggests de-authorizing the app.
+```
+vm-access show lima:NAME
+vm-access grant lima:NAME OWNER/REPO --profile read|task
+vm-access revoke lima:NAME OWNER/REPO
+vm-access edit lima:NAME
+vm-access logs lima:NAME [--follow]
+```
 
-Revoking: github.com/settings/apps/authorizations, "Revoke" on the app (listed
-under the name you gave it), ends the tokens of every VM at once. GitHub can revoke one token only with the app's
-client secret, which this design does not have, so there is no per-VM revocation.
-`limavm rm` deletes a VM but does not revoke its tokens: they stop at their
-expiry, or when the VM's own refresh fails. To cut off a VM early, de-authorize the
-app and run `limavm github NAME OWNER/REPO` for each VM you still use.
+`edit` opens the full YAML policy in `$VISUAL`, `$EDITOR` or `vi`; it rejects a
+stale revision. Adding a repository runs the GitHub authorization on the Mac
+before applying the edit. `grant` also authorizes a repository if needed. The
+gateway reads grants for every request, so changes take effect without a VM
+restart. `limavm rm` disables access before deleting the VM. A new VM with the
+same display name receives a new ID and no old grants. `vm-access logs VM-ID`
+can inspect a deleted VM's retained history.
 
-Limits: an agent in the VM can read both tokens, and the refresh token lasts
-months, so what limits a thief is the one repository and the rotation (a copy that
-is used makes the VM's next renewal fail, which is visible), not secrecy. The
-repository scope is also the only limit on `gh api` calls that are POSTs without
-`-X` (see below).
+The GitHub App uses device flow with expiring user tokens and no private key.
+For your own app, grant repository Contents read/write and Pull requests read;
+the gateway denies PR writes even if an app has broader permissions. The
+default public client ID is `Iv23lim5x4MdkNNgv28z`; set
+`LIMAVM_GITHUB_CLIENT_ID` for your own app. The Mac's `gh` login reads the
+repository ID; the device flow requests that `repository_id` to scope the app
+token, and the gateway verifies that token can read the intended repository.
+The device code and URL are printed on the Mac for you to complete. To replace
+an expired or revoked authorization, run `vm-access authorize OWNER/REPO` on
+the Mac; policy grants remain in place. Revoking the app authorization at
+GitHub invalidates all its tokens. The gateway keeps the rotating refresh
+tokens on the Mac and never sends them to a VM.
+
+Every request decision is logged with VM ID, repository, operation, permitted
+refs, policy revision, result, upstream status and duration. Headers, bodies
+and raw queries are not logged. Policy changes are separately audited with the
+actor and old/new revision. Request logs are kept for 30 days and policy
+events for one year; requests fail closed if the audit database cannot be
+written. The state and admin socket are under `~/.local/state/vm-access/` on
+the Mac. `vm-access logs lima:NAME --follow` streams both event types.
+
+## Other secrets
 
 ### Claude Code
 
@@ -274,7 +262,7 @@ Isolated, with `lima/dev.yaml` as the source:
   `limavm base` fails if `~/.lima/_config` has added any.
 - No guest port is forwarded to the Mac. Lima still opens `127.0.0.1` ports on the
   Mac for SSH and for its DNS resolver, which other programs on the Mac can
-  reach; the VM can reach only the resolver, through its DNS server.
+  reach. The GitHub gateway has one reverse Unix socket forward per VM.
 - The SSH agent is not forwarded, and the proxy environment is not propagated.
 - An nftables filter in the guest rejects connections to the Mac
   (`192.168.5.2`, also `host.lima.internal`, whose other ports reach the Mac's
@@ -288,13 +276,16 @@ Not isolated:
 - The internet. The agents need it, so HTTPS and every other public address work,
   and so does DNS, through Lima's resolver on the Mac.
 - Anything with root in the VM. `sudo` needs no password, so a process there can
-  delete the filter. It stops accidents and code that is not root, not a
-  determined attacker.
-- The secrets in the VM. The agents there can read the GitHub tokens (the
-  record in `~/.config/github-app/` and `gh`'s credentials), the Claude token,
-  the Codex login and the LGTMCP key, and send them to any public address. The
-  GitHub token's one-repository scope is what limits that, and de-authorizing
-  the app ends it.
+  delete the filter or the GitHub hosts mapping. These controls stop ordinary
+  clients, not a determined attacker.
+- Direct connections to GitHub IPs, other GitHub hostnames or a new outbound
+  proxy. General internet access is unrestricted, so the gateway cannot force
+  every possible GitHub connection through itself. It does keep its app tokens
+  off the VM; the policy is a boundary around those tokens, not around arbitrary
+  network traffic or credentials acquired by the guest.
+- The Claude token, Codex login and LGTMCP key in the VM. Agents can read and
+  send those to public addresses. The VM has no GitHub App token or refresh
+  token.
 - The Mac's own public address, if it has one. Only the private ranges are
   rejected.
 
@@ -318,37 +309,31 @@ sandboxed, prompting behavior.
 - Codex gets `/etc/codex/config.toml` with `approval_policy = "never"` and
   `sandbox_mode = "danger-full-access"`. `~/.codex/config.toml` overrides any key
   it sets, and `provision.sh` does not set these. `cx` is plain `codex`.
-- What still holds, checked in a VM against the installed tools with a stub model
-  server that makes each tool run chosen commands: `git push` (plain, by absolute
-  path, through `env` and with `-C`) and `git commit --no-verify`, stopped by
-  `git_guard.py` in both agents, which also stops `gh api` with `-X` or
-  `--method` anywhere in the command; `gh api` with `-X` or `--method` and
-  `gh repo delete`, stopped by Claude's deny rules; `gh repo delete`, stopped by
-  Codex's `.codex/rules`, which also stop `git push` when its hook is off.
-- What does not stop an agent: `gh api` with `-f`, `-F` or `--input` and no
-  `-X` is sent as a POST by default, and neither agent's rules nor the hook
-  catches it, because `gh api graphql` queries are read-only POSTs that have to
-  keep working. The token's scope is the limit on that.
+- In a gateway VM, `git_guard.py` and the installed deny rules allow `git push`;
+  the gateway checks the destinations against `task/VM-ID/*`. The hook still
+  stops `git commit --no-verify`, and the agent policies still refuse the
+  listed `gh` write commands. The gateway is the final check for API calls,
+  including POST requests formed by `gh api -f`, `-F` or `--input` without
+  `-X`.
 
 ## Checks to run once with real credentials
 
-After `limavm base` and `limavm new t1 --repo OWNER/REPO`, which shows a code,
-puts it on the clipboard and opens the address to paste it at:
+After `./provision.sh dev`, `limavm base` and `limavm new t1 --repo
+OWNER/REPO`, which shows a device code and authorization URL on the Mac:
 
 - `zsh -ic exit` prints nothing, `git --version` is 2.54 or later, and
   `git hook list pre-commit` lists gitleaks.
 - In a fresh repository under `~/src`, `c` opens with no dialogs and shows
   bypass-permissions mode, and `/sandbox` shows that the sandbox is off.
-- In the VM `gh auth status` accepts the token, `gh api repos/OWNER/REPO` shows
-  push, `git push` and `git pull` from the shell work on that repository, and
-  the same push through an agent is refused. A push to a second repository
-  fails, and so does `gh api` for it.
-- The renewal: `~/bin/github_app_token.py refresh-if-needed --force` there prints
-  that it renewed the token and `gh` still works. Waiting 8 hours does the same
-  through the timer (`systemctl list-timers github-app-refresh.timer`).
-- `limavm github t1 OWNER/REPO` replaces the access in a running VM, and
-  de-authorizing the app at github.com/settings/apps/authorizations makes the
-  next renewal in every VM fail with a message that names that command.
+- In the VM, `gh api repos/OWNER/REPO` and `git pull` work. A push to
+  `task/VM-ID/check` succeeds, including a forced update. A push to `main`, a
+  branch deletion, a PR write, and a read of an ungranted private repository
+  fail. `vm-access logs lima:t1` on the Mac records each decision.
+- `limavm github t1 OTHER/REPO` adds a grant while the VM runs; revoking it with
+  `vm-access revoke lima:t1 OTHER/REPO` takes effect on the next request.
+- Replacing an expiring access token happens on the Mac on demand. After a
+  revoked or expired refresh token, `vm-access authorize OWNER/REPO` restores
+  the authorization; the VM never receives it.
 - `claude` runs without a login (with the token from `limavm claude-token` or
   the `limavm new` prompt), and so does `codex` (with the Mac's `codex login`;
   `codex login status` says so).

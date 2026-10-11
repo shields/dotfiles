@@ -36,6 +36,9 @@ SHELL_SOURCES = \
 	bin/ghfork \
 	bin/git-add-upstream \
 	bin/limavm \
+	bin/vm-access \
+	bin/setup-github-gateway \
+	bin/github-gateway-credential \
 	bin/pager \
 	bin/setup-secrets
 

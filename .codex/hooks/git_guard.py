@@ -18,7 +18,7 @@ import json
 import re
 import shlex
 import sys
-from pathlib import PurePosixPath
+from pathlib import Path, PurePosixPath
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
@@ -162,7 +162,7 @@ def git_reason(args: list[str]) -> str | None:
     if index >= len(args):
         return None
     subcommand = args[index]
-    if subcommand == "push":
+    if subcommand == "push" and not Path("/etc/dotfiles-github-gateway").is_file():
         return NO_PUSH
     if subcommand == "commit" and (has_config or bypasses_hooks(args[index + 1 :])):
         return KEEP_HOOKS

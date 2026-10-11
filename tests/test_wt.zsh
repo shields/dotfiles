@@ -579,6 +579,19 @@ assert_eq "leaked GIT_DIR creates no worktree in the other repository" \
     "$odd_worktrees_before" \
     "$(worktree_count "$odd_repo")"
 
+gateway_repo="$(make_repo gateway)"
+gateway_marker="$TMPBASE/gateway-id"
+print -r -- "01234567-89ab-4cde-8fab-0123456789ab" > "$gateway_marker"
+DOTFILES_GITHUB_GATEWAY_MARKER="$gateway_marker"
+cd "$gateway_repo"
+configure_sort "$TMPBASE/gateway-sort-count" $'6643\tyo-yo' $'1111\taardvark'
+run_wt
+assert_eq "gateway worktree creation succeeds" 0 "$LAST_RC"
+assert_eq "gateway worktree branch is in the VM namespace" \
+    "task/01234567-89ab-4cde-8fab-0123456789ab/worktree-yo-yo-aardvark" \
+    "$(command git branch --show-current)"
+unset DOTFILES_GITHUB_GATEWAY_MARKER
+
 print
 print -r -- "Results: $pass passed, $fail failed"
 [[ $fail -eq 0 ]]

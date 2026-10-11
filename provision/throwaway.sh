@@ -25,10 +25,6 @@
 # repository's .claude/settings.json. Codex's policy is its system config,
 # which ~/.codex/config.toml overrides key by key.
 #
-# It also installs the timer that renews the GitHub App token of bin/limavm's
-# VMs. The unit is a system unit, since a user unit runs only while the user is
-# logged in or lingering, and it does nothing until an auth record exists.
-
 set -euo pipefail
 
 usage="usage: sudo provision/throwaway.sh [--etc-dir DIR] [--user NAME | --no-github-timer]"

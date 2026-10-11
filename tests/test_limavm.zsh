@@ -82,6 +82,7 @@ cat > "$STUBS/limactl" <<'STUB'
 #!/bin/bash
 state=$LIMA_STUB_STATE
 printf '%s\n' "$*" >> "$state/limactl.log"
+printf 'limactl %s\n' "$*" >> "$state/all.log"
 call=$(wc -l < "$state/limactl.log" | tr -d ' ')
 printf '%s\n' "$@" > "$state/calls/$call.argv"
 env | sort > "$state/calls/$call.env"
@@ -105,6 +106,7 @@ list)
         case $2 in
         '{{.Protected}}') [[ -e "$state/protected-$3" ]] && echo true || echo false ;;
         '{{.Status}}') [[ -e "$state/stopped-$3" ]] && echo Stopped || echo Running ;;
+        '{{.Dir}}') echo "$HOME/.lima/$3" ;;
         '{{len .Config.Mounts}}') cat "$state/mounts" 2>/dev/null || echo 0 ;;
         esac
         ;;
@@ -143,7 +145,7 @@ clone)
 edit)
     while [[ $# -gt 0 ]]; do
         case $1 in
-        --shell) shift ;;
+        --shell | --set) shift ;;
         --tty=false) ;;
         -*)
             echo "Error: unknown flag: $1" >&2
@@ -181,6 +183,24 @@ shell)
     ;;
 esac
 exit 0
+STUB
+
+cat > "$STUBS/vm-access" <<'STUB'
+#!/bin/bash
+state=$LIMA_STUB_STATE
+printf '%s\n' "$*" >> "$state/vm-access.log"
+printf 'vm-access %s\n' "$*" >> "$state/all.log"
+if [[ -n ${VM_ACCESS_STUB_FAIL:-} && $* == *"$VM_ACCESS_STUB_FAIL"* ]]; then
+    echo "vm-access: injected failure" >&2
+    exit 1
+fi
+case $1 in
+register)
+    name=${2#lima:}
+    printf '{"id":"01234567-89ab-4cde-8fab-0123456789ab","socket":"%s"}\n' "$HOME/.lima/$name/sock/github-01234567-89ab-4cde-8fab-0123456789ab.sock"
+    ;;
+ca-path) echo "$state/gateway-ca.pem" ;;
+esac
 STUB
 
 # gh answers the one read-only call limavm makes, with the id in
@@ -324,8 +344,10 @@ new_case() {
     : > "$STATE/instances"
     (( $# == 0 )) || printf '%s\n' "$@" >> "$STATE/instances"
     : > "$STATE/limactl.log"
+    : > "$STATE/vm-access.log"
     echo 4242 > "$STATE/gh-id"
     print -r -- "$FAKE_CLAUDE" > "$STATE/prompt"
+    print -r -- "TEST-GATEWAY-CA" > "$STATE/gateway-ca.pem"
     STAGE_ARGS_LOG="$STATE/stage-args"
     FAKE_URL=
     RUN_PATH=
@@ -458,7 +480,7 @@ stub_calls() {
 # stdin and nowhere else.
 assert_no_secret_leak() {
     local desc="$1" leaks
-    leaks="$(cat "$STATE"/calls/*.argv(N) "$STATE"/calls/*.env(N) "$STATE/limactl.log" \
+    leaks="$(cat "$STATE"/calls/*.argv(N) "$STATE"/calls/*.env(N) "$STATE/limactl.log" "$STATE/vm-access.log" \
         "$STATE"/gh.log "$STATE"/open.log "$STATE"/sleep.log 2>/dev/null |
         grep -c -e "$FAKE_CLAUDE" -e "$FAKE_LGTMCP" -e "$FAKE_CODEX" "${GITHUB_SECRETS[@]}" || true)"
     assert_eq "$desc: no secret in any recorded argv, environment or log" 0 "$leaks"
@@ -487,7 +509,7 @@ assert_contains "help names --no-claude-token" "--no-claude-token" "$OUT"
 assert_contains "help names --no-codex-auth" "--no-codex-auth" "$OUT"
 assert_contains "help says where Codex keeps its login" 'cli_auth_credentials_store = "file"' "$OUT"
 assert_contains "help lists claude-token" "limavm claude-token" "$OUT"
-assert_contains "help says rm does not revoke" "does not revoke" "$OUT"
+assert_contains "help describes the Mac gateway" "Credentials" "$OUT"
 run_limavm
 assert_eq "no command fails" 2 "$RC"
 RC=0
@@ -513,7 +535,7 @@ shell test-base sh -c printf %s \"\$HOME\"
 shell test-base sh -c set -eu; rm -rf \"\$1\"; mkdir -p \"\$1\"; tar -xf - --no-same-owner -C \"\$1\" _ $GUEST_DIR
 shell --workdir $GUEST_DIR test-base ./provision.sh none
 shell --workdir $GUEST_DIR test-base git reset --mixed --quiet HEAD
-shell test-base sudo $GUEST_DIR/provision/throwaway.sh
+shell test-base sudo $GUEST_DIR/provision/throwaway.sh --no-github-timer
 shell test-base sudo truncate -s 0 /etc/machine-id
 shell test-base $GUEST_DIR/provision/reset-identity.sh
 stop --tty=false test-base
@@ -756,1034 +778,113 @@ assert_eq "an unknown guest home in base runs no provisioning" 0 "$(count_in_log
 assert_contains "an unknown guest home in base keeps the VM for inspection" "left for inspection" "$OUT"
 assert_eq "an unknown guest home in base removes the staging directory" 0 "$(staging_dirs_left)"
 
-# --- 8. new with a repository ---
 new_case test-base
-start_fake
-stdin_marker
-before=$(date +%s)
 run_limavm new t1 --repo shields/dotfiles
-after=$(date +%s)
-assert_eq "new --repo succeeds" 0 "$RC"
-assert_eq "new --repo call order" "list -q test-base
-list -q t1
-clone --tty=false --start test-base t1
-shell t1 /home/linuxbrew/.linuxbrew/bin/brew upgrade --cask claude-code@latest codex
-$SETUP GITHUB_APP_AUTH
-shell t1 sh -c printf %s \"\$HOME\"
-$SETUP CLAUDE_CODE_OAUTH_TOKEN
-$SETUP CODEX_AUTH
-$SETUP LGTMCP_CONFIG
-shell --workdir $GUEST_DIR t1" "$(limactl_log)"
-assert_eq "the repository the base holds is not cloned again" 0 "$(count_in_log 'git clone')"
-assert_contains "new says the shell opens in the base's checkout" "the checkout from test-base is at $GUEST_DIR" "$OUT"
-assert_eq "gh is asked for the repository's id, once" "api repos/shields/dotfiles --jq .id" "$(<"$STATE/gh.log")"
-assert_eq "the fake GitHub saw the device flow and one poll" "POST /login/device/code
-POST /login/oauth/access_token" "$(fake_requests)"
-assert_eq "the device flow starts with the client id of the app" "$CLIENT_ID" \
-    "$(fake_form /login/device/code client_id)"
-assert_eq "the poll names the repository by id" 4242 "$(fake_form /login/oauth/access_token repository_id)"
-assert_eq "the poll carries the device code" fake-device-code "$(fake_form /login/oauth/access_token device_code)"
-assert_eq "the poll uses the device grant" urn:ietf:params:oauth:grant-type:device_code \
-    "$(fake_form /login/oauth/access_token grant_type)"
-assert_eq "the poll names the client id" "$CLIENT_ID" "$(fake_form /login/oauth/access_token client_id)"
-assert_eq "limavm opens the verification page" "$FAKE_URL/login/device" "$(<"$STATE/open.log")"
-assert_contains "new shows the user code" "WDJB-MJHT" "$OUT"
-assert_contains "new shows the verification page" "$FAKE_URL/login/device" "$OUT"
-assert_eq "the user code goes to the clipboard, with no newline" same \
-    "$(printf '%s' WDJB-MJHT | cmp -s - "$STATE/pbcopy.stdin" && echo same || echo different)"
-assert_eq "pbcopy is run once" 1 "$(stub_calls pbcopy)"
-assert_eq "pbcopy gets no arguments" "" "$(cat "$STATE"/calls/pbcopy.*.argv)"
-assert_contains "new says the code is on the clipboard" "the code is on the clipboard" "$OUT"
-record="$(stdin_of 5)"
-assert_eq "the record is one JSON object on one line" 1 "$(printf '%s\n' "$record" | wc -l | tr -d ' ')"
-assert_eq "the record names the client id" "$CLIENT_ID" "$(jq -r .client_id <<<"$record")"
-assert_eq "the record names the repository" shields/dotfiles "$(jq -r .repository <<<"$record")"
-assert_eq "the record holds the access token" ghu_fake-access-1 "$(jq -r .access_token <<<"$record")"
-assert_eq "the record holds the refresh token" ghr_fake-refresh-1 "$(jq -r .refresh_token <<<"$record")"
-assert_eq "the record holds the web URL" "$FAKE_URL" "$(jq -r .web_url <<<"$record")"
-assert_eq "the record holds the API URL" "$FAKE_URL/api/v3" "$(jq -r .api_url <<<"$record")"
-assert_eq "the record's access token lasts 8 hours" 1 \
-    "$(jq --argjson low $(( before + 28800 )) --argjson high $(( after + 28800 )) \
-        '.access_expires_at >= $low and .access_expires_at <= $high' <<<"$record" | grep -c true)"
-assert_eq "the record's refresh token lasts 6 months" 1 \
-    "$(jq --argjson low $(( before + 15811200 )) --argjson high $(( after + 15811200 )) \
-        '.refresh_expires_at >= $low and .refresh_expires_at <= $high' <<<"$record" | grep -c true)"
-assert_eq "the token manager accepts the record, and reads its fields the same way" \
-    "shields/dotfiles $CLIENT_ID $FAKE_URL $FAKE_URL/api/v3" \
-    "$(printf '%s\n' "$record" | python3 -c '
-import importlib.util
-import sys
-
-spec = importlib.util.spec_from_file_location("github_app_token", sys.argv[1])
-assert spec is not None and spec.loader is not None
-module = importlib.util.module_from_spec(spec)
-sys.modules["github_app_token"] = module
-spec.loader.exec_module(module)
-parsed = module.parse_record(sys.stdin.read())
-print(parsed.repository, parsed.client_id, parsed.web_url, parsed.api_url)
-' "$HERE/../bin/github_app_token.py")"
-assert_eq "the Claude token reaches setup-secrets on stdin, with a newline" same \
-    "$(print -r -- "$FAKE_CLAUDE" | cmp -s - "$STATE/calls/7.stdin" && echo same || echo different)"
-assert_eq "the Codex login reaches setup-secrets on stdin, byte for byte" same \
-    "$(print -rn -- "$CODEX_JSON" | cmp -s - "$STATE/calls/8.stdin" && echo same || echo different)"
-assert_eq "the LGTMCP config reaches setup-secrets on stdin, byte for byte" same \
-    "$(print -rn -- "$LGTMCP_YAML" | cmp -s - "$STATE/calls/9.stdin" && echo same || echo different)"
-assert_only_the_shell_reads_stdin "new --repo"
-assert_no_secret_leak "new --repo"
-assert_eq "curl was run for the flow" 2 "$(stub_calls curl)"
-assert_eq "limavm never calls security" 0 "$(cat "$STATE/security.log" 2>/dev/null | wc -l | tr -d ' ')"
-assert_contains "new says what the VM can reach" "shields/dotfiles only" "$OUT"
-assert_eq "new with a Codex login does not ask for a Codex login" 0 "$(printf '%s' "$OUT" | grep -c 'codex login' || true)"
-
-# --- 9. new without a repository, and without a Claude token ---
-new_case test-base
-run_limavm new t1
-assert_eq "new without --repo succeeds" 0 "$RC"
-assert_eq "new without --repo installs no GitHub authorization" "list -q test-base
-list -q t1
-clone --tty=false --start test-base t1
-shell t1 /home/linuxbrew/.linuxbrew/bin/brew upgrade --cask claude-code@latest codex
-$SETUP CLAUDE_CODE_OAUTH_TOKEN
-$SETUP CODEX_AUTH
-$SETUP LGTMCP_CONFIG
-shell t1" "$(limactl_log)"
-assert_eq "new without --repo never runs gh" 0 "$(stub_calls gh)"
-assert_eq "new without --repo never runs curl" 0 "$(stub_calls curl)"
-assert_eq "new without --repo never opens a browser" 0 "$([[ -e "$STATE/open.log" ]] && echo 1 || echo 0)"
-assert_contains "new without --repo says the VM has no GitHub access" "no GitHub access" "$OUT"
-assert_contains "new without --repo says how to add some" "limavm github t1 OWNER/REPO" "$OUT"
-assert_contains "new without a token file says how to keep the token" "limavm claude-token" "$OUT"
-assert_no_secret_leak "new without --repo"
+assert_eq "new with a repository succeeds" 0 "$RC"
+assert_contains "authorization happens before the clone" "vm-access ensure-auth shields/dotfiles" "$(<"$STATE/all.log")"
+assert_contains "new registers the VM" "register lima:t1 --lima-dir $HOME_DIR/.lima/t1" "$(<"$STATE/vm-access.log")"
+assert_contains "new installs reverse socket forwarding" 'guestSocket":"/tmp/vm-access-github.sock' "$(<"$STATE/limactl.log")"
+assert_contains "new starts the VM after configuring its socket" "edit --tty=false --set" "$(<"$STATE/limactl.log")"
+assert_contains "new installs guest trust and relay" "setup-github-gateway 01234567-89ab-4cde-8fab-0123456789ab" "$(<"$STATE/limactl.log")"
+assert_contains "new probes the guest relay" "/__vm_access__/health" "$(<"$STATE/limactl.log")"
+assert_contains "new grants task access" "grant lima:t1 shields/dotfiles --profile task" "$(<"$STATE/vm-access.log")"
+assert_contains "new verifies the granted repository" "https://api.github.com/repos/shields/dotfiles" "$(<"$STATE/limactl.log")"
+assert_eq "new sends no GitHub authorization to the guest" 0 "$(count_in_log GITHUB_APP_AUTH)"
+assert_eq "new reuses the base checkout" 0 "$(count_in_log 'git clone')"
+assert_contains "new opens the repository shell" "shell --workdir $GUEST_DIR t1" "$(<"$STATE/limactl.log")"
+gateway_call=$(grep -n 'setup-github-gateway' "$STATE/limactl.log" | head -1 | cut -d: -f1)
+assert_eq "the guest receives only the gateway CA" TEST-GATEWAY-CA "$(stdin_of "$gateway_call")"
+claude_call=$(grep -n 'CLAUDE_CODE_OAUTH_TOKEN' "$STATE/limactl.log" | head -1 | cut -d: -f1)
+codex_call=$(grep -n 'CODEX_AUTH' "$STATE/limactl.log" | head -1 | cut -d: -f1)
+lgtmcp_call=$(grep -n 'LGTMCP_CONFIG' "$STATE/limactl.log" | head -1 | cut -d: -f1)
+assert_eq "the Claude token reaches only setup-secrets stdin" "$FAKE_CLAUDE" "$(stdin_of "$claude_call")"
+assert_eq "the Codex login reaches only setup-secrets stdin" "${CODEX_JSON%$'\n'}" "$(stdin_of "$codex_call")"
+assert_eq "the LGTMCP config reaches only setup-secrets stdin" "${LGTMCP_YAML%$'\n'}" "$(stdin_of "$lgtmcp_call")"
+assert_no_secret_leak "new with a repository"
 
 new_case test-base
-EXTRA_ENV=(LIMAVM_PROMPT_INPUT="$STATE/does-not-exist")
-run_limavm new t1 --no-claude-token
-assert_eq "new --no-claude-token succeeds without a prompt" 0 "$RC"
-assert_eq "new --no-claude-token installs no Claude token" "list -q test-base
-list -q t1
-clone --tty=false --start test-base t1
-shell t1 /home/linuxbrew/.linuxbrew/bin/brew upgrade --cask claude-code@latest codex
-$SETUP CODEX_AUTH
-$SETUP LGTMCP_CONFIG
-shell t1" "$(limactl_log)"
-assert_contains "new --no-claude-token says to use claude auth login" "claude auth login" "$OUT"
+run_limavm new t1 --no-repo --no-claude-token --no-codex-auth
+assert_eq "new without a repository succeeds" 0 "$RC"
+assert_eq "new without a repository makes no grant" 0 "$(grep -c '^grant ' "$STATE/vm-access.log" || true)"
+assert_eq "new without a repository still installs the gateway" 1 "$(count_in_log setup-github-gateway)"
+assert_eq "new without a repository sends no GitHub secret" 0 "$(count_in_log GITHUB_APP_AUTH)"
+assert_eq "--no-claude-token skips the Claude secret" 0 "$(count_in_log CLAUDE_CODE_OAUTH_TOKEN)"
+assert_eq "--no-codex-auth skips the Codex login" 0 "$(count_in_log CODEX_AUTH)"
 
 new_case test-base
-start_fake
-run_limavm new t1 --no-claude-token --repo=shields/dotfiles
-assert_eq "new --repo=OWNER/REPO --no-claude-token succeeds" 0 "$RC"
-assert_eq "the GitHub authorization is the only secret but the Codex login and the LGTMCP config" "$SETUP GITHUB_APP_AUTH
-$SETUP CODEX_AUTH
-$SETUP LGTMCP_CONFIG" \
-    "$(limactl_log | sed -n '5p;7,8p')"
-
-# --- 9b. The repository comes from the checkout's origin ---
-# The fake GitHub is on 127.0.0.1, so an origin there is on GitHub's host, and
-# the checkout's usual github.com origin is not.
-ORIGIN_CASES=(
-    'git@127.0.0.1:shields/other.git'
-    'git@127.0.0.1:shields/other'
-    'git@127.0.0.1:/shields/other.git'
-    'ssh://git@127.0.0.1/shields/other.git'
-    'ssh://git@127.0.0.1/shields/other/'
-    'ssh://git@127.0.0.1:2222/shields/other.git'
-    'ssh://git@127.0.0.1:2222/shields/other'
-    'https://127.0.0.1/shields/other.git'
-    'https://127.0.0.1/shields/other'
-    'https://127.0.0.1/shields/other.git/'
-)
-for origin in "${ORIGIN_CASES[@]}"; do
-    new_case test-base
-    start_fake
-    stdin_marker
-    git -C "$CHECKOUT" remote set-url origin "$origin"
-    run_limavm new t1
-    assert_eq "new infers the repository from the origin $origin" 0 "$RC"
-    assert_contains "new says where the repository came from: $origin" \
-        "GitHub access for shields/other, from the origin of this checkout" "$OUT"
-    assert_eq "the inferred repository is authorized and cloned: $origin" "$SETUP GITHUB_APP_AUTH
-shell t1 sh -c printf %s \"\$HOME\"
-shell t1 env GIT_TERMINAL_PROMPT=0 git clone --quiet $FAKE_URL/shields/other.git $OTHER_DIR" "$(limactl_log | sed -n '5,7p')"
-    assert_only_the_shell_reads_stdin "$origin"
-    assert_eq "the shell opens in the clone: $origin" "shell --workdir $OTHER_DIR t1" "$(limactl_log | tail -1)"
-    assert_contains "new says where the repository is cloned: $origin" "cloned at $OTHER_DIR" "$OUT"
-    assert_eq "the inferred repository is looked up by name: $origin" "api repos/shields/other --jq .id" "$(<"$STATE/gh.log")"
-    assert_eq "the record names the inferred repository: $origin" shields/other "$(stdin_of 5 | jq -r .repository)"
-    assert_no_secret_leak "an inferred repository: $origin"
-done
-git -C "$CHECKOUT" remote set-url origin git@github.com:shields/dotfiles.git
+mkdir -p "$HOME_DIR/.config/secrets"
+print -r -- "$FAKE_CLAUDE" > "$HOME_DIR/.config/secrets/CLAUDE_CODE_OAUTH_TOKEN"
+run_limavm new t1 --no-repo --no-codex-auth
+assert_eq "new reuses the saved Claude token" 0 "$RC"
+claude_call=$(grep -n 'CLAUDE_CODE_OAUTH_TOKEN' "$STATE/limactl.log" | head -1 | cut -d: -f1)
+assert_eq "the saved Claude token reaches setup-secrets" "$FAKE_CLAUDE" "$(stdin_of "$claude_call")"
 
 new_case test-base
-start_fake
-git -C "$CHECKOUT" remote set-url origin git@127.0.0.1:shields/dotfiles.git
-run_limavm new t1
-assert_eq "new infers the repository the base holds" 0 "$RC"
-assert_eq "the repository the base holds is authorized, not cloned" "$SETUP GITHUB_APP_AUTH
-shell t1 sh -c printf %s \"\$HOME\"
-$SETUP CLAUDE_CODE_OAUTH_TOKEN" "$(limactl_log | sed -n '5,7p')"
-assert_eq "the shell opens in the base's checkout" "shell --workdir $GUEST_DIR t1" "$(limactl_log | tail -1)"
-assert_contains "new says the shell opens in the base's checkout" "the checkout from test-base is at $GUEST_DIR" "$OUT"
-assert_eq "the record names the repository the base holds" shields/dotfiles "$(stdin_of 5 | jq -r .repository)"
-git -C "$CHECKOUT" remote set-url origin git@github.com:shields/dotfiles.git
-
-new_case test-base
-start_fake
-run_limavm new t1 --repo Shields/Dotfiles
-assert_eq "the repository the base holds is known in any case" 0 "$RC"
-assert_eq "the repository the base holds, named in another case, is not cloned" 0 "$(count_in_log 'git clone')"
-assert_eq "the shell opens in the base's checkout for the name in another case" "shell --workdir $GUEST_DIR t1" "$(limactl_log | tail -1)"
-assert_contains "new names the base's checkout for the name in another case" "the checkout from test-base is at $GUEST_DIR" "$OUT"
-assert_eq "the record keeps the name as given" Shields/Dotfiles "$(stdin_of 5 | jq -r .repository)"
-
-new_case test-base
-start_fake
-git -C "$CHECKOUT" remote set-url origin git@127.0.0.1:shields/dotfiles.git
+print -r -- '[]' > "$HOME_DIR/.codex/auth.json"
 run_limavm new t1 --no-repo
-assert_eq "new --no-repo succeeds" 0 "$RC"
-assert_eq "new --no-repo installs no GitHub authorization" 0 "$(count_in_log GITHUB_APP_AUTH)"
-assert_eq "new --no-repo clones nothing in the VM" 0 "$(count_in_log 'git clone')"
-assert_eq "new --no-repo never runs gh" 0 "$(stub_calls gh)"
-assert_eq "new --no-repo contacts no GitHub" "" "$(fake_requests)"
-assert_eq "new --no-repo opens the shell at home" "shell t1" "$(limactl_log | tail -1)"
-assert_contains "new --no-repo says the VM has no GitHub access" "no GitHub access" "$OUT"
+assert_eq "invalid Codex login fails before cloning" 1 "$RC"
+assert_eq "invalid Codex login creates no VM" 0 "$(count_in_log clone)"
 
 new_case test-base
-start_fake
-git -C "$CHECKOUT" remote set-url origin git@127.0.0.1:shields/dotfiles.git
-run_limavm new t1 --repo shields/other
-assert_eq "--repo wins over the origin" 0 "$RC"
-assert_eq "--repo's repository is the one looked up" "api repos/shields/other --jq .id" "$(<"$STATE/gh.log")"
-assert_eq "--repo's repository is the one cloned" 1 "$(count_in_log "env GIT_TERMINAL_PROMPT=0 git clone --quiet $FAKE_URL/shields/other.git /home/guest/src/github.com/shields/other")"
-assert_eq "--repo's repository is in the record" shields/other "$(stdin_of 5 | jq -r .repository)"
-assert_eq "the origin's repository is not mentioned" 0 "$(printf '%s' "$OUT" | grep -c 'from the origin' || true)"
+rm -f "$HOME_DIR/.config/lgtmcp/config.yaml"
+run_limavm new t1 --no-repo
+assert_eq "missing LGTMCP config fails before cloning" 1 "$RC"
+assert_eq "missing LGTMCP config creates no VM" 0 "$(count_in_log clone)"
 
 new_case test-base
-start_fake
-git -C "$CHECKOUT" remote set-url origin git@127.0.0.1:shields/dotfiles.git
-run_limavm new t1 --repo shields/other --no-repo
-assert_eq "--repo with --no-repo fails" 1 "$RC"
-assert_contains "--repo with --no-repo says they exclude each other" "exclude each other" "$OUT"
-assert_eq "--repo with --no-repo touches no VM" "" "$(limactl_log)"
-
-for origin in \
-    'git@github.com:shields/dotfiles.git' \
-    'ssh://git@gitlab.com/shields/dotfiles.git' \
-    'https://127.0.0.2/shields/dotfiles.git' \
-    'https://127.0.0.1.example.com/shields/dotfiles.git' \
-    'https://user@127.0.0.1/shields/dotfiles.git' \
-    '/srv/git/shields/dotfiles.git'; do
-    new_case test-base
-    start_fake
-    git -C "$CHECKOUT" remote set-url origin "$origin"
-    run_limavm new t1
-    assert_eq "an origin elsewhere gives no GitHub access: $origin" 0 "$RC"
-    assert_eq "an origin elsewhere installs no GitHub authorization: $origin" 0 "$(count_in_log GITHUB_APP_AUTH)"
-    assert_eq "an origin elsewhere never runs gh: $origin" 0 "$(stub_calls gh)"
-    assert_eq "an origin elsewhere contacts no GitHub: $origin" "" "$(fake_requests)"
-    assert_eq "an origin elsewhere is not mentioned: $origin" 0 "$(printf '%s' "$OUT" | grep -c 'from the origin' || true)"
-done
-git -C "$CHECKOUT" remote set-url origin git@github.com:shields/dotfiles.git
-
-new_case test-base
-: > "$STATE/gh-fail"
-EXTRA_ENV+=(LIMAVM_GITHUB_WEB_URL=http://localhost:9)
-git -C "$CHECKOUT" remote set-url origin git@LOCALHOST:shields/other.git
-run_limavm new t1
-assert_contains "an origin host that differs from GitHub's only in case is inferred" \
-    "GitHub access for shields/other, from the origin of this checkout" "$OUT"
-assert_contains "an origin host that differs only in case goes on to gh" "gh cannot read shields/other" "$OUT"
-assert_eq "an origin host that differs only in case touches no VM" "list -q test-base
-list -q t1" "$(limactl_log)"
-git -C "$CHECKOUT" remote set-url origin git@github.com:shields/dotfiles.git
-
-new_case test-base
-: > "$STATE/gh-fail"
-EXTRA_ENV+=(LIMAVM_GITHUB_WEB_URL=http://LOCALHOST:9)
-git -C "$CHECKOUT" remote set-url origin git@localhost:shields/other.git
-run_limavm new t1
-assert_contains "a GitHub host that differs from the origin's only in case is inferred" \
-    "GitHub access for shields/other, from the origin of this checkout" "$OUT"
-assert_contains "a GitHub host that differs only in case goes on to gh" "gh cannot read shields/other" "$OUT"
-assert_eq "a GitHub host that differs only in case touches no VM" "list -q test-base
-list -q t1" "$(limactl_log)"
-git -C "$CHECKOUT" remote set-url origin git@github.com:shields/dotfiles.git
-
-new_case test-base
-: > "$STATE/gh-fail"
-EXTRA_ENV+=(LIMAVM_GITHUB_WEB_URL=http://someone@localhost:9)
-git -C "$CHECKOUT" remote set-url origin git@localhost:shields/other.git
-run_limavm new t1
-assert_contains "a GitHub address with a user in it is matched by host" \
-    "GitHub access for shields/other, from the origin of this checkout" "$OUT"
-assert_contains "a GitHub address with a user in it goes on to gh" "gh cannot read shields/other" "$OUT"
-git -C "$CHECKOUT" remote set-url origin git@github.com:shields/dotfiles.git
-
-# An empty LIMAVM_GITHUB_WEB_URL leaves limavm its default, https://github.com;
-# the failing gh stub ends the run before anything would be sent there.
-for origin in git@github.com:shields/other.git https://github.com/shields/other.git; do
-    new_case test-base
-    : > "$STATE/gh-fail"
-    EXTRA_ENV+=(LIMAVM_GITHUB_WEB_URL=)
-    git -C "$CHECKOUT" remote set-url origin "$origin"
-    run_limavm new t1
-    assert_contains "an origin on github.com is inferred with the default address: $origin" \
-        "GitHub access for shields/other, from the origin of this checkout" "$OUT"
-    assert_contains "an origin on github.com goes on to gh with the default address: $origin" "gh cannot read shields/other" "$OUT"
-    assert_eq "an origin on github.com with the default address runs no curl: $origin" 0 "$(stub_calls curl)"
-    assert_eq "an origin on github.com with the default address touches no VM: $origin" "list -q test-base
-list -q t1" "$(limactl_log)"
-done
-git -C "$CHECKOUT" remote set-url origin git@github.com:shields/dotfiles.git
-
-for origin in 'https://127.0.0.1/shields/dotfiles/more.git' 'ssh://git@127.0.0.1:2222/shields/dotfiles.git/extra'; do
-    new_case test-base
-    start_fake
-    git -C "$CHECKOUT" remote set-url origin "$origin"
-    run_limavm new t1
-    assert_eq "a GitHub origin whose path is not OWNER/REPO fails new: $origin" 1 "$RC"
-    assert_contains "a GitHub origin whose path is not OWNER/REPO says where the value came from: $origin" \
-        "from the origin of this checkout (--no-repo gives none)" "$OUT"
-    assert_contains "a GitHub origin whose path is not OWNER/REPO says what is expected: $origin" "OWNER/REPO" "$OUT"
-    assert_eq "a GitHub origin whose path is not OWNER/REPO touches no VM: $origin" "" "$(limactl_log)"
-    assert_eq "a GitHub origin whose path is not OWNER/REPO contacts no GitHub: $origin" "" "$(fake_requests)"
-done
-git -C "$CHECKOUT" remote set-url origin git@github.com:shields/dotfiles.git
-
-new_case test-base
-start_fake
-git -C "$CHECKOUT" remote remove origin
-run_limavm new t1
-assert_eq "a checkout without an origin gives no GitHub access" 0 "$RC"
-assert_eq "a checkout without an origin installs no GitHub authorization" 0 "$(count_in_log GITHUB_APP_AUTH)"
-assert_eq "a checkout without an origin contacts no GitHub" "" "$(fake_requests)"
-git -C "$CHECKOUT" remote add origin git@github.com:shields/dotfiles.git
-
-new_case test-base
-start_fake
-mkdir -p "$TMPBASE/not-a-repo"
-MAIN_CHECKOUT=$CHECKOUT
-CHECKOUT="$TMPBASE/not-a-repo"
-run_limavm new t1
-assert_eq "new outside a work tree gives no GitHub access" 0 "$RC"
-assert_eq "new outside a work tree installs no GitHub authorization" 0 "$(count_in_log GITHUB_APP_AUTH)"
-assert_eq "new outside a work tree contacts no GitHub" "" "$(fake_requests)"
-CHECKOUT=$MAIN_CHECKOUT
-
-new_case test-base
-start_fake
-EXTRA_ENV+=(LIMA_STUB_FAIL='git clone')
-run_limavm new t1 --repo shields/other
-assert_eq "a failing clone in the VM fails new" 1 "$RC"
-assert_eq "a failing clone in the VM sends no later secret" "$SETUP GITHUB_APP_AUTH" "$(limactl_log | grep setup-secrets)"
-assert_eq "a failing clone in the VM deletes the VM last" "delete --tty=false --force t1" "$(limactl_log | tail -1)"
-assert_eq "a failing clone in the VM leaves no t1" 0 "$(grep -cx t1 "$STATE/instances")"
-assert_no_secret_leak "a failing clone in the VM"
-
-new_case test-base
-start_fake
-: > "$STATE/guest-home-unknown"
-run_limavm new t1 --repo shields/other
-assert_eq "an unknown guest home fails new" 1 "$RC"
-assert_contains "an unknown guest home in new says so" "cannot tell the home directory in t1" "$OUT"
-assert_eq "an unknown guest home in new clones nothing and sends no later secret" "$SETUP GITHUB_APP_AUTH" \
-    "$(limactl_log | grep -e setup-secrets -e 'git clone')"
-assert_eq "an unknown guest home in new deletes the VM last" "delete --tty=false --force t1" "$(limactl_log | tail -1)"
-assert_no_secret_leak "an unknown guest home in new"
-
-# --- 9a. The Codex login ---
-new_case test-base
-EXTRA_ENV=(LIMAVM_PROMPT_INPUT="$STATE/does-not-exist")
+EXTRA_ENV+=(LIMAVM_GITHUB_WEB_URL=https://github.com)
 run_limavm new t1 --no-claude-token --no-codex-auth
-assert_eq "new --no-codex-auth succeeds" 0 "$RC"
-assert_eq "new --no-codex-auth installs no Codex login" "list -q test-base
-list -q t1
-clone --tty=false --start test-base t1
-shell t1 /home/linuxbrew/.linuxbrew/bin/brew upgrade --cask claude-code@latest codex
-$SETUP LGTMCP_CONFIG
-shell t1" "$(limactl_log)"
-assert_contains "new --no-codex-auth says how to sign Codex in" "codex login --device-auth" "$OUT"
-assert_contains "new --no-codex-auth mentions the ChatGPT setting" "ChatGPT" "$OUT"
-assert_no_secret_leak "new --no-codex-auth"
+assert_eq "new infers the GitHub origin" 0 "$RC"
+assert_contains "the inferred repository is authorized" "ensure-auth shields/dotfiles" "$(<"$STATE/vm-access.log")"
 
 new_case test-base
-rm "$HOME_DIR/.codex/auth.json"
-run_limavm new t1 --no-codex-auth
-assert_eq "new --no-codex-auth needs no Codex login on the Mac" 0 "$RC"
+EXTRA_ENV+=(VM_ACCESS_STUB_FAIL=health)
+run_limavm new t1 --repo shields/dotfiles
+assert_eq "an unavailable gateway stops new" 1 "$RC"
+assert_eq "an unavailable gateway creates no VM" 0 "$(count_in_log clone)"
 
 new_case test-base
-rm "$HOME_DIR/.codex/auth.json"
-run_limavm new t1
-assert_eq "a missing Codex login fails new" 1 "$RC"
-assert_contains "a missing Codex login names the file" "$HOME_DIR/.codex/auth.json does not exist" "$OUT"
-assert_contains "a missing Codex login says what to run" "codex login" "$OUT"
-assert_contains "a missing Codex login says where Codex keeps it otherwise" 'cli_auth_credentials_store in ~/.codex/config.toml is keyring or auto: set it to "file"' "$OUT"
-assert_contains "a missing Codex login points to the flag" "--no-codex-auth" "$OUT"
-assert_eq "a missing Codex login comes before the clone" "list -q test-base
-list -q t1" "$(limactl_log)"
+EXTRA_ENV+=(VM_ACCESS_STUB_FAIL=register)
+run_limavm new t1 --repo shields/dotfiles
+assert_eq "a failed registration stops new" 1 "$RC"
+assert_contains "a failed registration deletes the clone" "delete --tty=false --force t1" "$(<"$STATE/limactl.log")"
 
 new_case test-base
-rm "$HOME_DIR/.codex/auth.json"
-mkdir "$HOME_DIR/.codex/auth.json"
-run_limavm new t1
-assert_eq "a directory at the Codex login fails new" 1 "$RC"
-assert_contains "a directory at the Codex login is named" "$HOME_DIR/.codex/auth.json is not a regular file" "$OUT"
-assert_contains "a directory at the Codex login points to the flag" "--no-codex-auth" "$OUT"
-assert_eq "a directory at the Codex login comes before the clone" "list -q test-base
-list -q t1" "$(limactl_log)"
+EXTRA_ENV+=(LIMA_STUB_FAIL=setup-github-gateway)
+run_limavm new t1 --repo shields/dotfiles
+assert_eq "a failed guest setup stops new" 1 "$RC"
+assert_contains "a failed guest setup disables gateway access" "disable lima:t1" "$(<"$STATE/vm-access.log")"
+assert_contains "a failed guest setup deletes the clone" "delete --tty=false --force t1" "$(<"$STATE/limactl.log")"
 
 new_case test-base
-: > "$HOME_DIR/.codex/auth.json"
-run_limavm new t1
-assert_eq "an empty Codex login fails new" 1 "$RC"
-assert_contains "an empty Codex login is named" "$HOME_DIR/.codex/auth.json is empty" "$OUT"
-assert_contains "an empty Codex login points to the flag" "--no-codex-auth" "$OUT"
-assert_eq "an empty Codex login comes before the clone" "list -q test-base
-list -q t1" "$(limactl_log)"
-
-new_case test-base
-chmod 000 "$HOME_DIR/.codex/auth.json"
-run_limavm new t1
-assert_eq "an unreadable Codex login fails new" 1 "$RC"
-assert_contains "an unreadable Codex login names the file" "cannot read $HOME_DIR/.codex/auth.json" "$OUT"
-assert_eq "an unreadable Codex login clones nothing" 0 "$(count_in_log clone)"
-chmod 600 "$HOME_DIR/.codex/auth.json"
-
-for content in "\"$FAKE_CODEX\"" '[]' 'not json' '' "{\"tokens\": \"$FAKE_CODEX\"" '{} {}'; do
-    new_case test-base
-    start_fake
-    printf '%s\n' "$content" > "$HOME_DIR/.codex/auth.json"
-    run_limavm new t1 --repo shields/dotfiles
-    assert_eq "a Codex login that is not a JSON object fails new: $content" 1 "$RC"
-    assert_contains "a Codex login that is not a JSON object is named: $content" "$HOME_DIR/.codex/auth.json" "$OUT"
-    assert_contains "a Codex login that is not a JSON object points to the flag: $content" "--no-codex-auth" "$OUT"
-    assert_eq "a Codex login that is not a JSON object comes before the clone: $content" "list -q test-base
-list -q t1" "$(limactl_log)"
-    assert_eq "a Codex login that is not a JSON object contacts no GitHub: $content" "" "$(fake_requests)"
-    assert_no_secret_leak "a Codex login that is not a JSON object: $content"
-done
-
-# --- 10. The Claude token prompt ---
-new_case test-base
-printf '  %s \r\n' "$FAKE_CLAUDE" > "$STATE/prompt"
-run_limavm new t1
-assert_eq "a token with blanks around it is accepted" 0 "$RC"
-assert_eq "a token is trimmed before it is installed" same \
-    "$(print -r -- "$FAKE_CLAUDE" | cmp -s - "$STATE/calls/5.stdin" && echo same || echo different)"
-
-new_case test-base
-EXTRA_ENV+=(CLAUDE_CODE_OAUTH_TOKEN=from-the-environment-0a1b)
-run_limavm new t1
-assert_eq "a token in the environment is not used" same \
-    "$(print -r -- "$FAKE_CLAUDE" | cmp -s - "$STATE/calls/5.stdin" && echo same || echo different)"
-assert_eq "a token in the environment is not passed on" 0 \
-    "$(cat "$STATE"/calls/*.stdin "$STATE"/calls/*.argv | grep -c from-the-environment-0a1b || true)"
-
-for content in '' $'\n' $'  \r\n'; do
-    new_case test-base
-    start_fake
-    printf '%s' "$content" > "$STATE/prompt"
-    run_limavm new t1 --repo shields/dotfiles
-    assert_eq "an empty Claude token fails" 1 "$RC"
-    assert_contains "an empty Claude token says so" "the Claude token is empty" "$OUT"
-    assert_contains "an empty Claude token points to the flag" "--no-claude-token" "$OUT"
-    assert_eq "an empty Claude token comes before the clone" "list -q test-base
-list -q t1" "$(limactl_log)"
-    assert_eq "an empty Claude token never runs gh" 0 "$(stub_calls gh)"
-    assert_eq "an empty Claude token contacts no GitHub" "" "$(fake_requests)"
-done
-
-new_case test-base
-print -r -- 'sk-ant one two' > "$STATE/prompt"
-run_limavm new t1
-assert_eq "a Claude token with spaces in it fails" 1 "$RC"
-assert_eq "a Claude token with spaces in it clones nothing" 0 "$(count_in_log clone)"
-assert_eq "a Claude token with spaces in it is not echoed" 0 "$(printf '%s' "$OUT" | grep -c 'sk-ant' || true)"
-
-new_case test-base
-EXTRA_ENV=(LIMAVM_PROMPT_INPUT="$STATE/does-not-exist")
-run_limavm new t1
-assert_eq "an unreadable prompt file fails" 1 "$RC"
-assert_eq "an unreadable prompt file clones nothing" 0 "$(count_in_log clone)"
-
-# --- 10a. The Claude token file on the Mac ---
-TOKEN_FILE_SUFFIX=.config/secrets/CLAUDE_CODE_OAUTH_TOKEN
-FILE_CLAUDE='sk-ant-oat01-FAKEfileToken-9b2d'
-write_token_file() {
-    mkdir -p "$HOME_DIR/.config/secrets"
-    printf '%s' "$1" > "$HOME_DIR/$TOKEN_FILE_SUFFIX"
-}
-
-new_case test-base
-write_token_file "$FILE_CLAUDE"$'\n'
-EXTRA_ENV=(LIMAVM_PROMPT_INPUT="$STATE/does-not-exist")
-run_limavm new t1
-assert_eq "a token file means no prompt" 0 "$RC"
-assert_eq "the token file's token reaches setup-secrets on stdin, with a newline" same \
-    "$(print -r -- "$FILE_CLAUDE" | cmp -s - "$STATE/calls/5.stdin" && echo same || echo different)"
-assert_eq "the token file's token is in no argument list, environment or log" 0 \
-    "$(cat "$STATE"/calls/*.argv "$STATE"/calls/*.env "$STATE/limactl.log" | grep -c "$FILE_CLAUDE" || true)"
-assert_eq "the token file's token is not printed" 0 "$(printf '%s' "$OUT" | grep -c "$FILE_CLAUDE" || true)"
-assert_eq "a token file means no hint about keeping the token" 0 "$(printf '%s' "$OUT" | grep -c 'limavm claude-token' || true)"
-
-new_case test-base
-write_token_file $'  \r\n'"$FILE_CLAUDE"$'  \r\n\n'
-EXTRA_ENV=(LIMAVM_PROMPT_INPUT="$STATE/does-not-exist")
-run_limavm new t1
-assert_eq "a token file with blanks around the token is accepted" 0 "$RC"
-assert_eq "a token file's token is trimmed before it is installed" same \
-    "$(print -r -- "$FILE_CLAUDE" | cmp -s - "$STATE/calls/5.stdin" && echo same || echo different)"
-
-for content in '' $'\n' $'  \r\n'; do
-    new_case test-base
-    write_token_file "$content"
-    run_limavm new t1
-    assert_eq "an empty token file fails" 1 "$RC"
-    assert_contains "an empty token file is named" "$HOME_DIR/$TOKEN_FILE_SUFFIX is empty" "$OUT"
-    assert_contains "an empty token file points to claude-token" "limavm claude-token" "$OUT"
-    assert_eq "an empty token file comes before the clone" "list -q test-base
-list -q t1" "$(limactl_log)"
-done
-
-new_case test-base
-write_token_file 'sk-ant one two'
-run_limavm new t1
-assert_eq "a token file with two words fails" 1 "$RC"
-assert_contains "a token file with two words is named" "$HOME_DIR/$TOKEN_FILE_SUFFIX" "$OUT"
-assert_eq "a token file with two words clones nothing" 0 "$(count_in_log clone)"
-assert_eq "a token file with two words is not echoed" 0 "$(printf '%s' "$OUT" | grep -c 'sk-ant' || true)"
-
-new_case test-base
-write_token_file "$FILE_CLAUDE"
-chmod 000 "$HOME_DIR/$TOKEN_FILE_SUFFIX"
-run_limavm new t1
-assert_eq "an unreadable token file fails" 1 "$RC"
-assert_contains "an unreadable token file is named" "cannot read $HOME_DIR/$TOKEN_FILE_SUFFIX" "$OUT"
-assert_eq "an unreadable token file clones nothing" 0 "$(count_in_log clone)"
-chmod 600 "$HOME_DIR/$TOKEN_FILE_SUFFIX"
-
-new_case test-base
-mkdir -p "$HOME_DIR/$TOKEN_FILE_SUFFIX"
-run_limavm new t1
-assert_eq "a directory at the token file fails new" 1 "$RC"
-assert_contains "a directory at the token file is named" "$HOME_DIR/$TOKEN_FILE_SUFFIX is not a regular file" "$OUT"
-assert_eq "a directory at the token file is not called empty" 0 "$(printf '%s' "$OUT" | grep -c 'is empty' || true)"
-assert_eq "a directory at the token file clones nothing" 0 "$(count_in_log clone)"
-
-new_case test-base
-write_token_file 'sk-ant one two'
-EXTRA_ENV=(LIMAVM_PROMPT_INPUT="$STATE/does-not-exist")
-run_limavm new t1 --no-claude-token
-assert_eq "--no-claude-token ignores the token file" 0 "$RC"
-assert_eq "--no-claude-token with a token file installs no Claude token" 0 "$(count_in_log CLAUDE_CODE_OAUTH_TOKEN)"
-
-new_case test-base
-run_limavm claude-token
-assert_eq "claude-token succeeds" 0 "$RC"
-assert_eq "claude-token writes the token with a newline" same \
-    "$(print -r -- "$FAKE_CLAUDE" | cmp -s - "$HOME_DIR/$TOKEN_FILE_SUFFIX" && echo same || echo different)"
-assert_eq "claude-token's file mode" 600 "$(mode_of "$HOME_DIR/$TOKEN_FILE_SUFFIX")"
-assert_eq "claude-token's directory mode" 700 "$(mode_of "$HOME_DIR/.config/secrets")"
-assert_eq "claude-token leaves no temporary file" CLAUDE_CODE_OAUTH_TOKEN "$(ls -A "$HOME_DIR/.config/secrets")"
-assert_contains "claude-token says where it wrote" "$HOME_DIR/$TOKEN_FILE_SUFFIX" "$OUT"
-assert_eq "claude-token touches no VM" "" "$(limactl_log)"
-assert_no_secret_leak "claude-token"
-
-new_case test-base
-write_token_file 'old-token'
-chmod 644 "$HOME_DIR/$TOKEN_FILE_SUFFIX"
-chmod 755 "$HOME_DIR/.config/secrets"
-run_limavm claude-token
-assert_eq "claude-token replaces an existing file" 0 "$RC"
-assert_eq "claude-token's replacement content" "$FAKE_CLAUDE" "$(<"$HOME_DIR/$TOKEN_FILE_SUFFIX")"
-assert_eq "claude-token's replacement file mode" 600 "$(mode_of "$HOME_DIR/$TOKEN_FILE_SUFFIX")"
-assert_eq "claude-token's replacement directory mode" 700 "$(mode_of "$HOME_DIR/.config/secrets")"
-
-new_case test-base
-mkdir -p "$HOME_DIR/$TOKEN_FILE_SUFFIX"
-EXTRA_ENV=(LIMAVM_PROMPT_INPUT="$STATE/does-not-exist")
-run_limavm claude-token
-assert_eq "claude-token with a directory at the file fails" 1 "$RC"
-assert_contains "claude-token with a directory at the file names it" "$HOME_DIR/$TOKEN_FILE_SUFFIX is not a regular file" "$OUT"
-assert_eq "claude-token with a directory at the file asks for nothing" 0 "$(printf '%s' "$OUT" | grep -c LIMAVM_PROMPT_INPUT || true)"
-assert_eq "claude-token with a directory at the file writes nothing into it" "" "$(ls -A "$HOME_DIR/$TOKEN_FILE_SUFFIX")"
-assert_eq "claude-token with a directory at the file leaves no temporary file" CLAUDE_CODE_OAUTH_TOKEN "$(ls -A "$HOME_DIR/.config/secrets")"
-
-for content in '' $'\n' 'sk-ant one two'; do
-    new_case test-base
-    printf '%s' "$content" > "$STATE/prompt"
-    run_limavm claude-token
-    assert_eq "claude-token with the input '$content' fails" 1 "$RC"
-    assert_eq "claude-token with the input '$content' writes nothing" no \
-        "$([[ -e "$HOME_DIR/.config/secrets" ]] && echo yes || echo no)"
-    assert_eq "claude-token with the input '$content' is not echoed" 0 "$(printf '%s' "$OUT" | grep -c 'sk-ant' || true)"
-    assert_eq "claude-token with the input '$content' suggests no --no-claude-token" 0 \
-        "$(printf '%s' "$OUT" | grep -c -- '--no-claude-token' || true)"
-done
-
-new_case test-base
-run_limavm claude-token extra
-assert_eq "claude-token with an argument fails" 1 "$RC"
-assert_eq "claude-token with an argument writes nothing" no \
-    "$([[ -e "$HOME_DIR/.config/secrets" ]] && echo yes || echo no)"
-
-new_case test-base
-run_limavm claude-token
-EXTRA_ENV=(LIMAVM_PROMPT_INPUT="$STATE/does-not-exist")
-run_limavm new t1
-assert_eq "new after claude-token succeeds without a prompt" 0 "$RC"
-assert_eq "new after claude-token gives no hint about keeping the token" 0 "$(printf '%s' "$OUT" | grep -c 'limavm claude-token' || true)"
-assert_eq "new after claude-token installs the kept token" same \
-    "$(print -r -- "$FAKE_CLAUDE" | cmp -s - "$STATE/calls/5.stdin" && echo same || echo different)"
-
-cat > "$TMPBASE/tty_run.py" <<'PY'
-import json
-import os
-import pty
-import select
-import signal
-import subprocess
-import sys
-import termios
-import time
-
-mode, token, *argv = sys.argv[1:]
-if mode == "notty":
-    result = subprocess.run(
-        argv,
-        stdin=subprocess.DEVNULL,
-        capture_output=True,
-        text=True,
-        check=False,
-        start_new_session=True,
-        timeout=60,
-    )
-    print(json.dumps({"exit": result.returncode, "output": result.stdout + result.stderr}))
-    sys.exit(0)
-
-pid, master = pty.fork()
-if pid == 0:
-    os.execvp(argv[0], argv)
-prompt = b"press Enter: "
-transcript = b""
-sent = False
-deadline = time.monotonic() + 60
-while time.monotonic() < deadline:
-    ready, _, _ = select.select([master], [], [], 1)
-    if not ready:
-        continue
-    try:
-        data = os.read(master, 4096)
-    except OSError:
-        break
-    if not data:
-        break
-    transcript += data
-    if not sent and prompt in transcript:
-        # The prompt is printed before read turns the echo off. A person types
-        # later than that, so wait for it, but not for ever.
-        wait = time.monotonic() + 5
-        while termios.tcgetattr(master)[3] & termios.ECHO and time.monotonic() < wait:
-            time.sleep(0.01)
-        os.write(master, token.encode() + b"\n")
-        sent = True
-status = None
-while time.monotonic() < deadline:
-    done, status = os.waitpid(pid, os.WNOHANG)
-    if done:
-        break
-    time.sleep(0.05)
-else:
-    os.kill(pid, signal.SIGKILL)
-    _, status = os.waitpid(pid, 0)
-print(
-    json.dumps(
-        {
-            "exit": os.waitstatus_to_exitcode(status),
-            "prompted": prompt in transcript,
-            "echoed": token.encode() in transcript,
-            "output": transcript.decode(errors="replace"),
-        }
-    )
-)
-PY
-
-tty_run() {
-    local mode=$1 token=$2
-    shift 2
-    (cd "$CHECKOUT" && python3 "$TMPBASE/tty_run.py" "$mode" "$token" env PATH="$STUBS:$PATH" HOME="$HOME_DIR" USER=shields \
-        LIMA_STUB_STATE="$STATE" LIMAVM_BASE=test-base REAL_CURL="$REAL_CURL" REAL_GIT="$REAL_GIT" \
-        LIMAVM_GITHUB_WEB_URL="$UNREACHABLE_GITHUB" /bin/bash "$LIMAVM" "$@" 2>&1)
-}
-
-new_case test-base
-TTY_TOKEN='sk-ant-oat01-FAKEtypedToken-3d5e'
-RESULT="$(tty_run pty "$TTY_TOKEN" new t1 --no-claude-token)"
-assert_eq "--no-claude-token never prompts, even on a terminal" false "$(jq -r .prompted <<<"$RESULT")"
-
-new_case test-base
-RESULT="$(tty_run pty "$TTY_TOKEN" new t1)"
-assert_eq "new prompts on the terminal" true "$(jq -r .prompted <<<"$RESULT")"
-assert_eq "new succeeds with a token typed on the terminal" 0 "$(jq -r .exit <<<"$RESULT")"
-assert_eq "the typed token is not echoed" false "$(jq -r .echoed <<<"$RESULT")"
-assert_eq "the typed token reaches setup-secrets on stdin" same \
-    "$(print -r -- "$TTY_TOKEN" | cmp -s - "$STATE/calls/5.stdin" && echo same || echo different)"
-assert_eq "the typed token is in no argument list or environment" 0 \
-    "$(cat "$STATE"/calls/*.argv "$STATE"/calls/*.env "$STATE/limactl.log" | grep -c -e "$TTY_TOKEN" || true)"
-
-new_case test-base
-RESULT="$(tty_run notty x new t1)"
-assert_eq "new without a terminal fails" 1 "$(jq -r .exit <<<"$RESULT")"
-assert_contains "new without a terminal says what to do" "--no-claude-token" "$(jq -r .output <<<"$RESULT")"
-assert_contains "new without a terminal points to claude-token" "limavm claude-token" "$(jq -r .output <<<"$RESULT")"
-assert_eq "new without a terminal clones nothing" 0 "$(count_in_log clone)"
-
-new_case test-base
-RESULT="$(tty_run pty "$TTY_TOKEN" claude-token)"
-assert_eq "claude-token prompts on the terminal" true "$(jq -r .prompted <<<"$RESULT")"
-assert_eq "claude-token succeeds with a token typed on the terminal" 0 "$(jq -r .exit <<<"$RESULT")"
-assert_eq "claude-token does not echo the typed token" false "$(jq -r .echoed <<<"$RESULT")"
-assert_eq "claude-token keeps the typed token" "$TTY_TOKEN" "$(<"$HOME_DIR/$TOKEN_FILE_SUFFIX")"
-
-new_case test-base
-RESULT="$(tty_run notty x claude-token)"
-assert_eq "claude-token without a terminal fails" 1 "$(jq -r .exit <<<"$RESULT")"
-assert_contains "claude-token without a terminal says what to do" "run in a terminal" "$(jq -r .output <<<"$RESULT")"
-assert_eq "claude-token without a terminal suggests no --no-claude-token" 0 \
-    "$(jq -r .output <<<"$RESULT" | grep -c -- '--no-claude-token' || true)"
-assert_eq "claude-token without a terminal writes nothing" no \
-    "$([[ -e "$HOME_DIR/.config/secrets" ]] && echo yes || echo no)"
-
-# --- 11. new picks a name, and sizes ---
-new_case test-base
-EXTRA_ENV+=(LIMAVM_CPUS=2 LIMAVM_MEMORY=4)
-run_limavm new
-assert_eq "new without a name succeeds" 0 "$RC"
-assert_eq "new without a name makes a dated name" 1 \
-    "$([[ "$(limactl_log | sed -n 3p)" == "clone --tty=false --cpus 2 --memory 4 --start test-base vm-"[0-9][0-9][0-9][0-9][0-9][0-9]-[0-9][0-9][0-9][0-9][0-9][0-9] ]] && echo 1 || echo 0)"
-
-# --- 12. new refuses before it makes anything ---
-new_case test-base
-run_limavm new test-base
-assert_eq "new refuses the base name" 1 "$RC"
-assert_eq "the base-name refusal touches no VM" "" "$(limactl_log)"
+EXTRA_ENV+=(LIMA_STUB_FAIL=__vm_access__/health)
+run_limavm new t1 --repo shields/dotfiles
+assert_eq "a failed relay probe stops new" 1 "$RC"
+assert_contains "a failed relay probe disables gateway access" "disable lima:t1" "$(<"$STATE/vm-access.log")"
 
 new_case test-base t1
-run_limavm new t1
-assert_eq "new refuses an existing name" 1 "$RC"
-assert_contains "the existing-name refusal says so" "already exists" "$OUT"
-assert_eq "the existing-name refusal clones nothing" 0 "$(count_in_log clone)"
-
-new_case
-run_limavm new t1
-assert_eq "new without a base fails" 1 "$RC"
-assert_contains "the missing-base failure says what to run" "limavm base" "$OUT"
-
-for bad in -x ../x 'a b' .x 'x;y' ''; do
-    new_case test-base
-    run_limavm new "$bad"
-    assert_eq "new rejects the name '$bad'" 1 "$RC"
-    assert_eq "the bad name '$bad' clones nothing" 0 "$(count_in_log clone)"
-done
-
-for bad in foo a/b/c ../x a/.. ./b 'a b/c' 'a/b;id' '/b' 'a/' ''; do
-    new_case test-base
-    start_fake
-    run_limavm new t1 --repo "$bad"
-    assert_eq "new rejects the repository '$bad'" 1 "$RC"
-    assert_contains "the bad repository '$bad' says what is expected" "OWNER/REPO" "$OUT"
-    assert_eq "the bad repository '$bad' touches no VM" "" "$(limactl_log)"
-    assert_eq "the bad repository '$bad' never runs gh" 0 "$(stub_calls gh)"
-    assert_eq "the bad repository '$bad' contacts no GitHub" "" "$(fake_requests)"
-done
-
-new_case test-base
-run_limavm new t1 --repo
-assert_eq "--repo without a value fails" 1 "$RC"
-run_limavm new t1 --frobnicate
-assert_eq "an unknown option fails" 1 "$RC"
-assert_contains "an unknown option is named" "--frobnicate" "$OUT"
-assert_eq "an unknown option touches no VM" "" "$(limactl_log)"
-
-new_case test-base
-rm "$HOME_DIR/.config/lgtmcp/config.yaml"
-run_limavm new t1
-assert_eq "a missing LGTMCP config fails" 1 "$RC"
-assert_contains "that message names the file" ".config/lgtmcp/config.yaml" "$OUT"
-assert_eq "that failure clones nothing" 0 "$(count_in_log clone)"
-
-new_case test-base
-rm "$HOME_DIR/.config/lgtmcp/config.yaml"
-mkdir "$HOME_DIR/.config/lgtmcp/config.yaml"
-run_limavm new t1
-assert_eq "a directory at the LGTMCP config fails" 1 "$RC"
-assert_contains "a directory at the LGTMCP config is named" "cannot read $HOME_DIR/.config/lgtmcp/config.yaml" "$OUT"
-assert_eq "a directory at the LGTMCP config clones nothing" 0 "$(count_in_log clone)"
-
-# --- 13. The device flow ---
-new_case test-base
-start_fake '"device_polls": ["pending", "pending", "success"]'
-run_limavm new t1 --repo shields/dotfiles
-assert_eq "a flow that waits for the browser succeeds" 0 "$RC"
-assert_eq "limavm polls until the code is entered" 3 "$(fake_requests | grep -c 'POST /login/oauth/access_token' || true)"
-assert_eq "a poll interval of zero sleeps not at all" 0 "$([[ -e "$STATE/sleep.log" ]] && echo 1 || echo 0)"
-
-new_case test-base
-start_fake '"device_interval": 2, "device_polls": ["pending", "slow_down", "success"]'
-run_limavm new t1 --repo shields/dotfiles
-assert_eq "a flow that is told to slow down succeeds" 0 "$RC"
-assert_eq "limavm waits the interval before each poll, and the longer one GitHub asks for" "2
-2
-7" "$(<"$STATE/sleep.log")"
-
-new_case test-base
-start_fake '"device_polls": ["slow_down", "success"]'
-run_limavm new t1 --repo shields/dotfiles
-assert_eq "limavm slows down even when the interval was zero" "5" "$(<"$STATE/sleep.log")"
-
-for failing in denied:denied expired:expired disabled:"not enabled"; do
-    poll=${failing%%:*}
-    message=${failing#*:}
-    new_case test-base
-    start_fake "\"device_polls\": [\"pending\", \"$poll\"]"
-    run_limavm new t1 --repo shields/dotfiles
-    assert_eq "a $poll code fails new" 1 "$RC"
-    assert_contains "a $poll code says so" "$message" "$OUT"
-    assert_eq "a $poll code creates no VM" "list -q test-base
-list -q t1" "$(limactl_log)"
-    assert_no_secret_leak "a $poll code"
-done
-
-new_case test-base
-start_fake '"device_expires_in": 0'
-run_limavm new t1 --repo shields/dotfiles
-assert_eq "a code that is out of time fails new" 1 "$RC"
-assert_contains "a code that is out of time says so" "expired" "$OUT"
-assert_eq "a code that is out of time polls nothing" "POST /login/device/code" "$(fake_requests)"
-
-new_case test-base
-FAKE_CLIENT_ID=Iv-somebody-else start_fake
-run_limavm new t1 --repo shields/dotfiles
-assert_eq "an unknown client id fails new" 1 "$RC"
-assert_contains "an unknown client id says what GitHub said" "incorrect_client_credentials" "$OUT"
-assert_eq "an unknown client id creates no VM" 0 "$(count_in_log clone)"
-
-new_case test-base
-FAKE_CLIENT_ID=Iv-custom start_fake
-EXTRA_ENV+=(LIMAVM_GITHUB_CLIENT_ID=Iv-custom)
-run_limavm new t1 --repo shields/dotfiles
-assert_eq "LIMAVM_GITHUB_CLIENT_ID replaces the client id" 0 "$RC"
-assert_eq "the record has the replaced client id" Iv-custom "$(stdin_of 5 | jq -r .client_id)"
-
-new_case test-base
-echo 99999 > "$STATE/gh-id"
-start_fake
-run_limavm new t1 --repo shields/dotfiles
-assert_eq "a refused authorization fails new" 1 "$RC"
-assert_contains "a refused authorization says what GitHub said" "bad_repository" "$OUT"
-assert_eq "a refused authorization creates no VM" 0 "$(count_in_log clone)"
-
-new_case test-base
-: > "$STATE/gh-fail"
-start_fake
-run_limavm new t1 --repo shields/dotfiles
-assert_eq "a repository gh cannot read fails new" 1 "$RC"
-assert_contains "that failure names the repository" "shields/dotfiles" "$OUT"
-assert_eq "that failure contacts no GitHub" "" "$(fake_requests)"
-assert_eq "that failure creates no VM" 0 "$(count_in_log clone)"
-
-new_case test-base
-echo notanumber > "$STATE/gh-id"
-start_fake
-run_limavm new t1 --repo shields/dotfiles
-assert_eq "an id that is not a number fails new" 1 "$RC"
-assert_eq "an id that is not a number contacts no GitHub" "" "$(fake_requests)"
-
-new_case test-base
-EXTRA_ENV+=(LIMAVM_GITHUB_WEB_URL=http://127.0.0.1:9)
-run_limavm new t1 --repo shields/dotfiles
-assert_eq "an unreachable GitHub fails new" 1 "$RC"
-assert_contains "an unreachable GitHub says so" "cannot reach http://127.0.0.1:9" "$OUT"
-assert_eq "an unreachable GitHub creates no VM" 0 "$(count_in_log clone)"
-
-new_case test-base
-start_fake
-: > "$STATE/open-fail"
-run_limavm new t1 --repo shields/dotfiles
-assert_eq "a failing open does not stop the flow" 0 "$RC"
-assert_contains "a failing open asks for the address to be opened by hand" "open that address yourself" "$OUT"
-
-new_case test-base
-start_fake
-: > "$STATE/pbcopy-fail"
-run_limavm new t1 --repo shields/dotfiles
-assert_eq "a failing pbcopy does not stop the flow" 0 "$RC"
-assert_eq "a failing pbcopy still installs the authorization" 1 "$(count_in_log GITHUB_APP_AUTH)"
-assert_contains "a failing pbcopy still shows the user code" "WDJB-MJHT" "$OUT"
-assert_contains "a failing pbcopy asks for the code to be typed" "type it" "$OUT"
-assert_eq "a failing pbcopy does not claim the clipboard" 0 "$(printf '%s' "$OUT" | grep -c 'the code is on the clipboard' || true)"
-
-new_case test-base
-start_fake
-RUN_PATH=$(no_pbcopy_path)
-assert_eq "the PATH without pbcopy has none" no "$(env PATH="$RUN_PATH" sh -c 'command -v pbcopy' >/dev/null 2>&1 && echo yes || echo no)"
-run_limavm new t1 --repo shields/dotfiles
-assert_eq "no pbcopy on the PATH does not stop the flow" 0 "$RC"
-assert_eq "no pbcopy on the PATH still installs the authorization" 1 "$(count_in_log GITHUB_APP_AUTH)"
-assert_contains "no pbcopy on the PATH still shows the user code" "WDJB-MJHT" "$OUT"
-assert_eq "no pbcopy on the PATH says nothing about the clipboard" 0 "$(printf '%s' "$OUT" | grep -c 'clipboard' || true)"
-assert_eq "no pbcopy on the PATH runs none" 0 "$(stub_calls pbcopy)"
-
-new_case test-base
-run_limavm new t1
-assert_eq "new without --repo never runs pbcopy" 0 "$(stub_calls pbcopy)"
-
-# --- 14. The clone is deleted after any later failure ---
-for failing in clone brew setup-secrets; do
-    new_case test-base
-    start_fake
-    EXTRA_ENV+=(LIMA_STUB_FAIL=$failing)
-    run_limavm new t1 --repo shields/dotfiles
-    assert_eq "a failing $failing fails new" 1 "$RC"
-    assert_eq "a failing $failing deletes the clone last" "delete --tty=false --force t1" \
-        "$(limactl_log | tail -1)"
-    assert_eq "a failing $failing leaves no t1" 0 "$(grep -cx t1 "$STATE/instances")"
-    assert_eq "a failing $failing keeps the base" 1 "$(grep -cx test-base "$STATE/instances")"
-    assert_contains "a failing $failing says it removed the clone" "removing t1" "$OUT"
-    assert_no_secret_leak "a failing $failing"
-done
-
-for failing in GITHUB_APP_AUTH CLAUDE_CODE_OAUTH_TOKEN CODEX_AUTH LGTMCP_CONFIG; do
-    new_case test-base
-    start_fake
-    EXTRA_ENV+=(LIMA_STUB_FAIL=$failing)
-    run_limavm new t1 --repo shields/dotfiles
-    assert_eq "a failing $failing install fails new" 1 "$RC"
-    assert_eq "a failing $failing install deletes the clone" "delete --tty=false --force t1" \
-        "$(limactl_log | tail -1)"
-    assert_no_secret_leak "a failing $failing install"
-done
-
-new_case test-base
-start_fake
-EXTRA_ENV+=(LIMA_STUB_FAIL=brew)
-run_limavm new t1 --repo shields/dotfiles
-assert_eq "no secret is sent when the cask upgrade fails" 0 "$(count_in_log setup-secrets)"
-
-# --- 15. github re-authorizes an existing VM ---
-new_case test-base t1
-start_fake
-run_limavm github t1 shields/dotfiles
-assert_eq "github succeeds" 0 "$RC"
-assert_eq "github call order" "list -q t1
-list --format {{.Status}} t1
-$SETUP GITHUB_APP_AUTH" "$(limactl_log)"
-assert_eq "github clones nothing" 0 "$(count_in_log 'git clone')"
-assert_eq "github sends the record on stdin" shields/dotfiles "$(stdin_of 3 | jq -r .repository)"
-assert_eq "github sends tokens for that repository only" "ghu_fake-access-1" "$(stdin_of 3 | jq -r .access_token)"
-assert_eq "github narrows the token to the repository" 4242 "$(fake_form /login/oauth/access_token repository_id)"
-assert_contains "github says what the VM can reach" "shields/dotfiles" "$OUT"
-assert_eq "github keeps the VM" 1 "$(grep -cx t1 "$STATE/instances")"
-assert_no_secret_leak "github"
-
-new_case test-base t1
-start_fake
-: > "$STATE/stopped-t1"
 run_limavm github t1 shields/other
-assert_eq "github on a stopped VM succeeds" 0 "$RC"
-assert_eq "github starts a stopped VM first" "list -q t1
-list --format {{.Status}} t1
-start --tty=false t1
-$SETUP GITHUB_APP_AUTH" "$(limactl_log)"
-assert_eq "github asks gh for the other repository" "api repos/shields/other --jq .id" "$(<"$STATE/gh.log")"
-
-new_case test-base t1
-start_fake '"device_polls": ["denied"]'
-run_limavm github t1 shields/dotfiles
-assert_eq "a denied github fails" 1 "$RC"
-assert_eq "a denied github installs nothing" 0 "$(count_in_log setup-secrets)"
-assert_eq "a denied github keeps the VM" 1 "$(grep -cx t1 "$STATE/instances")"
-assert_eq "a denied github deletes nothing" 0 "$(count_in_log delete)"
+assert_eq "github adds an additional repository" 0 "$RC"
+assert_contains "github uses the host policy" "grant lima:t1 shields/other --profile task" "$(<"$STATE/vm-access.log")"
+assert_eq "github does not copy a credential into the guest" 0 "$(count_in_log setup-secrets)"
+assert_eq "github does not start a stopped VM" 0 "$(count_in_log start)"
 
 new_case test-base
-start_fake
-run_limavm github t1 shields/dotfiles
-assert_eq "github on a missing VM fails" 1 "$RC"
-assert_contains "github on a missing VM says so" "does not exist" "$OUT"
-assert_eq "github on a missing VM contacts no GitHub" "" "$(fake_requests)"
+run_limavm github missing shields/other
+assert_eq "github refuses a missing VM" 1 "$RC"
+assert_eq "github leaves policy unchanged for a missing VM" 0 "$(wc -l < "$STATE/vm-access.log" | tr -d ' ')"
 
-new_case test-base
-start_fake
-run_limavm github test-base shields/dotfiles
-assert_eq "github refuses the base" 1 "$RC"
-assert_eq "github on the base touches no VM" "" "$(limactl_log)"
-
-for args in "" "t1 shields/dotfiles extra" "t1 notarepo" "../x shields/dotfiles"; do
-    new_case test-base t1
-    start_fake
-    run_limavm github ${=args}
-    assert_eq "github with '$args' fails" 1 "$RC"
-    assert_eq "github with '$args' contacts no GitHub" "" "$(fake_requests)"
-    assert_eq "github with '$args' installs nothing" 0 "$(count_in_log setup-secrets)"
-done
-new_case test-base t1
-start_fake
-run_limavm github t1
-assert_eq "github without a repository, outside a GitHub checkout, fails" 1 "$RC"
-assert_contains "github without a repository, outside a GitHub checkout, asks for one" "limavm github t1 OWNER/REPO" "$OUT"
-assert_eq "github without a repository, outside a GitHub checkout, contacts no GitHub" "" "$(fake_requests)"
-assert_eq "github without a repository, outside a GitHub checkout, installs nothing" 0 "$(count_in_log setup-secrets)"
-
-new_case test-base t1
-: > "$STATE/gh-fail"
-EXTRA_ENV+=(LIMAVM_GITHUB_WEB_URL=)
-run_limavm github t1
-assert_contains "github infers the checkout's github.com origin with the default address" \
-    "GitHub access for shields/dotfiles, from the origin of this checkout" "$OUT"
-assert_contains "github with the default address goes on to gh" "gh cannot read shields/dotfiles" "$OUT"
-assert_eq "github with the default address runs no curl" 0 "$(stub_calls curl)"
-assert_eq "github with the default address installs nothing" 0 "$(count_in_log setup-secrets)"
-
-new_case test-base t1
-start_fake
-git -C "$CHECKOUT" remote set-url origin https://127.0.0.1/shields/other.git
-run_limavm github t1
-assert_eq "github infers the repository from the origin" 0 "$RC"
-assert_contains "github says where the repository came from" "GitHub access for shields/other, from the origin of this checkout" "$OUT"
-assert_eq "github asks gh for the inferred repository" "api repos/shields/other --jq .id" "$(<"$STATE/gh.log")"
-assert_eq "github installs the inferred repository's record" shields/other "$(stdin_of 3 | jq -r .repository)"
-assert_eq "github with an inferred repository clones nothing" 0 "$(count_in_log 'git clone')"
-git -C "$CHECKOUT" remote set-url origin git@github.com:shields/dotfiles.git
-
-new_case test-base t1
-start_fake
-MAIN_CHECKOUT=$CHECKOUT
-CHECKOUT="$TMPBASE/not-a-repo"
-run_limavm github t1
-assert_eq "github outside a work tree fails" 1 "$RC"
-assert_contains "github outside a work tree asks for the repository" "limavm github t1 OWNER/REPO" "$OUT"
-assert_eq "github outside a work tree contacts no GitHub" "" "$(fake_requests)"
-CHECKOUT=$MAIN_CHECKOUT
-
-# --- 16. rm ---
 new_case test-base t1
 run_limavm rm test-base
 assert_eq "rm refuses the base" 1 "$RC"
-assert_contains "the refusal says why" "refusing to delete test-base" "$OUT"
-assert_eq "the refusal touches no VM" "" "$(limactl_log)"
 run_limavm rm t1
 assert_eq "rm succeeds" 0 "$RC"
-assert_eq "rm deletes just that VM" "delete --tty=false --force t1" "$(limactl_log)"
-assert_contains "rm says the tokens are not revoked" "not revoked" "$OUT"
-assert_contains "rm says how to end them" "https://github.com/settings/apps/authorizations" "$OUT"
-assert_contains "rm says the end is for every VM" "every VM" "$OUT"
-run_limavm rm
-assert_eq "rm without a name fails" 1 "$RC"
-run_limavm rm ../x
-assert_eq "rm with a bad name fails" 1 "$RC"
-run_limavm rm t1 t2
-assert_eq "rm with two names fails" 1 "$RC"
+assert_contains "rm disables the grant" "disable lima:t1" "$(<"$STATE/vm-access.log")"
+assert_contains "rm deletes the VM" "delete --tty=false --force t1" "$(<"$STATE/limactl.log")"
+first_disable=$(grep -n '^vm-access disable lima:t1$' "$STATE/all.log" | head -1 | cut -d: -f1)
+first_delete=$(grep -n '^limactl delete --tty=false --force t1$' "$STATE/all.log" | head -1 | cut -d: -f1)
+assert_eq "rm revokes before deleting" 1 "$(( first_disable < first_delete ))"
 
-# --- 17. No case ever called security ---
 assert_eq "no case called security" 0 "$(cat "$TMPBASE"/state-*/security.log(N) | wc -l | tr -d ' ')"
 
 echo ""

@@ -17,12 +17,34 @@
 # Call these as plain statements. Inside a function that is called as `fn &&`,
 # `fn ||` or `if fn`, errexit is off, so a failing command would not stop the run.
 
+macos_vm_access_cleanup() {
+    if ! modules_has "${modules_selection:-}" dev; then
+        if launchctl print "gui/$UID/com.msrl.dotfiles.vm-access" >/dev/null 2>&1; then
+            launchctl bootout "gui/$UID/com.msrl.dotfiles.vm-access"
+        fi
+        rm -f "$HOME/Library/LaunchAgents/com.msrl.dotfiles.vm-access.plist"
+    fi
+}
+
 macos_preflight() {
     softwareupdate --install --recommended
 
     # Install Rosetta if it's not already working.
     if ! arch -x86_64 /usr/bin/true 2>/dev/null; then
         softwareupdate --install-rosetta --agree-to-license
+    fi
+}
+
+macos_vm_access_install() {
+    if modules_has "${modules_selection:-}" dev; then
+        bun install --frozen-lockfile
+        mkdir -p "$HOME/.local/share/vm-access"
+        bun build gateway/main.ts --target=node --outfile "$HOME/.local/share/vm-access/main.mjs"
+        "$HOME/bin/vm-access" init
+        if launchctl print "gui/$UID/com.msrl.dotfiles.vm-access" >/dev/null 2>&1; then
+            launchctl bootout "gui/$UID/com.msrl.dotfiles.vm-access"
+        fi
+        launchctl bootstrap "gui/$UID" "$HOME/Library/LaunchAgents/com.msrl.dotfiles.vm-access.plist"
     fi
 }
 

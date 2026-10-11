@@ -279,6 +279,15 @@ wt() {
 
     local worktree_name="$first_word-$second_word"
     local branch_name="worktree-$worktree_name"
+    local gateway_marker="${DOTFILES_GITHUB_GATEWAY_MARKER:-/etc/dotfiles-github-gateway}"
+    if [[ -f "$gateway_marker" ]]; then
+        local gateway_id="$(<"$gateway_marker")"
+        if [[ ! "$gateway_id" =~ ^[0-9a-f]{8}(-[0-9a-f]{4}){3}-[0-9a-f]{12}$ ]]; then
+            print -u2 -r -- "wt: invalid GitHub gateway identity"
+            return 1
+        fi
+        branch_name="task/$gateway_id/$branch_name"
+    fi
     local target="$main_worktree/.worktrees/$worktree_name"
 
     if [[ -e "$target" || -L "$target" ]]; then

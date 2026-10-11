@@ -232,6 +232,9 @@ if [[ "$OSTYPE" == linux* && -e "$HOME/.config/secrets/CLAUDE_CODE_OAUTH_TOKEN" 
     CLAUDE_CODE_OAUTH_TOKEN="$(<"$HOME/.config/secrets/CLAUDE_CODE_OAUTH_TOKEN")" &&
         export CLAUDE_CODE_OAUTH_TOKEN
 fi
+if [[ "$OSTYPE" == linux* && -f /etc/dotfiles-github-gateway ]]; then
+    export GH_TOKEN=vm-access
+fi
 
 if [ -d "$HOME/.cargo" ]; then
     PATH="$PATH:$HOME/.cargo/bin"
