@@ -200,9 +200,8 @@ export function graphqlRepository(body: Uint8Array): string {
   }
   if (
     payload.variables !== undefined &&
-    (!payload.variables ||
-      typeof payload.variables !== "object" ||
-      Array.isArray(payload.variables))
+    payload.variables !== null &&
+    (typeof payload.variables !== "object" || Array.isArray(payload.variables))
   ) {
     throw new PolicyError("invalid GraphQL variables");
   }
@@ -234,6 +233,18 @@ export function graphqlRepository(body: Uint8Array): string {
     new Set(),
   )) {
     if (field.name.value === "__typename" || field.name.value === "rateLimit") {
+      continue;
+    }
+    if (field.name.value === "viewer") {
+      if (
+        !field.selectionSet ||
+        rootFields(field.selectionSet.selections, fragments, new Set()).some(
+          (selection) =>
+            selection.name.value !== "login" || selection.selectionSet,
+        )
+      ) {
+        throw new PolicyError("unsupported GraphQL viewer field");
+      }
       continue;
     }
     if (field.name.value !== "repository") {

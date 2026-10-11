@@ -190,6 +190,20 @@ void test("the HTTPS socket injects a repo token only after checking the full pu
       200,
     );
     assert.equal(incoming[2]?.authorization, "Bearer ghu_secret");
+    const discovery = Buffer.from(
+      JSON.stringify({
+        query:
+          '{ viewer { login } repo_000: repository(owner: "shields", name: "dotfiles") { name } }',
+        variables: null,
+      }),
+    );
+    assert.equal(
+      (await send(socket, "POST", "/graphql", discovery, "api.github.com"))
+        .status,
+      200,
+    );
+    assert.equal(incoming[3]?.authorization, "Bearer ghu_secret");
+    assert.deepEqual(incoming[3].body, discovery);
     const bad = Buffer.concat([
       packet(
         `${"0".repeat(40)} ${"1".repeat(40)} ${idRef(instance.id)}\0report-status\n`,
@@ -208,8 +222,13 @@ void test("the HTTPS socket injects a repo token only after checking the full pu
       ).status,
       403,
     );
-    assert.equal(incoming.length, 3);
+    assert.equal(incoming.length, 4);
     state.update("lima:work", 1, {}, "tester");
+    assert.equal(
+      (await send(socket, "POST", "/graphql", discovery, "api.github.com"))
+        .status,
+      403,
+    );
     assert.equal(
       (
         await send(
@@ -220,9 +239,9 @@ void test("the HTTPS socket injects a repo token only after checking the full pu
       ).status,
       403,
     );
-    assert.equal(incoming.length, 3);
+    assert.equal(incoming.length, 4);
     const logs = state.logs(instance.id);
-    assert.equal(logs.length, 6);
+    assert.equal(logs.length, 8);
     assert.equal(logs[0]?.revision, 2);
     assert.equal(logs[0].allowed, false);
   } finally {

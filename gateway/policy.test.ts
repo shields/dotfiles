@@ -111,6 +111,75 @@ void test("GraphQL allows one scoped query and rejects mutation and cross-reposi
   );
 });
 
+void test("GraphQL accepts gh's interactive repository discovery query", () => {
+  const query = `
+    fragment repo on Repository {
+      id
+      databaseId
+      name
+      owner { login }
+      viewerPermission
+      defaultBranchRef { name }
+      isPrivate
+    }
+    query RepositoryNetwork {
+      viewer { login }
+      repo_000: repository(owner: "shields", name: "dotfiles") {
+        ...repo
+        parent { ...repo }
+      }
+    }
+  `;
+  for (const variables of [undefined, null, {}]) {
+    assert.equal(
+      graphqlRepository(Buffer.from(JSON.stringify({ query, variables }))),
+      "shields/dotfiles",
+    );
+  }
+  for (const variables of [[], "", "{}", 0, false]) {
+    assert.throws(
+      () =>
+        graphqlRepository(Buffer.from(JSON.stringify({ query, variables }))),
+      /invalid GraphQL variables/,
+    );
+  }
+});
+
+void test("GraphQL viewer reads allow only the login alongside one repository", () => {
+  const repository = 'repository(owner:"shields",name:"dotfiles"){name}';
+  const body = (query: string): Buffer =>
+    Buffer.from(JSON.stringify({ query, variables: null }));
+  assert.equal(
+    graphqlRepository(
+      body(`query { ${repository} me:viewer { ...identity } }
+        fragment identity on User { username:login }`),
+    ),
+    "shields/dotfiles",
+  );
+  for (const query of [
+    `{ ${repository} viewer { login repositories(first:1) { nodes { name } } } }`,
+    `{ ${repository} viewer { login:repositories(first:1) { nodes { name } } } }`,
+    `{ ${repository} viewer { ... on User { organizations(first:1) { nodes { name } } } } }`,
+    `query { ${repository} viewer { ...identity } }
+      fragment identity on User { repositories(first:1) { nodes { name } } }`,
+    `{ ${repository} user(login:"shields") { login } }`,
+  ]) {
+    assert.throws(() => graphqlRepository(body(query)), /unsupported GraphQL/);
+  }
+  assert.throws(
+    () => graphqlRepository(body("{ viewer { login } }")),
+    /exactly one repository/,
+  );
+  assert.throws(
+    () =>
+      graphqlRepository(
+        body(`{ ${repository} viewer { login }
+          other:repository(owner:"other",name:"repo"){name} }`),
+      ),
+    /exactly one repository/,
+  );
+});
+
 void test("REST reads require a grant and API writes have no classification", () => {
   const read = classify(
     {

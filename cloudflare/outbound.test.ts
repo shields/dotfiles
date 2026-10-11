@@ -135,7 +135,9 @@ void test("unsupported writes and foreign refs are denied before forwarding", as
 void test("GraphQL reads retain their body and mutations are denied", async () => {
   const events: string[] = [];
   const query = JSON.stringify({
-    query: '{ repository(owner: "shields", name: "dotfiles") { name } }',
+    query:
+      '{ viewer { login } repo_000: repository(owner: "shields", name: "dotfiles") { name } }',
+    variables: null,
   });
   let forwardedBody: string | null = null;
   const allowed = await handleOutbound(
