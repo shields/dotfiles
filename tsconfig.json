@@ -15,5 +15,5 @@
     "esModuleInterop": true,
     "forceConsistentCasingInFileNames": true
   },
-  "include": ["tools/**/*.ts", "eslint.config.ts"]
+  "include": ["tools/**/*.ts", "gateway/**/*.ts", "eslint.config.ts"]
 }

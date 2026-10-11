@@ -43,6 +43,7 @@ build:
 	bun run tsc --noEmit
 
 test:
+	node --test gateway/*.test.ts
 	zsh tests/test_gcl.zsh
 	zsh tests/test_git_add_upstream.zsh
 	zsh tests/test_ghfork.zsh
