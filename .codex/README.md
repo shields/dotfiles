@@ -54,10 +54,12 @@ It selects a `dev` permission profile extending `:workspace`, grants writes to
 allowed. Local binding is enabled so tests can start local servers. Other
 filesystem and network rules in that profile are preserved. On machines marked
 by `/etc/dotfiles-throwaway`, it selects `:danger-full-access` and disables the
-Codex network proxy. Lima and Cloudflare provisioning run the configuration step
-again after installing that marker, so the user-level `dev` selection cannot
-override the system's throwaway defaults. After converting an existing machine
-to a throwaway environment, rerun `tools/configure_codex.py` and restart Codex.
+Codex network proxy, which otherwise filters destinations even with full sandbox
+access. Lima and Cloudflare provisioning run the configuration step again after
+installing that marker, so the user-level `dev` selection cannot override the
+system's throwaway defaults. Subsequent provisioning keeps the proxy disabled.
+After converting an existing machine to a throwaway environment, rerun
+`tools/configure_codex.py` and restart Codex.
 
 The same run seeds hook trust. The script asks the app server for `hooks/list`,
 then writes `hooks.state.<key>.trusted_hash` for every hook that

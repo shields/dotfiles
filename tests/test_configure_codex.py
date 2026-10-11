@@ -537,10 +537,15 @@ def test_configure_after_becoming_throwaway(
     throwaway_marker.touch()
     tool.configure_codex(config_file, HOME)
     after = tomllib.loads(config_file.read_text())
+    assert after["features"]["network_proxy"] is False
     before["features"]["network_proxy"] = False
     before["default_permissions"] = ":danger-full-access"
     assert after == before
     assert asyncio.run(effective_sandbox(codex_home))["type"] == "dangerFullAccess"
+
+    first = config_file.read_bytes()
+    tool.configure_codex(config_file, HOME)
+    assert config_file.read_bytes() == first
 
 
 def test_configure_without_installed_hooks_does_not_list_them(

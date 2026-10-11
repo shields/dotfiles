@@ -752,10 +752,15 @@ def test_docker_prune_runs_only_on_macos() -> None:
 
 def test_cloudflare_reconfigures_codex_after_installing_the_throwaway_policy() -> None:
     dockerfile = (REPO / "cloudflare/Dockerfile").read_text()
-    throwaway = dockerfile.index("sudo provision/throwaway.sh")
+    guard = dockerfile.index('RUN if [ "$CLOUDFLARE_AGENT" = 1 ]; then')
+    throwaway = dockerfile.index("sudo provision/throwaway.sh", guard)
     configure = dockerfile.index("python tools/configure_codex.py", throwaway)
     reset = dockerfile.index("provision/reset-identity.sh", configure)
-    assert throwaway < configure < reset
+    end = dockerfile.index("\n    fi", guard)
+    assert guard < throwaway < configure < reset < end
+    assert (
+        'PATH="/home/linuxbrew/.linuxbrew/bin:$PATH"' in dockerfile[throwaway:configure]
+    )
 
 
 def test_the_plugin_tools_come_from_the_modules_that_update_them() -> None:

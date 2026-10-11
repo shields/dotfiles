@@ -314,8 +314,12 @@ sandboxed, prompting behavior.
   and sandbox settings are left out, because they would override managed
   settings.
 - Codex gets `/etc/codex/config.toml` with `approval_policy = "never"` and
-  `sandbox_mode = "danger-full-access"`. `~/.codex/config.toml` overrides any key
-  it sets, and `provision.sh` does not set these. `cx` is plain `codex`.
+  `default_permissions = ":danger-full-access"`. `~/.codex/config.toml` overrides
+  any key it sets, so `tools/configure_codex.py` detects `/etc/dotfiles-throwaway`
+  and selects the same full-access profile there. The network proxy is disabled
+  in both configs. Lima bases and Cloudflare agent images run the configuration
+  script after installing the throwaway policy. Re-provisioning preserves these
+  settings. `cx` is plain `codex`.
 - In a gateway VM, `git_guard.py` and the installed deny rules allow `git push`;
   the gateway checks the destinations against `task/VM-ID/*`. The hook still
   stops `git commit --no-verify`, and the agent policies still refuse the
