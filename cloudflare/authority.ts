@@ -2,6 +2,7 @@ import {
   authorize,
   normalizeRepository,
   PolicyError,
+  type Access,
   type Classification,
   type Grant,
 } from "../gateway/policy.ts";
@@ -48,7 +49,7 @@ export interface CloudPolicyEvent {
 }
 
 export type AllowResult =
-  | { allowed: true; requestId: string; token: string | null }
+  | { allowed: true; requestId: string; token: string | null; access: Access }
   | { allowed: false; reason: string };
 
 const tokenPattern = /^[A-Za-z0-9_.~+/=-]+$/;
@@ -378,36 +379,39 @@ export class CloudAuthority {
       classification.operation === "identity.read"
         ? (Object.keys(before.grants).toSorted()[0] ?? null)
         : classification.repository;
-    if (classification.operation !== "public.read") {
-      try {
-        authorize(
-          repository ? (before.grants[repository] ?? null) : null,
-          classification.operation,
-        );
-      } catch (error) {
-        if (error instanceof PolicyError) {
-          return { allowed: false, reason: error.message };
-        }
-        throw error;
+    let access: Access;
+    try {
+      access = authorize(
+        repository ? (before.grants[repository] ?? null) : null,
+        classification.operation,
+      );
+    } catch (error) {
+      if (error instanceof PolicyError) {
+        return { allowed: false, reason: error.message };
       }
+      throw error;
     }
-    const token = repository === null ? null : await this.token(repository);
+    const token =
+      access === "authenticated" && repository !== null
+        ? await this.token(repository)
+        : null;
     const current = await this.instance(id);
     if (!current || current.disabled) {
       return { allowed: false, reason: "VM access has been revoked" };
     }
-    if (classification.operation !== "public.read") {
-      try {
-        authorize(
-          repository ? (current.grants[repository] ?? null) : null,
-          classification.operation,
-        );
-      } catch (error) {
-        if (error instanceof PolicyError) {
-          return { allowed: false, reason: error.message };
-        }
-        throw error;
+    try {
+      const currentAccess = authorize(
+        repository ? (current.grants[repository] ?? null) : null,
+        classification.operation,
+      );
+      if (access === "authenticated" && currentAccess !== access) {
+        throw new PolicyError("repository is not granted to this VM");
       }
+    } catch (error) {
+      if (error instanceof PolicyError) {
+        return { allowed: false, reason: error.message };
+      }
+      throw error;
     }
     const requestId = logKey(id, Date.now(), crypto.randomUUID());
     await this.storage.put(requestId, {
@@ -418,13 +422,13 @@ export class CloudAuthority {
       operation: classification.operation,
       refs: classification.refs,
       allowed: true,
-      reason: "granted",
+      reason: access === "anonymous" ? "anonymous read" : "granted",
       revision: current.revision,
       upstreamStatus: null,
       durationMs: null,
       outcome: "unknown",
     } satisfies CloudAccessLog);
-    return { allowed: true, requestId, token };
+    return { allowed: true, requestId, token, access };
   }
 
   async deny(

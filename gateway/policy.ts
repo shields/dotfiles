@@ -14,6 +14,7 @@ export interface Grant {
   read: boolean;
   pushTaskBranches: boolean;
 }
+export type Access = "anonymous" | "authenticated";
 export type Operation =
   | "git.read"
   | "git.push"
@@ -45,7 +46,8 @@ export class PolicyError extends Error {
 const repositoryName = /^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/;
 const hexSha = /^(?:[0-9a-f]{40}|[0-9a-f]{64})$/;
 const gitRoute =
-  /^\/([A-Za-z0-9_.-]+)\/([A-Za-z0-9_.-]+)\.git\/(info\/refs|git-upload-pack|git-receive-pack)$/;
+  /^\/([A-Za-z0-9_.-]+)\/([A-Za-z0-9_.-]+?)(?:\.git)?\/(info\/refs|git-upload-pack|git-receive-pack)$/;
+const webRoute = /^\/([A-Za-z0-9_.-]+)\/([A-Za-z0-9_.-]+)(?:\/|$)/;
 const restRoute = /^\/repos\/([A-Za-z0-9_.-]+)\/([A-Za-z0-9_.-]+)(?:\/|$)/;
 const decoder = new TextDecoder();
 
@@ -293,7 +295,14 @@ export function classify(
         (url.search === "?service=git-upload-pack" ||
           url.search === "?service=git-receive-pack")
       ) {
-        return { repository, operation: "git.read", refs: [] };
+        return {
+          repository,
+          operation:
+            url.search === "?service=git-receive-pack"
+              ? "git.push"
+              : "git.read",
+          refs: [],
+        };
       }
       if (route === "git-upload-pack" && method === "POST" && !url.search) {
         return { repository, operation: "git.read", refs: [] };
@@ -308,12 +317,15 @@ export function classify(
         }
         return { repository, operation: "git.push", refs: parsed.refs };
       }
+      throw new PolicyError("unsupported GitHub Git operation");
     }
-    if (
-      method === "GET" &&
-      /^\/[^/]+\/[^/]+\/(releases\/download|archive)\//.test(url.pathname)
-    ) {
-      return { repository: null, operation: "public.read", refs: [] };
+    const web = webRoute.exec(url.pathname);
+    if (web && (method === "GET" || method === "HEAD")) {
+      return {
+        repository: normalizeRepository(`${web[1] ?? ""}/${web[2] ?? ""}`),
+        operation: "public.read",
+        refs: [],
+      };
     }
     throw new PolicyError("unsupported GitHub web operation");
   }
@@ -340,7 +352,7 @@ export function classify(
     return { repository: null, operation: "identity.read", refs: [] };
   }
   const match = restRoute.exec(url.pathname);
-  if (match && method === "GET") {
+  if (match && (method === "GET" || method === "HEAD")) {
     return {
       repository: normalizeRepository(`${match[1] ?? ""}/${match[2] ?? ""}`),
       operation: "api.read",
@@ -350,11 +362,14 @@ export function classify(
   throw new PolicyError("unsupported GitHub API operation");
 }
 
-export function authorize(grant: Grant | null, operation: Operation): void {
+export function authorize(grant: Grant | null, operation: Operation): Access {
   if (operation === "public.read") {
-    return;
+    return "anonymous";
   }
   if (!grant?.read) {
+    if (operation === "git.read" || operation === "api.read") {
+      return "anonymous";
+    }
     throw new PolicyError("repository is not granted to this VM");
   }
   if (operation === "git.push" && !grant.pushTaskBranches) {
@@ -362,4 +377,5 @@ export function authorize(grant: Grant | null, operation: Operation): void {
       "task-branch pushes are not granted for this repository",
     );
   }
+  return "authenticated";
 }

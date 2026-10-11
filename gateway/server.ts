@@ -325,14 +325,14 @@ export class Gateway {
           throw new PolicyError("repository is not granted to this VM");
         }
       }
-      authorize(
+      const access = authorize(
         classification.repository === null
           ? null
           : this.state.grant(instanceId, classification.repository),
         classification.operation,
       );
       let token: string | null = null;
-      if (classification.repository !== null) {
+      if (access === "authenticated" && classification.repository !== null) {
         token = await this.auth.token(classification.repository);
       }
       const current = this.state.byId(instanceId);
@@ -340,12 +340,15 @@ export class Gateway {
         throw new PolicyError("VM access has been revoked");
       }
       revision = current.revision;
-      authorize(
+      const currentAccess = authorize(
         classification.repository === null
           ? null
           : this.state.grant(instanceId, classification.repository),
         classification.operation,
       );
+      if (access === "authenticated" && currentAccess !== access) {
+        throw new PolicyError("repository is not granted to this VM");
+      }
       this.state.logDecision({
         id: requestId,
         instanceId,
@@ -353,7 +356,7 @@ export class Gateway {
         operation: classification.operation,
         refs: classification.refs,
         allowed: true,
-        reason: "granted",
+        reason: access === "anonymous" ? "anonymous read" : "granted",
         revision,
       });
       logged = true;

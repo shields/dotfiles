@@ -105,7 +105,11 @@ export class Outbound extends WorkerEntrypoint<Env, { instanceId: string }> {
         if (!result.allowed) {
           throw new PolicyError(result.reason);
         }
-        return { requestId: result.requestId, token: result.token };
+        return {
+          requestId: result.requestId,
+          token: result.token,
+          access: result.access,
+        };
       },
       deny(id, classification, reason) {
         return stub.deny(id, classification, reason);

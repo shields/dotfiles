@@ -173,11 +173,20 @@ NAME [OWNER/REPO]` adds another repository without stopping the VM or removing
 its existing grants. It infers the repository from the current checkout if the
 argument is omitted.
 
-The gateway accepts Git fetches and pushes to the VM's task branch namespace,
-including force pushes. It checks every ref update before forwarding a push;
-deletions and push options are denied. GitHub REST GET requests and GraphQL
-queries for exactly one granted repository are allowed. The `/user` identity
-read uses a granted repository token. GitHub API writes, PR creation and
+Public repositories, including those under `github.com/shields`, are readable
+without a grant, even in a VM created with `--no-repo`. Git clone/fetch and
+repository REST GET/HEAD requests use anonymous access when the repository has
+no grant. Repository web pages and downloads always use anonymous access.
+The gateway strips guest credentials and cookies, and GitHub denies anonymous
+reads of private repositories. Anonymous API reads use GitHub's unauthenticated
+rate limits.
+
+Granted repositories use their token for Git and REST reads. The `task` profile
+also permits pushes to the VM's task branch namespace, including force pushes.
+The gateway checks every ref update before forwarding a push; deletions and
+push options are denied. GraphQL queries still require exactly one granted
+repository because GitHub requires authentication. The `/user` identity read
+uses a granted repository token. GitHub API writes, PR creation and
 updates, cross-repository GraphQL queries, search queries and other unlisted
 operations are denied. `gh pr list` with search filters may therefore fail;
 basic repository and PR reads work through the supported routes. There is no

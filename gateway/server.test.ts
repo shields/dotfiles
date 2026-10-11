@@ -36,7 +36,12 @@ function send(
         method,
         path: target,
         agent: false,
-        headers: { host, "content-length": body.length },
+        headers: {
+          host,
+          "content-length": body.length,
+          authorization: "Bearer guest-token",
+          cookie: "session=guest",
+        },
       },
       (response) => {
         const chunks: Buffer[] = [];
@@ -89,6 +94,7 @@ void test("the HTTPS socket injects a repo token only after checking the full pu
   const incoming: {
     target: string;
     authorization: string | undefined;
+    cookie: string | undefined;
     body: Buffer;
   }[] = [];
   const upstream = createServer((request, response) => {
@@ -100,9 +106,12 @@ void test("the HTTPS socket injects a repo token only after checking the full pu
       incoming.push({
         target: request.url ?? "",
         authorization: request.headers.authorization,
+        cookie: request.headers.cookie,
         body: Buffer.concat(chunks),
       });
-      response.writeHead(200).end("ok");
+      response
+        .writeHead(request.url?.includes("/shields/private") ? 404 : 200)
+        .end("ok");
     });
   });
   await new Promise<void>((resolve) => {
@@ -237,13 +246,99 @@ void test("the HTTPS socket injects a repo token only after checking the full pu
           "/shields/dotfiles.git/info/refs?service=git-upload-pack",
         )
       ).status,
-      403,
+      200,
     );
-    assert.equal(incoming.length, 4);
+    assert.equal(incoming.length, 5);
+    assert.equal(incoming[4]?.authorization, undefined);
     const logs = state.logs(instance.id);
     assert.equal(logs.length, 8);
     assert.equal(logs[0]?.revision, 2);
-    assert.equal(logs[0].allowed, false);
+    assert.equal(logs[0].allowed, true);
+    assert.equal(logs[0].reason, "anonymous read");
+
+    for (const repository of [
+      "shields/dotfiles",
+      "octocat/Hello-World",
+      "shields/private",
+    ]) {
+      for (const [host, method, target, body] of [
+        [
+          "github.com",
+          "GET",
+          `/${repository}.git/info/refs?service=git-upload-pack`,
+          Buffer.alloc(0),
+        ],
+        [
+          "github.com",
+          "POST",
+          `/${repository}.git/git-upload-pack`,
+          Buffer.from("0000"),
+        ],
+        [
+          "github.com",
+          "GET",
+          `/${repository}/info/refs?service=git-upload-pack`,
+          Buffer.alloc(0),
+        ],
+        [
+          "github.com",
+          "POST",
+          `/${repository}/git-upload-pack`,
+          Buffer.from("0000"),
+        ],
+        [
+          "api.github.com",
+          "GET",
+          `/repos/${repository}/pulls`,
+          Buffer.alloc(0),
+        ],
+        ["api.github.com", "HEAD", `/repos/${repository}`, Buffer.alloc(0)],
+        ["github.com", "GET", `/${repository}`, Buffer.alloc(0)],
+        [
+          "github.com",
+          "HEAD",
+          `/${repository}/archive/refs/heads/main.zip`,
+          Buffer.alloc(0),
+        ],
+      ] as const) {
+        const response = await send(socket, method, target, body, host);
+        assert.equal(
+          response.status,
+          repository === "shields/private" ? 404 : 200,
+          target,
+        );
+        assert.equal(incoming.at(-1)?.authorization, undefined, target);
+        assert.equal(incoming.at(-1)?.cookie, undefined, target);
+        assert.deepEqual(incoming.at(-1)?.body, body, target);
+      }
+    }
+    const forwarded = incoming.length;
+    for (const [host, method, target, body] of [
+      [
+        "github.com",
+        "GET",
+        "/shields/dotfiles.git/info/refs?service=git-receive-pack",
+        Buffer.alloc(0),
+      ],
+      ["github.com", "POST", "/shields/dotfiles.git/git-receive-pack", good],
+      [
+        "api.github.com",
+        "POST",
+        "/repos/shields/dotfiles/issues",
+        Buffer.from("{}"),
+      ],
+      ["api.github.com", "POST", "/graphql", discovery],
+      ["api.github.com", "GET", "/user", Buffer.alloc(0)],
+    ] as const) {
+      assert.equal(
+        (await send(socket, method, target, body, host)).status,
+        403,
+        target,
+      );
+    }
+    state.disable("lima:work", "tester");
+    assert.equal((await send(socket, "GET", "/shields/dotfiles")).status, 403);
+    assert.equal(incoming.length, forwarded);
   } finally {
     await gateway.stop();
     await new Promise<void>((resolve) => {

@@ -180,7 +180,7 @@ void test("GraphQL viewer reads allow only the login alongside one repository", 
   );
 });
 
-void test("REST reads require a grant and API writes have no classification", () => {
+void test("REST reads can be anonymous and API writes have no classification", () => {
   const read = classify(
     {
       host: "api.github.com",
@@ -210,9 +210,7 @@ void test("REST reads require a grant and API writes have no classification", ()
   assert.doesNotThrow(() => {
     authorize({ read: true, pushTaskBranches: false }, read.operation);
   });
-  assert.throws(() => {
-    authorize(null, read.operation);
-  }, /not granted/);
+  assert.equal(authorize(null, read.operation), "anonymous");
   assert.throws(() => {
     classify(
       {
@@ -239,4 +237,112 @@ void test("REST reads require a grant and API writes have no classification", ()
   assert.doesNotThrow(() => {
     authorize({ read: true, pushTaskBranches: true }, "git.push");
   });
+});
+
+void test("anonymous access covers repository reads without granting writes or identity", () => {
+  for (const operation of ["git.read", "api.read", "public.read"] as const) {
+    assert.equal(authorize(null, operation), "anonymous");
+    assert.equal(
+      authorize({ read: false, pushTaskBranches: true }, operation),
+      "anonymous",
+    );
+  }
+  for (const operation of [
+    "git.push",
+    "graphql.read",
+    "identity.read",
+  ] as const) {
+    assert.throws(() => authorize(null, operation), /not granted/);
+  }
+  assert.equal(
+    authorize({ read: true, pushTaskBranches: false }, "api.read"),
+    "authenticated",
+  );
+  assert.equal(
+    authorize({ read: true, pushTaskBranches: true }, "public.read"),
+    "anonymous",
+  );
+});
+
+void test("Git discovery separates fetches from pushes with and without a .git suffix", () => {
+  for (const repository of ["shields/dotfiles", "octocat/Hello-World"]) {
+    for (const suffix of ["", ".git"]) {
+      for (const service of ["git-upload-pack", "git-receive-pack"]) {
+        const classification = classify(
+          {
+            host: "github.com",
+            method: "GET",
+            target: `/${repository}${suffix}/info/refs?service=${service}`,
+          },
+          id,
+        );
+        assert.equal(classification.repository, repository.toLowerCase());
+        assert.equal(
+          classification.operation,
+          service === "git-upload-pack" ? "git.read" : "git.push",
+        );
+        if (service === "git-upload-pack") {
+          assert.equal(authorize(null, classification.operation), "anonymous");
+        } else {
+          assert.throws(
+            () => authorize(null, classification.operation),
+            /not granted/,
+          );
+          assert.throws(
+            () =>
+              authorize(
+                { read: true, pushTaskBranches: false },
+                classification.operation,
+              ),
+            /not granted/,
+          );
+        }
+      }
+      assert.equal(
+        classify(
+          {
+            host: "github.com",
+            method: "POST",
+            target: `/${repository}${suffix}/git-upload-pack`,
+          },
+          id,
+        ).operation,
+        "git.read",
+      );
+    }
+  }
+  assert.throws(
+    () =>
+      classify(
+        {
+          host: "github.com",
+          method: "GET",
+          target: "/shields/dotfiles.git/info/refs?service=other",
+        },
+        id,
+      ),
+    /unsupported/,
+  );
+});
+
+void test("repository web pages are always anonymous and accept only reads", () => {
+  for (const target of [
+    "/shields/dotfiles",
+    "/shields/dotfiles/blob/main/README.md",
+    "/shields/dotfiles/releases/download/v1/archive.zip",
+    "/shields/dotfiles/archive/refs/heads/main.zip",
+    "/shields/dotfiles/issues/1",
+  ]) {
+    for (const method of ["GET", "HEAD"]) {
+      assert.deepEqual(classify({ host: "github.com", method, target }, id), {
+        repository: "shields/dotfiles",
+        operation: "public.read",
+        refs: [],
+      });
+    }
+    assert.throws(
+      () => classify({ host: "github.com", method: "POST", target }, id),
+      /unsupported/,
+    );
+  }
 });

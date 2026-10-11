@@ -1,7 +1,9 @@
 import {
+  authorize,
   classify,
   parsePushCommands,
   PolicyError,
+  type Access,
   type Classification,
 } from "../gateway/policy.ts";
 
@@ -9,7 +11,7 @@ export interface OutboundAuthority {
   allow(
     instanceId: string,
     classification: Classification,
-  ): Promise<{ requestId: string; token: string | null }>;
+  ): Promise<{ requestId: string; token: string | null; access: Access }>;
   deny(
     instanceId: string,
     classification: Classification | null,
@@ -163,7 +165,9 @@ export async function handleOutbound(
     );
     const allowed = await authority.allow(instanceId, classification);
     requestId = allowed.requestId;
-    if (classification.operation !== "public.read" && !allowed.token) {
+    if (allowed.access === "anonymous") {
+      authorize(null, classification.operation);
+    } else if (!allowed.token) {
       throw new Error("repository authorization is unavailable");
     }
     if (url.pathname === "/__vm_access__/health") {
@@ -173,7 +177,10 @@ export async function handleOutbound(
     const response = await forward(
       upstreamRequest(
         request,
-        classification.operation === "public.read" ? null : allowed.token,
+        allowed.access === "anonymous" ||
+          classification.operation === "public.read"
+          ? null
+          : allowed.token,
       ),
     );
     await authority.finish(

@@ -9,7 +9,7 @@ function authority(events: string[]): OutboundAuthority {
   return {
     allow(_id: string, classification: Classification) {
       events.push(`allow:${classification.operation}`);
-      authorize(
+      const access = authorize(
         classification.repository === "shields/dotfiles"
           ? { read: true, pushTaskBranches: true }
           : null,
@@ -17,7 +17,8 @@ function authority(events: string[]): OutboundAuthority {
       );
       return Promise.resolve({
         requestId: "request-1",
-        token: "upstream-secret",
+        token: access === "authenticated" ? "upstream-secret" : null,
+        access,
       });
     },
     deny(_id: string, _classification: Classification | null, reason: string) {
@@ -228,7 +229,11 @@ void test("a missing repository token stops forwarding", async () => {
   const events: string[] = [];
   const missing = authority(events);
   missing.allow = () =>
-    Promise.resolve({ requestId: "request-1", token: null });
+    Promise.resolve({
+      requestId: "request-1",
+      token: null,
+      access: "authenticated",
+    });
   const response = await handleOutbound(
     new Request("https://api.github.com/repos/shields/dotfiles"),
     instanceId,
@@ -256,4 +261,91 @@ void test("public release downloads receive no repository token", async () => {
   );
   assert.equal(response.status, 200);
   assert.equal(authorization, null);
+});
+
+void test("ungranted reads forward anonymously and preserve GitHub's private-repository denial", async () => {
+  for (const repository of [
+    "shields/public",
+    "octocat/Hello-World",
+    "shields/private",
+  ]) {
+    for (const [method, url, body] of [
+      [
+        "GET",
+        `https://github.com/${repository}.git/info/refs?service=git-upload-pack`,
+        undefined,
+      ],
+      ["POST", `https://github.com/${repository}.git/git-upload-pack`, "0000"],
+      [
+        "GET",
+        `https://github.com/${repository}/info/refs?service=git-upload-pack`,
+        undefined,
+      ],
+      ["POST", `https://github.com/${repository}/git-upload-pack`, "0000"],
+      ["GET", `https://api.github.com/repos/${repository}/pulls`, undefined],
+      ["HEAD", `https://api.github.com/repos/${repository}`, undefined],
+      ["GET", `https://github.com/${repository}`, undefined],
+      [
+        "HEAD",
+        `https://github.com/${repository}/blob/main/README.md`,
+        undefined,
+      ],
+    ] as const) {
+      const events: string[] = [];
+      const status = repository === "shields/private" ? 404 : 200;
+      const response = await handleOutbound(
+        new Request(url, {
+          method,
+          ...(body ? { body } : {}),
+          headers: {
+            authorization: "Bearer guest-token",
+            cookie: "session=guest",
+          },
+        }),
+        instanceId,
+        authority(events),
+        async (request) => {
+          assert.equal(request.headers.get("authorization"), null, url);
+          assert.equal(request.headers.get("cookie"), null, url);
+          assert.equal(request.redirect, "manual", url);
+          assert.equal(await request.text(), body ?? "", url);
+          return new Response(null, { status });
+        },
+      );
+      assert.equal(response.status, status, url);
+      assert.equal(events.at(-1), `finish:completed:${String(status)}`);
+    }
+  }
+});
+
+void test("anonymous access does not allow push discovery, pushes, or API writes", async () => {
+  for (const request of [
+    new Request(
+      "https://github.com/shields/public.git/info/refs?service=git-receive-pack",
+    ),
+    new Request("https://github.com/shields/public/git-receive-pack", {
+      method: "POST",
+      body: push(`refs/heads/task/${instanceId}/check`),
+    }),
+    new Request("https://api.github.com/repos/shields/public/issues", {
+      method: "POST",
+      body: "{}",
+    }),
+    new Request("https://api.github.com/graphql", {
+      method: "POST",
+      body: JSON.stringify({
+        query: '{repository(owner:"shields",name:"public"){name}}',
+      }),
+    }),
+  ]) {
+    const response = await handleOutbound(
+      request,
+      instanceId,
+      authority([]),
+      () => {
+        throw new Error("ungranted write or GraphQL request reached GitHub");
+      },
+    );
+    assert.equal(response.status, 403, request.url);
+  }
 });
