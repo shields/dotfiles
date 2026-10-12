@@ -129,7 +129,7 @@ def settings(config: Json, home: Path, *, throwaway: bool = False) -> Json:
         "mcp_servers.lgtmcp.tools.review_and_commit.approval_mode": "approve",
         "approvals_reviewer": "auto_review",
         "features.worktrees": True,
-        "features.network_proxy": not throwaway,
+        "features.network_proxy": False,
         "tui.status_line": [
             "model-with-reasoning",
             "project-name",
@@ -153,12 +153,6 @@ def settings(config: Json, home: Path, *, throwaway: bool = False) -> Json:
             "network": {
                 **network,
                 "enabled": True,
-                "allow_local_binding": True,
-                "domains": {
-                    **table(network, "domains"),
-                    "localhost": "allow",
-                    "127.0.0.1": "allow",
-                },
             },
         },
     }

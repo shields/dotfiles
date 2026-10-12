@@ -50,14 +50,14 @@ limits, and fast mode, with status-line colors disabled. These settings are
 provisioned on both macOS and Linux, including VM bases.
 
 It selects a `dev` permission profile extending `:workspace`, grants writes to
-`~/.cache/uv`, and enables the network proxy with localhost and `127.0.0.1`
-allowed. Local binding is enabled so tests can start local servers. Other
-filesystem and network rules in that profile are preserved. On machines marked
-by `/etc/dotfiles-throwaway`, it selects `:danger-full-access` and disables the
-Codex network proxy, which otherwise filters destinations even with full sandbox
-access. Lima and Cloudflare provisioning run the configuration step again after
-installing that marker, so the user-level `dev` selection cannot override the
-system's throwaway defaults. Subsequent provisioning keeps the proxy disabled.
+`~/.cache/uv`, and enables network access with the Codex network proxy disabled.
+Commands can reach the network directly while filesystem writes remain
+sandboxed. Other filesystem and network settings in that profile are preserved;
+domain rules are inactive while the proxy is disabled. On machines marked by
+`/etc/dotfiles-throwaway`, it selects `:danger-full-access`. Lima and Cloudflare
+provisioning run the configuration step again after installing that marker, so
+the user-level `dev` selection cannot override the system's throwaway defaults.
+Subsequent provisioning keeps the proxy disabled.
 After converting an existing machine to a throwaway environment, rerun
 `tools/configure_codex.py` and restart Codex.
 

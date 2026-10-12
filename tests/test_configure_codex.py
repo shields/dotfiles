@@ -49,11 +49,7 @@ STATUS_LINE = [
 DEVELOPMENT_PERMISSIONS: Json = {
     "extends": ":workspace",
     "filesystem": {"~/.cache/uv": "write"},
-    "network": {
-        "enabled": True,
-        "allow_local_binding": True,
-        "domains": {"localhost": "allow", "127.0.0.1": "allow"},
-    },
+    "network": {"enabled": True},
 }
 
 STUB = """\
@@ -168,7 +164,7 @@ def test_settings_for_an_empty_config() -> None:
         "mcp_servers.lgtmcp.tools.review_and_commit.approval_mode": "approve",
         "approvals_reviewer": "auto_review",
         "features.worktrees": True,
-        "features.network_proxy": True,
+        "features.network_proxy": False,
         "tui.status_line": STATUS_LINE,
         "tui.status_line_use_colors": False,
         "default_permissions": "dev",
@@ -225,8 +221,7 @@ def test_settings_keep_existing_permission_rules() -> None:
     assert result["network"] == {
         "allow_upstream_proxy": False,
         "enabled": True,
-        "allow_local_binding": True,
-        "domains": {"example.com": "deny", "localhost": "allow", "127.0.0.1": "allow"},
+        "domains": {"example.com": "deny"},
         "unix_sockets": {"/var/run/docker.sock": "deny"},
     }
     assert json.dumps(development) == original
@@ -242,7 +237,6 @@ def test_settings_keep_existing_permission_rules() -> None:
         {"permissions": {"dev": "text"}},
         {"permissions": {"dev": {"filesystem": "text"}}},
         {"permissions": {"dev": {"network": "text"}}},
-        {"permissions": {"dev": {"network": {"domains": "text"}}}},
     ],
 )
 def test_settings_reject_malformed_config(config: Json) -> None:
@@ -419,7 +413,7 @@ def test_configure_trusts_the_installed_hooks(
             edit("mcp_servers.lgtmcp.tools.review_and_commit.approval_mode", "approve"),
             edit("approvals_reviewer", "auto_review"),
             edit("features.worktrees", True),  # noqa: FBT003
-            edit("features.network_proxy", True),  # noqa: FBT003
+            edit("features.network_proxy", False),  # noqa: FBT003
             edit("tui.status_line", STATUS_LINE),
             edit("tui.status_line_use_colors", False),  # noqa: FBT003
             edit("default_permissions", "dev"),
@@ -476,7 +470,7 @@ def test_configure_permissions_with_the_real_cli(
     config_text = (
         'default_permissions = "audit"\n'
         '[mcp_servers.lgtmcp]\ncommand = "lgtmcp"\n'
-        "[features]\nhooks = false\n"
+        "[features]\nhooks = false\nnetwork_proxy = true\n"
         '[permissions.dev]\ndescription = "Keep this"\n'
         '[permissions.dev.filesystem]\n"~/.ssh" = "deny"\n'
         '[permissions.dev.network.domains]\n"example.com" = "deny"\n'
@@ -498,7 +492,7 @@ def test_configure_permissions_with_the_real_cli(
     assert config["features"] == {
         "hooks": False,
         "worktrees": True,
-        "network_proxy": not throwaway,
+        "network_proxy": False,
     }
     assert config["permissions"]["audit"] == {"extends": ":read-only"}
     assert config["permissions"]["dev"] == {
@@ -507,12 +501,7 @@ def test_configure_permissions_with_the_real_cli(
         "filesystem": {"~/.ssh": "deny", "~/.cache/uv": "write"},
         "network": {
             "enabled": True,
-            "allow_local_binding": True,
-            "domains": {
-                "example.com": "deny",
-                "localhost": "allow",
-                "127.0.0.1": "allow",
-            },
+            "domains": {"example.com": "deny"},
         },
     }
     first = config_file.read_bytes()
@@ -520,6 +509,11 @@ def test_configure_permissions_with_the_real_cli(
     assert config_file.read_bytes() == first
     sandbox = asyncio.run(effective_sandbox(codex_home))
     assert sandbox["type"] == ("dangerFullAccess" if throwaway else "workspaceWrite")
+    if not throwaway:
+        assert sandbox["networkAccess"] is True
+        assert str(Path.home() / ".cache/uv") in cast(
+            "list[str]", sandbox["writableRoots"]
+        )
 
 
 def test_configure_after_becoming_throwaway(
@@ -531,14 +525,13 @@ def test_configure_after_becoming_throwaway(
     _ = config_file.write_text('[mcp_servers.lgtmcp]\ncommand = "lgtmcp"\n')
     tool.configure_codex(config_file, HOME)
     before = tomllib.loads(config_file.read_text())
-    assert before["features"]["network_proxy"] is True
+    assert before["features"]["network_proxy"] is False
     assert before["default_permissions"] == "dev"
 
     throwaway_marker.touch()
     tool.configure_codex(config_file, HOME)
     after = tomllib.loads(config_file.read_text())
     assert after["features"]["network_proxy"] is False
-    before["features"]["network_proxy"] = False
     before["default_permissions"] = ":danger-full-access"
     assert after == before
     assert asyncio.run(effective_sandbox(codex_home))["type"] == "dangerFullAccess"
