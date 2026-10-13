@@ -214,17 +214,17 @@ same display name receives a new ID and no old grants. `vm-access logs VM-ID`
 can inspect a deleted VM's retained history.
 
 The GitHub App uses device flow with expiring user tokens and no private key.
-For your own app, grant repository Contents read/write and Pull requests read;
-the gateway denies PR writes even if an app has broader permissions. The
-default public client ID is `Iv23lim5x4MdkNNgv28z`; set
-`LIMAVM_GITHUB_CLIENT_ID` for your own app. The Mac's `gh` login reads the
-repository ID; the device flow requests that `repository_id` to scope the app
-token, and the gateway verifies that token can read the intended repository.
-The device code and URL are printed on the Mac for you to complete. To replace
-an expired or revoked authorization, run `vm-access authorize OWNER/REPO` on
-the Mac; policy grants remain in place. Revoking the app authorization at
-GitHub invalidates all its tokens. The gateway keeps the rotating refresh
-tokens on the Mac and never sends them to a VM.
+For your own app, grant repository Contents read/write, and Pull requests,
+Actions, Checks and Commit statuses read; the gateway denies PR writes even if
+an app has broader permissions. The default public client ID is
+`Iv23lim5x4MdkNNgv28z`; set `LIMAVM_GITHUB_CLIENT_ID` for your own app. The
+Mac's `gh` login reads the repository ID; the device flow requests that
+`repository_id` to scope the app token, and the gateway verifies that token can
+read the intended repository. The device code and URL are printed on the Mac for
+you to complete. To replace an expired or revoked authorization, run
+`vm-access authorize OWNER/REPO` on the Mac; policy grants remain in place.
+Revoking the app authorization at GitHub invalidates all its tokens. The gateway
+keeps the rotating refresh tokens on the Mac and never sends them to a VM.
 
 Every request decision is logged with VM ID, repository, operation, permitted
 refs, policy revision, result, upstream status and duration. Headers, bodies
@@ -334,7 +334,11 @@ sandboxed, prompting behavior.
   stops `git commit --no-verify`, and the agent policies still refuse the
   listed `gh` write commands. The gateway is the final check for API calls,
   including POST requests formed by `gh api -f`, `-F` or `--input` without
-  `-X`.
+  `-X`. In a Lima VM, `setup-github-gateway` tells the agents about
+  `task/VM-ID/*` in system-wide instructions that re-provisioning leaves in
+  place: Claude Code's `/etc/claude-code/CLAUDE.md` and Codex's
+  `/etc/codex/requirements.toml` (`additional_developer_instructions`). A
+  Cloudflare VM gets neither file, so its agents are not told the namespace.
 
 ## Checks to run once with real credentials
 
@@ -345,10 +349,12 @@ OWNER/REPO`, which shows a device code and authorization URL on the Mac:
   `git hook list pre-commit` lists gitleaks.
 - In a fresh repository under `~/src`, `c` opens with no dialogs and shows
   bypass-permissions mode, and `/sandbox` shows that the sandbox is off.
-- In the VM, `gh api repos/OWNER/REPO` and `git pull` work. A push to
-  `task/VM-ID/check` succeeds, including a forced update. A push to `main`, a
-  branch deletion, a PR write, and a read of an ungranted private repository
-  fail. `vm-access logs lima:t1` on the Mac records each decision.
+- In the VM, `gh api repos/OWNER/REPO`, `gh run list`, `gh run view --log` and
+  `git pull` work, and `codex debug prompt-input hi` shows the `task/VM-ID/`
+  instructions. A push to `task/VM-ID/check` succeeds, including a forced
+  update. A push to `main`, a branch deletion, a PR write, and a read of an
+  ungranted private repository fail. `vm-access logs lima:t1` on the Mac records
+  each decision.
 - `limavm github t1 OTHER/REPO` adds a grant while the VM runs; revoking it with
   `vm-access revoke lima:t1 OTHER/REPO` takes effect on the next request.
 - Replacing an expiring access token happens on the Mac on demand. After a

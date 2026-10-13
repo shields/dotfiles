@@ -82,8 +82,9 @@ Throwaway Lima VMs (the README describes them for users):
   and refreshes them on demand; the guest gets only a dummy credential helper,
   a dummy `GH_TOKEN`, the CA and its ID. The gateway inspects Git push commands,
   allows only `task/VM-ID/*`, and applies live per-VM/repository grants to REST
-  and GraphQL reads. `limavm github` adds a grant and `limavm rm` disables the
-  VM before deletion. `gateway/` contains the shared policy, service, state,
+  and GraphQL reads. `setup-github-gateway` puts `task/VM-ID/*` in the agents'
+  managed instructions. `limavm github` adds a grant and `limavm rm` disables
+  the VM before deletion. `gateway/` contains the shared policy, service, state,
   authorization and CLI. `.config/vm-access/profiles.yaml` defines templates;
   edits affect future grants only. On the Mac, `provision.sh dev` bundles the
   service and loads its launchd agent. The agent's `main.mjs` is built from this

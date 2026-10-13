@@ -19,7 +19,9 @@ guest_home=$(getent passwd "$SUDO_USER" | cut -d: -f6)
 
 ca=$(mktemp /usr/local/share/ca-certificates/.dotfiles-github-gateway.XXXXXX)
 managed=$(mktemp /etc/claude-code/.managed-settings.XXXXXX)
-trap 'rm -f "$ca" "$managed"' EXIT
+claude_md=$(mktemp /etc/claude-code/.CLAUDE.md.XXXXXX)
+requirements=$(mktemp /etc/codex/.requirements.toml.XXXXXX)
+trap 'rm -f "$ca" "$managed" "$claude_md" "$requirements"' EXIT
 cat >"$ca"
 openssl x509 -noout -in "$ca" >/dev/null || die "invalid gateway CA certificate"
 chmod 644 "$ca"
@@ -58,6 +60,30 @@ jq '.permissions.deny |= map(select(. as $entry | [
   ] | index($entry) | not))' "$settings" >"$managed"
 chmod 644 "$managed"
 mv -f "$managed" "$settings"
+
+# Provisioning regenerates the agents' instruction files in the guest user's
+# home, so the namespace goes in the system-wide ones.
+instructions=$(
+    cat <<'EOF'
+Push to GitHub only branches named `task/VM-ID/NAME`, for example
+`git switch -c task/VM-ID/fix-login` and then `git push -u origin HEAD`. The
+GitHub gateway rejects other pushes with HTTP 403, as it does branch deletions
+and pushes to repositories the user has not granted; git does not show why. It
+also rejects GitHub writes such as creating a pull request, so tell the user
+which branch you pushed.
+EOF
+)
+instructions=${instructions//VM-ID/$1}
+printf '%s\n' "$instructions" >"$claude_md"
+cat >"$requirements" <<EOF
+# Written by setup-github-gateway.
+additional_developer_instructions = '''
+$instructions
+'''
+EOF
+chmod 644 "$claude_md" "$requirements"
+mv -f "$claude_md" /etc/claude-code/CLAUDE.md
+mv -f "$requirements" /etc/codex/requirements.toml
 
 rm -f "$guest_home/.codex/rules/no-push.rules"
 sudo -H -u "$SUDO_USER" git config --global credential.https://github.com.helper "!$guest_home/bin/github-gateway-credential"
