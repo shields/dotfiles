@@ -68,10 +68,10 @@ instructions=$(
     cat <<'EOF'
 Push to GitHub only branches named `task/VM-ID/NAME`, for example
 `git switch -c task/VM-ID/fix-login` and then `git push -u origin HEAD`. The
-GitHub gateway rejects other pushes with HTTP 403, as it does branch deletions
-and pushes to repositories the user has not granted push access to; git does
-not show why. It also rejects GitHub writes such as creating a pull request,
-so tell the user which branch you pushed.
+GitHub gateway rejects other pushes, branch deletions, and pushes to
+repositories the user has not granted push access to. It also rejects GitHub
+writes such as creating a pull request, so tell the user which branch you
+pushed.
 EOF
 )
 instructions=${instructions//VM-ID/$1}
