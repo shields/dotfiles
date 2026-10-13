@@ -6,9 +6,10 @@ import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import test from "node:test";
+import { gzipSync } from "node:zlib";
 import { AppAuth } from "./auth.ts";
 import { Gateway } from "./server.ts";
-import { State } from "./state.ts";
+import { State, type Instance } from "./state.ts";
 
 const idRef = (id: string): string => `refs/heads/task/${id}/one`;
 
@@ -26,6 +27,7 @@ function send(
   target: string,
   body: Buffer | Buffer[] = Buffer.alloc(0),
   host = "github.com",
+  headers: Record<string, string> = {},
 ): Promise<{ status: number; body: string }> {
   return new Promise((resolve, reject) => {
     const request = https.request(
@@ -41,6 +43,7 @@ function send(
           ...(Array.isArray(body) ? {} : { "content-length": body.length }),
           authorization: "Bearer guest-token",
           cookie: "session=guest",
+          ...headers,
         },
       },
       (response) => {
@@ -73,7 +76,22 @@ function send(
   });
 }
 
-void test("the HTTPS socket injects a repo token only after checking the full push and live grant", async (t) => {
+interface Forwarded {
+  target: string;
+  authorization: string | undefined;
+  cookie: string | undefined;
+  contentEncoding: string | undefined;
+  transferEncoding: string | undefined;
+  body: Buffer;
+}
+
+async function startGateway(): Promise<{
+  socket: string;
+  instance: Instance;
+  state: State;
+  incoming: Forwarded[];
+  stop: () => Promise<void>;
+}> {
   const root = mkdtempSync(path.join(tmpdir(), "vm-access-server-"));
   const certificate = path.join(root, "cert.pem");
   const key = path.join(root, "key.pem");
@@ -103,13 +121,7 @@ void test("the HTTPS socket injects a repo token only after checking the full pu
   const secretDirectory = path.join(root, "secrets");
   mkdirSync(secretDirectory);
   const auth = new AppAuth(secretDirectory);
-  const incoming: {
-    target: string;
-    authorization: string | undefined;
-    cookie: string | undefined;
-    transferEncoding: string | undefined;
-    body: Buffer;
-  }[] = [];
+  const incoming: Forwarded[] = [];
   const upstream = createServer((request, response) => {
     const chunks: Buffer[] = [];
     request.on("data", (chunk: Buffer) => {
@@ -120,6 +132,7 @@ void test("the HTTPS socket injects a repo token only after checking the full pu
         target: request.url ?? "",
         authorization: request.headers.authorization,
         cookie: request.headers.cookie,
+        contentEncoding: request.headers["content-encoding"],
         transferEncoding: request.headers["transfer-encoding"],
         body: Buffer.concat(chunks),
       });
@@ -164,9 +177,29 @@ void test("the HTTPS socket injects a repo token only after checking the full pu
     webUpstream: `http://127.0.0.1:${String(address.port)}`,
     apiUpstream: `http://127.0.0.1:${String(address.port)}`,
   });
-  const listeners = t.mock.method(https, "createServer");
+  const stop = async (): Promise<void> => {
+    await gateway.stop();
+    await new Promise<void>((resolve) => {
+      upstream.close(() => {
+        resolve();
+      });
+    });
+    state.close();
+    rmSync(root, { recursive: true, force: true });
+  };
   try {
     await gateway.start();
+  } catch (error) {
+    await stop();
+    throw error;
+  }
+  return { socket, instance, state, incoming, stop };
+}
+
+void test("the HTTPS socket injects a repo token only after checking the full push and live grant", async (t) => {
+  const listeners = t.mock.method(https, "createServer");
+  const { socket, instance, state, incoming, stop } = await startGateway();
+  try {
     const listener = listeners.mock.calls[0]?.result;
     assert.ok(listener);
     assert.equal(listener.requestTimeout, 3_600_000);
@@ -412,13 +445,103 @@ void test("the HTTPS socket injects a repo token only after checking the full pu
     assert.equal((await send(socket, "GET", "/shields/dotfiles")).status, 403);
     assert.equal(incoming.length, forwarded);
   } finally {
-    await gateway.stop();
-    await new Promise<void>((resolve) => {
-      upstream.close(() => {
-        resolve();
+    await stop();
+  }
+});
+
+void test("Content-Encoding reaches GitHub only on fetch bodies, and inspected bodies must be unencoded", async () => {
+  const { socket, instance, incoming, stop } = await startGateway();
+  try {
+    const negotiation = gzipSync(
+      Buffer.concat([packet(`want ${"1".repeat(40)}\n`), Buffer.from("0000")]),
+    );
+    assert.equal(
+      (
+        await send(
+          socket,
+          "POST",
+          "/shields/dotfiles.git/git-upload-pack",
+          negotiation,
+          "github.com",
+          { "content-encoding": "gzip" },
+        )
+      ).status,
+      200,
+    );
+    assert.equal(incoming.at(-1)?.contentEncoding, "gzip");
+    assert.deepEqual(incoming.at(-1)?.body, negotiation);
+    assert.equal(
+      (
+        await send(
+          socket,
+          "GET",
+          "/shields/dotfiles.git/info/refs?service=git-upload-pack",
+          Buffer.alloc(0),
+          "github.com",
+          { "content-encoding": "gzip" },
+        )
+      ).status,
+      200,
+    );
+    assert.equal(incoming.at(-1)?.contentEncoding, undefined);
+
+    const push = Buffer.concat([
+      packet(
+        `${"0".repeat(40)} ${"1".repeat(40)} ${idRef(instance.id)}\0report-status\n`,
+      ),
+      Buffer.from("0000PACK"),
+    ]);
+    const query = Buffer.from(
+      JSON.stringify({
+        query: '{ repository(owner: "shields", name: "dotfiles") { name } }',
+      }),
+    );
+    const forwarded = incoming.length;
+    for (const [host, target, body, encoding] of [
+      ["github.com", "/shields/dotfiles.git/git-receive-pack", push, "gzip"],
+      [
+        "github.com",
+        "/shields/dotfiles.git/git-receive-pack",
+        gzipSync(push),
+        "gzip",
+      ],
+      ["github.com", "/shields/dotfiles.git/git-receive-pack", push, ""],
+      ["api.github.com", "/graphql", query, "br"],
+      ["api.github.com", "/graphql", query, "identity, gzip"],
+    ] as const) {
+      const response = await send(socket, "POST", target, body, host, {
+        "content-encoding": encoding,
       });
-    });
-    state.close();
-    rmSync(root, { recursive: true, force: true });
+      assert.equal(response.status, 403, `${target} ${encoding}`);
+      assert.equal(
+        (JSON.parse(response.body) as { error: string }).error,
+        "encoded request bodies are unsupported",
+      );
+    }
+    assert.equal(incoming.length, forwarded);
+
+    for (const [host, target, body, encoding] of [
+      [
+        "github.com",
+        "/shields/dotfiles.git/git-receive-pack",
+        push,
+        "identity",
+      ],
+      ["api.github.com", "/graphql", query, "Identity"],
+    ] as const) {
+      assert.equal(
+        (
+          await send(socket, "POST", target, body, host, {
+            "content-encoding": encoding,
+          })
+        ).status,
+        200,
+        target,
+      );
+      assert.equal(incoming.at(-1)?.contentEncoding, undefined, target);
+      assert.deepEqual(incoming.at(-1)?.body, body, target);
+    }
+  } finally {
+    await stop();
   }
 });

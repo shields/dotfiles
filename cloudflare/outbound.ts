@@ -3,6 +3,7 @@ import {
   classify,
   parsePushCommands,
   PolicyError,
+  requireIdentityEncoding,
   type Access,
   type Classification,
 } from "../gateway/policy.ts";
@@ -51,6 +52,7 @@ async function bodyForPolicy(
   limit: number,
   instanceId?: string,
 ): Promise<Uint8Array> {
+  requireIdentityEncoding(request.headers.get("content-encoding"));
   if (!request.body) {
     return new Uint8Array();
   }
@@ -86,7 +88,11 @@ async function bodyForPolicy(
   }
 }
 
-function upstreamRequest(request: Request, token: string | null): Request {
+function upstreamRequest(
+  request: Request,
+  token: string | null,
+  forwardEncoding: boolean,
+): Request {
   const url = new URL(request.url);
   const headers = new Headers();
   for (const name of forwardedHeaders) {
@@ -94,6 +100,10 @@ function upstreamRequest(request: Request, token: string | null): Request {
     if (value !== null) {
       headers.set(name, value);
     }
+  }
+  const encoding = request.headers.get("content-encoding");
+  if (forwardEncoding && encoding !== null) {
+    headers.set("content-encoding", encoding);
   }
   if (token !== null) {
     headers.set(
@@ -178,6 +188,7 @@ export async function handleOutbound(
           classification.operation === "public.read"
           ? null
           : allowed.token,
+        classification.operation === "git.read" && request.method === "POST",
       ),
     );
     await authority.finish(

@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import { gzipSync } from "node:zlib";
 import { authorize, type Classification } from "../gateway/policy.ts";
 import { handleOutbound, type OutboundAuthority } from "./outbound.ts";
 
@@ -167,6 +168,99 @@ void test("a push probe followed by more data is denied before forwarding", asyn
     "deny:Git push has no ref updates",
     "finish:denied:null",
   ]);
+});
+
+void test("gzipped fetch negotiation reaches GitHub with its Content-Encoding", async () => {
+  const events: string[] = [];
+  const body = new Uint8Array(gzipSync(`0032want ${"1".repeat(40)}\n0000`));
+  let encoding: string | null = null;
+  let forwardedBody: Uint8Array | null = null;
+  const response = await handleOutbound(
+    new Request("https://github.com/shields/dotfiles.git/git-upload-pack", {
+      method: "POST",
+      body,
+      headers: { "content-encoding": "gzip" },
+    }),
+    instanceId,
+    authority(events),
+    async (request) => {
+      encoding = request.headers.get("content-encoding");
+      forwardedBody = new Uint8Array(await request.arrayBuffer());
+      return new Response("ok", { status: 200 });
+    },
+  );
+  assert.equal(response.status, 200, JSON.stringify(events));
+  assert.equal(encoding, "gzip");
+  assert.deepEqual(forwardedBody, body);
+  assert.deepEqual(events, ["allow:git.read", "finish:completed:200"]);
+});
+
+void test("inspected bodies must be unencoded", async () => {
+  const body = push(`refs/heads/task/${instanceId}/check`);
+  const query = JSON.stringify({
+    query: '{ repository(owner: "shields", name: "dotfiles") { name } }',
+  });
+  for (const [url, payload, encoding] of [
+    ["https://github.com/shields/dotfiles.git/git-receive-pack", body, "gzip"],
+    [
+      "https://github.com/shields/dotfiles.git/git-receive-pack",
+      new Uint8Array(gzipSync(body)),
+      "gzip",
+    ],
+    ["https://github.com/shields/dotfiles.git/git-receive-pack", body, ""],
+    ["https://api.github.com/graphql", query, "br"],
+    ["https://api.github.com/graphql", query, "identity, gzip"],
+  ] as const) {
+    const events: string[] = [];
+    const response = await handleOutbound(
+      new Request(url, {
+        method: "POST",
+        body: payload,
+        headers: { "content-encoding": encoding },
+      }),
+      instanceId,
+      authority(events),
+      () => {
+        throw new Error("encoded body reached GitHub");
+      },
+    );
+    assert.equal(response.status, 403, `${url} ${encoding}`);
+    assert.deepEqual(events, [
+      "deny:encoded request bodies are unsupported",
+      "finish:denied:null",
+    ]);
+  }
+
+  for (const [url, payload, encoding] of [
+    [
+      "https://github.com/shields/dotfiles.git/git-receive-pack",
+      body,
+      "identity",
+    ],
+    ["https://api.github.com/graphql", query, "Identity"],
+  ] as const) {
+    const response = await handleOutbound(
+      new Request(url, {
+        method: "POST",
+        body: payload,
+        headers: { "content-encoding": encoding },
+      }),
+      instanceId,
+      authority([]),
+      async (request) => {
+        assert.equal(request.headers.get("content-encoding"), null, url);
+        assert.deepEqual(
+          new Uint8Array(await request.arrayBuffer()),
+          typeof payload === "string"
+            ? new TextEncoder().encode(payload)
+            : payload,
+          url,
+        );
+        return new Response("ok", { status: 200 });
+      },
+    );
+    assert.equal(response.status, 200, url);
+  }
 });
 
 void test("unsupported writes and foreign refs are denied before forwarding", async () => {

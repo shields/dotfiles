@@ -13,6 +13,7 @@ import {
   classify,
   parsePushCommands,
   PolicyError,
+  requireIdentityEncoding,
   type Classification,
 } from "./policy.ts";
 import { State } from "./state.ts";
@@ -61,6 +62,7 @@ async function readBody(
   limit: number,
   pushInstanceId?: string,
 ): Promise<RequestBody> {
+  requireIdentityEncoding(request.headers["content-encoding"]);
   const remaining = bodyIterator(request);
   let buffered = Buffer.alloc(0);
   for (;;) {
@@ -104,6 +106,7 @@ function requestHeaders(
   headers: IncomingHttpHeaders,
   token: string | null,
   host: string,
+  forwardEncoding: boolean,
 ): http.OutgoingHttpHeaders {
   const outgoing: http.OutgoingHttpHeaders = { host };
   for (const name of forwardedHeaders) {
@@ -111,6 +114,9 @@ function requestHeaders(
     if (typeof value === "string") {
       outgoing[name] = value;
     }
+  }
+  if (forwardEncoding && headers["content-encoding"] !== undefined) {
+    outgoing["content-encoding"] = headers["content-encoding"];
   }
   if (token) {
     outgoing.authorization =
@@ -377,7 +383,12 @@ export class Gateway {
         response,
         host,
         target,
-        token,
+        requestHeaders(
+          request.headers,
+          token,
+          host,
+          classification.operation === "git.read" && method === "POST",
+        ),
         body,
         requestId,
         started,
@@ -438,7 +449,7 @@ export class Gateway {
     response: ServerResponse,
     host: string,
     target: string,
-    token: string | null,
+    headers: http.OutgoingHttpHeaders,
     body: RequestBody,
     requestId: string,
     started: number,
@@ -467,7 +478,7 @@ export class Gateway {
     const transport = upstreamUrl.protocol === "https:" ? https : http;
     const upstream = transport.request(upstreamUrl, {
       method: incoming.method,
-      headers: requestHeaders(incoming.headers, token, host),
+      headers,
       timeout: 60_000,
     });
     let completed = false;

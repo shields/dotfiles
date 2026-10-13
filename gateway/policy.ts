@@ -74,6 +74,19 @@ function isPushProbe(body: Uint8Array): boolean {
   return body.length === 4 && decoder.decode(body) === "0000";
 }
 
+export function requireIdentityEncoding(
+  contentEncoding: string | null | undefined,
+): void {
+  // GitHub acts on the decoded body, not the bytes the gateway inspects.
+  if (
+    contentEncoding !== undefined &&
+    contentEncoding !== null &&
+    contentEncoding.toLowerCase() !== "identity"
+  ) {
+    throw new PolicyError("encoded request bodies are unsupported");
+  }
+}
+
 export function parsePushCommands(
   body: Uint8Array,
   instanceId: string,
