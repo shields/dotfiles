@@ -315,6 +315,21 @@ void test("the HTTPS socket injects a repo token only after checking the full pu
     assert.equal(incoming[5].authorization, incoming[4].authorization);
     assert.equal(incoming[5].body.length, large.length);
     assert.ok(incoming[5].body.equals(large));
+    const shallow = Buffer.concat([
+      packet(`shallow ${"2".repeat(40)}\n`),
+      good,
+    ]);
+    assert.equal(
+      (
+        await send(socket, "POST", "/shields/dotfiles.git/git-receive-pack", [
+          shallow.subarray(0, 20),
+          shallow.subarray(20),
+        ])
+      ).status,
+      200,
+    );
+    assert.equal(incoming[6]?.authorization, incoming[4].authorization);
+    assert.deepEqual(incoming[6].body, shallow);
     assert.equal(
       (
         await send(
@@ -335,7 +350,7 @@ void test("the HTTPS socket injects a repo token only after checking the full pu
       ).status,
       403,
     );
-    assert.equal(incoming.length, 6);
+    assert.equal(incoming.length, 7);
     state.update("lima:work", 1, {}, "tester");
     assert.equal(
       (await send(socket, "POST", "/graphql", discovery, "api.github.com"))
@@ -352,10 +367,10 @@ void test("the HTTPS socket injects a repo token only after checking the full pu
       ).status,
       200,
     );
-    assert.equal(incoming.length, 7);
-    assert.equal(incoming[6]?.authorization, undefined);
+    assert.equal(incoming.length, 8);
+    assert.equal(incoming[7]?.authorization, undefined);
     const logs = state.logs(instance.id);
-    assert.equal(logs.length, 12);
+    assert.equal(logs.length, 13);
     assert.equal(logs[0]?.revision, 2);
     assert.equal(logs[0].allowed, true);
     assert.equal(logs[0].reason, "anonymous read");

@@ -5,6 +5,7 @@ import {
   classify,
   graphqlRepository,
   parsePushCommands,
+  type Classification,
 } from "./policy.ts";
 
 const id = "01234567-89ab-4cde-8fab-0123456789ab";
@@ -114,6 +115,74 @@ void test("a lone flush packet is classified as a push probe", () => {
         id,
       ),
     /no ref updates/,
+  );
+});
+
+void test("a push from a shallow clone lists its shallow commits before the commands", () => {
+  const shallow = `shallow ${"3".repeat(40)}\n`;
+  const command = `${old} ${next} refs/heads/task/${id}/new\0report-status\n`;
+  const receivePack = (body: Buffer): Classification =>
+    classify(
+      {
+        host: "github.com",
+        method: "POST",
+        target: "/shields/dotfiles.git/git-receive-pack",
+        body,
+      },
+      id,
+    );
+  assert.deepEqual(receivePack(push(shallow, command)), {
+    repository: "shields/dotfiles",
+    operation: "git.push",
+    refs: [`refs/heads/task/${id}/new`],
+  });
+  const sha256 = (digit: string): string => digit.repeat(64);
+  assert.deepEqual(
+    parsePushCommands(
+      push(
+        `shallow ${sha256("3")}\n`,
+        `shallow ${sha256("4")}`,
+        `${sha256("0")} ${sha256("2")} refs/heads/task/${id}/new\0report-status\n`,
+        `${sha256("1")} ${sha256("2")} refs/heads/task/${id}/other\n`,
+      ),
+      id,
+    )?.refs,
+    [`refs/heads/task/${id}/new`, `refs/heads/task/${id}/other`],
+  );
+  assert.equal(parsePushCommands(packet(shallow), id), null);
+  assert.throws(() => receivePack(packet(shallow)), /incomplete/);
+  assert.throws(() => receivePack(push(shallow)), /no ref updates/);
+  assert.throws(
+    () => receivePack(push(shallow, `${old} ${next} refs/heads/main\n`)),
+    /outside this VM/,
+  );
+  assert.throws(
+    () =>
+      receivePack(
+        push(
+          shallow,
+          `${old} ${next} refs/heads/task/${id}/new\0push-options\n`,
+        ),
+      ),
+    /options/,
+  );
+  for (const line of [
+    `shallow ${"3".repeat(40)}\0report-status\n`,
+    `shallow ${"3".repeat(39)}\n`,
+    `shallow ${"3".repeat(41)}\n`,
+    `shallow ${"A".repeat(40)}\n`,
+    `shallow  ${"3".repeat(40)}\n`,
+    `shallow ${"3".repeat(40)}\n\n`,
+  ]) {
+    assert.throws(
+      () => receivePack(push(line, command)),
+      /unsupported Git push command/,
+      JSON.stringify(line),
+    );
+  }
+  assert.throws(
+    () => receivePack(push(command, shallow)),
+    /unsupported Git push command/,
   );
 });
 

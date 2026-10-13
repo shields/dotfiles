@@ -352,8 +352,9 @@ OWNER/REPO`, which shows a device code and authorization URL on the Mac:
 - In the VM, `gh api repos/OWNER/REPO`, `gh run list`, `gh run view --log` and
   `git pull` work, and `codex debug prompt-input hi` shows the `task/VM-ID/`
   instructions. A push to `task/VM-ID/check` succeeds, including a forced
-  update and a push of more than 1 MiB. A push to `main`, a branch deletion, a
-  PR write, and a read of an ungranted private repository fail.
+  update, a push of more than 1 MiB and a push from a `--depth 1` clone. A push
+  to `main`, a branch deletion, a PR write, and a read of an ungranted private
+  repository fail.
   `vm-access logs lima:t1` on the Mac records each decision.
 - `limavm github t1 OTHER/REPO` adds a grant while the VM runs; revoking it with
   `vm-access revoke lima:t1 OTHER/REPO` takes effect on the next request.

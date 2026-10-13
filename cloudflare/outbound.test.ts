@@ -38,19 +38,16 @@ function authority(events: string[]): OutboundAuthority {
   };
 }
 
-function push(destination: string): Uint8Array {
-  const line = `${"1".repeat(40)} ${"2".repeat(40)} ${destination}\0report-status\n`;
+function push(destination: string, ...shallow: string[]): Uint8Array {
   const encoder = new TextEncoder();
-  const packet = encoder.encode(line);
-  const prefix = encoder.encode(
-    (packet.length + 4).toString(16).padStart(4, "0"),
+  const packets = [
+    ...shallow.map((oid) => `shallow ${oid}\n`),
+    `${"1".repeat(40)} ${"2".repeat(40)} ${destination}\0report-status\n`,
+  ].map(
+    (line) =>
+      `${(encoder.encode(line).length + 4).toString(16).padStart(4, "0")}${line}`,
   );
-  const suffix = encoder.encode("0000PACK");
-  const body = new Uint8Array(prefix.length + packet.length + suffix.length);
-  body.set(prefix);
-  body.set(packet, prefix.length);
-  body.set(suffix, prefix.length + packet.length);
-  return body;
+  return encoder.encode(`${packets.join("")}0000PACK`);
 }
 
 function streamedPush(...chunks: Uint8Array[]): Request {
@@ -102,6 +99,7 @@ void test("GitHub reads inject a token without forwarding guest credentials", as
 void test("task pushes and push probes are forwarded with the repository token", async () => {
   for (const body of [
     push(`refs/heads/task/${instanceId}/check`),
+    push(`refs/heads/task/${instanceId}/check`, "3".repeat(40), "4".repeat(40)),
     new TextEncoder().encode("0000"),
   ]) {
     const events: string[] = [];
@@ -132,22 +130,26 @@ void test("task pushes and push probes are forwarded with the repository token",
 });
 
 void test("a streamed push beyond the inspection limit is forwarded whole", async () => {
-  const commands = push(`refs/heads/task/${instanceId}/check`);
-  const body = new Uint8Array(commands.length + 2 * 1_048_576);
-  body.set(commands);
-  let forwarded = new Uint8Array();
-  const response = await handleOutbound(
-    streamedPush(body.subarray(0, 20), body.subarray(20)),
-    instanceId,
-    authority([]),
-    async (request) => {
-      forwarded = new Uint8Array(await request.arrayBuffer());
-      return new Response(null, { status: 200 });
-    },
-  );
-  assert.equal(response.status, 200);
-  assert.equal(forwarded.length, body.length);
-  assert.ok(forwarded.every((byte, index) => byte === body[index]));
+  for (const commands of [
+    push(`refs/heads/task/${instanceId}/check`),
+    push(`refs/heads/task/${instanceId}/check`, "3".repeat(40)),
+  ]) {
+    const body = new Uint8Array(commands.length + 2 * 1_048_576);
+    body.set(commands);
+    let forwarded = new Uint8Array();
+    const response = await handleOutbound(
+      streamedPush(body.subarray(0, 20), body.subarray(20)),
+      instanceId,
+      authority([]),
+      async (request) => {
+        forwarded = new Uint8Array(await request.arrayBuffer());
+        return new Response(null, { status: 200 });
+      },
+    );
+    assert.equal(response.status, 200);
+    assert.equal(forwarded.length, body.length);
+    assert.ok(forwarded.every((byte, index) => byte === body[index]));
+  }
 });
 
 void test("a push probe followed by more data is denied before forwarding", async () => {

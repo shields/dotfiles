@@ -45,6 +45,7 @@ export class PolicyError extends Error {
 
 const repositoryName = /^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/;
 const hexSha = /^(?:[0-9a-f]{40}|[0-9a-f]{64})$/;
+const shallowLine = /^shallow (?:[0-9a-f]{40}|[0-9a-f]{64})\n?$/;
 const gitRoute =
   /^\/([A-Za-z0-9_.-]+)\/([A-Za-z0-9_.-]+?)(?:\.git)?\/(info\/refs|git-upload-pack|git-receive-pack)$/;
 const webRoute = /^\/([A-Za-z0-9_.-]+)\/([A-Za-z0-9_.-]+)(?:\/|$)/;
@@ -116,6 +117,12 @@ export function parsePushCommands(
       return null;
     }
     const line = decoder.decode(body.subarray(offset + 4, offset + size));
+    // A push from a shallow clone lists its shallow commits before the first
+    // command.
+    if (first && shallowLine.test(line)) {
+      offset += size;
+      continue;
+    }
     const [command, capabilities, ...rest] = line.split("\0");
     if (
       first &&
