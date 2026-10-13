@@ -14,6 +14,7 @@ import {
   parsePushCommands,
   PolicyError,
   requireIdentityEncoding,
+  rewriteLinks,
   type Classification,
 } from "./policy.ts";
 import { State } from "./state.ts";
@@ -129,11 +130,15 @@ function requestHeaders(
 
 function copyResponseHeaders(
   headers: IncomingHttpHeaders,
+  classification: Classification,
 ): http.OutgoingHttpHeaders {
   const outgoing: http.OutgoingHttpHeaders = {};
   for (const [name, value] of Object.entries(headers)) {
     if (!responseBlocked.has(name) && value !== undefined) {
-      outgoing[name] = value;
+      outgoing[name] =
+        name === "link" && typeof value === "string"
+          ? rewriteLinks(value, classification)
+          : value;
     }
   }
   return outgoing;
@@ -389,6 +394,7 @@ export class Gateway {
           host,
           classification.operation === "git.read" && method === "POST",
         ),
+        classification,
         body,
         requestId,
         started,
@@ -450,6 +456,7 @@ export class Gateway {
     host: string,
     target: string,
     headers: http.OutgoingHttpHeaders,
+    classification: Classification,
     body: RequestBody,
     requestId: string,
     started: number,
@@ -494,7 +501,7 @@ export class Gateway {
         const status = upstreamResponse.statusCode ?? 502;
         response.writeHead(
           status,
-          copyResponseHeaders(upstreamResponse.headers),
+          copyResponseHeaders(upstreamResponse.headers, classification),
         );
         upstreamResponse.pipe(response);
         response.once("finish", () => {

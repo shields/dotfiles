@@ -5,6 +5,7 @@ import {
   classify,
   graphqlRepository,
   parsePushCommands,
+  rewriteLinks,
   type Classification,
 } from "./policy.ts";
 
@@ -346,6 +347,67 @@ void test("REST reads can be anonymous and API writes have no classification", (
   assert.doesNotThrow(() => {
     authorize({ read: true, pushTaskBranches: true }, "git.push");
   });
+});
+
+void test("REST pagination links name the requested repository instead of its ID", () => {
+  const read = classify(
+    {
+      host: "api.github.com",
+      method: "GET",
+      target: "/repos/Cli/CLI/issues?per_page=1",
+    },
+    id,
+  );
+  const link = (repository: string): string =>
+    [
+      `<https://api.github.com/${repository}/issues?per_page=1&after=Y3Vy%3D&page=2>; rel="next"`,
+      `<https://api.github.com/${repository}/issues?per_page=1&page=1&before=Y3Vy%3D>; rel="prev"`,
+      `<https://api.github.com/${repository}?page=3>; rel="last"`,
+      `<https://api.github.com/${repository}>; rel="first"`,
+    ].join(", ");
+  const rewritten = rewriteLinks(link("repositories/212613049"), read);
+  assert.equal(rewritten, link("repos/cli/cli"));
+  const targets = [
+    ...rewritten.matchAll(/<https:\/\/api\.github\.com([^>]+)>/g),
+  ].map((match) => match[1] ?? "");
+  assert.equal(targets.length, 4);
+  for (const target of targets) {
+    assert.deepEqual(
+      classify({ host: "api.github.com", method: "GET", target }, id),
+      read,
+    );
+  }
+  for (const unchanged of [
+    '<https://api.github.com/repositories?since=369>; rel="next"',
+    '<https://api.github.com/repositories/12x/issues?page=2>; rel="next"',
+    '<https://uploads.github.com/repositories/1/issues?page=2>; rel="next"',
+    '<https://api.github.com/user/repos?page=2>; rel="next"',
+  ]) {
+    assert.equal(rewriteLinks(unchanged, read), unchanged);
+  }
+  for (const other of [
+    { repository: "cli/cli", operation: "identity.read", refs: [] },
+    { repository: "cli/cli", operation: "graphql.read", refs: [] },
+    { repository: "cli/cli", operation: "public.read", refs: [] },
+    { repository: null, operation: "api.read", refs: [] },
+  ] satisfies Classification[]) {
+    assert.equal(
+      rewriteLinks(link("repositories/212613049"), other),
+      link("repositories/212613049"),
+    );
+  }
+  assert.throws(
+    () =>
+      classify(
+        {
+          host: "api.github.com",
+          method: "GET",
+          target: "/repositories/212613049/issues?page=2",
+        },
+        id,
+      ),
+    /unsupported/,
+  );
 });
 
 void test("anonymous access covers repository reads without granting writes or identity", () => {

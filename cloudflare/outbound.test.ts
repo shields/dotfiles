@@ -515,3 +515,81 @@ void test("anonymous access does not allow push discovery, pushes, or API writes
     assert.equal(response.status, 403, request.url);
   }
 });
+
+void test("pagination links name the repository so later pages are checked like the first", async () => {
+  const link = (repository: string): string =>
+    `<https://api.github.com/${repository}/actions/runs?per_page=1&page=2>; rel="next", <https://api.github.com/${repository}/actions/runs?per_page=1&page=9>; rel="last"`;
+  for (const [requested, repository, authorization] of [
+    ["Shields/Dotfiles", "shields/dotfiles", "Bearer upstream-secret"],
+    ["octocat/Hello-World", "octocat/hello-world", null],
+  ] as const) {
+    const events: string[] = [];
+    const forwarded: { url: string; authorization: string | null }[] = [];
+    const get = (url: string): Promise<Response> =>
+      handleOutbound(
+        new Request(url),
+        instanceId,
+        authority(events),
+        (request) => {
+          forwarded.push({
+            url: request.url,
+            authorization: request.headers.get("authorization"),
+          });
+          return Promise.resolve(
+            new Response("[]", { headers: { link: link("repositories/42") } }),
+          );
+        },
+      );
+    const first = await get(
+      `https://api.github.com/repos/${requested}/actions/runs?per_page=1`,
+    );
+    assert.equal(first.headers.get("link"), link(`repos/${repository}`));
+    const next = /<([^>]+)>; rel="next"/.exec(
+      first.headers.get("link") ?? "",
+    )?.[1];
+    assert.equal(
+      next,
+      `https://api.github.com/repos/${repository}/actions/runs?per_page=1&page=2`,
+    );
+    assert.equal((await get(next)).status, 200);
+    assert.deepEqual(forwarded, [
+      {
+        url: `https://api.github.com/repos/${requested}/actions/runs?per_page=1`,
+        authorization,
+      },
+      { url: next, authorization },
+    ]);
+    assert.deepEqual(events, [
+      "allow:api.read",
+      "finish:completed:200",
+      "allow:api.read",
+      "finish:completed:200",
+    ]);
+  }
+
+  const moved = await handleOutbound(
+    new Request("https://api.github.com/repos/octocat/old-name/pulls"),
+    instanceId,
+    authority([]),
+    () =>
+      Promise.resolve(
+        new Response(null, {
+          status: 301,
+          headers: { location: "https://api.github.com/repositories/42/pulls" },
+        }),
+      ),
+  );
+  assert.equal(
+    moved.headers.get("location"),
+    "https://api.github.com/repositories/42/pulls",
+  );
+  const followed = await handleOutbound(
+    new Request("https://api.github.com/repositories/42/pulls"),
+    instanceId,
+    authority([]),
+    () => {
+      throw new Error("a repository ID request reached GitHub");
+    },
+  );
+  assert.equal(followed.status, 403);
+});

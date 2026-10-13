@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
-import { createServer } from "node:http";
+import { createServer, type IncomingHttpHeaders } from "node:http";
 import https from "node:https";
 import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -12,6 +12,8 @@ import { Gateway } from "./server.ts";
 import { State, type Instance } from "./state.ts";
 
 const idRef = (id: string): string => `refs/heads/task/${id}/one`;
+const pages = (repository: string): string =>
+  `<https://api.github.com/${repository}/pulls?page=2>; rel="next", <https://api.github.com/${repository}/pulls?page=3>; rel="last"`;
 
 function packet(line: string): Buffer {
   const body = Buffer.from(line);
@@ -28,7 +30,7 @@ function send(
   body: Buffer | Buffer[] = Buffer.alloc(0),
   host = "github.com",
   headers: Record<string, string> = {},
-): Promise<{ status: number; body: string }> {
+): Promise<{ status: number; body: string; headers: IncomingHttpHeaders }> {
   return new Promise((resolve, reject) => {
     const request = https.request(
       {
@@ -55,6 +57,7 @@ function send(
           resolve({
             status: response.statusCode ?? 0,
             body: Buffer.concat(chunks).toString(),
+            headers: response.headers,
           });
         });
       },
@@ -137,7 +140,9 @@ async function startGateway(): Promise<{
         body: Buffer.concat(chunks),
       });
       response
-        .writeHead(request.url?.includes("/shields/private") ? 404 : 200)
+        .writeHead(request.url?.includes("/shields/private") ? 404 : 200, {
+          link: pages("repositories/1296269"),
+        })
         .end("ok");
     });
   });
@@ -245,11 +250,15 @@ void test("the HTTPS socket injects a repo token only after checking the full pu
       200,
     );
     assert.deepEqual(incoming[1]?.body, good);
-    assert.equal(
-      (await send(socket, "GET", "/user", Buffer.alloc(0), "api.github.com"))
-        .status,
-      200,
+    const identity = await send(
+      socket,
+      "GET",
+      "/user",
+      Buffer.alloc(0),
+      "api.github.com",
     );
+    assert.equal(identity.status, 200);
+    assert.equal(identity.headers.link, pages("repositories/1296269"));
     assert.equal(incoming[2]?.authorization, "Bearer ghu_secret");
     const discovery = Buffer.from(
       JSON.stringify({
@@ -351,6 +360,25 @@ void test("the HTTPS socket injects a repo token only after checking the full pu
       403,
     );
     assert.equal(incoming.length, 7);
+    const listed = await send(
+      socket,
+      "GET",
+      "/repos/Shields/Dotfiles/pulls",
+      Buffer.alloc(0),
+      "api.github.com",
+    );
+    assert.equal(listed.headers.link, pages("repos/shields/dotfiles"));
+    const next = /<https:\/\/api\.github\.com([^>]+)>; rel="next"/.exec(
+      listed.headers.link,
+    )?.[1];
+    assert.equal(next, "/repos/shields/dotfiles/pulls?page=2");
+    assert.equal(
+      (await send(socket, "GET", next, Buffer.alloc(0), "api.github.com"))
+        .status,
+      200,
+    );
+    assert.equal(incoming[8]?.target, next);
+    assert.equal(incoming[8].authorization, "Bearer ghu_secret");
     state.update("lima:work", 1, {}, "tester");
     assert.equal(
       (await send(socket, "POST", "/graphql", discovery, "api.github.com"))
@@ -367,10 +395,10 @@ void test("the HTTPS socket injects a repo token only after checking the full pu
       ).status,
       200,
     );
-    assert.equal(incoming.length, 8);
-    assert.equal(incoming[7]?.authorization, undefined);
+    assert.equal(incoming.length, 10);
+    assert.equal(incoming[9]?.authorization, undefined);
     const logs = state.logs(instance.id);
-    assert.equal(logs.length, 13);
+    assert.equal(logs.length, 15);
     assert.equal(logs[0]?.revision, 2);
     assert.equal(logs[0].allowed, true);
     assert.equal(logs[0].reason, "anonymous read");
@@ -429,6 +457,15 @@ void test("the HTTPS socket injects a repo token only after checking the full pu
         assert.equal(incoming.at(-1)?.authorization, undefined, target);
         assert.equal(incoming.at(-1)?.cookie, undefined, target);
         assert.deepEqual(incoming.at(-1)?.body, body, target);
+        assert.equal(
+          response.headers.link,
+          pages(
+            host === "api.github.com"
+              ? `repos/${repository.toLowerCase()}`
+              : "repositories/1296269",
+          ),
+          target,
+        );
       }
     }
     const forwarded = incoming.length;

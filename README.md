@@ -189,7 +189,11 @@ repository because GitHub requires authentication. The `/user` identity read
 uses a granted repository token. GitHub API writes, PR creation and
 updates, cross-repository GraphQL queries, search queries and other unlisted
 operations are denied. `gh pr list` with search filters may therefore fail;
-basic repository and PR reads work through the supported routes. There is no
+basic repository and PR reads work through the supported routes. GitHub's REST
+pagination links name the repository by numeric ID; the gateway rewrites them to
+`/repos/OWNER/REPO`, so each page is checked like the first. Other requests by
+repository ID are denied, including GitHub's redirect from a renamed or
+transferred repository's old name, so use its current name. There is no
 approval queue.
 
 The version-controlled profiles in `.config/vm-access/profiles.yaml` define

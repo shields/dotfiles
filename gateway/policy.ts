@@ -50,6 +50,8 @@ const gitRoute =
   /^\/([A-Za-z0-9_.-]+)\/([A-Za-z0-9_.-]+?)(?:\.git)?\/(info\/refs|git-upload-pack|git-receive-pack)$/;
 const webRoute = /^\/([A-Za-z0-9_.-]+)\/([A-Za-z0-9_.-]+)(?:\/|$)/;
 const restRoute = /^\/repos\/([A-Za-z0-9_.-]+)\/([A-Za-z0-9_.-]+)(?:\/|$)/;
+const repositoryIdLink =
+  /<https:\/\/api\.github\.com\/repositories\/\d+(?=[/?>])/g;
 const decoder = new TextDecoder();
 
 export function normalizeRepository(repository: string): string {
@@ -397,6 +399,25 @@ export function classify(
     };
   }
   throw new PolicyError("unsupported GitHub API operation");
+}
+
+// GitHub's pagination links address the repository by ID, which classify
+// rejects. Location stays as is: GitHub redirects a renamed repository's old
+// name to its ID, so rewriting a redirect back to the requested name loops.
+export function rewriteLinks(
+  link: string,
+  classification: Classification,
+): string {
+  if (
+    classification.operation !== "api.read" ||
+    classification.repository === null
+  ) {
+    return link;
+  }
+  return link.replaceAll(
+    repositoryIdLink,
+    `<https://api.github.com/repos/${classification.repository}`,
+  );
 }
 
 export function authorize(grant: Grant | null, operation: Operation): Access {

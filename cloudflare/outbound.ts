@@ -4,6 +4,7 @@ import {
   parsePushCommands,
   PolicyError,
   requireIdentityEncoding,
+  rewriteLinks,
   type Access,
   type Classification,
 } from "../gateway/policy.ts";
@@ -116,11 +117,17 @@ function upstreamRequest(
   return new Request(request, { headers, redirect: "manual" });
 }
 
-function downstreamResponse(response: Response): Response {
+function downstreamResponse(
+  response: Response,
+  classification: Classification,
+): Response {
   const headers = new Headers();
   for (const [name, value] of response.headers) {
     if (!blockedResponseHeaders.has(name)) {
-      headers.set(name, value);
+      headers.set(
+        name,
+        name === "link" ? rewriteLinks(value, classification) : value,
+      );
     }
   }
   return new Response(response.body, {
@@ -197,7 +204,7 @@ export async function handleOutbound(
       Date.now() - started,
       "completed",
     );
-    return downstreamResponse(response);
+    return downstreamResponse(response, classification);
   } catch (error) {
     const reason =
       error instanceof PolicyError ? error.message : "gateway request failed";
