@@ -1,10 +1,12 @@
 import {
   authorize,
   classify,
+  denial,
   parsePushCommands,
   PolicyError,
   requireIdentityEncoding,
   rewriteLinks,
+  PushDenied,
   type Access,
   type Classification,
 } from "../gateway/policy.ts";
@@ -85,6 +87,30 @@ async function bodyForPolicy(
   } finally {
     void reader.cancel().catch((error: unknown) => {
       console.error("vm-access: inspection stream cancellation failed", error);
+    });
+  }
+}
+
+async function drained(request: Request, limit: number): Promise<boolean> {
+  const reader = request.body?.getReader();
+  if (!reader) {
+    return true;
+  }
+  let length = 0;
+  try {
+    for (;;) {
+      const { done, value } = await reader.read();
+      if (done) {
+        return true;
+      }
+      length += value.length;
+      if (length > limit) {
+        return false;
+      }
+    }
+  } finally {
+    void reader.cancel().catch((error: unknown) => {
+      console.error("vm-access: denied body cancellation failed", error);
     });
   }
 }
@@ -208,6 +234,22 @@ export async function handleOutbound(
   } catch (error) {
     const reason =
       error instanceof PolicyError ? error.message : "gateway request failed";
+    const respond = (
+      status: number,
+      message: string,
+      id: string | null,
+    ): Response => {
+      const { contentType, body } = denial(
+        url.hostname,
+        url.pathname,
+        message,
+        id,
+      );
+      return new Response(body, {
+        status,
+        headers: { "content-type": contentType },
+      });
+    };
     try {
       if (requestId === null) {
         requestId = await authority.deny(instanceId, classification, reason);
@@ -221,14 +263,23 @@ export async function handleOutbound(
         );
       }
     } catch {
-      return Response.json(
-        { error: "gateway audit unavailable" },
-        { status: 503 },
-      );
+      return respond(503, "gateway audit unavailable", null);
     }
-    return Response.json(
-      { error: reason, request_id: requestId },
-      { status: error instanceof PolicyError ? 403 : 503 },
-    );
+    if (
+      // git keeps sending after a 200 and shows a transport error, not these
+      // ref statuses, unless the whole body is read.
+      error instanceof PushDenied &&
+      error.report !== null &&
+      (await drained(request, 67_108_864).catch(() => false))
+    ) {
+      return new Response(error.report, {
+        status: 200,
+        headers: {
+          "content-type": "application/x-git-receive-pack-result",
+          "cache-control": "no-cache",
+        },
+      });
+    }
+    return respond(error instanceof PolicyError ? 403 : 503, reason, requestId);
   }
 }

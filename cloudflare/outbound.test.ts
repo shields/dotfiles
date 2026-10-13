@@ -38,11 +38,17 @@ function authority(events: string[]): OutboundAuthority {
   };
 }
 
-function push(destination: string, ...shallow: string[]): Uint8Array {
+function push(
+  destination: string,
+  {
+    capabilities = "report-status",
+    shallow = [],
+  }: { capabilities?: string; shallow?: string[] } = {},
+): Uint8Array {
   const encoder = new TextEncoder();
   const packets = [
     ...shallow.map((oid) => `shallow ${oid}\n`),
-    `${"1".repeat(40)} ${"2".repeat(40)} ${destination}\0report-status\n`,
+    `${"1".repeat(40)} ${"2".repeat(40)} ${destination}\0${capabilities}\n`,
   ].map(
     (line) =>
       `${(encoder.encode(line).length + 4).toString(16).padStart(4, "0")}${line}`,
@@ -99,7 +105,9 @@ void test("GitHub reads inject a token without forwarding guest credentials", as
 void test("task pushes and push probes are forwarded with the repository token", async () => {
   for (const body of [
     push(`refs/heads/task/${instanceId}/check`),
-    push(`refs/heads/task/${instanceId}/check`, "3".repeat(40), "4".repeat(40)),
+    push(`refs/heads/task/${instanceId}/check`, {
+      shallow: ["3".repeat(40), "4".repeat(40)],
+    }),
     new TextEncoder().encode("0000"),
   ]) {
     const events: string[] = [];
@@ -132,7 +140,7 @@ void test("task pushes and push probes are forwarded with the repository token",
 void test("a streamed push beyond the inspection limit is forwarded whole", async () => {
   for (const commands of [
     push(`refs/heads/task/${instanceId}/check`),
-    push(`refs/heads/task/${instanceId}/check`, "3".repeat(40)),
+    push(`refs/heads/task/${instanceId}/check`, { shallow: ["3".repeat(40)] }),
   ]) {
     const body = new Uint8Array(commands.length + 2 * 1_048_576);
     body.set(commands);
@@ -266,20 +274,58 @@ void test("inspected bodies must be unencoded", async () => {
 });
 
 void test("unsupported writes and foreign refs are denied before forwarding", async () => {
-  for (const request of [
-    new Request("https://api.github.com/repos/shields/dotfiles/pulls", {
-      method: "POST",
-      body: "{}",
-    }),
-    new Request("https://github.com/shields/dotfiles.git/git-receive-pack", {
-      method: "POST",
-      body: push("refs/heads/main"),
-    }),
-    new Request("https://github.com/shields/dotfiles.git/git-receive-pack", {
-      method: "POST",
-      body: "0000PACK",
-    }),
-  ]) {
+  const pushed = push("refs/heads/main");
+  let drained = 0;
+  for (const [request, status, type, body] of [
+    [
+      new Request("https://api.github.com/repos/shields/dotfiles/pulls", {
+        method: "POST",
+        body: "{}",
+      }),
+      403,
+      "application/json",
+      '{"message":"unsupported GitHub API operation","request_id":"request-1"}',
+    ],
+    [
+      new Request("https://github.com/shields/dotfiles.git/git-receive-pack", {
+        method: "POST",
+        body: new ReadableStream<Uint8Array>({
+          pull(controller) {
+            if (drained === 0) {
+              controller.enqueue(pushed);
+            } else if (drained <= 4) {
+              controller.enqueue(new Uint8Array(1_048_576));
+            } else {
+              controller.close();
+            }
+            drained += 1;
+          },
+        }),
+        duplex: "half",
+      } as RequestInit),
+      200,
+      "application/x-git-receive-pack-result",
+      "000eunpack ok\n004cng refs/heads/main push destination is outside this VM's task namespace\n0000",
+    ],
+    [
+      new Request("https://github.com/shields/dotfiles.git/git-receive-pack", {
+        method: "POST",
+        body: push("refs/heads/main", { capabilities: "quiet" }),
+      }),
+      403,
+      "text/plain; charset=utf-8",
+      "push destination is outside this VM's task namespace\nrequest ID: request-1\n",
+    ],
+    [
+      new Request("https://github.com/shields/dotfiles.git/git-receive-pack", {
+        method: "POST",
+        body: "0000PACK",
+      }),
+      403,
+      "text/plain; charset=utf-8",
+      "Git push has no ref updates\nrequest ID: request-1\n",
+    ],
+  ] as const) {
     const events: string[] = [];
     const response = await handleOutbound(
       request,
@@ -289,10 +335,44 @@ void test("unsupported writes and foreign refs are denied before forwarding", as
         throw new Error("denied request reached GitHub");
       },
     );
-    assert.equal(response.status, 403);
+    assert.equal(response.status, status);
+    assert.equal(response.headers.get("content-type"), type);
+    assert.equal(await response.text(), body);
     assert.match(events[0] ?? "", /^deny:/);
     assert.equal(events[1], "finish:denied:null");
   }
+  assert.equal(drained, 6);
+});
+
+void test("a denied push larger than the drain limit gets a plain denial", async () => {
+  let pulled = 0;
+  let cancelled = false;
+  const response = await handleOutbound(
+    new Request("https://github.com/shields/dotfiles.git/git-receive-pack", {
+      method: "POST",
+      body: new ReadableStream<Uint8Array>({
+        pull(controller) {
+          controller.enqueue(
+            pulled === 0 ? push("refs/heads/main") : new Uint8Array(1_048_576),
+          );
+          pulled += 1;
+        },
+        cancel() {
+          cancelled = true;
+        },
+      }),
+      duplex: "half",
+    } as RequestInit),
+    instanceId,
+    authority([]),
+    () => {
+      throw new Error("denied request reached GitHub");
+    },
+  );
+  assert.equal(response.status, 403);
+  assert.match(await response.text(), /^push destination is outside/);
+  assert.ok(pulled > 64 && pulled < 80, String(pulled));
+  assert.ok(cancelled);
 });
 
 void test("GraphQL reads retain their body and mutations are denied", async () => {

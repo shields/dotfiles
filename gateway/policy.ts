@@ -43,16 +43,104 @@ export class PolicyError extends Error {
   }
 }
 
+export class PushDenied extends PolicyError {
+  readonly report: Uint8Array | null;
+
+  constructor(message: string, report: Uint8Array | null) {
+    super(message);
+    this.name = "PushDenied";
+    this.report = report;
+  }
+}
+
 const repositoryName = /^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/;
 const hexSha = /^(?:[0-9a-f]{40}|[0-9a-f]{64})$/;
 const shallowLine = /^shallow (?:[0-9a-f]{40}|[0-9a-f]{64})\n?$/;
 const gitRoute =
   /^\/([A-Za-z0-9_.-]+)\/([A-Za-z0-9_.-]+?)(?:\.git)?\/(info\/refs|git-upload-pack|git-receive-pack)$/;
+const gitEndpoint = /\/(?:info\/refs|git-upload-pack|git-receive-pack)$/;
 const webRoute = /^\/([A-Za-z0-9_.-]+)\/([A-Za-z0-9_.-]+)(?:\/|$)/;
 const restRoute = /^\/repos\/([A-Za-z0-9_.-]+)\/([A-Za-z0-9_.-]+)(?:\/|$)/;
 const repositoryIdLink =
   /<https:\/\/api\.github\.com\/repositories\/\d+(?=[/?>])/g;
 const decoder = new TextDecoder();
+const encoder = new TextEncoder();
+
+export function denial(
+  host: string,
+  target: string,
+  message: string,
+  requestId: string | null,
+): { contentType: string; body: string } {
+  if (
+    host === "github.com" &&
+    gitEndpoint.test(target.split("?", 1)[0] ?? "")
+  ) {
+    return {
+      contentType: "text/plain; charset=utf-8",
+      body:
+        requestId === null
+          ? `${message}\n`
+          : `${message}\nrequest ID: ${requestId}\n`,
+    };
+  }
+  return {
+    contentType: "application/json",
+    body: JSON.stringify(
+      requestId === null ? { message } : { message, request_id: requestId },
+    ),
+  };
+}
+
+function concat(parts: Uint8Array[]): Uint8Array {
+  const joined = new Uint8Array(
+    parts.reduce((length, part) => length + part.length, 0),
+  );
+  let offset = 0;
+  for (const part of parts) {
+    joined.set(part, offset);
+    offset += part.length;
+  }
+  return joined;
+}
+
+function pktLine(data: Uint8Array): Uint8Array {
+  return concat([
+    encoder.encode((data.length + 4).toString(16).padStart(4, "0")),
+    data,
+  ]);
+}
+
+function pushReport(
+  capabilities: string[],
+  statuses: string[],
+): Uint8Array | null {
+  if (
+    !capabilities.includes("report-status") &&
+    !capabilities.includes("report-status-v2")
+  ) {
+    return null;
+  }
+  const flush = encoder.encode("0000");
+  const report = concat([
+    ...["unpack ok", ...statuses].map((line) =>
+      pktLine(encoder.encode(`${line}\n`)),
+    ),
+    flush,
+  ]);
+  if (!capabilities.includes("side-band-64k")) {
+    return report;
+  }
+  const packets: Uint8Array[] = [];
+  for (let offset = 0; offset < report.length; offset += 65_515) {
+    packets.push(
+      pktLine(
+        concat([Uint8Array.of(1), report.subarray(offset, offset + 65_515)]),
+      ),
+    );
+  }
+  return concat([...packets, flush]);
+}
 
 export function normalizeRepository(repository: string): string {
   if (
@@ -94,7 +182,8 @@ export function parsePushCommands(
   body: Uint8Array,
   instanceId: string,
 ): { refs: string[]; bytes: number } | null {
-  const refs: string[] = [];
+  const denials = new Map<string, string | null>();
+  let capabilities: string[] = [];
   let offset = 0;
   let first = true;
   while (offset + 4 <= body.length) {
@@ -107,10 +196,24 @@ export function parsePushCommands(
       if (isPushProbe(body)) {
         return null;
       }
-      if (refs.length === 0) {
+      if (denials.size === 0) {
         throw new PolicyError("Git push has no ref updates");
       }
-      return { refs, bytes: offset + 4 };
+      const denied = denials.values().find((reason) => reason !== null);
+      if (denied) {
+        throw new PushDenied(
+          denied,
+          pushReport(
+            capabilities,
+            Array.from(
+              denials,
+              ([ref, reason]) =>
+                `ng ${ref} ${reason ?? "another ref update in this push is denied"}`,
+            ),
+          ),
+        );
+      }
+      return { refs: [...denials.keys()], bytes: offset + 4 };
     }
     if (size < 5 || size > 65_520) {
       throw new PolicyError("invalid Git push packet length");
@@ -125,19 +228,23 @@ export function parsePushCommands(
       offset += size;
       continue;
     }
-    const [command, capabilities, ...rest] = line.split("\0");
-    if (
-      first &&
-      capabilities
-        ?.split(/\s+/)
-        .some((capability) => /^push-options(?:=|$)/.test(capability))
-    ) {
-      throw new PolicyError("Git push options are unsupported");
-    }
-    if ((!first && capabilities !== undefined) || rest.length > 0) {
+    const [command, lineCapabilities, ...rest] = line.split("\0");
+    if (rest.length > 0) {
       throw new PolicyError("unexpected Git push capabilities");
     }
-    const match = /^([0-9a-f]+) ([0-9a-f]+) (refs\/heads\/[^\s\0]+)\n?$/.exec(
+    if (first) {
+      capabilities = lineCapabilities?.split(/\s+/) ?? [];
+      if (
+        capabilities.some((capability) =>
+          /^push-options(?:=|$)/.test(capability),
+        )
+      ) {
+        throw new PolicyError("Git push options are unsupported");
+      }
+    } else if (lineCapabilities !== undefined) {
+      throw new PolicyError("unexpected Git push capabilities");
+    }
+    const match = /^([0-9a-f]+) ([0-9a-f]+) (refs\/[^\s\0]+)\n?$/.exec(
       command ?? "",
     );
     if (
@@ -149,21 +256,18 @@ export function parsePushCommands(
       throw new PolicyError("unsupported Git push command");
     }
     const ref = match[3] ?? "";
-    if (
-      !ref.startsWith(taskPrefix(instanceId)) ||
-      ref.length === taskPrefix(instanceId).length
-    ) {
-      throw new PolicyError(
-        "push destination is outside this VM's task namespace",
-      );
-    }
-    if (/^0+$/.test(match[2] ?? "")) {
-      throw new PolicyError("branch deletion is denied");
-    }
-    if (refs.includes(ref)) {
+    if (denials.has(ref)) {
       throw new PolicyError("duplicate Git push destination");
     }
-    refs.push(ref);
+    denials.set(
+      ref,
+      !ref.startsWith(taskPrefix(instanceId)) ||
+        ref.length === taskPrefix(instanceId).length
+        ? "push destination is outside this VM's task namespace"
+        : /^0+$/.test(match[2] ?? "")
+          ? "branch deletion is denied"
+          : null,
+    );
     first = false;
     offset += size;
   }

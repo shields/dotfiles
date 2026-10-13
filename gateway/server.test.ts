@@ -30,7 +30,12 @@ function send(
   body: Buffer | Buffer[] = Buffer.alloc(0),
   host = "github.com",
   headers: Record<string, string> = {},
-): Promise<{ status: number; body: string; headers: IncomingHttpHeaders }> {
+): Promise<{
+  status: number;
+  type: string | undefined;
+  body: string;
+  headers: IncomingHttpHeaders;
+}> {
   return new Promise((resolve, reject) => {
     const request = https.request(
       {
@@ -56,6 +61,7 @@ function send(
         response.on("end", () => {
           resolve({
             status: response.statusCode ?? 0,
+            type: response.headers["content-type"],
             body: Buffer.concat(chunks).toString(),
             headers: response.headers,
           });
@@ -280,19 +286,55 @@ void test("the HTTPS socket injects a repo token only after checking the full pu
       ),
       packet(`${"0".repeat(40)} ${"1".repeat(40)} refs/heads/main\n`),
       Buffer.from("0000PACK"),
+      Buffer.alloc(4_194_304),
     ]);
-    assert.equal(
-      (
-        await send(
-          socket,
-          "POST",
-          "/shields/dotfiles.git/git-receive-pack",
-          bad,
-        )
-      ).status,
-      403,
+    const reported = await send(
+      socket,
+      "POST",
+      "/shields/dotfiles.git/git-receive-pack",
+      bad,
+    );
+    assert.deepEqual(
+      { status: reported.status, type: reported.type, body: reported.body },
+      {
+        status: 200,
+        type: "application/x-git-receive-pack-result",
+        body: Buffer.concat([
+          packet("unpack ok\n"),
+          packet(
+            `ng ${idRef(instance.id)} another ref update in this push is denied\n`,
+          ),
+          packet(
+            "ng refs/heads/main push destination is outside this VM's task namespace\n",
+          ),
+          Buffer.from("0000"),
+        ]).toString(),
+      },
+    );
+    const unreported = await send(
+      socket,
+      "POST",
+      "/shields/dotfiles.git/git-receive-pack",
+      Buffer.concat([
+        packet(`${"0".repeat(40)} ${"1".repeat(40)} refs/heads/main\0quiet`),
+        Buffer.from("0000PACK"),
+      ]),
+    );
+    assert.equal(unreported.status, 403);
+    assert.equal(unreported.type, "text/plain; charset=utf-8");
+    assert.match(
+      unreported.body,
+      /^push destination is outside this VM's task namespace\nrequest ID: [0-9a-f-]{36}\n$/,
     );
     assert.equal(incoming.length, 4);
+    for (const log of state.logs(instance.id).slice(0, 2)) {
+      assert.equal(log.allowed, false);
+      assert.equal(
+        log.reason,
+        "push destination is outside this VM's task namespace",
+      );
+      assert.equal(log.outcome, "denied");
+    }
     const probe = Buffer.from("0000");
     assert.equal(
       (
@@ -398,7 +440,7 @@ void test("the HTTPS socket injects a repo token only after checking the full pu
     assert.equal(incoming.length, 10);
     assert.equal(incoming[9]?.authorization, undefined);
     const logs = state.logs(instance.id);
-    assert.equal(logs.length, 15);
+    assert.equal(logs.length, 16);
     assert.equal(logs[0]?.revision, 2);
     assert.equal(logs[0].allowed, true);
     assert.equal(logs[0].reason, "anonymous read");
@@ -487,11 +529,21 @@ void test("the HTTPS socket injects a repo token only after checking the full pu
       ["api.github.com", "POST", "/graphql", discovery],
       ["api.github.com", "GET", "/user", Buffer.alloc(0)],
     ] as const) {
-      assert.equal(
-        (await send(socket, method, target, body, host)).status,
-        403,
-        target,
-      );
+      const denied = await send(socket, method, target, body, host);
+      assert.equal(denied.status, 403, target);
+      if (host === "github.com") {
+        assert.equal(denied.type, "text/plain; charset=utf-8", target);
+        assert.match(denied.body, /^repository is not granted to this VM\n/);
+      } else {
+        assert.equal(denied.type, "application/json", target);
+        assert.equal(
+          (JSON.parse(denied.body) as { message: unknown }).message,
+          target === "/repos/shields/dotfiles/issues"
+            ? "unsupported GitHub API operation"
+            : "repository is not granted to this VM",
+          target,
+        );
+      }
     }
     state.disable("lima:work", "tester");
     assert.equal((await send(socket, "GET", "/shields/dotfiles")).status, 403);
@@ -565,9 +617,11 @@ void test("Content-Encoding reaches GitHub only on fetch bodies, and inspected b
         "content-encoding": encoding,
       });
       assert.equal(response.status, 403, `${target} ${encoding}`);
-      assert.equal(
-        (JSON.parse(response.body) as { error: string }).error,
-        "encoded request bodies are unsupported",
+      assert.match(
+        response.body,
+        host === "github.com"
+          ? /^encoded request bodies are unsupported\n/
+          : /"message":"encoded request bodies are unsupported"/,
       );
     }
     assert.equal(incoming.length, forwarded);

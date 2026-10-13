@@ -3,10 +3,12 @@ import test from "node:test";
 import {
   authorize,
   classify,
+  denial,
   graphqlRepository,
   parsePushCommands,
   rewriteLinks,
   type Classification,
+  PushDenied,
 } from "./policy.ts";
 
 const id = "01234567-89ab-4cde-8fab-0123456789ab";
@@ -25,12 +27,172 @@ function push(...lines: string[]): Buffer {
   return Buffer.concat([...lines.map(packet), Buffer.from("0000PACK")]);
 }
 
+function pushDenial(body: Uint8Array): PushDenied {
+  try {
+    parsePushCommands(body, id);
+  } catch (error) {
+    assert.ok(error instanceof PushDenied);
+    return error;
+  }
+  assert.fail("push was not denied");
+}
+
+function sideband(report: Uint8Array): Buffer {
+  const bytes = Buffer.from(report);
+  const payload: Buffer[] = [];
+  let offset = 0;
+  for (;;) {
+    const size = Number.parseInt(
+      bytes.subarray(offset, offset + 4).toString(),
+      16,
+    );
+    if (size === 0) {
+      assert.equal(offset + 4, bytes.length);
+      return Buffer.concat(payload);
+    }
+    assert.ok(size <= 65_520);
+    assert.equal(bytes[offset + 4], 1);
+    payload.push(bytes.subarray(offset + 5, offset + size));
+    offset += size;
+  }
+}
+
 void test("a batch with another destination is denied before any ref can be forwarded", () => {
   const body = push(
     `${old} ${next} refs/heads/task/${id}/one\0report-status\n`,
     `${old} ${next} refs/heads/main\n`,
   );
   assert.throws(() => parsePushCommands(body, id), /outside this VM/);
+});
+
+void test("denied ref updates are reported in the status format the client requested", () => {
+  const commands = (capabilities: string): Buffer =>
+    push(
+      `${old} ${next} refs/heads/task/${id}/one\0${capabilities}`,
+      `${old} ${next} refs/heads/main`,
+      `${old} ${next} refs/tags/v1`,
+      `${old} ${"0".repeat(40)} refs/heads/task/${id}/gone`,
+    );
+  const report = Buffer.concat([
+    packet("unpack ok\n"),
+    packet(
+      `ng refs/heads/task/${id}/one another ref update in this push is denied\n`,
+    ),
+    packet(
+      "ng refs/heads/main push destination is outside this VM's task namespace\n",
+    ),
+    packet(
+      "ng refs/tags/v1 push destination is outside this VM's task namespace\n",
+    ),
+    packet(`ng refs/heads/task/${id}/gone branch deletion is denied\n`),
+    Buffer.from("0000"),
+  ]);
+  for (const capabilities of [
+    " report-status agent=git/2.56.0",
+    " report-status-v2 quiet object-format=sha1",
+  ]) {
+    const denied = pushDenial(commands(capabilities));
+    assert.match(denied.message, /outside this VM/);
+    assert.deepEqual(denied.report, new Uint8Array(report));
+  }
+  const multiplexed = pushDenial(
+    commands(" report-status-v2 side-band-64k quiet"),
+  ).report;
+  assert.ok(multiplexed);
+  assert.deepEqual(sideband(multiplexed), report);
+  assert.equal(
+    pushDenial(commands(" side-band-64k agent=git/2.56.0")).report,
+    null,
+  );
+  assert.equal(
+    pushDenial(commands(" report-status-v2side-band-64k")).report,
+    null,
+  );
+});
+
+void test("a sideband report larger than one packet is split across packets", () => {
+  const refs = Array.from(
+    { length: 1000 },
+    (_, index) => `refs/heads/denied/${String(index).padStart(60, "0")}`,
+  );
+  const report = pushDenial(
+    push(
+      ...refs.map(
+        (ref, index) =>
+          `${old} ${next} ${ref}${index === 0 ? "\0report-status side-band-64k" : ""}`,
+      ),
+    ),
+  ).report;
+  assert.ok(report);
+  const plain = sideband(report).toString();
+  assert.ok(plain.length > 65_515);
+  assert.ok(plain.startsWith("000eunpack ok\n"));
+  assert.ok(
+    plain.endsWith(
+      `${refs.at(-1) ?? ""} push destination is outside this VM's task namespace\n0000`,
+    ),
+  );
+});
+
+void test("a push naming one destination twice is denied without a report", () => {
+  for (const ref of [`refs/heads/task/${id}/one`, "refs/heads/main"]) {
+    assert.throws(
+      () =>
+        parsePushCommands(
+          push(
+            `${old} ${next} ${ref}\0report-status`,
+            `${old} ${next} refs/heads/task/${id}/two`,
+            `${next} ${old} ${ref}`,
+          ),
+          id,
+        ),
+      (error: unknown) =>
+        error instanceof Error &&
+        !(error instanceof PushDenied) &&
+        error.message === "duplicate Git push destination",
+    );
+  }
+});
+
+void test("a denial waits for the full command list", () => {
+  assert.equal(
+    parsePushCommands(
+      packet(`${old} ${next} refs/heads/main\0report-status\n`),
+      id,
+    ),
+    null,
+  );
+});
+
+void test("denials reach git as text and gh as a JSON message", () => {
+  for (const target of [
+    "/shields/dotfiles.git/info/refs?service=git-receive-pack",
+    "/shields/dotfiles/info/refs?service=git-upload-pack",
+    "/shields/dotfiles.git/git-upload-pack",
+    "/shields/dotfiles.git/git-receive-pack",
+  ]) {
+    assert.deepEqual(denial("github.com", target, "no", "request-1"), {
+      contentType: "text/plain; charset=utf-8",
+      body: "no\nrequest ID: request-1\n",
+    });
+  }
+  assert.deepEqual(
+    denial("github.com", "/shields/dotfiles.git/git-receive-pack", "no", null),
+    { contentType: "text/plain; charset=utf-8", body: "no\n" },
+  );
+  for (const [host, target] of [
+    ["api.github.com", "/repos/shields/dotfiles/issues"],
+    ["api.github.com", "/repos/shields/dotfiles/info/refs"],
+    ["github.com", "/shields/dotfiles/pulls"],
+    ["github.com", "/shields/dotfiles/pulls?next=/info/refs"],
+  ] as const) {
+    const response = denial(host, target, "no", "request-1");
+    assert.equal(response.contentType, "application/json");
+    assert.deepEqual(JSON.parse(response.body), {
+      message: "no",
+      request_id: "request-1",
+    });
+  }
 });
 
 void test("task branch creation and force updates are both accepted", () => {

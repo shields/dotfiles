@@ -11,10 +11,12 @@ import { AppAuth } from "./auth.ts";
 import {
   authorize,
   classify,
+  denial,
   parsePushCommands,
   PolicyError,
   requireIdentityEncoding,
   rewriteLinks,
+  PushDenied,
   type Classification,
 } from "./policy.ts";
 import { State } from "./state.ts";
@@ -59,12 +61,12 @@ function bodyIterator(request: IncomingMessage): AsyncIterator<Buffer> {
 }
 
 async function readBody(
-  request: IncomingMessage,
+  remaining: AsyncIterator<Buffer>,
+  contentEncoding: string | undefined,
   limit: number,
   pushInstanceId?: string,
 ): Promise<RequestBody> {
-  requireIdentityEncoding(request.headers["content-encoding"]);
-  const remaining = bodyIterator(request);
+  requireIdentityEncoding(contentEncoding);
   let buffered = Buffer.alloc(0);
   for (;;) {
     const next = await remaining.next();
@@ -80,6 +82,23 @@ async function readBody(
     }
     if (buffered.length > limit) {
       throw new PolicyError("request prefix is too large");
+    }
+  }
+}
+
+async function drained(
+  remaining: AsyncIterator<Buffer>,
+  limit: number,
+): Promise<boolean> {
+  let length = 0;
+  for (;;) {
+    const next = await remaining.next();
+    if (next.done) {
+      return true;
+    }
+    length += next.value.length;
+    if (length > limit) {
+      return false;
     }
   }
 }
@@ -299,6 +318,7 @@ export class Gateway {
     let classification: Classification | null = null;
     let revision = this.state.byId(instanceId)?.revision ?? 0;
     let logged = false;
+    const remaining = bodyIterator(request);
     try {
       const host = request.headers.host?.toLowerCase();
       if (host !== "github.com" && host !== "api.github.com") {
@@ -312,15 +332,24 @@ export class Gateway {
         method === "POST" &&
         target.endsWith("/git-receive-pack")
       ) {
-        body = await readBody(request, 1_048_576, instanceId);
+        body = await readBody(
+          remaining,
+          request.headers["content-encoding"],
+          1_048_576,
+          instanceId,
+        );
       } else if (
         host === "api.github.com" &&
         method === "POST" &&
         target === "/graphql"
       ) {
-        body = await readBody(request, 1_048_576);
+        body = await readBody(
+          remaining,
+          request.headers["content-encoding"],
+          1_048_576,
+        );
       } else {
-        body = { buffered: Buffer.alloc(0), remaining: bodyIterator(request) };
+        body = { buffered: Buffer.alloc(0), remaining };
       }
       classification = classify(
         { host, method, target, body: body.buffered },
@@ -402,6 +431,15 @@ export class Gateway {
     } catch (error) {
       const reason =
         error instanceof PolicyError ? error.message : "gateway request failed";
+      const respond = (status: number, message: string): void => {
+        const { contentType, body } = denial(
+          request.headers.host?.toLowerCase() ?? "",
+          request.url ?? "",
+          message,
+          requestId,
+        );
+        response.writeHead(status, { "content-type": contentType }).end(body);
+      };
       if (logged) {
         this.state.finish(
           requestId,
@@ -429,23 +467,28 @@ export class Gateway {
           if (response.headersSent) {
             response.destroy();
           } else {
-            response.writeHead(503, { "content-type": "application/json" }).end(
-              JSON.stringify({
-                error: "gateway audit unavailable",
-                request_id: requestId,
-              }),
-            );
+            respond(503, "gateway audit unavailable");
           }
           return;
         }
       }
       if (response.headersSent) {
         response.destroy();
+      } else if (
+        // git keeps sending after a 200 and shows a transport error, not these
+        // ref statuses, unless the whole body is read.
+        error instanceof PushDenied &&
+        error.report !== null &&
+        (await drained(remaining, 67_108_864).catch(() => false))
+      ) {
+        response
+          .writeHead(200, {
+            "content-type": "application/x-git-receive-pack-result",
+            "cache-control": "no-cache",
+          })
+          .end(error.report);
       } else {
-        response.writeHead(error instanceof PolicyError ? 403 : 503, {
-          "content-type": "application/json",
-        });
-        response.end(JSON.stringify({ error: reason, request_id: requestId }));
+        respond(error instanceof PolicyError ? 403 : 503, reason);
       }
     }
   }
