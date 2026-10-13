@@ -24,7 +24,7 @@ function send(
   socket: string,
   method: string,
   target: string,
-  body = Buffer.alloc(0),
+  body: Buffer | Buffer[] = Buffer.alloc(0),
   host = "github.com",
 ): Promise<{ status: number; body: string }> {
   return new Promise((resolve, reject) => {
@@ -38,7 +38,7 @@ function send(
         agent: false,
         headers: {
           host,
-          "content-length": body.length,
+          ...(Array.isArray(body) ? {} : { "content-length": body.length }),
           authorization: "Bearer guest-token",
           cookie: "session=guest",
         },
@@ -57,7 +57,19 @@ function send(
       },
     );
     request.once("error", reject);
-    request.end(body);
+    if (Array.isArray(body)) {
+      const [first = Buffer.alloc(0), ...rest] = body;
+      request.write(first);
+      // The pause makes the gateway read the first chunk on its own.
+      setTimeout(() => {
+        for (const chunk of rest) {
+          request.write(chunk);
+        }
+        request.end();
+      }, 20);
+    } else {
+      request.end(body);
+    }
   });
 }
 
@@ -95,6 +107,7 @@ void test("the HTTPS socket injects a repo token only after checking the full pu
     target: string;
     authorization: string | undefined;
     cookie: string | undefined;
+    transferEncoding: string | undefined;
     body: Buffer;
   }[] = [];
   const upstream = createServer((request, response) => {
@@ -107,6 +120,7 @@ void test("the HTTPS socket injects a repo token only after checking the full pu
         target: request.url ?? "",
         authorization: request.headers.authorization,
         cookie: request.headers.cookie,
+        transferEncoding: request.headers["transfer-encoding"],
         body: Buffer.concat(chunks),
       });
       response
@@ -232,6 +246,58 @@ void test("the HTTPS socket injects a repo token only after checking the full pu
       403,
     );
     assert.equal(incoming.length, 4);
+    const probe = Buffer.from("0000");
+    assert.equal(
+      (
+        await send(
+          socket,
+          "POST",
+          "/shields/dotfiles.git/git-receive-pack",
+          probe,
+        )
+      ).status,
+      200,
+    );
+    assert.equal(
+      incoming[4]?.authorization,
+      `Basic ${Buffer.from("x-access-token:ghu_secret").toString("base64")}`,
+    );
+    assert.deepEqual(incoming[4].body, probe);
+    const large = Buffer.concat([good, Buffer.alloc(2 * 1_048_576, 1)]);
+    assert.equal(
+      (
+        await send(socket, "POST", "/shields/dotfiles.git/git-receive-pack", [
+          large.subarray(0, 20),
+          large.subarray(20),
+        ])
+      ).status,
+      200,
+    );
+    assert.equal(incoming[5]?.transferEncoding, "chunked");
+    assert.equal(incoming[5].authorization, incoming[4].authorization);
+    assert.equal(incoming[5].body.length, large.length);
+    assert.ok(incoming[5].body.equals(large));
+    assert.equal(
+      (
+        await send(
+          socket,
+          "POST",
+          "/shields/dotfiles.git/git-receive-pack",
+          Buffer.from("0000PACK"),
+        )
+      ).status,
+      403,
+    );
+    assert.equal(
+      (
+        await send(socket, "POST", "/shields/dotfiles.git/git-receive-pack", [
+          probe,
+          good,
+        ])
+      ).status,
+      403,
+    );
+    assert.equal(incoming.length, 6);
     state.update("lima:work", 1, {}, "tester");
     assert.equal(
       (await send(socket, "POST", "/graphql", discovery, "api.github.com"))
@@ -248,10 +314,10 @@ void test("the HTTPS socket injects a repo token only after checking the full pu
       ).status,
       200,
     );
-    assert.equal(incoming.length, 5);
-    assert.equal(incoming[4]?.authorization, undefined);
+    assert.equal(incoming.length, 7);
+    assert.equal(incoming[6]?.authorization, undefined);
     const logs = state.logs(instance.id);
-    assert.equal(logs.length, 8);
+    assert.equal(logs.length, 12);
     assert.equal(logs[0]?.revision, 2);
     assert.equal(logs[0].allowed, true);
     assert.equal(logs[0].reason, "anonymous read");
@@ -321,6 +387,7 @@ void test("the HTTPS socket injects a repo token only after checking the full pu
         Buffer.alloc(0),
       ],
       ["github.com", "POST", "/shields/dotfiles.git/git-receive-pack", good],
+      ["github.com", "POST", "/shields/dotfiles.git/git-receive-pack", probe],
       [
         "api.github.com",
         "POST",

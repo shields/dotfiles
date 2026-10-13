@@ -66,9 +66,6 @@ async function readBody(
   for (;;) {
     const next = await remaining.next();
     if (next.done) {
-      if (pushInstanceId !== undefined) {
-        throw new PolicyError("incomplete Git push commands");
-      }
       return { buffered, remaining };
     }
     buffered = Buffer.concat([buffered, next.value]);

@@ -52,6 +52,25 @@ function push(destination: string): Uint8Array {
   return body;
 }
 
+function streamedPush(...chunks: Uint8Array[]): Request {
+  const init: RequestInit & { duplex: "half" } = {
+    method: "POST",
+    body: new ReadableStream({
+      start(controller) {
+        for (const chunk of chunks) {
+          controller.enqueue(chunk);
+        }
+        controller.close();
+      },
+    }),
+    duplex: "half",
+  };
+  return new Request(
+    "https://github.com/shields/dotfiles.git/git-receive-pack",
+    init,
+  );
+}
+
 void test("GitHub reads inject a token without forwarding guest credentials", async () => {
   const events: string[] = [];
   let authorization: string | null = null;
@@ -79,32 +98,75 @@ void test("GitHub reads inject a token without forwarding guest credentials", as
   assert.deepEqual(events, ["allow:api.read", "finish:completed:200"]);
 });
 
-void test("task pushes stream after their commands are checked", async () => {
-  const events: string[] = [];
-  const body = push(`refs/heads/task/${instanceId}/check`);
-  let authorization: string | null = null;
-  let forwardedBody: Uint8Array | null = null;
+void test("task pushes and push probes are forwarded with the repository token", async () => {
+  for (const body of [
+    push(`refs/heads/task/${instanceId}/check`),
+    new TextEncoder().encode("0000"),
+  ]) {
+    const events: string[] = [];
+    let authorization: string | null = null;
+    let forwardedBody: Uint8Array | null = null;
+    const response = await handleOutbound(
+      new Request("https://github.com/shields/dotfiles.git/git-receive-pack", {
+        method: "POST",
+        body,
+        headers: { authorization: "Basic Z3Vlc3Q6Z3Vlc3Q=" },
+      }),
+      instanceId,
+      authority(events),
+      async (request) => {
+        authorization = request.headers.get("authorization");
+        forwardedBody = new Uint8Array(await request.arrayBuffer());
+        return new Response("ok", { status: 200 });
+      },
+    );
+    assert.equal(response.status, 200, JSON.stringify(events));
+    assert.equal(
+      authorization,
+      `Basic ${btoa("x-access-token:upstream-secret")}`,
+    );
+    assert.deepEqual(forwardedBody, body);
+    assert.deepEqual(events, ["allow:git.push", "finish:completed:200"]);
+  }
+});
+
+void test("a streamed push beyond the inspection limit is forwarded whole", async () => {
+  const commands = push(`refs/heads/task/${instanceId}/check`);
+  const body = new Uint8Array(commands.length + 2 * 1_048_576);
+  body.set(commands);
+  let forwarded = new Uint8Array();
   const response = await handleOutbound(
-    new Request("https://github.com/shields/dotfiles.git/git-receive-pack", {
-      method: "POST",
-      body,
-      headers: { authorization: "Basic Z3Vlc3Q6Z3Vlc3Q=" },
-    }),
+    streamedPush(body.subarray(0, 20), body.subarray(20)),
     instanceId,
-    authority(events),
+    authority([]),
     async (request) => {
-      authorization = request.headers.get("authorization");
-      forwardedBody = new Uint8Array(await request.arrayBuffer());
-      return new Response("ok", { status: 200 });
+      forwarded = new Uint8Array(await request.arrayBuffer());
+      return new Response(null, { status: 200 });
     },
   );
-  assert.equal(response.status, 200, JSON.stringify(events));
-  assert.equal(
-    authorization,
-    `Basic ${btoa("x-access-token:upstream-secret")}`,
+  assert.equal(response.status, 200);
+  assert.equal(forwarded.length, body.length);
+  assert.ok(forwarded.every((byte, index) => byte === body[index]));
+});
+
+void test("a push probe followed by more data is denied before forwarding", async () => {
+  const events: string[] = [];
+  const response = await handleOutbound(
+    streamedPush(
+      new TextEncoder().encode("0000"),
+      push(`refs/heads/task/${instanceId}/check`),
+    ),
+    instanceId,
+    authority(events),
+    () => {
+      throw new Error("an uninspected push reached GitHub");
+    },
   );
-  assert.deepEqual(forwardedBody, body);
-  assert.deepEqual(events, ["allow:git.push", "finish:completed:200"]);
+  assert.equal(response.status, 403);
+  assert.deepEqual(events, [
+    "deny:Git push has no ref updates",
+    "finish:denied:null",
+  ]);
 });
 
 void test("unsupported writes and foreign refs are denied before forwarding", async () => {
@@ -116,6 +178,10 @@ void test("unsupported writes and foreign refs are denied before forwarding", as
     new Request("https://github.com/shields/dotfiles.git/git-receive-pack", {
       method: "POST",
       body: push("refs/heads/main"),
+    }),
+    new Request("https://github.com/shields/dotfiles.git/git-receive-pack", {
+      method: "POST",
+      body: "0000PACK",
     }),
   ]) {
     const events: string[] = [];
@@ -326,6 +392,10 @@ void test("anonymous access does not allow push discovery, pushes, or API writes
     new Request("https://github.com/shields/public/git-receive-pack", {
       method: "POST",
       body: push(`refs/heads/task/${instanceId}/check`),
+    }),
+    new Request("https://github.com/shields/public/git-receive-pack", {
+      method: "POST",
+      body: "0000",
     }),
     new Request("https://api.github.com/repos/shields/public/issues", {
       method: "POST",

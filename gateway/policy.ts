@@ -68,6 +68,12 @@ export function taskPrefix(instanceId: string): string {
   return `refs/heads/task/${instanceId}/`;
 }
 
+// Before a push larger than http.postBuffer, git checks its credentials by
+// posting a body that is only a flush packet.
+function isPushProbe(body: Uint8Array): boolean {
+  return body.length === 4 && decoder.decode(body) === "0000";
+}
+
 export function parsePushCommands(
   body: Uint8Array,
   instanceId: string,
@@ -82,6 +88,9 @@ export function parsePushCommands(
     }
     const size = Number.parseInt(sizeText, 16);
     if (size === 0) {
+      if (isPushProbe(body)) {
+        return null;
+      }
       if (refs.length === 0) {
         throw new PolicyError("Git push has no ref updates");
       }
@@ -94,11 +103,16 @@ export function parsePushCommands(
       return null;
     }
     const line = decoder.decode(body.subarray(offset + 4, offset + size));
-    const [command, capabilities] = line.split("\0", 2);
-    if (first && capabilities?.split(/[\s\n]+/).includes("push-options")) {
+    const [command, capabilities, ...rest] = line.split("\0");
+    if (
+      first &&
+      capabilities
+        ?.split(/\s+/)
+        .some((capability) => /^push-options(?:=|$)/.test(capability))
+    ) {
       throw new PolicyError("Git push options are unsupported");
     }
-    if (!first && capabilities !== undefined) {
+    if ((!first && capabilities !== undefined) || rest.length > 0) {
       throw new PolicyError("unexpected Git push capabilities");
     }
     const match = /^([0-9a-f]+) ([0-9a-f]+) (refs\/heads\/[^\s\0]+)\n?$/.exec(
@@ -310,6 +324,9 @@ export function classify(
       if (route === "git-receive-pack" && method === "POST" && !url.search) {
         if (!request.body) {
           throw new PolicyError("Git push commands were not inspected");
+        }
+        if (isPushProbe(request.body)) {
+          return { repository, operation: "git.push", refs: [] };
         }
         const parsed = parsePushCommands(request.body, instanceId);
         if (parsed === null) {

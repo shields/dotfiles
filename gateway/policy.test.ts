@@ -60,13 +60,25 @@ void test("branch deletion, push options, and incomplete commands are denied", (
       ),
     /deletion/,
   );
+  for (const capabilities of ["push-options", "report-status push-options=1"]) {
+    assert.throws(
+      () =>
+        parsePushCommands(
+          push(`${old} ${next} refs/heads/task/${id}/new\0${capabilities}\n`),
+          id,
+        ),
+      /options/,
+    );
+  }
   assert.throws(
     () =>
       parsePushCommands(
-        push(`${old} ${next} refs/heads/task/${id}/new\0push-options\n`),
+        push(
+          `${old} ${next} refs/heads/task/${id}/new\0report-status\0 push-options\n`,
+        ),
         id,
       ),
-    /options/,
+    /capabilities/,
   );
   assert.equal(
     parsePushCommands(
@@ -74,6 +86,34 @@ void test("branch deletion, push options, and incomplete commands are denied", (
       id,
     ),
     null,
+  );
+});
+
+void test("a lone flush packet is classified as a push probe", () => {
+  const probe = Buffer.from("0000");
+  assert.equal(parsePushCommands(probe, id), null);
+  assert.throws(() => parsePushCommands(push(), id), /no ref updates/);
+  for (const target of [
+    "/shields/dotfiles.git/git-receive-pack",
+    "/shields/dotfiles/git-receive-pack",
+  ]) {
+    assert.deepEqual(
+      classify({ host: "github.com", method: "POST", target, body: probe }, id),
+      { repository: "shields/dotfiles", operation: "git.push", refs: [] },
+    );
+  }
+  assert.throws(
+    () =>
+      classify(
+        {
+          host: "github.com",
+          method: "POST",
+          target: "/shields/dotfiles.git/git-receive-pack",
+          body: push(),
+        },
+        id,
+      ),
+    /no ref updates/,
   );
 });
 

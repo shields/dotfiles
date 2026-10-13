@@ -64,9 +64,6 @@ async function bodyForPolicy(
     for (;;) {
       const { done, value } = await reader.read();
       if (done) {
-        if (instanceId !== undefined) {
-          throw new PolicyError("incomplete Git push commands");
-        }
         return buffered.subarray(0, length);
       }
       const remaining = buffered.length - length;
