@@ -213,5 +213,6 @@
   "skipWorkflowUsageWarning": true,
   "theme": "light",
   "verbose": true,
-  "autoCompactEnabled": true
+  "autoCompactEnabled": true,
+  "disableClaudeAiConnectors": true
 }
