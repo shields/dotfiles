@@ -195,6 +195,10 @@ export class Gateway {
         {
           cert: readFileSync(this.options.cert),
           key: readFileSync(this.options.key),
+          // requestTimeout covers a push's whole upload, and GitHub accepts
+          // pushes up to 2 GiB: about an hour at 5 Mbit/s.
+          requestTimeout: 3_600_000,
+          headersTimeout: 60_000,
         },
         (request, response) => {
           void this.handle(instance.id, request, response);

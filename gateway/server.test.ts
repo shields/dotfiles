@@ -73,7 +73,7 @@ function send(
   });
 }
 
-void test("the HTTPS socket injects a repo token only after checking the full push and live grant", async () => {
+void test("the HTTPS socket injects a repo token only after checking the full push and live grant", async (t) => {
   const root = mkdtempSync(path.join(tmpdir(), "vm-access-server-"));
   const certificate = path.join(root, "cert.pem");
   const key = path.join(root, "key.pem");
@@ -164,8 +164,13 @@ void test("the HTTPS socket injects a repo token only after checking the full pu
     webUpstream: `http://127.0.0.1:${String(address.port)}`,
     apiUpstream: `http://127.0.0.1:${String(address.port)}`,
   });
+  const listeners = t.mock.method(https, "createServer");
   try {
     await gateway.start();
+    const listener = listeners.mock.calls[0]?.result;
+    assert.ok(listener);
+    assert.equal(listener.requestTimeout, 3_600_000);
+    assert.equal(listener.headersTimeout, 60_000);
     assert.equal(
       (
         await send(
