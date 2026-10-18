@@ -160,7 +160,7 @@ def test_managed_settings_register_only_the_git_guard_hook(etc: Path) -> None:
     hooks = cast("Json", managed(etc)["hooks"])
     assert set(hooks) == {"PreToolUse"}
     (entry,) = cast("list[Json]", hooks["PreToolUse"])
-    assert entry["matcher"] == "Bash"
+    assert entry["matcher"] == "Bash|Monitor"
     (hook,) = cast("list[Json]", entry["hooks"])
     assert hook["type"] == "command"
     assert "$HOME/.codex/hooks/git_guard.py" in cast("str", hook["command"])

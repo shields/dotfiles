@@ -24,6 +24,9 @@ from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     from collections.abc import Iterator
 
+# Monitor runs its command under the Bash permission rules.
+SHELL_TOOLS = {"Bash", "Monitor"}
+
 NO_PUSH = "The user performs all pushes. Leave commits local."
 KEEP_HOOKS = (
     "Respect the configured Git hooks. "
@@ -251,9 +254,14 @@ def shell_reason(script: str) -> str | None:
 def main() -> None:
     try:
         payload = json.load(sys.stdin)
-        if payload.get("tool_name") != "Bash":
+        tool = payload.get("tool_name")
+        if tool not in SHELL_TOOLS:
             return
-        reason = shell_reason(payload["tool_input"]["command"])
+        tool_input = payload["tool_input"]
+        # A Monitor WebSocket watch has `ws` in place of `command`.
+        if tool == "Monitor" and not tool_input.get("command") and tool_input.get("ws"):
+            return
+        reason = shell_reason(tool_input["command"])
     except Exception as exc:  # noqa: BLE001 - hook errors otherwise fail open
         reason = (
             f"Git policy check failed ({type(exc).__name__}). "

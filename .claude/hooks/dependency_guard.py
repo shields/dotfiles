@@ -25,6 +25,10 @@
 # change (lockfiles, Brewfile, requirements.txt) need no parsing and are
 # covered by plain Edit(...) ask rules instead.
 #
+# Shell commands get two checks: a write to one of those manifests, and a package
+# manager's install, which an ask rule cannot split into a bare install and one
+# that names a package (see Installer).
+#
 # Silence is the "no opinion" pass-through; anything it cannot analyze asks.
 #
 # permissionDecisionReason is shown to the user, not to the model, so it is
@@ -39,13 +43,15 @@
 
 import json
 import re
+import signal
 import sys
 import tomllib
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, cast
+from typing import TYPE_CHECKING, Any, Literal, NamedTuple, cast
 
 if TYPE_CHECKING:
     from collections.abc import Callable
+    from types import FrameType
 
 type Specs = dict[str, str]
 
@@ -55,7 +61,14 @@ MAX_BYTES = 2_000_000
 # Cap on how many names a prompt lists before eliding.
 MAX_LISTED = 5
 
+# Seconds the hook may run before it gives up and asks. settings.json gives it
+# 10, and a hook that outlasts that fails open.
+WALL_BUDGET = 5.0
+
 EDIT_TOOLS = frozenset({"Edit", "Write"})
+
+# Monitor runs its command under the Bash permission rules.
+SHELL_TOOLS = frozenset({"Bash", "Monitor"})
 
 
 def _canon(value: object) -> str:
@@ -415,6 +428,13 @@ BASH_GUARDED = (
     r"go\.mod",
     r"go\.sum",
     r"Brewfile",
+    r"Gemfile",
+    r"gems\.rb",
+    r"\.gemspec",
+    r"\.npmrc",
+    r"bunfig\.toml",
+    r"\.pnpmfile\.cjs",
+    r"pnpm-workspace\.yaml",
     r"Package\.swift",
     r"\.pre-commit-config\.yaml",
     r"requirements[\w.-]*\.txt",
@@ -441,7 +461,7 @@ _SED_IN_PLACE = r"(?:-[abEnrsuz]*[iI]|--i[a-z-]*)"
 BASH_WRITE_RES = tuple(
     re.compile(pattern)
     for pattern in (
-        rf">>?\s*\S*{_MANIFEST}\b",
+        rf">>?\s*[^\s>]*{_MANIFEST}\b",
         rf"\btee\b{_SEG}\s\S*{_MANIFEST}\b",
         # Two independent lookaheads, flag first, so that the flag may sit on
         # either side of the file operands and each lookahead is one scan. gsed
@@ -449,11 +469,392 @@ BASH_WRITE_RES = tuple(
         rf"\bg?sed\b(?={_SEG}\s{_SED_IN_PLACE})(?={_SEG}\s\S*{_MANIFEST}\b)",
         rf"\bdd\b{_SEG}\bof=\S*{_MANIFEST}\b",
         rf"\b(?:python3?|perl|ruby|node|bun)\b{_SEG}\s-[ce]\b{_SEG}{_MANIFEST}",
+        # The destination of a copy is its last operand, so copying a manifest
+        # elsewhere does not match.
+        rf"\b(?:cp|mv|rsync|ln)\b{_SEG}\s\S*{_MANIFEST}\b(?=\s*(?:[|;&\n]|$))",
+        rf"\b(?:curl|wget)\b{_SEG}\s(?:-[A-Za-z]*[oO]|--output(?:-document)?)[\s=]\s*\S*{_MANIFEST}\b",
+        rf"\b(?:patch|truncate)\b{_SEG}\s\S*{_MANIFEST}\b",
+        rf"\b(?:npm|pnpm|bun)\b{_SEG}\bpkg\s+(?:set|delete|fix)\b",
     )
 )
 
 
+class Installer(NamedTuple):
+    subcommands: frozenset[str]
+    flags: frozenset[str]
+    value_flags: tuple[str, ...] = ()
+    adds: frozenset[str] = frozenset()
+    manifest_env: tuple[re.Pattern[str], ...] = ()
+    bare: bool = False
+
+    @property
+    def value_names(self) -> frozenset[str]:
+        return frozenset(flag.rstrip("=") for flag in self.value_flags)
+
+
+# A package manager's install command with no package names installs what the
+# manifest already declares, which the checks above vet. A permissions rule
+# cannot express that: `npm install:*` also matches `npm install left-pad`, and
+# an allow rule cannot carve `--no-audit` out of an ask rule. So only the listed
+# flags (`--name=` prefixes for those that take a value) and bare words may appear
+# around the subcommand; anything else, a package name included, asks. The `adds`
+# subcommands always name a package. Ask rules cover them, but a rule matches from
+# the first word, so the hook asks for them behind a flag, as in
+# `pnpm --filter web add zod`. `manifest_env` matches the variables that select a
+# different manifest or package source, as `--file`, `--gemfile` and `--registry`
+# do. `bare` marks a manager whose command with no subcommand installs.
+_HELP = frozenset({"--help", "-h", "--version", "-v"})
+
+# Every `npm_config_` variable is the flag of the same name, and npm reads the
+# prefix in any case. `npm_config_cache` only moves the cache.
+_JS_ENV = (re.compile(r"(?:npm|pnpm|bun)_config_(?!cache=)", re.IGNORECASE),)
+
+_PNPM = Installer(
+    subcommands=frozenset({"install", "i"}),
+    flags=_HELP
+    | {
+        "--dry-run",
+        "--frozen-lockfile",
+        "--ignore-scripts",
+        "--no-progress",
+        "--offline",
+        "--prefer-frozen-lockfile",
+        "--prefer-offline",
+        "--prod",
+        "-P",
+        "--recursive",
+        "-r",
+    },
+    value_flags=("--dir=", "--filter=", "--loglevel=", "--reporter="),
+    adds=frozenset({"add", "it", "install-test"}),
+    manifest_env=_JS_ENV,
+)
+
+_BUNDLE = Installer(
+    subcommands=frozenset({"install", "i", "ins", "inst", "insta", "instal"}),
+    flags=_HELP | {"--deployment", "--frozen", "--local", "--quiet"},
+    value_flags=("--jobs=", "--retry=", "--with=", "--without="),
+    adds=frozenset({"add", "ad", "a", "inject", "inj", "inje", "injec"}),
+    manifest_env=(
+        re.compile(
+            r"BUNDLE_(?:(?:GEMFILE|APP_CONFIG|USER_CONFIG)=|(?:MIRROR|LOCAL)__)"
+        ),
+    ),
+    bare=True,
+)
+
+INSTALLERS = {
+    "bun": Installer(
+        subcommands=frozenset({"install", "i"}),
+        flags=_HELP
+        | {
+            "--dry-run",
+            "--frozen-lockfile",
+            "--ignore-scripts",
+            "--no-progress",
+            "--no-summary",
+            "--production",
+            "-p",
+            "--silent",
+            "--verbose",
+        },
+        value_flags=("--cwd=", "--filter=", "--omit="),
+        adds=frozenset({"add", "a"}),
+        manifest_env=_JS_ENV,
+    ),
+    # npm resolves any unambiguous prefix of "install" and its misspellings.
+    "npm": Installer(
+        subcommands=frozenset(
+            {
+                "i",
+                "in",
+                "ins",
+                "inst",
+                "insta",
+                "instal",
+                "install",
+                "isnt",
+                "isnta",
+                "isntal",
+                "isntall",
+            }
+        ),
+        flags=_HELP
+        | {
+            "--dry-run",
+            "--foreground-scripts",
+            "--ignore-scripts",
+            "--no-audit",
+            "--no-fund",
+            "--no-progress",
+            "--offline",
+            "--prefer-offline",
+            "--production",
+            "--silent",
+        },
+        value_flags=("--include=", "--loglevel=", "--omit=", "--prefix="),
+        adds=frozenset(
+            {
+                "add",
+                "it",
+                "install-t",
+                "install-te",
+                "install-tes",
+                "install-test",
+                "cit",
+                "install-ci-test",
+            }
+        ),
+        manifest_env=_JS_ENV,
+    ),
+    "pnpm": _PNPM,
+    "pn": _PNPM,
+    "bundle": _BUNDLE,
+    "bundler": _BUNDLE,
+    # Only a bare `brew bundle` or `brew bundle install` installs from the
+    # Brewfile. The other subcommands (add, dump, cleanup, exec) and `--file`
+    # and `--global`, which name a different Brewfile, ask.
+    "brew": Installer(
+        subcommands=frozenset({"bundle"}),
+        flags=_HELP
+        | {
+            "--cask",
+            "--force",
+            "--formula",
+            "--no-upgrade",
+            "-q",
+            "--quiet",
+            "install",
+            "--verbose",
+        },
+        value_flags=("--upgrade-formulae=",),
+        manifest_env=(
+            re.compile(
+                r"HOMEBREW_(?:BUNDLE_FILE|API_DOMAIN|ARTIFACT_DOMAIN|BOTTLE_DOMAIN"
+                r"|BREW_GIT_REMOTE|CORE_GIT_REMOTE)="
+            ),
+        ),
+    ),
+}
+
+# These only print or search their arguments, so a package manager named in one
+# is text. rg is absent because `rg --pre COMMAND` runs COMMAND.
+TEXT_COMMANDS = frozenset({"echo", "printf", "grep", "egrep", "fgrep"})
+
+# Commands that pass their standard input on as arguments.
+FEEDERS = frozenset({"xargs", "gxargs", "parallel"})
+
+# Shell syntax that can precede the command it governs.
+_KEYWORDS = frozenset({"if", "then", "else", "elif", "do", "while", "until", "!", "{"})
+
+# Words that run the command after them unchanged, as an assignment does.
+_PREFIXES = frozenset({"time", "env", "command"})
+_ASSIGNMENT_RE = re.compile(r"[A-Za-z_][A-Za-z0-9_]*=")
+
+# A flag value containing one of these can expand to several words.
+_SHELL_META = frozenset("'\"$\\")
+
+# Words read after a manager's name before the scan gives up and asks, which keeps
+# a run of flags linear.
+MAX_LOOKAHEAD = 64
+
+# A lone & ends a command, but the & of 2>&1 and &> does not, and neither does
+# the | of >|. The delimiter is captured so a following substitution is visible.
+_COMMAND_END_RE = re.compile(r"(&&|\|\||[;\n`()]|(?<!>)\||(?<![<>&])&(?![>&]))")
+_REDIRECT_RE = re.compile(r"(?:\d*|&)(?:>[>|]?|<)&?")
+_COMMENT_RE = re.compile(r"(?:^|\s)#")
+_UNQUOTE = str.maketrans("", "", "'\"\\")
+
+
+def _cut(raw: str) -> bool:
+    """Whether a separator inside quotes ended this word early."""
+    return raw[0] in "'\"" and raw.count(raw[0]) % 2 == 1
+
+
+def _plain(raw: str) -> str:
+    """A word as the shell hands it on, without quotes or a redirection glued to it."""
+    word = raw.translate(_UNQUOTE)
+    ends = [index for index in (word.find("<"), word.find(">")) if index >= 0]
+    return word[: min(ends)] if ends else word
+
+
+def _program(word: str) -> str:
+    """The command a word names, as the shell would look it up."""
+    return word.rpartition("/")[2].lower()
+
+
+type Verdict = Literal["ask", "vetted", "open"]
+
+
+def _classify(
+    installer: Installer, words: list[str], start: int, *, fed: bool
+) -> Verdict | None:
+    """How the words after a package manager's name read.
+
+    "ask" if they could add a dependency, "vetted" if they install only what the
+    manifest declares, "open" if the command ends before any subcommand, and None
+    if the manager runs something else. Before the subcommand only flags, their
+    values and redirections may appear. A flag the tables do not list taints the
+    install, as does `fed`, input that arrives on standard input.
+    """
+    names = installer.value_names
+    taint = fed
+    maybe_value = False
+    target = False
+    for index in range(start, len(words)):
+        raw = words[index]
+        if raw.startswith("#"):
+            break
+        if index - start >= MAX_LOOKAHEAD or _cut(raw):
+            return "ask"
+        if target:
+            target = False
+            continue
+        word = _plain(raw)
+        if word in installer.subcommands:
+            if taint or _has_unvetted_arg(installer, words, index + 1):
+                return "ask"
+            return "vetted"
+        if word in installer.adds:
+            return "ask"
+        redirect = _REDIRECT_RE.match(raw)
+        if redirect:
+            target = redirect.end() == len(raw)
+            continue
+        if not word.startswith("-"):
+            if "$" in word:
+                return "ask"
+            if not maybe_value:
+                return None
+            maybe_value = False
+            continue
+        if word in installer.flags or (
+            word.startswith(installer.value_flags) and not _SHELL_META.intersection(raw)
+        ):
+            maybe_value = False
+            continue
+        taint = taint or word not in names
+        maybe_value = "=" not in word
+    if not installer.bare:
+        return "open"
+    return "ask" if taint else "vetted"
+
+
+def _has_unvetted_arg(installer: Installer, words: list[str], start: int) -> bool:
+    skip = False
+    for index in range(start, len(words)):
+        raw = words[index]
+        if skip:
+            skip = False
+            continue
+        if raw.startswith("#"):
+            break
+        redirect = _REDIRECT_RE.match(raw)
+        if redirect:
+            # A bare operator such as `>` or `2>` takes the next word as its target.
+            skip = redirect.end() == len(raw)
+            continue
+        if _cut(raw):
+            return True
+        arg = _plain(raw)
+        if arg in installer.flags:
+            continue
+        if arg.startswith(installer.value_flags) and not _SHELL_META.intersection(raw):
+            continue
+        return True
+    return False
+
+
+def _is_text(words: list[str]) -> bool:
+    """Whether the command only prints or searches its arguments."""
+    for index, raw in enumerate(words):
+        word = raw.translate(_UNQUOTE)
+        if word in _KEYWORDS or _ASSIGNMENT_RE.match(word):
+            continue
+        if word in _PREFIXES:
+            # A flag can change what runs, as `env -S` does.
+            if words[index + 1 : index + 2] and words[index + 1].startswith("-"):
+                return False
+            continue
+        return _program(word) in TEXT_COMMANDS
+    return False
+
+
+def _fold(command: str, *, comments: bool) -> str:
+    """Join each line ending in an odd number of backslashes to the next.
+
+    An even number is an escaped backslash, so the newline still ends the
+    command. With `comments` set, a line that may hold a comment is not joined,
+    because a comment ends at its newline.
+    """
+    lines = command.split("\n")
+    parts: list[str] = []
+    for index, line in enumerate(lines):
+        odd = (len(line) - len(line.rstrip("\\"))) % 2 == 1
+        joins = odd and index < len(lines) - 1
+        if joins and not (comments and _COMMENT_RE.search(line)):
+            parts.append(line[:-1])
+        else:
+            parts.append(line + "\n")
+    return "".join(parts)[:-1]
+
+
+def _segments_add(command: str) -> bool:
+    parts = _COMMAND_END_RE.split(command)
+    plain = command.translate(_UNQUOTE)
+    selects: dict[str, bool] = {}
+    ticks = 0
+    for index in range(0, len(parts), 2):
+        delimiter = parts[index + 1] if index + 1 < len(parts) else ""
+        words = parts[index].split()
+        # An opening backtick, `$(`, `<(` or `>(` can supply packages or the rest
+        # of the command.
+        substituted = (delimiter == "`" and ticks % 2 == 0) or (
+            delimiter == "(" and bool(words) and words[-1].endswith(("$", "<", ">"))
+        )
+        if delimiter == "`":
+            ticks += 1
+        if not words or words[0].startswith("#") or _is_text(words):
+            continue
+        fed = False
+        for position, raw in enumerate(words):
+            if raw.startswith("#"):
+                break
+            word = _plain(raw)
+            if word.startswith("-"):
+                continue
+            program = _program(word)
+            fed = fed or program in FEEDERS
+            installer = INSTALLERS.get(program)
+            if installer is None:
+                continue
+            verdict = _classify(installer, words, position + 1, fed=fed)
+            if verdict is None:
+                continue
+            if verdict == "ask" or substituted:
+                return True
+            if verdict == "vetted":
+                if program not in selects:
+                    selects[program] = any(
+                        pattern.search(plain) for pattern in installer.manifest_env
+                    )
+                if selects[program]:
+                    return True
+            break
+    return False
+
+
+def _install_adds(command: str) -> bool:
+    # Whether a backslash line ending continues the line depends on whether it
+    # sits in a comment, which this cannot tell from a quoted #. Either reading
+    # is enough to ask.
+    readings = {_fold(command, comments=comments) for comments in (False, True)}
+    return any(map(_segments_add, readings))
+
+
 def _bash_reason(command: str) -> str | None:
+    if _install_adds(command):
+        return "This package install has arguments that could add a dependency."
     if any(pattern.search(command) for pattern in BASH_WRITE_RES):
         return "This shell command appears to write a dependency manifest directly."
     return None
@@ -464,7 +865,7 @@ def _reason(payload: dict[str, Any]) -> str | None:
     tool_input = payload.get("tool_input")
     if not isinstance(tool_input, dict):
         return None
-    if tool == "Bash":
+    if tool in SHELL_TOOLS:
         command = tool_input.get("command")
         return _bash_reason(command) if isinstance(command, str) else None
     if tool in EDIT_TOOLS:
@@ -472,10 +873,23 @@ def _reason(payload: dict[str, Any]) -> str | None:
     return None
 
 
+class OutOfTime(Exception):  # noqa: N818 - not an error condition in the usual sense
+    pass
+
+
+def _out_of_time(_signum: int, _frame: FrameType | None) -> None:
+    raise OutOfTime
+
+
 def main() -> None:
+    signal.signal(signal.SIGALRM, _out_of_time)
     try:
-        payload = json.load(sys.stdin)
-        reason = _reason(payload) if isinstance(payload, dict) else None
+        signal.setitimer(signal.ITIMER_REAL, WALL_BUDGET)
+        try:
+            payload = json.load(sys.stdin)
+            reason = _reason(payload) if isinstance(payload, dict) else None
+        finally:
+            signal.setitimer(signal.ITIMER_REAL, 0)
     except Exception as exc:  # noqa: BLE001 - a crash here would fail open
         reason = (
             f"Dependency guard failed ({type(exc).__name__}), so asking to be safe."

@@ -97,6 +97,7 @@ HOOKS = [
     *registered_hooks("codex", CODEX_HOOKS),
 ]
 GIT_GUARDS = [hook for hook in HOOKS if hook.script == GIT_GUARD]
+CLAUDE_GIT_GUARDS = [hook for hook in GIT_GUARDS if hook.agent == "claude"]
 
 
 def label(hook: object) -> str:
@@ -225,8 +226,8 @@ def sandbox(tmp_path: Path) -> Sandbox:
 
 def test_registered_hooks() -> None:
     assert {(hook.agent, hook.event, hook.matcher, hook.script) for hook in HOOKS} == {
-        ("claude", "PreToolUse", "Bash|Edit|Write", DEPENDENCY_GUARD),
-        ("claude", "PreToolUse", "Bash", GIT_GUARD),
+        ("claude", "PreToolUse", "Bash|Edit|Write|Monitor", DEPENDENCY_GUARD),
+        ("claude", "PreToolUse", "Bash|Monitor", GIT_GUARD),
         ("codex", "PreToolUse", "^Bash$", GIT_GUARD),
     }
     assert len(HOOKS) == 3
@@ -325,6 +326,49 @@ def test_git_guard_stays_silent(sandbox: Sandbox, hook: Hook, command: str) -> N
     assert (result.returncode, result.stdout, result.stderr) == (0, "", "")
 
 
+@pytest.mark.parametrize("hook", CLAUDE_GIT_GUARDS, ids=label)
+@pytest.mark.parametrize(
+    "tool_input",
+    [
+        {"command": "git push origin main"},
+        {"command": "cd /tmp/repo && git push", "timeout_ms": 60_000},
+        {"command": "git commit --no-verify -m message"},
+        {},
+        {"ws": None, "command": None},
+    ],
+)
+def test_git_guard_denies_monitor(
+    sandbox: Sandbox, hook: Hook, tool_input: Mapping[str, object]
+) -> None:
+    result = sandbox.run(
+        ["/bin/sh", "-c"],
+        substituted(hook, sandbox.install(("exec", "missing", "missing"))),
+        payload(hook, "Monitor", tool_input),
+    )
+    assert result.returncode == 0, result.stderr
+    assert decision_of(result)["permissionDecision"] == "deny"
+
+
+@pytest.mark.parametrize("hook", CLAUDE_GIT_GUARDS, ids=label)
+@pytest.mark.parametrize(
+    "tool_input",
+    [
+        {"command": "git log --oneline -n 5"},
+        {"command": "tail -f build.log"},
+        {"ws": {"url": "wss://example.com/events"}},
+    ],
+)
+def test_git_guard_allows_monitor(
+    sandbox: Sandbox, hook: Hook, tool_input: Mapping[str, object]
+) -> None:
+    result = sandbox.run(
+        ["/bin/sh", "-c"],
+        substituted(hook, sandbox.install(("exec", "missing", "missing"))),
+        payload(hook, "Monitor", tool_input),
+    )
+    assert (result.returncode, result.stdout, result.stderr) == (0, "", "")
+
+
 def test_dependency_guard_asks_about_a_new_dependency(
     sandbox: Sandbox, tmp_path: Path
 ) -> None:
@@ -389,6 +433,13 @@ def test_claude_subprocess_env_is_not_scrubbed() -> None:
 
 INSTALL_ASK = {
     "Edit(//**/*.Brewfile)",
+    "Edit(//**/Gemfile)",
+    "Edit(//**/gems.rb)",
+    "Edit(//**/*.gemspec)",
+    "Edit(//**/.npmrc)",
+    "Edit(//**/bunfig.toml)",
+    "Edit(//**/.pnpmfile.cjs)",
+    "Edit(//**/pnpm-workspace.yaml)",
     *(
         f"Bash({sudo}{command})"
         for sudo in ("", "sudo ")

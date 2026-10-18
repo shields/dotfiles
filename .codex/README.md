@@ -32,9 +32,10 @@ runs the command with `$SHELL -lc` and Claude Code with `sh -c`, so keep it vali
 in both.
 
 Claude Code runs the same hook. `.claude/settings.json` registers
-`~/.codex/hooks/git_guard.py` as a `PreToolUse` hook for Bash with the same
-interpreter lookup, which also catches the spellings its string-matched deny rules
-miss, such as `/usr/bin/git push` and `env git push`.
+`~/.codex/hooks/git_guard.py` as a `PreToolUse` hook for Bash and Monitor (which
+runs commands under the Bash permission rules) with the same interpreter lookup,
+which also catches the spellings its string-matched deny rules miss, such as
+`/usr/bin/git push` and `env git push`.
 
 Provisioning runs `tools/configure_codex.py` to authorize LGTMCP's code transfers to
 Gemini in `auto_review.extra_policy` and preapprove its `review_only` and

@@ -78,16 +78,12 @@
       "Bash(apt install *)",
       "Bash(apt-get * install *)",
       "Bash(apt-get install *)",
-      "Bash(brew bundle:*)",
       "Bash(brew install *)",
       "Bash(brew reinstall:*)",
       "Bash(brew tap:*)",
       "Bash(bun a *)",
       "Bash(bun add *)",
-      "Bash(bun i:*)",
-      "Bash(bun install:*)",
       "Bash(bundle add:*)",
-      "Bash(bundle install:*)",
       "Bash(cargo add *)",
       "Bash(cargo install *)",
       "Bash(composer require:*)",
@@ -101,14 +97,10 @@
       "Bash(go mod edit:*)",
       "Bash(mas install:*)",
       "Bash(npm add:*)",
-      "Bash(npm i:*)",
-      "Bash(npm install:*)",
       "Bash(pip install:*)",
       "Bash(pip3 install:*)",
       "Bash(pipx install:*)",
       "Bash(pnpm add:*)",
-      "Bash(pnpm i:*)",
-      "Bash(pnpm install:*)",
       "Bash(poetry add:*)",
       "Bash(rustup component add:*)",
       "Bash(rustup target add:*)",
@@ -131,6 +123,13 @@
       "Edit(//**/constraints.txt)",
       "Edit(//**/Package.swift)",
       "Edit(//**/.pre-commit-config.yaml)",
+      "Edit(//**/Gemfile)",
+      "Edit(//**/gems.rb)",
+      "Edit(//**/*.gemspec)",
+      "Edit(//**/.npmrc)",
+      "Edit(//**/bunfig.toml)",
+      "Edit(//**/.pnpmfile.cjs)",
+      "Edit(//**/pnpm-workspace.yaml)",
       "Edit(//**/uv.lock)",
       "Edit(//**/bun.lock)",
       "Edit(//**/bun.lockb)",
@@ -152,7 +151,7 @@
   "hooks": {
     "PreToolUse": [
       {
-        "matcher": "Bash|Edit|Write",
+        "matcher": "Bash|Edit|Write|Monitor",
         "hooks": [
           {
             "type": "command",
@@ -162,7 +161,7 @@
         ]
       },
       {
-        "matcher": "Bash",
+        "matcher": "Bash|Monitor",
         "hooks": [
           {
             "type": "command",
