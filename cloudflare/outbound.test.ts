@@ -305,7 +305,7 @@ void test("unsupported writes and foreign refs are denied before forwarding", as
       } as RequestInit),
       200,
       "application/x-git-receive-pack-result",
-      "000eunpack ok\n004cng refs/heads/main push destination is outside this VM's task namespace\n0000",
+      `000eunpack ok\n008cng refs/heads/main push destination is outside this VM's task namespace; allowed namespace: task/${instanceId}/*\n0000`,
     ],
     [
       new Request("https://github.com/shields/dotfiles.git/git-receive-pack", {
@@ -314,7 +314,7 @@ void test("unsupported writes and foreign refs are denied before forwarding", as
       }),
       403,
       "text/plain; charset=utf-8",
-      "push destination is outside this VM's task namespace\nrequest ID: request-1\n",
+      `push destination is outside this VM's task namespace; allowed namespace: task/${instanceId}/*\nrequest ID: request-1\n`,
     ],
     [
       new Request("https://github.com/shields/dotfiles.git/git-receive-pack", {

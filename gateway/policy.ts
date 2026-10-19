@@ -263,7 +263,7 @@ export function parsePushCommands(
       ref,
       !ref.startsWith(taskPrefix(instanceId)) ||
         ref.length === taskPrefix(instanceId).length
-        ? "push destination is outside this VM's task namespace"
+        ? `push destination is outside this VM's task namespace; allowed namespace: task/${instanceId}/*`
         : /^0+$/.test(match[2] ?? "")
           ? "branch deletion is denied"
           : null,

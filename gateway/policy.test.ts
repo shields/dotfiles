@@ -79,10 +79,10 @@ void test("denied ref updates are reported in the status format the client reque
       `ng refs/heads/task/${id}/one another ref update in this push is denied\n`,
     ),
     packet(
-      "ng refs/heads/main push destination is outside this VM's task namespace\n",
+      `ng refs/heads/main push destination is outside this VM's task namespace; allowed namespace: task/${id}/*\n`,
     ),
     packet(
-      "ng refs/tags/v1 push destination is outside this VM's task namespace\n",
+      `ng refs/tags/v1 push destination is outside this VM's task namespace; allowed namespace: task/${id}/*\n`,
     ),
     packet(`ng refs/heads/task/${id}/gone branch deletion is denied\n`),
     Buffer.from("0000"),
@@ -92,7 +92,10 @@ void test("denied ref updates are reported in the status format the client reque
     " report-status-v2 quiet object-format=sha1",
   ]) {
     const denied = pushDenial(commands(capabilities));
-    assert.match(denied.message, /outside this VM/);
+    assert.equal(
+      denied.message,
+      `push destination is outside this VM's task namespace; allowed namespace: task/${id}/*`,
+    );
     assert.deepEqual(denied.report, new Uint8Array(report));
   }
   const multiplexed = pushDenial(
@@ -129,7 +132,7 @@ void test("a sideband report larger than one packet is split across packets", ()
   assert.ok(plain.startsWith("000eunpack ok\n"));
   assert.ok(
     plain.endsWith(
-      `${refs.at(-1) ?? ""} push destination is outside this VM's task namespace\n0000`,
+      `${refs.at(-1) ?? ""} push destination is outside this VM's task namespace; allowed namespace: task/${id}/*\n0000`,
     ),
   );
 });
