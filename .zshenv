@@ -17,7 +17,8 @@
 # of forks, output and secrets: tokens exported here would reach every
 # subprocess, undoing the credential scrubbing the agents do.
 #
-# macOS gets its PATH from /etc/zprofile and .zshrc, so only Linux is touched.
+# macOS gets its PATH from /etc/zprofile and .zshrc, so only Linux's PATH is
+# touched.
 if [[ $OSTYPE == linux* ]]; then
     typeset -U path
     # Directories already on PATH keep their place, so entries that the parent
@@ -30,5 +31,31 @@ if [[ $OSTYPE == linux* ]]; then
         export SSL_CERT_FILE=/etc/ssl/certs/ca-certificates.crt
         export NODE_EXTRA_CA_CERTS=/etc/ssl/certs/ca-certificates.crt
         export REQUESTS_CA_BUNDLE=/etc/ssl/certs/ca-certificates.crt
+    fi
+fi
+
+# Claude Code's sandbox on macOS (Anthropic's sandbox-runtime) blocks trustd,
+# the service Go asks to verify certificates on macOS, so gh, crane and go fail
+# with "x509: OSStatus -26276". The sandbox's only marker is SANDBOX_RUNTIME=1;
+# CLAUDECODE=1 is also required because that name is generic. Since Go 1.27, a
+# set SSL_CERT_FILE replaces trustd, and the GODEBUG setting (which Go plans to
+# remove in 1.31) extends that to programs whose go.mod names an older Go, such
+# as crane. Programs built with an older Go toolchain still fail.
+#
+# Homebrew's ca-certificates bundle stays current with brew upgrades, unlike
+# /etc/ssl/cert.pem, a 2021 OpenBSD bundle that lacks many current roots. Roots
+# trusted only in the Keychain, such as a local development server's CA, are in
+# neither. A CA file that the sandbox sets for its own TLS-terminating proxy is
+# kept.
+#
+# Opening trustd to the sandbox (enableWeakerNetworkIsolation) would let any
+# sandboxed command reach the network around the domain allowlist, because
+# trustd fetches the URLs named in the certificates it checks.
+#
+# Linux needs none of this: Go reads root certificates from files there.
+if [[ $OSTYPE == darwin* && ${CLAUDECODE-} == 1 && ${SANDBOX_RUNTIME-} == 1 ]]; then
+    export SSL_CERT_FILE=${SSL_CERT_FILE:-/opt/homebrew/etc/ca-certificates/cert.pem}
+    if [[ ,${GODEBUG-}, != *,x509sslcertoverrideplatform=* ]]; then
+        export GODEBUG=${GODEBUG:+$GODEBUG,}x509sslcertoverrideplatform=1
     fi
 fi
