@@ -24,6 +24,10 @@
 # vertical metrics that set the line height are unchanged.
 
 import math
+import shutil
+import subprocess
+import sys
+from hashlib import sha256
 from pathlib import Path
 from typing import TYPE_CHECKING, NamedTuple, Protocol, cast
 
@@ -48,6 +52,12 @@ FAMILY = "CommitMonoShields Nerd Font"
 WINDOWS_NAMES = (3, 1, 0x409)
 MACINTOSH_NAMES = (1, 0, 0)
 LICENSE_NAME_IDS = (0, 13, 14)
+DONOR_COPYRIGHT = (
+    "Copyright 2022 The Noto Project Authors "
+    "(https://github.com/notofonts/latin-greek-cyrillic)"
+)
+DONOR_DIR = SOURCE_DIR / "noto-sans-mono"
+DOUBLE_OBLIQUE_HYPHEN = 0x2E17
 
 # Codepoint ranges the Nerd Fonts patcher writes into (setup_patch_set in
 # font-patcher v3.5.1, with --complete on a monospaced font). Source glyphs in
@@ -638,9 +648,10 @@ def test_names(fonts: Fonts, platform: tuple[int, int, int]) -> None:
         NAME_ID_FULL_NAME: fonts.face.full_name,
         NAME_ID_POSTSCRIPT_NAME: fonts.face.postscript,
     }
-    # Copyright and license must carry over from Commit Mono.
     for name_id in LICENSE_NAME_IDS:
         expected[name_id] = fonts.source.name(name_id, WINDOWS_NAMES)
+    expected[0] = f"{expected[0]}\n\n{DONOR_COPYRIGHT}"
+    expected[13] = f"{expected[13]}\n\n{(DONOR_DIR / 'OFL.txt').read_text().strip()}"
     actual = {name_id: fonts.patched.name(name_id, platform) for name_id in expected}
     assert actual == expected
 
@@ -829,9 +840,86 @@ def test_additions_stay_inside_the_patchers_ranges(fonts: Fonts) -> None:
     outside = [
         f"U+{codepoint:04X}"
         for codepoint in fonts.added
-        if not in_patched_range(codepoint)
+        if not in_patched_range(codepoint) and codepoint != DOUBLE_OBLIQUE_HYPHEN
     ]
     assert not outside, summarize(outside)
+
+
+def test_donor_subset_matches_documented_source() -> None:
+    donor_path = DONOR_DIR / "NotoSansMono-DoubleObliqueHyphen.ttf"
+    assert sha256(donor_path.read_bytes()).hexdigest() == (
+        "79a7324d5e446579a82c3dc2b7d189b48ff08485c041f205e7fa05e4e3220d5b"
+    )
+    with TTFont(donor_path) as donor:
+        assert set(donor.getBestCmap() or {}) == {DOUBLE_OBLIQUE_HYPHEN}
+
+
+def test_double_oblique_hyphen_has_two_sloping_strokes(fonts: Fonts) -> None:
+    patched = fonts.patched
+    glyph = patched.cmap[DOUBLE_OBLIQUE_HYPHEN]
+    expected_bounds = {
+        "Regular": (148, 81, 452, 481),
+        "Italic": (119, 81, 474, 481),
+        "Bold": (147, 74, 453, 490),
+        "Bold Italic": (118, 74, 476, 490),
+    }
+    assert patched.bounds(glyph) == expected_bounds[fonts.face.style]
+    outline = patched.outline(glyph)
+    assert [operator for operator, _ in outline] == [
+        "moveTo",
+        "lineTo",
+        "lineTo",
+        "lineTo",
+        "closePath",
+        "moveTo",
+        "lineTo",
+        "lineTo",
+        "lineTo",
+        "closePath",
+    ]
+    for start in (0, 5):
+        points = [outline[start + i][1][0] for i in range(4)]
+        left, right = points[1:3]
+        assert right[0] > left[0]
+        assert right[1] > left[1]
+        assert all(0 < x < patched.cell for x, _ in points)
+        assert all(0 < y < patched.ascent for _, y in points)
+
+
+def test_graft_preserves_all_existing_glyphs_and_is_repeatable(
+    fonts: Fonts, tmp_path: Path
+) -> None:
+    outputs = [tmp_path / "first.otf", tmp_path / "second.otf"]
+    for output in outputs:
+        _ = shutil.copyfile(fonts.source.path, output)
+    _ = subprocess.run(
+        [
+            sys.executable,
+            str(REPO / "tools/add_commit_mono_glyph.py"),
+            *map(str, outputs),
+        ],
+        check=True,
+        capture_output=True,
+        timeout=60,
+    )
+    assert outputs[0].read_bytes() == outputs[1].read_bytes()
+    grafted = Font(outputs[0])
+    assert set(grafted.cmap) - set(fonts.source.cmap) == {DOUBLE_OBLIQUE_HYPHEN}
+    assert all(
+        grafted.outline(glyph) == fonts.source.outline(glyph)
+        and grafted.advance(glyph) == fonts.source.advance(glyph)
+        for glyph in fonts.source.glyph_names
+    )
+    before = outputs[0].read_bytes()
+    result = subprocess.run(
+        [sys.executable, str(REPO / "tools/add_commit_mono_glyph.py"), str(outputs[0])],
+        check=False,
+        capture_output=True,
+        timeout=60,
+    )
+    assert result.returncode != 0
+    assert b"U+2E17 already present" in result.stderr
+    assert outputs[0].read_bytes() == before
 
 
 def test_every_glyph_advances_one_cell(fonts: Fonts) -> None:

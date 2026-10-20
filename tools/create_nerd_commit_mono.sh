@@ -43,10 +43,12 @@ temp_dir="$(mktemp -d)"
 trap 'rm -rf "$temp_dir"' EXIT
 trap 'exit 1' INT TERM
 
-mkdir "$temp_dir/out"
+mkdir "$temp_dir/in" "$temp_dir/out"
+# The patcher scans recursively and opens source fonts for writing.
+cp "$source_dir"/*.otf "$temp_dir/in"
 
 docker run --rm \
-    --volume "$source_dir:/in:ro" \
+    --volume "$temp_dir/in:/in" \
     --volume "$temp_dir/out:/out" \
     nerdfonts/patcher:4.27.3 --complete --no-progressbars
 
@@ -60,6 +62,9 @@ if [[ $produced -ne $expected ]]; then
     echo "expected $expected patched fonts, got $produced" >&2
     exit 1
 fi
+
+uv run --frozen --project "$repo_dir" python \
+    "$repo_dir/tools/add_commit_mono_glyph.py" "$temp_dir"/out/*.otf
 
 mkdir -p "$output_dir"
 rm -f "$output_dir"/CommitMonoShieldsNerdFont-*.otf

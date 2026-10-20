@@ -22,6 +22,41 @@ which the site writes into the zip. `tools/create_nerd_commit_mono.sh` patches
 them into the "CommitMonoShields Nerd Font" in `Library/Fonts/`, and
 `tests/test_nerd_commit_mono.py` checks the result.
 
+## Double oblique hyphen
+
+The build also adds U+2E17 DOUBLE OBLIQUE HYPHEN (`⸗`) from Noto Sans Mono,
+so the character is available in the font itself in Emacs and terminal
+emulators such as iTerm2. `tools/add_commit_mono_glyph.py` runs after the Nerd
+Fonts patcher. It adds the glyph at weights 350 and 700, matching the regular
+and bold faces, and applies Commit Mono's 1:6 shear and horizontal centering
+to the italic faces. Both fonts use 1000 units per em and a 600-unit advance.
+The existing glyphs, line metrics, and OpenType substitutions are preserved.
+
+`noto-sans-mono/NotoSansMono-DoubleObliqueHyphen.ttf` is a subset of the
+Noto Sans Mono 2.014 variable font containing only U+2E17 and `.notdef`.
+The source is pinned to
+[Google Fonts commit 47d54ca1ebb14fd864695f1d39dc734f39017c33](https://github.com/google/fonts/tree/47d54ca1ebb14fd864695f1d39dc734f39017c33/ofl/notosansmono).
+The upstream file's SHA-256 is
+`2cb2adb378a8f574213e23df697050b83c54c27df465a2015552740b2769a081`.
+To regenerate the subset from the repository root:
+
+```sh
+curl --fail --location \
+    'https://raw.githubusercontent.com/google/fonts/47d54ca1ebb14fd864695f1d39dc734f39017c33/ofl/notosansmono/NotoSansMono%5Bwdth,wght%5D.ttf' \
+    --output /tmp/NotoSansMono.ttf
+uv run fonttools subset /tmp/NotoSansMono.ttf \
+    --unicodes=U+2E17 --name-IDs='*' --name-languages='*' --name-legacy \
+    --no-recalc-timestamp --recalc-bounds \
+    --output-file=commit-mono/noto-sans-mono/NotoSansMono-DoubleObliqueHyphen.ttf
+```
+
+The subset's SHA-256 is
+`79a7324d5e446579a82c3dc2b7d189b48ff08485c041f205e7fa05e4e3220d5b`.
+Its original notices are retained, and the unmodified upstream license is in
+[`noto-sans-mono/OFL.txt`](noto-sans-mono/OFL.txt). The final OTFs retain Commit
+Mono's notices and additionally embed the donor's copyright and full OFL
+license in their name tables.
+
 ## Spacing
 
 `letterSpacing` and `lineHeight` are chosen so that CommitMonoShields at 12pt
