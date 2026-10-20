@@ -24,6 +24,7 @@
 # vertical metrics that set the line height are unchanged.
 
 import math
+import os
 import shutil
 import subprocess
 import sys
@@ -920,6 +921,67 @@ def test_graft_preserves_all_existing_glyphs_and_is_repeatable(
     assert result.returncode != 0
     assert b"U+2E17 already present" in result.stderr
     assert outputs[0].read_bytes() == before
+
+
+def test_rebuild_with_read_only_patcher_outputs(tmp_path: Path) -> None:
+    repo = tmp_path / "repo"
+    tools = repo / "tools"
+    tools.mkdir(parents=True)
+    for name in ("create_nerd_commit_mono.sh", "add_commit_mono_glyph.py"):
+        _ = shutil.copyfile(REPO / "tools" / name, tools / name)
+    _ = shutil.copytree(DONOR_DIR, repo / "commit-mono" / DONOR_DIR.name)
+    source = SOURCE_DIR / f"{FACES[0].source}.otf"
+    _ = shutil.copyfile(source, repo / "commit-mono" / source.name)
+
+    bin_dir = tmp_path / "bin"
+    bin_dir.mkdir()
+    stubs = {
+        "docker": """
+import shutil
+import sys
+from pathlib import Path
+
+mounts = {}
+for index, arg in enumerate(sys.argv):
+    if arg == "--volume":
+        host, container = sys.argv[index + 1].rsplit(":", 1)
+        mounts[container] = Path(host)
+for source in mounts["/in"].glob("*.otf"):
+    output = mounts["/out"] / source.name
+    shutil.copyfile(source, output)
+    output.chmod(0o444)
+""",
+        "uv": """
+import os
+import stat
+import sys
+from pathlib import Path
+
+for arg in sys.argv[7:]:
+    info = Path(arg).stat()
+    assert info.st_uid == os.getuid()
+    assert info.st_mode & stat.S_IWUSR
+os.execv(sys.executable, [sys.executable, *sys.argv[6:]])
+""",
+    }
+    for name, body in stubs.items():
+        stub = bin_dir / name
+        _ = stub.write_text(f"#!{sys.executable}\n{body}")
+        stub.chmod(0o755)
+
+    result = subprocess.run(
+        ["/bin/bash", str(tools / "create_nerd_commit_mono.sh")],
+        env=os.environ | {"PATH": f"{bin_dir}{os.pathsep}{os.environ['PATH']}"},
+        capture_output=True,
+        text=True,
+        check=False,
+        timeout=60,
+    )
+    assert result.returncode == 0, result.stderr
+    outputs = list((repo / "Library" / "Fonts").glob("*.otf"))
+    assert len(outputs) == 1
+    with TTFont(outputs[0]) as font:
+        assert DOUBLE_OBLIQUE_HYPHEN in (font.getBestCmap() or {})
 
 
 def test_every_glyph_advances_one_cell(fonts: Fonts) -> None:

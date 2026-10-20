@@ -63,9 +63,12 @@ if [[ $produced -ne $expected ]]; then
     exit 1
 fi
 
+# Docker can create root-owned outputs on Linux.
+mkdir "$temp_dir/fonts"
+install -m 0644 "$temp_dir"/out/*.otf "$temp_dir/fonts"
 uv run --frozen --project "$repo_dir" python \
-    "$repo_dir/tools/add_commit_mono_glyph.py" "$temp_dir"/out/*.otf
+    "$repo_dir/tools/add_commit_mono_glyph.py" "$temp_dir"/fonts/*.otf
 
 mkdir -p "$output_dir"
 rm -f "$output_dir"/CommitMonoShieldsNerdFont-*.otf
-cp "$temp_dir"/out/*.otf "$output_dir"
+cp "$temp_dir"/fonts/*.otf "$output_dir"
