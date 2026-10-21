@@ -40,6 +40,7 @@ function! s:WhitespaceColors() abort
     highlight! link SpecialKey ShieldsWhitespace
     highlight! link Whitespace ShieldsWhitespace
     highlight! link NonText ShieldsWhitespace
+    highlight EndOfBuffer guifg=#365773 guibg=NONE ctermfg=24 ctermbg=NONE gui=NONE cterm=NONE
 endfunction
 
 function! s:WhitespaceMarkers() abort

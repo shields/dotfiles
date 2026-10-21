@@ -27,6 +27,7 @@ class VimReport(TypedDict):
     hidden: str
     truncated: str
     colors: list[str]
+    filler_background: list[str]
     truecolor: int
 
 
@@ -56,8 +57,12 @@ colorscheme default
 let group = synIDtrans(hlID('SpecialKey'))
 let colors = [synIDattr(group, 'fg#', 'gui'), synIDattr(group, 'bg#', 'gui'),
             \ synIDattr(group, 'fg', 'cterm'), synIDattr(group, 'bg', 'cterm')]
+let filler = synIDtrans(hlID('EndOfBuffer'))
+let filler_background = [synIDattr(filler, 'bg#', 'gui'),
+            \ synIDattr(filler, 'bg', 'cterm')]
 call writefile([json_encode({'reports': reports, 'hidden': hidden,
             \ 'truncated': truncated, 'colors': colors,
+            \ 'filler_background': filler_background,
             \ 'truecolor': &termguicolors})], $WHITESPACE_REPORT)
 qa!
 """
@@ -113,6 +118,7 @@ def test_vim_whitespace_display(tmp_path: Path, *, truecolor: bool) -> None:
     assert data["hidden"].count("␣") == 2
     assert data["truncated"] == "…"
     assert data["colors"] == ["#365773", "#e8f4ff", "24", "195"]
+    assert data["filler_background"] == ["", ""]
     assert bool(data["truecolor"]) == truecolor
     assert all((tmp_path / name).read_text() == SAMPLE for name in FILES)
 
