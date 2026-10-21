@@ -14,8 +14,8 @@
 
 # lima/dev.yaml is checked by limactl itself, with its defaults filled in, so
 # these tests need no YAML library. They skip where limactl is missing, as in
-# the Linux image. They read the settings; only a running VM shows that the
-# isolation works.
+# the Linux image, but CI installs it. They read the settings; only a running VM
+# shows that the isolation works.
 
 import ipaddress
 import os
@@ -32,7 +32,7 @@ LIMACTL = shutil.which("limactl")
 
 pytestmark = pytest.mark.skipif(
     LIMACTL is None,
-    reason="limactl is installed on the Mac only, not in the Linux image",
+    reason="limactl is missing (the Mac and CI install it, the Linux image does not)",
 )
 
 

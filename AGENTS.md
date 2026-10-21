@@ -23,6 +23,14 @@ limitations under the License.
   runs `make test lint` inside it, so it also covers uncommitted changes.
   `MODULES` selects Brewfile modules (`dev` by default, and `make test lint`
   needs its tools). The first run takes tens of minutes.
+- **CI**: `.github/workflows/ci.yml` runs `make lint build test` on
+  ubuntu-24.04 as the "Lint and test" check, after `make ci-tools`
+  (`tools/install_ci_tools.sh`) installs the tools the tests need and
+  `make setup` installs the locked dependencies. `DOTFILES_FAIL_ON_SKIP=1` makes
+  any skipped pytest test fail the run, so a test that needs a new tool needs it
+  added to the script, not a skip. Node and zsh tests have no skip mechanism;
+  keep it that way. The script pins Lima with a checksum; bump it by hand.
+  `zizmor.yml` audits the workflows.
 - **Fonts**: `tools/create_nerd_commit_mono.sh` rebuilds the Nerd Font in
   `Library/Fonts/` from `commit-mono/` (checked by `make test`)
 - **Benchmark**: `make bench` times `wt` with hyperfine in a throwaway repo;
@@ -130,7 +138,8 @@ Throwaway Lima VMs (the README describes them for users):
   anywhere. `gateway/*.test.ts` cover the policy, token refresh, live grants,
   audit and HTTPS Unix socket. `tests/fake_github.py` and
   `tests/test_github_app_token.py` still cover the non-gateway token manager.
-  `tests/test_lima_dev_yaml.py` needs `limactl`, so it skips in the Linux image.
+  `tests/test_lima_dev_yaml.py` needs `limactl`, so it skips in the Linux image
+  (CI installs it).
   No automated test covers what only a running VM shows: the network
   isolation, relay and agent behavior under the installed managed settings.
 

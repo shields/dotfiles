@@ -76,7 +76,7 @@ void test("CLI grants and edits apply live and disabled VM logs stay addressable
           resolve(false);
         });
       });
-      if (healthy) {
+      if (healthy || service.exitCode !== null || service.signalCode !== null) {
         break;
       }
       await new Promise((resolve) => {

@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-.PHONY: build test test-linux lint fmt run bench bench-startup
+.PHONY: setup ci-tools build test test-node test-zsh test-python test-linux lint lint-ts lint-python lint-shell fmt run bench bench-startup
 
 # Shell scripts to lint and format with shellcheck and shfmt. zsh files
 # (.zshrc, .zprofile, .zsh.d/*.zsh, tests/*.zsh) and vendored files
@@ -33,6 +33,7 @@ SHELL_SOURCES = \
 	cloudflare/entrypoint.sh \
 	tools/create_nerd_andale_mono.sh \
 	tools/create_nerd_commit_mono.sh \
+	tools/install_ci_tools.sh \
 	tools/stage_tree.sh \
 	bin/$$ \
 	bin/docker-prune \
@@ -49,14 +50,27 @@ build:
 	bun run tsc --noEmit
 	bun run tsc --noEmit -p cloudflare/tsconfig.json
 
-test:
+setup:
+	bun install --frozen-lockfile
+	uv sync --locked
+
+ci-tools:
+	tools/install_ci_tools.sh
+
+test: test-node test-zsh test-python
+
+test-node:
 	node --test gateway/*.test.ts cloudflare/*.test.ts
+
+test-zsh:
 	zsh tests/test_gcl.zsh
 	zsh tests/test_git_add_upstream.zsh
 	zsh tests/test_ghfork.zsh
 	zsh tests/test_limavm.zsh
 	zsh tests/test_setup_secrets.zsh
 	zsh tests/test_wt.zsh
+
+test-python:
 	uv run pytest
 
 MODULES ?= dev
@@ -71,11 +85,17 @@ test-linux:
 	docker build --build-arg "MODULES=$(MODULES)" -t "$(LINUX_IMAGE)" -f cloudflare/Dockerfile "$$stage/tree"; \
 	docker run --rm "$(LINUX_IMAGE)" zsh -c 'bun install --frozen-lockfile && make test lint'
 
-lint:
+lint: lint-ts lint-python lint-shell
+
+lint-ts:
 	bun run eslint .
+
+lint-python:
 	uv run ruff check
 	uv run ty check
 	basedpyright
+
+lint-shell:
 	shellcheck --exclude=SC1091 $(SHELL_SOURCES)
 	shfmt -i 4 -d $(SHELL_SOURCES)
 
