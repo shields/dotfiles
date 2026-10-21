@@ -15,7 +15,7 @@
 # The build context is a staged tree (tools/stage_tree.sh DEST), so this builds
 # from any directory with: docker build -f DEST/cloudflare/Dockerfile DEST
 
-FROM debian:trixie-slim
+FROM debian:trixie-slim@sha256:62bd423aeee912639ca8ee681c2b762cb3e25137e0a92b20be455898a9f034ad
 
 # provision.sh installs everything else, through provision/linux-system.sh.
 RUN DEBIAN_FRONTEND=noninteractive apt-get update \
