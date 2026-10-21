@@ -102,9 +102,12 @@
  '(parenthesis ((t (:inherit font-lock-bracket-face))))
  '(region ((((type ns)) (:background "selectedTextBackgroundColor" :extend nil))
            (t (:background "#dfecff" :extend nil))))
+ '(shields/whitespace ((t (:inherit fixed-pitch :foreground "#365773" :background "#e8f4ff"))))
+ '(shields/line-marker ((t (:inherit shields/whitespace))))
  '(show-paren-match ((t (:foreground "magenta" :weight bold))))
  '(show-paren-match-expression ((t (:background "#f4f4ff"))))
- '(variable-pitch ((t (:height 1.2 :family "Avenir Next")))))
+ '(variable-pitch ((t (:height 1.2 :family "Avenir Next"))))
+ '(whitespace-tab ((t (:inherit shields/whitespace)))))
 
 (provide-theme 'shields)
 

@@ -1,4 +1,4 @@
-" Copyright © 2003, 2009 Michael Shields
+" Copyright © 2003, 2009, 2026 Michael Shields
 "
 " Licensed under the Apache License, Version 2.0 (the "License");
 " you may not use this file except in compliance with the License.
@@ -24,6 +24,37 @@ set incsearch
 set autoindent
 set sw=4
 set softtabstop=4
+
+set wrap
+set showbreak=⸗
+set list
+let &listchars = 'tab:⇥ ,trail:␣,extends:…,precedes:…'
+let g:shields_tab_required_filetypes = ['go', 'gomod', 'gowork', 'make']
+
+if $TERM_PROGRAM ==# 'iTerm.app' || $COLORTERM =~# 'truecolor\|24bit'
+    set termguicolors
+endif
+
+function! s:WhitespaceColors() abort
+    highlight ShieldsWhitespace guifg=#365773 guibg=#e8f4ff ctermfg=24 ctermbg=195 gui=NONE cterm=NONE
+    highlight! link SpecialKey ShieldsWhitespace
+    highlight! link Whitespace ShieldsWhitespace
+    highlight! link NonText ShieldsWhitespace
+endfunction
+
+function! s:WhitespaceMarkers() abort
+    let hide_tabs = index(g:shields_tab_required_filetypes, &filetype) >= 0
+                \ || !get(b:, 'shields_show_tabs', 1)
+    let &l:listchars = 'tab:' . (hide_tabs ? '  ' : '⇥ ')
+                \ . ',trail:␣,extends:…,precedes:…'
+endfunction
+
+augroup shields_whitespace
+    autocmd!
+    autocmd ColorScheme * call s:WhitespaceColors()
+    autocmd FileType,BufWinEnter * call s:WhitespaceMarkers()
+augroup END
+call s:WhitespaceColors()
 
 " Disable cursor blink in graphical mode
 set guicursor=a:blinkoff0

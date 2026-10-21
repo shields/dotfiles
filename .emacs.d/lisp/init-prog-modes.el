@@ -72,9 +72,7 @@
   :custom
   (godoc-at-point-function #'godoc-gogetdoc)
   :hook
-  (go-ts-mode . eglot-ensure)
-  (go-ts-mode . shields/suppress-whitespace-mode)
-  (go-mod-ts-mode . shields/suppress-whitespace-mode))
+  (go-ts-mode . eglot-ensure))
 
 ;; JavaScript and TypeScript
 (use-package js

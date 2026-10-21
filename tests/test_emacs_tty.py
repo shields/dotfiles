@@ -203,11 +203,11 @@ HARNESS = r""";;; -*- lexical-binding: t -*-
 type Report = dict[str, object]
 
 
-def run_session(scenario: str, home: Path) -> Report:
+def run_session(scenario: str, home: Path, extra_lisp: str = "") -> Report:
     emacs = shutil.which("emacs")
     assert emacs, "emacs is required"
     harness = home / "harness.el"
-    _ = harness.write_text(HARNESS, encoding="utf-8")
+    _ = harness.write_text(HARNESS + extra_lisp, encoding="utf-8")
     keys = [*TERMINAL_KEYS, *GRAPHICAL_KEYS, *OTHER_KEYS]
     env = {
         "PATH": os.environ["PATH"],
@@ -339,3 +339,125 @@ def test_region_and_match_have_a_color_for_every_frame(report: Report) -> None:
     assert match["ns"] == {"background": "findHighlightColor", "foreground": "black"}
     assert match["other"] == {"background": "yellow", "foreground": "black"}
     assert match["here"] == match["other"]
+
+
+WHITESPACE_TESTS = r"""
+(require 'ert)
+(require 'make-mode)
+
+(defmacro h-with-whitespace-buffer (&rest body)
+  `(let ((noninteractive nil)
+         (text-mode-hook nil)
+         (prog-mode-hook nil))
+     (with-temp-buffer ,@body)))
+
+(defun h-trailing-markers ()
+  (sort (seq-filter (lambda (overlay)
+                      (overlay-get overlay 'shields/trailing-space))
+                    (overlays-in (point-min) (point-max)))
+        (lambda (a b) (< (overlay-start a) (overlay-start b)))))
+
+(defun h-tab-marker ()
+  (let ((mapping (and buffer-display-table (aref buffer-display-table ?\t))))
+    (and mapping (glyph-char (aref mapping 0)))))
+
+(ert-deftest h-whitespace-activates-automatically ()
+  (h-with-whitespace-buffer
+    (rename-buffer "whitespace-test" t)
+    (text-mode)
+    (should whitespace-mode)
+    (insert "value\t \n")
+    (jit-lock-fontify-now)
+    (should (eq (h-tab-marker) ?⇥))
+    (should (= (length (h-trailing-markers)) 1))
+    (makefile-mode)
+    (should whitespace-mode)
+    (jit-lock-fontify-now)
+    (should-not (h-tab-marker))
+    (should (= (length (h-trailing-markers)) 1))))
+
+(ert-deftest h-whitespace-markers-preserve-text-and-tab-stops ()
+  (h-with-whitespace-buffer
+    (text-mode)
+    (insert "a\tb \t \nnext\n")
+    (whitespace-mode 1)
+    (set-buffer-modified-p nil)
+    (jit-lock-fontify-now)
+    (should (equal (mapcar #'overlay-start (h-trailing-markers)) '(4 6)))
+    (dolist (overlay (h-trailing-markers))
+      (should (equal (overlay-get overlay 'display) "␣"))
+      (should (= (- (overlay-end overlay) (overlay-start overlay)) 1)))
+    (should (eq (h-tab-marker) ?⇥))
+    (should (eq (aref (aref buffer-display-table ?\t) 1) ?\t))
+    (should (equal (buffer-string) "a\tb \t \nnext\n"))
+    (should-not (buffer-modified-p))
+    (should (eq (glyph-char (display-table-slot buffer-display-table 'wrap)) ?⸗))
+    (should-not truncate-lines)
+    (goto-char (point-min))
+    (end-of-line)
+    (insert "x")
+    (jit-lock-fontify-now)
+    (should-not (h-trailing-markers))
+    (delete-char -1)
+    (jit-lock-fontify-now)
+    (should (= (length (h-trailing-markers)) 2))
+    (whitespace-mode -1)
+    (should-not (h-trailing-markers))))
+
+(ert-deftest h-whitespace-exempts-tabs-but-keeps-trailing-spaces ()
+  (dolist (mode '(go-mode go-ts-mode go-mod-mode go-mod-ts-mode
+                 go-work-mode go-work-ts-mode makefile-mode makefile-gmake-mode))
+    (h-with-whitespace-buffer
+      (setq major-mode mode)
+      (run-hooks 'after-change-major-mode-hook)
+      (insert "\tvalue \t \n")
+      (whitespace-mode 1)
+      (jit-lock-fontify-now)
+      (should-not (h-tab-marker))
+      (should (= (length (h-trailing-markers)) 2)))))
+
+(ert-deftest h-whitespace-tsv-and-mode-changes ()
+  (h-with-whitespace-buffer
+    (setq buffer-file-name "/tmp/example.tsv")
+    (text-mode)
+    (insert "one\ttwo \n")
+    (whitespace-mode 1)
+    (jit-lock-fontify-now)
+    (should (eq (h-tab-marker) ?⇥))
+    (should (= (length (h-trailing-markers)) 1))
+    (makefile-mode)
+    (whitespace-mode 1)
+    (jit-lock-fontify-now)
+    (should-not (h-tab-marker))
+    (should (= (length (h-trailing-markers)) 1))
+    (text-mode)
+    (whitespace-mode 1)
+    (jit-lock-fontify-now)
+    (should (eq (h-tab-marker) ?⇥))
+    (setq-local shields/show-tabs nil)
+    (run-hooks 'hack-local-variables-hook)
+    (jit-lock-fontify-now)
+    (should-not (h-tab-marker))
+    (should (= (length (h-trailing-markers)) 1))
+    (narrow-to-region 1 2)
+    (whitespace-mode -1)
+    (widen)
+    (should-not (h-trailing-markers))))
+
+(ert-deftest h-whitespace-face-and-wrap-defaults ()
+  (should (eq (glyph-char (display-table-slot standard-display-table 'wrap)) ?⸗))
+  (should (eq (glyph-char (display-table-slot standard-display-table 'truncation)) ?…))
+  (should-not (default-value 'truncate-lines))
+  (should-not (default-value 'truncate-partial-width-windows))
+  (dolist (face '(shields/whitespace shields/line-marker whitespace-tab))
+    (should (equal (face-attribute face :family nil t) "CommitMonoShields Nerd Font"))
+    (should (equal (face-attribute face :foreground nil t) "#365773"))
+    (should (equal (face-attribute face :background nil t) "#e8f4ff"))))
+
+(ert-run-tests-batch-and-exit "^h-whitespace-")
+"""
+
+
+@pytest.mark.parametrize("scenario", ["linux", "macos"])
+def test_whitespace_display(scenario: str, tmp_path: Path) -> None:
+    _ = run_session(scenario, tmp_path, WHITESPACE_TESTS)

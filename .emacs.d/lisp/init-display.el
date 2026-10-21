@@ -49,14 +49,67 @@
 (when (fboundp 'tool-bar-mode)
   (tool-bar-mode 0))
 
-;; Highlight tabs and trailing spaces
-(setq-default whitespace-style
-              '(face
-                tabs trailing space-before-tab space-after-tab tab-mark
-                missing-newline-at-eof))
-(global-whitespace-mode 1)
-(defun shields/suppress-whitespace-mode ()
-  (setq-local whitespace-style nil))
+(require 'whitespace)
+(require 'jit-lock)
+
+(defface shields/whitespace '((t (:inherit fixed-pitch)))
+  "Face for display-only whitespace markers.")
+(defface shields/line-marker '((t (:inherit shields/whitespace)))
+  "Face for line truncation and wrap markers.")
+
+(setq-default whitespace-style '(face tabs tab-mark))
+(setopt whitespace-display-mappings '((tab-mark ?\t [?⇥ ?\t])))
+
+(defvar shields/tab-required-modes
+  '(go-mode go-ts-mode go-mod-mode go-mod-ts-mode go-work-mode go-work-ts-mode
+    makefile-mode makefile-ts-mode)
+  "Major modes whose tabs should remain blank, including derived modes.")
+(defvar-local shields/show-tabs t
+  "Whether to mark tabs in buffers whose format does not require them.")
+(put 'shields/show-tabs 'safe-local-variable #'booleanp)
+
+(defun shields/update-whitespace-style ()
+  "Choose tab visibility for the current buffer's format."
+  (let ((enabled whitespace-mode))
+    (when enabled (whitespace-mode -1))
+    (setq-local whitespace-style
+                (if (or (not shields/show-tabs)
+                        (apply #'derived-mode-p shields/tab-required-modes))
+                    '(face)
+                  '(face tabs tab-mark)))
+    (when enabled (whitespace-mode 1))))
+(add-hook 'after-change-major-mode-hook #'shields/update-whitespace-style -10)
+(add-hook 'hack-local-variables-hook #'shields/update-whitespace-style)
+
+(defun shields/clear-trailing-space-markers ()
+  "Remove this buffer's trailing-space overlays."
+  (save-restriction
+    (widen)
+    (remove-overlays (point-min) (point-max) 'shields/trailing-space t)))
+
+(defun shields/fontify-trailing-spaces (start end)
+  "Mark trailing spaces on the lines between START and END."
+  (save-excursion
+    (save-match-data
+      (save-restriction
+        (widen)
+        (goto-char end)
+        (setq end (line-end-position))
+        (goto-char start)
+        (setq start (line-beginning-position))
+        (remove-overlays start end 'shields/trailing-space t)
+        (goto-char start)
+        (while (re-search-forward "[ \t]+$" end t)
+          (let ((limit (match-end 0)))
+            (goto-char (match-beginning 0))
+            (while (< (point) limit)
+              (when (eq (char-after) ?\s)
+                (let ((overlay (make-overlay (point) (1+ (point)))))
+                  (overlay-put overlay 'shields/trailing-space t)
+                  (overlay-put overlay 'evaporate t)
+                  (overlay-put overlay 'face 'shields/whitespace)
+                  (overlay-put overlay 'display (string ?␣))))
+              (forward-char))))))))
 
 ;; Remove trailing whitespace on save, for edited lines only.
 (use-package ws-butler
@@ -119,22 +172,13 @@
 
 (setopt scroll-error-top-bottom t)
 
-(setq-default truncate-lines t)
+(setq-default truncate-lines nil
+              truncate-partial-width-windows nil)
 
-;; Markers shown when the right fringe is disabled (see above).  The family
-;; override is required because display-table glyphs attached to a face are
-;; resolved against the face's primary font directly, bypassing the fontset
-;; fallback that handles missing glyphs in normal text.  Without it the face
-;; inherits the default font (Commit Mono, which lacks U+2E17 DOUBLE OBLIQUE
-;; HYPHEN ⸗) and the wrap marker shows as a missing-glyph box -- even though
-;; ⸗ renders fine inline because the fallback covers it.
-(defface shields/line-marker '((t :family "Courier New" :background "#e8f4ff"))
-  "Face for line truncation and wrap markers.")
 (defun shields/install-line-markers (table)
   "Set truncation and wrap markers in display TABLE."
   (set-display-table-slot table 'truncation
                           (make-glyph-code ?… 'shields/line-marker))
-  ;; The double oblique hyphen is what Gutenberg used.
   (set-display-table-slot table 'wrap
                           (make-glyph-code ?⸗ 'shields/line-marker)))
 (unless standard-display-table
@@ -142,11 +186,19 @@
 (shields/install-line-markers standard-display-table)
 ;; `whitespace-mode' installs a buffer-local display table for `tab-mark',
 ;; which shadows the standard one.  Reapply our markers there too.
-(defun shields/whitespace-mode-line-markers ()
-  "Reapply line markers after `whitespace-mode' installs its table."
-  (when (and whitespace-mode buffer-display-table)
-    (shields/install-line-markers buffer-display-table)))
-(add-hook 'whitespace-mode-hook #'shields/whitespace-mode-line-markers)
+(defun shields/whitespace-mode-markers ()
+  "Keep display markers synchronized with `whitespace-mode'."
+  (if whitespace-mode
+      (progn
+        (when buffer-display-table
+          (shields/install-line-markers buffer-display-table))
+        (add-hook 'change-major-mode-hook #'shields/clear-trailing-space-markers nil t)
+        (jit-lock-register #'shields/fontify-trailing-spaces))
+    (jit-lock-unregister #'shields/fontify-trailing-spaces)
+    (remove-hook 'change-major-mode-hook #'shields/clear-trailing-space-markers t)
+    (shields/clear-trailing-space-markers)))
+(add-hook 'whitespace-mode-hook #'shields/whitespace-mode-markers)
+(global-whitespace-mode 1)
 
 ;; Enable horizontal trackpad scrolling.
 (setopt mouse-wheel-tilt-scroll t

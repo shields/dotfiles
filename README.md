@@ -33,6 +33,50 @@ Additional steps not yet automated:
 Many preferences can be translated to `defaults write` settings using
 `tools/diff_defaults.py`.
 
+# Whitespace display
+
+Emacs and Vim wrap long lines without inserting newlines. Display markers use
+dark blue (`#365773`) on pale blue (`#e8f4ff`) to distinguish them from file
+contents. CommitMonoShields Nerd Font contains all three glyphs; iTerm2 uses
+the same font as graphical Emacs.
+
+| Meaning        | Marker       | Emacs                  | Vim                       |
+| -------------- | ------------ | ---------------------- | ------------------------- |
+| Soft wrap      | `⸗` (U+2E17) | End of the screen line | Start of the continuation |
+| Tab            | `⇥` (U+21E5) | Preserves tab stops    | Preserves tab stops       |
+| Trailing space | `␣` (U+2423) | One per space          | One per space             |
+
+Ordinary spaces remain blank. Tabs remain blank in Go source, `go.mod`,
+`go.work`, and Makefiles, including trailing tabs. Trailing spaces remain
+visible in those files. TSV tabs remain visible as `⇥`. For another format
+that requires tabs, add its mode to `shields/tab-required-modes` in Emacs or
+its filetype to
+`g:shields_tab_required_filetypes` in Vim. Emacs buffer-local
+`shields/show-tabs` and Vim buffer-local `b:shields_show_tabs` can also disable
+tab markers.
+
+Vim uses true color in iTerm2 and terminals advertising it through `COLORTERM`;
+its 256-color fallback uses colors 24 and 195. Emacs maps the face colors to
+the terminal's available palette. With wrapping explicitly disabled, both
+editors use `…` to mark truncated text.
+
+`bin/pager` keeps less's normal line wrapping. Less 710 has no setting for a
+soft-wrap marker, custom tab markers, trailing-space markers, or filetype
+exceptions. Its `--rscroll` option marks **truncation**, not wrapping, so the
+pager uses `…` with the same 256-color approximation when `-S` is requested.
+Input is passed through unchanged, preserving searching, copying, and ANSI
+formatting. The optional `--PROC-TAB` flag can reveal tabs as `^I` for
+inspection. See `man less`, the [less release notes][less-rscroll], and
+[Vim's display options][vim-display].
+
+These settings change display only. Emacs's existing ws-butler setup still
+removes trailing whitespace from edited lines on save. Run `./provision.sh`
+to install the configuration, then restart Emacs and Vim; new pager processes
+use it immediately. Restart iTerm2 if it still has the old font cached.
+
+[less-rscroll]: https://www.greenwoodsoftware.com/less/news.661.html
+[vim-display]: https://vimhelp.org/options.txt.html#%27listchars%27
+
 # Brewfile modules
 
 What `provision.sh` installs with Homebrew is split into modules,
