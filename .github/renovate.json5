@@ -1,0 +1,23 @@
+{
+  $schema: "https://docs.renovatebot.com/renovate-schema.json",
+  extends: ["config:best-practices", ":semanticCommitsDisabled"],
+  // Automerge waits for passing checks; Renovate counts a branch with none as
+  // not green.
+  platformAutomerge: true,
+  packageRules: [
+    {
+      description: "Automerge non-major updates",
+      matchUpdateTypes: ["minor", "patch", "pin", "digest"],
+      automerge: true,
+    },
+    {
+      description: "Automerge dev dependencies",
+      // Rules apply independently, so this one also merges major updates: dev
+      // dependencies can't break production. pep621 gives every
+      // [dependency-groups] entry the depType "dependency-groups", whatever
+      // the group is named.
+      matchDepTypes: ["devDependencies", "dependency-groups"],
+      automerge: true,
+    },
+  ],
+}

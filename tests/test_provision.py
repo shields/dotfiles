@@ -207,6 +207,8 @@ def git_ls_files(
 
 def selected(path: str, os_name: str) -> bool:
     """Which tracked paths each OS copies, written independently of the pathspecs."""
+    if path == ".github" or path.startswith(".github/"):
+        return False
     if os_name == "macos":
         in_scope = path.startswith((".", "bin/", "Library/"))
         return in_scope and path not in MACOS_EXCLUDES
@@ -382,7 +384,7 @@ def test_git_identity_is_set_for_shields_on_both_systems() -> None:
 
 def test_copy_uses_git_ls_files_through_tar() -> None:
     assert COPY_COMMAND in TEXT
-    assert array_items(TEXT, "copy_paths=(") == [".*", "bin"]
+    assert array_items(TEXT, "copy_paths=(") == [".*", "bin", ":(exclude).github"]
     assert "tar cf - -T - bin Library" not in TEXT
 
 
@@ -390,6 +392,7 @@ def test_macos_copy_adds_library_and_leaves_out_the_guest_only_scripts() -> None
     assert copy_pathspecs("macos") == [
         ".*",
         "bin",
+        ":(exclude).github",
         "Library",
         *(f":(exclude){p}" for p in MACOS_EXCLUDES),
     ]
@@ -399,6 +402,7 @@ def test_linux_copy_leaves_out_exactly_the_macos_only_files() -> None:
     assert copy_pathspecs("linux") == [
         ".*",
         "bin",
+        ":(exclude).github",
         *(f":(exclude){p}" for p in LINUX_EXCLUDES),
     ]
 
@@ -432,6 +436,8 @@ SCRATCH_FILES = {
     ".config/alacritty/alacritty.toml": "",
     ".config/emacs-plus/build.yml": "",
     ".gnupg/gpg-agent.conf": "",
+    ".github/renovate.json5": "",
+    ".github/workflows/ci.yml": "",
     ".agents/skills/bughunt/SKILL.md": "",
     ".agents/skills/transcribe/SKILL.md": "",
     "bin/ghfork": "",
@@ -495,6 +501,7 @@ def test_scratch_repo_macos_copy_matches_the_independent_selection(
     assert "bin/setup-github-gateway" not in actual
     assert "bin/github-gateway-credential" not in actual
     assert "bin/scratch-untracked" not in actual
+    assert ".github/renovate.json5" not in actual
     assert {"bin/$", "Library/Application Support/with space.txt"} <= actual
     assert ".config/karabiner/karabiner.json" in actual
 

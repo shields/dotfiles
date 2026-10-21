@@ -68,7 +68,7 @@ modules_persist "$selection_file" "$modules_selection"
 export HOMEBREW_DOTFILES_BREW_MODULES=${modules_selection:-none}
 
 # Copy these files.
-copy_paths=('.*' bin)
+copy_paths=('.*' bin ':(exclude).github')
 case $os in
 macos)
     copy_paths+=(

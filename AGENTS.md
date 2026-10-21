@@ -38,8 +38,9 @@ limitations under the License.
 `provision.sh` runs on macOS and on Debian Linux, which it tells apart with
 `uname -s`; any other OS is an error. It installs the dotfiles by piping
 `git ls-files` through `tar` into `$HOME`: `bin/` and every git-tracked path
-starting with `.` (e.g. `.claude/`, `.zshrc`). Untracked files are not copied.
-Files are copied, not symlinked, so this repo is the source of truth; edits take
+starting with `.` (e.g. `.claude/`, `.zshrc`), except `.github/`, which holds
+GitHub-specific repository configuration. Untracked files are not copied. Files
+are copied, not symlinked, so this repo is the source of truth; edits take
 effect only after running `./provision.sh`.
 
 - macOS also copies `Library/`, and leaves out `bin/setup-secrets` and
