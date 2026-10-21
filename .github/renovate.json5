@@ -19,5 +19,12 @@
       matchDepTypes: ["devDependencies", "dependency-groups"],
       automerge: true,
     },
+    {
+      description: "Hold new GitHub Actions releases for three days",
+      // The same hold config:best-practices gives npm packages. The manager
+      // also covers the uv and bun versions set in a workflow.
+      matchManagers: ["github-actions"],
+      minimumReleaseAge: "3 days",
+    },
   ],
 }
