@@ -51,6 +51,7 @@
 
 (require 'whitespace)
 (require 'jit-lock)
+(require 'seq)
 
 (defface shields/whitespace '((t (:inherit fixed-pitch)))
   "Face for display-only whitespace markers.")
@@ -110,6 +111,39 @@
                   (overlay-put overlay 'face 'shields/whitespace)
                   (overlay-put overlay 'display (string ?␣))))
               (forward-char))))))))
+
+(defun shields/trailing-space-buffers ()
+  "Return buffers sharing this text that have whitespace display enabled."
+  (let ((base (or (buffer-base-buffer) (current-buffer))))
+    (seq-filter (lambda (buffer)
+                  (and (eq base (or (buffer-base-buffer buffer) buffer))
+                       (buffer-local-value 'whitespace-mode buffer)))
+                (buffer-list))))
+
+(defun shields/sync-trailing-space-markers (start end &optional _old-length)
+  "Refresh markers between START and END in buffers sharing this text."
+  (dolist (buffer (shields/trailing-space-buffers))
+    (with-current-buffer buffer
+      (shields/fontify-trailing-spaces start end))))
+
+(defun shields/stop-trailing-space-markers ()
+  "Unregister this buffer's markers without affecting its siblings."
+  (jit-lock-unregister #'shields/sync-trailing-space-markers)
+  (remove-hook 'change-major-mode-hook #'shields/stop-trailing-space-markers t)
+  (remove-hook 'kill-buffer-hook #'shields/stop-trailing-space-markers t)
+  (shields/clear-trailing-space-markers)
+  (unless (delq (current-buffer) (shields/trailing-space-buffers))
+    (with-current-buffer (or (buffer-base-buffer) (current-buffer))
+      (remove-hook 'after-change-functions
+                   #'shields/sync-trailing-space-markers t))))
+
+(defun shields/install-whitespace-change-hook ()
+  "Watch shared text for edits while any buffer displays whitespace."
+  (when (shields/trailing-space-buffers)
+    (with-current-buffer (or (buffer-base-buffer) (current-buffer))
+      (add-hook 'after-change-functions
+                #'shields/sync-trailing-space-markers nil t))))
+(add-hook 'after-change-major-mode-hook #'shields/install-whitespace-change-hook 90)
 
 ;; Remove trailing whitespace on save, for edited lines only.
 (use-package ws-butler
@@ -192,12 +226,19 @@
       (progn
         (when buffer-display-table
           (shields/install-line-markers buffer-display-table))
-        (add-hook 'change-major-mode-hook #'shields/clear-trailing-space-markers nil t)
-        (jit-lock-register #'shields/fontify-trailing-spaces))
-    (jit-lock-unregister #'shields/fontify-trailing-spaces)
-    (remove-hook 'change-major-mode-hook #'shields/clear-trailing-space-markers t)
-    (shields/clear-trailing-space-markers)))
+        (shields/install-whitespace-change-hook)
+        (add-hook 'change-major-mode-hook #'shields/stop-trailing-space-markers nil t)
+        (add-hook 'kill-buffer-hook #'shields/stop-trailing-space-markers nil t)
+        ;; JIT Lock cannot track indirect buffers' separate overlays.
+        (if (buffer-base-buffer)
+            (save-restriction
+              (widen)
+              (shields/fontify-trailing-spaces (point-min) (point-max)))
+          (jit-lock-register #'shields/sync-trailing-space-markers)))
+    (shields/stop-trailing-space-markers)))
 (add-hook 'whitespace-mode-hook #'shields/whitespace-mode-markers)
+(add-hook 'clone-buffer-hook #'shields/whitespace-mode-markers)
+(add-hook 'clone-indirect-buffer-hook #'shields/whitespace-mode-markers)
 (global-whitespace-mode 1)
 
 ;; Enable horizontal trackpad scrolling.

@@ -416,6 +416,109 @@ WHITESPACE_TESTS = r"""
       (should-not (h-tab-marker))
       (should (= (length (h-trailing-markers)) 2)))))
 
+(ert-deftest h-whitespace-indirect-buffers-share-marker-updates ()
+  (dolist (fontify-before-cloning '(nil t))
+    (h-with-whitespace-buffer
+      (text-mode)
+      (insert "a \nnext \n")
+      (whitespace-mode 1)
+      (when fontify-before-cloning (jit-lock-fontify-now))
+      (let* ((base (current-buffer))
+             (clone (clone-indirect-buffer nil nil)))
+        (unwind-protect
+            (progn
+              (dolist (buffer (list base clone))
+                (with-current-buffer buffer
+                  (jit-lock-fontify-now)
+                  (should (equal (mapcar #'overlay-start (h-trailing-markers))
+                                 '(2 8)))))
+              (dolist (editing-buffer (list base clone))
+                (with-current-buffer editing-buffer
+                  (goto-char 3)
+                  (insert "x")
+                  (jit-lock-fontify-now))
+                (dolist (buffer (list base clone))
+                  (with-current-buffer buffer
+                    (jit-lock-fontify-now)
+                    (should (equal (mapcar #'overlay-start (h-trailing-markers))
+                                   '(9)))))
+                (with-current-buffer editing-buffer
+                  (delete-char -1)
+                  (jit-lock-fontify-now))
+                (dolist (buffer (list clone base))
+                  (with-current-buffer buffer
+                    (jit-lock-fontify-now)
+                    (should (equal (mapcar #'overlay-start (h-trailing-markers))
+                                   '(2 8)))))))
+          (kill-buffer clone))))))
+
+(ert-deftest h-whitespace-indirect-buffers-keep-local-display-state ()
+  (h-with-whitespace-buffer
+    (text-mode)
+    (insert "a \nnext \n")
+    (whitespace-mode 1)
+    (jit-lock-fontify-now)
+    (let* ((base (current-buffer))
+           (clone (clone-indirect-buffer nil nil)))
+      (unwind-protect
+          (progn
+            (with-current-buffer clone
+              (narrow-to-region 4 (point-max)))
+            (whitespace-mode -1)
+            (goto-char 3)
+            (insert "x")
+            (with-current-buffer clone
+              (when jit-lock-mode (jit-lock-fontify-now))
+              (should (= (point-min) 5))
+              (widen)
+              (when jit-lock-mode (jit-lock-fontify-now))
+              (should (equal (mapcar #'overlay-start (h-trailing-markers)) '(9))))
+            (should-not (h-trailing-markers))
+            (with-current-buffer clone
+              (whitespace-mode -1))
+            (whitespace-mode 1)
+            (jit-lock-fontify-now)
+            (with-current-buffer clone
+              (goto-char 4)
+              (delete-char -1)
+              (should-not (h-trailing-markers)))
+            (jit-lock-fontify-now)
+            (should (equal (mapcar #'overlay-start (h-trailing-markers)) '(2 8)))
+            (with-current-buffer clone
+              (whitespace-mode 1)
+              (when jit-lock-mode (jit-lock-fontify-now)))
+            (let ((global-whitespace-mode nil))
+              (text-mode))
+            (goto-char 3)
+            (insert "x")
+            (with-current-buffer clone
+              (when jit-lock-mode (jit-lock-fontify-now))
+              (should (equal (mapcar #'overlay-start (h-trailing-markers)) '(9))))
+            (should-not (h-trailing-markers))
+            (should (eq (current-buffer) base)))
+        (kill-buffer clone)))))
+
+(ert-deftest h-whitespace-direct-clones-keep-independent-markers ()
+  (h-with-whitespace-buffer
+    (text-mode)
+    (insert "a \n")
+    (whitespace-mode 1)
+    (jit-lock-fontify-now)
+    (let ((clone (clone-buffer)))
+      (unwind-protect
+          (progn
+            (with-current-buffer clone
+              (jit-lock-fontify-now)
+              (should (equal (mapcar #'overlay-start (h-trailing-markers)) '(2))))
+            (goto-char 3)
+            (insert "x")
+            (jit-lock-fontify-now)
+            (should-not (h-trailing-markers))
+            (with-current-buffer clone
+              (should (equal (buffer-string) "a \n"))
+              (should (equal (mapcar #'overlay-start (h-trailing-markers)) '(2)))))
+        (kill-buffer clone)))))
+
 (ert-deftest h-whitespace-tsv-and-mode-changes ()
   (h-with-whitespace-buffer
     (setq buffer-file-name "/tmp/example.tsv")
