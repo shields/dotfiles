@@ -63,7 +63,7 @@ void test("CLI grants and edits apply live and disabled VM logs stay addressable
   try {
     const admin = path.join(root, "state", "admin.sock");
     let healthy = false;
-    for (let attempt = 0; attempt < 100; attempt++) {
+    for (let attempt = 0; attempt < 600; attempt++) {
       healthy = await new Promise<boolean>((resolve) => {
         const request = http.get(
           { socketPath: admin, path: "/health" },

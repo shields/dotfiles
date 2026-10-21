@@ -44,9 +44,9 @@ export class PolicyError extends Error {
 }
 
 export class PushDenied extends PolicyError {
-  readonly report: Uint8Array | null;
+  readonly report: Uint8Array<ArrayBuffer> | null;
 
-  constructor(message: string, report: Uint8Array | null) {
+  constructor(message: string, report: Uint8Array<ArrayBuffer> | null) {
     super(message);
     this.name = "PushDenied";
     this.report = report;
@@ -92,7 +92,7 @@ export function denial(
   };
 }
 
-function concat(parts: Uint8Array[]): Uint8Array {
+function concat(parts: Uint8Array[]): Uint8Array<ArrayBuffer> {
   const joined = new Uint8Array(
     parts.reduce((length, part) => length + part.length, 0),
   );
@@ -104,7 +104,7 @@ function concat(parts: Uint8Array[]): Uint8Array {
   return joined;
 }
 
-function pktLine(data: Uint8Array): Uint8Array {
+function pktLine(data: Uint8Array): Uint8Array<ArrayBuffer> {
   return concat([
     encoder.encode((data.length + 4).toString(16).padStart(4, "0")),
     data,
@@ -114,7 +114,7 @@ function pktLine(data: Uint8Array): Uint8Array {
 function pushReport(
   capabilities: string[],
   statuses: string[],
-): Uint8Array | null {
+): Uint8Array<ArrayBuffer> | null {
   if (
     !capabilities.includes("report-status") &&
     !capabilities.includes("report-status-v2")

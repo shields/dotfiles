@@ -69,8 +69,8 @@ class MemoryStorage {
 }
 
 function authority(
-  request: typeof fetch = (() =>
-    Promise.resolve(new Response(null, { status: 200 }))) as typeof fetch,
+  request: typeof fetch = () =>
+    Promise.resolve(new Response(null, { status: 200 })),
 ): CloudAuthority {
   return new CloudAuthority(
     new MemoryStorage() as unknown as DurableObjectStorage,
@@ -185,9 +185,9 @@ void test("refresh is shared across concurrent calls and never appears in logs",
 });
 
 void test("ungranted repository reads are anonymous, audited, and revoked with the VM", async () => {
-  const state = authority((() => {
+  const state = authority(() => {
     throw new Error("anonymous access must not request a token");
-  }) as typeof fetch);
+  });
   const instance = await state.register("work", "owner");
   for (const repository of ["shields/dotfiles", "octocat/hello-world"]) {
     for (const operation of ["git.read", "api.read", "public.read"] as const) {

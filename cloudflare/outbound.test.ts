@@ -44,7 +44,7 @@ function push(
     capabilities = "report-status",
     shallow = [],
   }: { capabilities?: string; shallow?: string[] } = {},
-): Uint8Array {
+): Uint8Array<ArrayBuffer> {
   const encoder = new TextEncoder();
   const packets = [
     ...shallow.map((oid) => `shallow ${oid}\n`),
