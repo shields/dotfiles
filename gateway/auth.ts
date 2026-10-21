@@ -214,6 +214,7 @@ export class AppAuth {
         if (Date.now() >= deadline) {
           throw new Error(
             `GitHub authorization for ${repository} is locked; inspect ${lock}`,
+            { cause: error },
           );
         }
         await delay(100);

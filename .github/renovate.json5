@@ -20,6 +20,13 @@
       automerge: true,
     },
     {
+      description: "Keep TypeScript within what typescript-eslint supports",
+      // Newer TypeScript stops ESLint from loading its configuration. Lift this
+      // when typescript-eslint's peer range includes the new version.
+      matchPackageNames: ["typescript"],
+      allowedVersions: "<6.1.0",
+    },
+    {
       description: "Hold new GitHub Actions releases for three days",
       // The same hold config:best-practices gives npm packages. The manager
       // also covers the uv and bun versions set in a workflow.
