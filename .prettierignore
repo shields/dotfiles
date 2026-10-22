@@ -1,1 +1,14 @@
 .config/karabiner/karabiner.json
+
+# deploy.sh pipes this file through jq, which rejects the trailing commas that
+# Prettier adds to .jsonc.
+cloudflare/wrangler.jsonc
+
+# uv and pytest write a .gitignore inside their own directories, which Prettier
+# does not read.
+.venv/
+.pytest_cache/
+
+# git excludes nested worktrees through .git/info/exclude, which Prettier does
+# not read.
+.claude/worktrees/

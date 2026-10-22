@@ -231,8 +231,7 @@ export class State {
         "SELECT capabilities FROM grants WHERE instance_id = ? AND repository = ?",
       )
       .get(instanceId, normalizeRepository(repository)) as unknown as
-      | { capabilities: string }
-      | undefined;
+      { capabilities: string } | undefined;
     return row ? (JSON.parse(row.capabilities) as Grant) : null;
   }
 

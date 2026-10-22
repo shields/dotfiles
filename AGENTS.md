@@ -31,6 +31,10 @@ limitations under the License.
   added to the script, not a skip. Node and zsh tests have no skip mechanism;
   keep it that way. The script pins Lima with a checksum; bump it by hand.
   `zizmor.yml` audits the workflows.
+- **Formatting**: `make lint` runs `prettier --check .` and `make fmt` runs
+  `prettier --write .`, so both cover every file type Prettier supports natively
+  (not TOML, which needs a plugin) except what `.prettierignore` lists. A
+  Prettier bump that changes the output fails CI until `make fmt` is run.
 - **Fonts**: `tools/create_nerd_commit_mono.sh` rebuilds the Nerd Font in
   `Library/Fonts/` from `commit-mono/` (checked by `make test`)
 - **Benchmark**: `make bench` times `wt` with hyperfine in a throwaway repo;
