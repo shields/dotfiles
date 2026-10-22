@@ -28,9 +28,12 @@
     },
     {
       description: "Hold new GitHub Actions releases for three days",
-      // The same hold config:best-practices gives npm packages. The manager
-      // also covers the uv and bun versions set in a workflow.
+      // Renovate withholds an update with no release time indefinitely, and
+      // container registries give none, so the hold is limited to GitHub
+      // sources. These include the uv version that setup-uv takes from a
+      // release.
       matchManagers: ["github-actions"],
+      matchDatasources: ["github-tags", "github-releases"],
       minimumReleaseAge: "3 days",
     },
   ],
