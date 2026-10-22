@@ -265,7 +265,7 @@ export class State {
         }
         const grant = rawGrant as Record<string, unknown>;
         if (
-          Object.keys(grant).toSorted().join(",") !== "pushTaskBranches,read" ||
+          Object.keys(grant).length !== 2 ||
           grant.read !== true ||
           typeof grant.pushTaskBranches !== "boolean"
         ) {

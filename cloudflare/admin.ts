@@ -55,7 +55,12 @@ async function api<T>(
     signal: AbortSignal.timeout(30_000),
   });
   if (!response.ok) {
-    const payload: unknown = await response.json().catch(() => null);
+    let payload: unknown;
+    try {
+      payload = await response.json();
+    } catch {
+      payload = null;
+    }
     const message =
       payload &&
       typeof payload === "object" &&
@@ -84,7 +89,7 @@ function profile(name: string): Grant {
   }
   const grant = selected as Record<string, unknown>;
   if (
-    Object.keys(grant).toSorted().join(",") !== "pushTaskBranches,read" ||
+    Object.keys(grant).length !== 2 ||
     grant.read !== true ||
     typeof grant.pushTaskBranches !== "boolean"
   ) {
@@ -174,7 +179,9 @@ async function command(args: string[]): Promise<void> {
         (third !== "read" && third !== "task") ||
         !second
       ) {
-        throw new Error(`usage: ${commandName} grant VM-ID OWNER/REPO read|task`);
+        throw new Error(
+          `usage: ${commandName} grant VM-ID OWNER/REPO read|task`,
+        );
       }
       const id = instanceId(first);
       const repository = normalizeRepository(second);

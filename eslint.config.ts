@@ -13,16 +13,16 @@
 // limitations under the License.
 
 import eslint from "@eslint/js";
+import { defineConfig } from "eslint/config";
 import prettier from "eslint-config-prettier";
 import unicorn from "eslint-plugin-unicorn";
 import tseslint from "typescript-eslint";
 
-// eslint-disable-next-line @typescript-eslint/no-deprecated
-export default tseslint.config(
+export default defineConfig(
   { ignores: ["node_modules/"] },
   eslint.configs.recommended,
-  ...tseslint.configs.strictTypeChecked,
-  ...tseslint.configs.stylisticTypeChecked,
+  tseslint.configs.strictTypeChecked,
+  tseslint.configs.stylisticTypeChecked,
   // unopinionated was added in eslint-plugin-unicorn v64; matches right-answers
   unicorn.configs.unopinionated,
   {

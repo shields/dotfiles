@@ -91,15 +91,19 @@ async function drained(
   limit: number,
 ): Promise<boolean> {
   let length = 0;
-  for (;;) {
-    const next = await remaining.next();
-    if (next.done) {
-      return true;
+  try {
+    for (;;) {
+      const next = await remaining.next();
+      if (next.done) {
+        return true;
+      }
+      length += next.value.length;
+      if (length > limit) {
+        return false;
+      }
     }
-    length += next.value.length;
-    if (length > limit) {
-      return false;
-    }
+  } catch {
+    return false;
   }
 }
 
@@ -196,12 +200,18 @@ export class Gateway {
   }
 
   refresh(): Promise<void> {
-    const next = this.syncing.then(
-      () => this.refreshNow(),
-      () => this.refreshNow(),
-    );
+    const next = this.refreshAfter(this.syncing);
     this.syncing = next;
     return next;
+  }
+
+  private async refreshAfter(previous: Promise<void>): Promise<void> {
+    try {
+      await previous;
+    } catch {
+      // The failure belongs to the caller of that refresh; this one still runs.
+    }
+    await this.refreshNow();
   }
 
   private async refreshNow(): Promise<void> {
@@ -372,10 +382,10 @@ export class Gateway {
           : this.state.grant(instanceId, classification.repository),
         classification.operation,
       );
-      let token: string | null = null;
-      if (access === "authenticated" && classification.repository !== null) {
-        token = await this.auth.token(classification.repository);
-      }
+      const token =
+        access === "authenticated" && classification.repository !== null
+          ? await this.auth.token(classification.repository)
+          : null;
       const current = this.state.byId(instanceId);
       if (!current || current.disabled) {
         throw new PolicyError("VM access has been revoked");
@@ -479,7 +489,7 @@ export class Gateway {
         // ref statuses, unless the whole body is read.
         error instanceof PushDenied &&
         error.report !== null &&
-        (await drained(remaining, 67_108_864).catch(() => false))
+        (await drained(remaining, 67_108_864))
       ) {
         response
           .writeHead(200, {
@@ -552,11 +562,12 @@ export class Gateway {
           resolve();
         });
         response.once("close", () => {
-          if (!response.writableFinished) {
-            finish(status, "interrupted");
-            upstream.destroy();
-            resolve();
+          if (response.writableFinished) {
+            return;
           }
+          finish(status, "interrupted");
+          upstream.destroy();
+          resolve();
         });
       });
       upstream.once("error", reject);

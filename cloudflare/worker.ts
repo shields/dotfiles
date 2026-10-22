@@ -155,22 +155,23 @@ export class AgentContainer extends DurableObject<Env> {
     console.log("configuring HTTPS outbound interception", instanceId);
     await container.interceptOutboundHttps("*", outbound);
     console.log("outbound interception configured", instanceId);
-    if (!container.running) {
-      const image = container.images.base;
-      if (!image) {
-        throw new Error("container image is missing");
-      }
-      container.start({
-        image,
-        instance: { vcpu: 1, memoryMib: 4096, diskMb: 20_000 },
-        enableInternet: false,
-        labels: { vm_id: instanceId },
-        entrypoint: [
-          "/home/shields/src/github.com/shields/dotfiles/cloudflare/entrypoint.sh",
-        ],
-      });
-      await container.setInactivityTimeout(21_600_000);
+    if (container.running) {
+      return;
     }
+    const image = container.images.base;
+    if (!image) {
+      throw new Error("container image is missing");
+    }
+    container.start({
+      image,
+      instance: { vcpu: 1, memoryMib: 4096, diskMb: 20_000 },
+      enableInternet: false,
+      labels: { vm_id: instanceId },
+      entrypoint: [
+        "/home/shields/src/github.com/shields/dotfiles/cloudflare/entrypoint.sh",
+      ],
+    });
+    await container.setInactivityTimeout(21_600_000);
   }
 
   async stop(): Promise<void> {
@@ -289,10 +290,9 @@ async function route(request: Request, env: Env): Promise<Response> {
   if (action === "logs" && request.method === "GET") {
     return Response.json(await state.logs(id, 100));
   }
-  if (action === "events" && request.method === "GET") {
-    return Response.json(await Promise.resolve(state.policyEvents(id, 100)));
-  }
-  return new Response(null, { status: 405 });
+  return action === "events" && request.method === "GET"
+    ? Response.json(await Promise.resolve(state.policyEvents(id, 100)))
+    : new Response(null, { status: 405 });
 }
 
 export default {
