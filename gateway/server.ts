@@ -458,6 +458,9 @@ export class Gateway {
           "gateway-error",
         );
       } else {
+        // Reading the body fails with the request's own error when the
+        // connection closes before the body ends.
+        const aborted = error === request.errored;
         try {
           this.state.logDecision({
             id: requestId,
@@ -466,10 +469,15 @@ export class Gateway {
             operation: classification?.operation ?? "unknown",
             refs: classification?.refs ?? [],
             allowed: false,
-            reason,
+            reason: aborted ? "request aborted" : reason,
             revision,
           });
-          this.state.finish(requestId, null, Date.now() - started, "denied");
+          this.state.finish(
+            requestId,
+            null,
+            Date.now() - started,
+            aborted ? "interrupted" : "denied",
+          );
         } catch (auditError) {
           process.stderr.write(
             `vm-access audit failure: ${String(auditError)}\n`,
@@ -535,46 +543,75 @@ export class Gateway {
     if (upstreamUrl.origin !== base.origin) {
       throw new Error("upstream target escaped its host");
     }
+    // The client's "close" has already been emitted if it left while the
+    // request was being authorized.
+    if (response.destroyed) {
+      this.state.finish(requestId, null, Date.now() - started, "interrupted");
+      return;
+    }
     const transport = upstreamUrl.protocol === "https:" ? https : http;
     const upstream = transport.request(upstreamUrl, {
       method: incoming.method,
       headers,
       timeout: 60_000,
     });
-    let completed = false;
+    let settled = false;
+    let upstreamStatus: number | null = null;
     const finish = (status: number | null, outcome: string): void => {
-      if (completed) {
+      if (settled) {
         return;
       }
-      completed = true;
+      settled = true;
       this.state.finish(requestId, status, Date.now() - started, outcome);
     };
     const result = new Promise<void>((resolve, reject) => {
+      // handle() records a rejection as a gateway error, and the response it
+      // destroys then emits "close", which must not record an interruption.
+      const fail = (error: Error): void => {
+        settled = true;
+        reject(error);
+      };
+      response.once("close", () => {
+        if (response.writableFinished) {
+          return;
+        }
+        finish(upstreamStatus, "interrupted");
+        upstream.destroy();
+        resolve();
+      });
       upstream.once("response", (upstreamResponse) => {
-        const status = upstreamResponse.statusCode ?? 502;
+        upstreamStatus = upstreamResponse.statusCode ?? 502;
         response.writeHead(
-          status,
+          upstreamStatus,
           copyResponseHeaders(upstreamResponse.headers, classification),
         );
         upstreamResponse.pipe(response);
+        // An upstream that closes mid-body never ends the pipe, and Node
+        // reports that on the response only while an "error" listener exists.
+        upstreamResponse.once("error", fail);
         response.once("finish", () => {
-          finish(status, "completed");
-          resolve();
-        });
-        response.once("close", () => {
-          if (response.writableFinished) {
-            return;
-          }
-          finish(status, "interrupted");
-          upstream.destroy();
+          finish(upstreamStatus, "completed");
           resolve();
         });
       });
-      upstream.once("error", reject);
+      upstream.once("error", fail);
       upstream.once("timeout", () => {
         upstream.destroy(new Error("upstream timed out"));
       });
     });
+    // The server stops reporting a client that leaves mid-upload once the
+    // response has finished, so an upstream that answers early would keep its
+    // half-sent request open.
+    if (!incoming.complete) {
+      const { socket } = incoming;
+      const abandon = (): void => {
+        upstream.destroy();
+      };
+      socket.once("close", abandon);
+      incoming.once("end", () => {
+        socket.off("close", abandon);
+      });
+    }
     void sendBody(upstream, body).catch((error: unknown) => {
       upstream.destroy(
         error instanceof Error ? error : new Error("request body failed"),

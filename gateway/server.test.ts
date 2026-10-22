@@ -1,11 +1,23 @@
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
-import { createServer, type IncomingHttpHeaders } from "node:http";
+import {
+  createServer,
+  type ClientRequest,
+  type IncomingHttpHeaders,
+  type RequestListener,
+} from "node:http";
 import https from "node:https";
-import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
+import type { Socket } from "node:net";
+import {
+  mkdtempSync,
+  mkdirSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import test from "node:test";
+import test, { mock, type TestContext } from "node:test";
 import { gzipSync } from "node:zlib";
 import { AppAuth } from "./auth.ts";
 import { Gateway } from "./server.ts";
@@ -30,6 +42,7 @@ function send(
   body: Buffer | Buffer[] = Buffer.alloc(0),
   host = "github.com",
   headers: Record<string, string> = {},
+  agent: https.Agent | false = false,
 ): Promise<{
   status: number;
   type: string | undefined;
@@ -44,7 +57,7 @@ function send(
         rejectUnauthorized: false,
         method,
         path: target,
-        agent: false,
+        agent,
         headers: {
           host,
           ...(Array.isArray(body) ? {} : { "content-length": body.length }),
@@ -94,11 +107,16 @@ interface Forwarded {
   body: Buffer;
 }
 
-async function startGateway(): Promise<{
+async function startGateway(
+  upstreamOptions: { handler: RequestListener; tls: boolean } | null = null,
+): Promise<{
   socket: string;
   instance: Instance;
   state: State;
+  auth: AppAuth;
   incoming: Forwarded[];
+  listener: https.Server;
+  closed: () => Promise<void>;
   stop: () => Promise<void>;
 }> {
   const root = mkdtempSync(path.join(tmpdir(), "vm-access-server-"));
@@ -131,7 +149,7 @@ async function startGateway(): Promise<{
   mkdirSync(secretDirectory);
   const auth = new AppAuth(secretDirectory);
   const incoming: Forwarded[] = [];
-  const upstream = createServer((request, response) => {
+  const record: RequestListener = (request, response) => {
     const chunks: Buffer[] = [];
     request.on("data", (chunk: Buffer) => {
       chunks.push(chunk);
@@ -151,7 +169,19 @@ async function startGateway(): Promise<{
         })
         .end("ok");
     });
-  });
+  };
+  const serve = upstreamOptions?.handler ?? record;
+  const upstream = upstreamOptions?.tls
+    ? https.createServer(
+        { cert: readFileSync(certificate), key: readFileSync(key) },
+        serve,
+      )
+    : createServer(serve);
+  const agentOptions = https.globalAgent.options;
+  const trusted = agentOptions.ca;
+  if (upstreamOptions?.tls) {
+    agentOptions.ca = readFileSync(certificate);
+  }
   await new Promise<void>((resolve) => {
     upstream.listen(0, "127.0.0.1", resolve);
   });
@@ -181,15 +211,20 @@ async function startGateway(): Promise<{
       api_url: "https://api.github.com",
     }),
   );
+  const origin = `${upstreamOptions?.tls ? "https" : "http"}://127.0.0.1:${String(address.port)}`;
   const gateway = new Gateway(state, auth, {
     cert: certificate,
     key,
     adminSocket: path.join(root, "admin.sock"),
-    webUpstream: `http://127.0.0.1:${String(address.port)}`,
-    apiUpstream: `http://127.0.0.1:${String(address.port)}`,
+    webUpstream: origin,
+    apiUpstream: origin,
   });
+  const created = mock.method(https, "createServer");
   const stop = async (): Promise<void> => {
+    created.mock.restore();
     await gateway.stop();
+    upstream.closeAllConnections();
+    agentOptions.ca = trusted;
     await new Promise<void>((resolve) => {
       upstream.close(() => {
         resolve();
@@ -200,19 +235,30 @@ async function startGateway(): Promise<{
   };
   try {
     await gateway.start();
+    const listener = created.mock.calls[0]?.result;
+    assert.ok(listener);
+    const responses: Promise<void>[] = [];
+    listener.on("request", (_request, response) => {
+      responses.push(
+        new Promise((resolve) => {
+          response.once("close", resolve);
+        }),
+      );
+    });
+    const closed = async (): Promise<void> => {
+      await Promise.all(responses);
+    };
+    return { socket, instance, state, auth, incoming, listener, closed, stop };
   } catch (error) {
     await stop();
     throw error;
   }
-  return { socket, instance, state, incoming, stop };
 }
 
-void test("the HTTPS socket injects a repo token only after checking the full push and live grant", async (t) => {
-  const listeners = t.mock.method(https, "createServer");
-  const { socket, instance, state, incoming, stop } = await startGateway();
+void test("the HTTPS socket injects a repo token only after checking the full push and live grant", async () => {
+  const { socket, instance, state, incoming, listener, stop } =
+    await startGateway();
   try {
-    const listener = listeners.mock.calls[0]?.result;
-    assert.ok(listener);
     assert.equal(listener.requestTimeout, 3_600_000);
     assert.equal(listener.headersTimeout, 60_000);
     assert.equal(
@@ -651,4 +697,623 @@ void test("Content-Encoding reaches GitHub only on fetch bodies, and inspected b
   } finally {
     await stop();
   }
+});
+
+function signal(): { promise: Promise<undefined>; resolve: () => void } {
+  const { promise, resolve } = Promise.withResolvers<undefined>();
+  return {
+    promise,
+    resolve: () => {
+      resolve(undefined);
+    },
+  };
+}
+
+async function within<T>(what: string, pending: Promise<T>): Promise<T> {
+  let timer: NodeJS.Timeout | undefined;
+  const deadline = new Promise<never>((_resolve, reject) => {
+    timer = setTimeout(() => {
+      reject(new Error(`${what} did not happen within 5 s`));
+    }, 5000);
+  });
+  try {
+    return await Promise.race([pending, deadline]);
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+const requestShapes: Record<
+  "get" | "post" | "upload" | "push",
+  { method: string; path: string; body?: string; ends: boolean }
+> = {
+  get: {
+    method: "GET",
+    path: "/shields/dotfiles.git/info/refs?service=git-upload-pack",
+    ends: true,
+  },
+  post: {
+    method: "POST",
+    path: "/shields/dotfiles.git/git-upload-pack",
+    body: "0000",
+    ends: true,
+  },
+  upload: {
+    method: "POST",
+    path: "/shields/dotfiles.git/git-upload-pack",
+    body: "0000",
+    ends: false,
+  },
+  push: {
+    method: "POST",
+    path: "/shields/dotfiles.git/git-receive-pack",
+    body: "00",
+    ends: false,
+  },
+};
+
+function open(
+  socket: string,
+  mode: keyof typeof requestShapes = "get",
+): {
+  request: ClientRequest;
+  firstData: Promise<void>;
+  response: Promise<{ status: number; body: string; complete: boolean }>;
+} {
+  const { method, path, body, ends } = requestShapes[mode];
+  const request = https.request({
+    socketPath: socket,
+    servername: "github.com",
+    rejectUnauthorized: false,
+    method,
+    path,
+    agent: false,
+    headers: { host: "github.com" },
+  });
+  const firstData = signal();
+  const response = new Promise<{
+    status: number;
+    body: string;
+    complete: boolean;
+  }>((resolve, reject) => {
+    request.once("error", reject);
+    request.once("response", (incoming) => {
+      const chunks: Buffer[] = [];
+      incoming.on("data", (chunk: Buffer) => {
+        chunks.push(chunk);
+        firstData.resolve();
+      });
+      incoming.once("close", () => {
+        resolve({
+          status: incoming.statusCode ?? 0,
+          body: Buffer.concat(chunks).toString(),
+          complete: incoming.complete,
+        });
+      });
+    });
+  });
+  if (ends) {
+    request.end(body);
+  } else {
+    request.write(body ?? "");
+  }
+  return { request, firstData: firstData.promise, response };
+}
+
+function recordFinishes(
+  t: TestContext,
+  state: State,
+): {
+  calls: { status: number | null; outcome: string }[];
+  first: Promise<void>;
+} {
+  const calls: { status: number | null; outcome: string }[] = [];
+  const first = signal();
+  const finish = state.finish.bind(state);
+  t.mock.method(
+    state,
+    "finish",
+    (
+      id: string,
+      status: number | null,
+      durationMs: number,
+      outcome: string,
+    ): void => {
+      finish(id, status, durationMs, outcome);
+      calls.push({ status, outcome });
+      first.resolve();
+    },
+  );
+  return { calls, first: first.promise };
+}
+
+function auditRows(
+  state: State,
+  instance: Instance,
+): { outcome: string; upstreamStatus: number | null }[] {
+  return state
+    .logs(instance.id)
+    .map(({ outcome, upstreamStatus }) => ({ outcome, upstreamStatus }));
+}
+
+const endsEarly: {
+  name: string;
+  tls: boolean;
+  begin: RequestListener;
+  end: (socket: Socket) => void;
+}[] = [
+  {
+    name: "FIN after a chunk, without the final chunk",
+    tls: false,
+    begin: (_request, response) => {
+      response.writeHead(200);
+      response.write("partial");
+    },
+    end: (socket) => {
+      socket.end();
+    },
+  },
+  {
+    name: "FIN in the middle of a chunk",
+    tls: false,
+    begin: (request, response) => {
+      response.writeHead(200, { "transfer-encoding": "chunked" });
+      response.flushHeaders();
+      request.socket.write("64\r\npart");
+    },
+    end: (socket) => {
+      socket.end();
+    },
+  },
+  {
+    name: "FIN before the end of a Content-Length body",
+    tls: false,
+    begin: (_request, response) => {
+      response.writeHead(200, { "content-length": 100_000 });
+      response.write("partial");
+    },
+    end: (socket) => {
+      socket.end();
+    },
+  },
+  {
+    name: "TLS close_notify without the final chunk",
+    tls: true,
+    begin: (_request, response) => {
+      response.writeHead(200);
+      response.write("partial");
+    },
+    end: (socket) => {
+      socket.end();
+    },
+  },
+  {
+    name: "TLS EOF without close_notify",
+    tls: true,
+    begin: (_request, response) => {
+      response.writeHead(200);
+      response.write("partial");
+    },
+    end: (socket) => {
+      socket.destroy();
+    },
+  },
+  {
+    name: "TCP reset",
+    tls: false,
+    begin: (_request, response) => {
+      response.writeHead(200, { "content-length": 100_000 });
+      response.write("partial");
+    },
+    end: (socket) => {
+      socket.resetAndDestroy();
+    },
+  },
+];
+
+for (const { name, tls, begin, end } of endsEarly) {
+  void test(`an upstream that ends its body early (${name}) fails the client's response and is audited as a gateway error`, async (t) => {
+    const clientHasData = signal();
+    const { socket, instance, state, closed, stop } = await startGateway({
+      handler: (request, response) => {
+        begin(request, response);
+        void clientHasData.promise.then(() => {
+          end(request.socket);
+        });
+      },
+      tls,
+    });
+    const audit = recordFinishes(t, state);
+    const { request, firstData, response } = open(socket);
+    void firstData.then(clientHasData.resolve);
+    let rows;
+    let fetched;
+    try {
+      fetched = await within("the client's response to close", response);
+      await within("the audit row", audit.first);
+      await within("the gateway's response to close", closed());
+      rows = auditRows(state, instance);
+    } finally {
+      request.destroy();
+      await stop();
+    }
+    assert.equal(fetched.status, 200);
+    assert.equal(fetched.complete, false);
+    assert.deepEqual(rows, [
+      { outcome: "gateway-error", upstreamStatus: null },
+    ]);
+    assert.deepEqual(audit.calls, [{ status: null, outcome: "gateway-error" }]);
+  });
+}
+
+for (const { name, respond } of [
+  {
+    name: "Content-Length body",
+    respond: ((_request, response) => {
+      response.writeHead(200, { "content-length": 7 }).end("partial");
+    }) satisfies RequestListener,
+  },
+  {
+    name: "chunked body",
+    respond: ((_request, response) => {
+      response.writeHead(200);
+      response.write("par");
+      response.end("tial");
+    }) satisfies RequestListener,
+  },
+  {
+    name: "body that ends when the upstream closes the connection",
+    respond: ((request) => {
+      request.socket.end("HTTP/1.1 200 OK\r\nconnection: close\r\n\r\npartial");
+    }) satisfies RequestListener,
+  },
+]) {
+  void test(`a complete response (${name}) is audited once, as completed`, async (t) => {
+    const { socket, instance, state, closed, stop } = await startGateway({
+      handler: respond,
+      tls: false,
+    });
+    const audit = recordFinishes(t, state);
+    const { request, response } = open(socket);
+    let rows;
+    let fetched;
+    try {
+      fetched = await within("the client's response to close", response);
+      await within("the audit row", audit.first);
+      await within("the gateway's response to close", closed());
+      rows = auditRows(state, instance);
+    } finally {
+      request.destroy();
+      await stop();
+    }
+    assert.deepEqual(fetched, { status: 200, body: "partial", complete: true });
+    assert.deepEqual(rows, [{ outcome: "completed", upstreamStatus: 200 }]);
+    assert.deepEqual(audit.calls, [{ status: 200, outcome: "completed" }]);
+  });
+}
+
+for (const [name, respond] of [
+  [
+    "hangs up",
+    (request) => {
+      request.socket.destroy();
+    },
+  ],
+  [
+    "resets the connection",
+    (request) => {
+      request.socket.resetAndDestroy();
+    },
+  ],
+] as [string, RequestListener][]) {
+  void test(`an upstream that ${name} before sending headers is a gateway error with a 503`, async (t) => {
+    const { socket, instance, state, closed, stop } = await startGateway({
+      handler: respond,
+      tls: false,
+    });
+    const audit = recordFinishes(t, state);
+    const { request, response } = open(socket);
+    let rows;
+    let fetched;
+    try {
+      fetched = await within("the client's response to close", response);
+      await within("the audit row", audit.first);
+      await within("the gateway's response to close", closed());
+      rows = auditRows(state, instance);
+    } finally {
+      request.destroy();
+      await stop();
+    }
+    assert.equal(fetched.status, 503);
+    assert.equal(fetched.complete, true);
+    assert.deepEqual(rows, [
+      { outcome: "gateway-error", upstreamStatus: null },
+    ]);
+    assert.deepEqual(audit.calls, [{ status: null, outcome: "gateway-error" }]);
+  });
+}
+
+void test("a client that leaves mid-body is audited as interrupted and the upstream request is aborted", async (t) => {
+  const upstreamClosed = signal();
+  const { socket, instance, state, closed, stop } = await startGateway({
+    handler: (request, response) => {
+      request.socket.once("close", upstreamClosed.resolve);
+      response.writeHead(200, { "content-length": 100_000 });
+      response.write("partial");
+    },
+    tls: false,
+  });
+  const audit = recordFinishes(t, state);
+  const { request, firstData } = open(socket);
+  let rows;
+  try {
+    await within("the first byte of the body", firstData);
+    request.destroy();
+    await within("the audit row", audit.first);
+    await within("the upstream connection to close", upstreamClosed.promise);
+    await within("the gateway's response to close", closed());
+    rows = auditRows(state, instance);
+  } finally {
+    request.destroy();
+    await stop();
+  }
+  assert.deepEqual(rows, [{ outcome: "interrupted", upstreamStatus: 200 }]);
+  assert.deepEqual(audit.calls, [{ status: 200, outcome: "interrupted" }]);
+});
+
+void test("a client that leaves before the upstream answers is audited as interrupted and the upstream request is aborted", async (t) => {
+  const asked = signal();
+  const upstreamClosed = signal();
+  const { socket, instance, state, closed, stop } = await startGateway({
+    handler: (request) => {
+      asked.resolve();
+      request.socket.once("close", upstreamClosed.resolve);
+    },
+    tls: false,
+  });
+  const audit = recordFinishes(t, state);
+  const { request, response } = open(socket);
+  const hungUp = assert.rejects(response, { message: "socket hang up" });
+  let rows;
+  try {
+    await within("the upstream to receive the request", asked.promise);
+    request.destroy();
+    await within("the client's request to fail", hungUp);
+    await within("the audit row", audit.first);
+    await within("the upstream connection to close", upstreamClosed.promise);
+    await within("the gateway's response to close", closed());
+    rows = auditRows(state, instance);
+  } finally {
+    request.destroy();
+    await stop();
+  }
+  assert.deepEqual(rows, [{ outcome: "interrupted", upstreamStatus: null }]);
+  assert.deepEqual(audit.calls, [{ status: null, outcome: "interrupted" }]);
+});
+
+for (const [name, mode] of [
+  ["a GET", "get"],
+  ["a POST that arrived whole", "post"],
+] as const) {
+  void test(`a client that leaves while its token is being fetched (${name}) is audited as interrupted and never reaches the upstream`, async (t) => {
+    const { socket, instance, state, auth, incoming, closed, stop } =
+      await startGateway();
+    const audit = recordFinishes(t, state);
+    const asked = signal();
+    const resume = signal();
+    t.mock.method(auth, "token", async (): Promise<string> => {
+      asked.resolve();
+      await resume.promise;
+      return "ghu_secret";
+    });
+    const { request, response } = open(socket, mode);
+    const hungUp = assert.rejects(response, { message: "socket hang up" });
+    let rows;
+    try {
+      await within("the gateway to ask for a token", asked.promise);
+      request.destroy();
+      await within("the client's request to fail", hungUp);
+      await within("the gateway's response to close", closed());
+      resume.resolve();
+      await within("the audit row", audit.first);
+      rows = auditRows(state, instance);
+    } finally {
+      request.destroy();
+      resume.resolve();
+      await stop();
+    }
+    assert.deepEqual(rows, [{ outcome: "interrupted", upstreamStatus: null }]);
+    assert.deepEqual(audit.calls, [{ status: null, outcome: "interrupted" }]);
+    assert.deepEqual(incoming, []);
+  });
+}
+
+void test("a client that leaves while uploading is audited as interrupted and the upstream request is aborted", async (t) => {
+  const asked = signal();
+  const upstreamClosed = signal();
+  const { socket, instance, state, closed, stop } = await startGateway({
+    handler: (request) => {
+      request.resume();
+      asked.resolve();
+      request.socket.once("close", upstreamClosed.resolve);
+    },
+    tls: false,
+  });
+  const audit = recordFinishes(t, state);
+  const { request, response } = open(socket, "upload");
+  const hungUp = assert.rejects(response, { message: "socket hang up" });
+  let rows;
+  try {
+    await within("the upstream to receive the request", asked.promise);
+    request.destroy();
+    await within("the client's request to fail", hungUp);
+    await within("the audit row", audit.first);
+    await within("the upstream connection to close", upstreamClosed.promise);
+    await within("the gateway's response to close", closed());
+    rows = auditRows(state, instance);
+  } finally {
+    request.destroy();
+    await stop();
+  }
+  assert.deepEqual(rows, [{ outcome: "interrupted", upstreamStatus: null }]);
+  assert.deepEqual(audit.calls, [{ status: null, outcome: "interrupted" }]);
+});
+
+void test("a client that leaves while its push commands are being read is audited as interrupted, not denied", async (t) => {
+  const { socket, instance, state, listener, incoming, closed, stop } =
+    await startGateway();
+  const audit = recordFinishes(t, state);
+  const requested = signal();
+  listener.on("request", requested.resolve);
+  const { request, response } = open(socket, "push");
+  const hungUp = assert.rejects(response, { message: "socket hang up" });
+  let logs;
+  try {
+    await within("the gateway to receive the request", requested.promise);
+    request.destroy();
+    await within("the client's request to fail", hungUp);
+    await within("the audit row", audit.first);
+    await within("the gateway's response to close", closed());
+    logs = state.logs(instance.id);
+  } finally {
+    request.destroy();
+    await stop();
+  }
+  assert.deepEqual(
+    logs.map(({ allowed, operation, reason, outcome }) => ({
+      allowed,
+      operation,
+      reason,
+      outcome,
+    })),
+    [
+      {
+        allowed: false,
+        operation: "unknown",
+        reason: "request aborted",
+        outcome: "interrupted",
+      },
+    ],
+  );
+  assert.deepEqual(audit.calls, [{ status: null, outcome: "interrupted" }]);
+  assert.deepEqual(incoming, []);
+});
+
+void test("an upstream that answers before the upload ends has its request aborted when the client connection closes", async (t) => {
+  const upstreamClosed = signal();
+  const { socket, instance, state, closed, stop } = await startGateway({
+    handler: (request, response) => {
+      request.socket.once("close", upstreamClosed.resolve);
+      response.writeHead(200, { "content-length": 2 }).end("ok");
+    },
+    tls: false,
+  });
+  const audit = recordFinishes(t, state);
+  const { request, response } = open(socket, "upload");
+  let rows;
+  let fetched;
+  try {
+    fetched = await within("the client's response to close", response);
+    await within("the audit row", audit.first);
+    await within("the upstream connection to close", upstreamClosed.promise);
+    await within("the gateway's response to close", closed());
+    rows = auditRows(state, instance);
+  } finally {
+    request.destroy();
+    await stop();
+  }
+  assert.deepEqual(fetched, { status: 200, body: "ok", complete: true });
+  assert.deepEqual(rows, [{ outcome: "completed", upstreamStatus: 200 }]);
+  assert.deepEqual(audit.calls, [{ status: 200, outcome: "completed" }]);
+});
+
+function watchCloseListeners(listener: https.Server): {
+  connections: Set<Socket>;
+  counts: number[];
+} {
+  const connections = new Set<Socket>();
+  const counts: number[] = [];
+  listener.on("request", (request) => {
+    connections.add(request.socket);
+    counts.push(request.socket.listenerCount("close"));
+  });
+  return { connections, counts };
+}
+
+void test("GraphQL queries in sequence on one connection leave no listeners behind on its socket", async () => {
+  const { socket, listener, stop } = await startGateway();
+  const watched = watchCloseListeners(listener);
+  const agent = new https.Agent({ keepAlive: true, maxSockets: 1 });
+  try {
+    for (let round = 0; round < 8; round += 1) {
+      const query = await send(
+        socket,
+        "POST",
+        "/graphql",
+        Buffer.from(
+          JSON.stringify({
+            query:
+              '{ repo_000: repository(owner: "shields", name: "dotfiles") { name } }',
+            variables: null,
+          }),
+        ),
+        "api.github.com",
+        {},
+        agent,
+      );
+      assert.equal(query.status, 200);
+    }
+  } finally {
+    agent.destroy();
+    await stop();
+  }
+  assert.equal(watched.connections.size, 1);
+  assert.equal(new Set(watched.counts).size, 1);
+});
+
+void test("uploads in sequence on one connection leave no listeners behind on its socket", async () => {
+  const uploads = Array.from({ length: 8 }, () => signal());
+  let forwarded = 0;
+  const { socket, listener, stop } = await startGateway({
+    handler: (request, response) => {
+      uploads[forwarded]?.resolve();
+      forwarded += 1;
+      request.resume();
+      request.once("end", () => {
+        response.writeHead(200, { "content-length": 2 }).end("ok");
+      });
+    },
+    tls: false,
+  });
+  const watched = watchCloseListeners(listener);
+  const agent = new https.Agent({ keepAlive: true, maxSockets: 1 });
+  try {
+    for (const upload of uploads) {
+      const request = https.request({
+        socketPath: socket,
+        servername: "github.com",
+        rejectUnauthorized: false,
+        agent,
+        method: "POST",
+        path: "/shields/dotfiles.git/git-upload-pack",
+        headers: { host: "github.com" },
+      });
+      const answered = new Promise<void>((resolve, reject) => {
+        request.once("error", reject);
+        request.once("response", (incoming) => {
+          incoming.resume();
+          incoming.once("end", resolve);
+        });
+      });
+      request.write("0000");
+      await within("the gateway to forward the upload", upload.promise);
+      request.end("0000");
+      await within("the response to end", answered);
+    }
+  } finally {
+    agent.destroy();
+    await stop();
+  }
+  assert.equal(watched.connections.size, 1);
+  assert.equal(new Set(watched.counts).size, 1);
 });
