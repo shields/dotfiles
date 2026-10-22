@@ -163,6 +163,8 @@ class VimReport(TypedDict):
 
 VIM_SCRIPT = r"""
 set lines=30 columns=40
+" Shaping would put the presentation form of an Arabic test base on the screen.
+set noarabicshape
 execute 'set regexpengine=' . $WHITESPACE_REGEXPENGINE
 function! Cells(row, first, last) abort
     let cols = range(a:first, a:last)
