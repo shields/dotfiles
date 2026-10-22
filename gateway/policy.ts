@@ -142,6 +142,13 @@ function pushReport(
   return concat([...packets, flush]);
 }
 
+export function compareCodeUnits(left: string, right: string): number {
+  if (left < right) {
+    return -1;
+  }
+  return left > right ? 1 : 0;
+}
+
 export function normalizeRepository(repository: string): string {
   if (
     !repositoryName.test(repository) ||

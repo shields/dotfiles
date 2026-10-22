@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "bun:test";
+import { compareCodeUnits } from "../gateway/policy.ts";
 import {
   CloudAuthority,
   type CloudAuthorization,
@@ -47,7 +48,7 @@ class MemoryStorage {
           key.startsWith(options.prefix ?? "") &&
           (options.startAfter === undefined || key > options.startAfter),
       )
-      .toSorted((a, b) => Number(a > b) - Number(a < b));
+      .toSorted(compareCodeUnits);
     if (options.reverse) {
       keys.reverse();
     }
@@ -262,6 +263,35 @@ test("revoking a grant removes credentials while preserving anonymous reads", as
   assert.ok(read.allowed);
   assert.equal(read.access, "anonymous");
   assert.equal(read.token, null);
+});
+
+test("identity reads use the first granted repository in code-unit order", async () => {
+  const state = authority();
+  for (const repository of ["owner/a_b", "owner/a-b"]) {
+    await state.installAuthorization({
+      ...authorization(),
+      repository,
+      accessToken: `access-${repository}`,
+    });
+  }
+  const instance = await state.register("work", "owner");
+  await state.update(
+    instance.id,
+    0,
+    {
+      "owner/a_b": { read: true, pushTaskBranches: false },
+      "owner/a-b": { read: true, pushTaskBranches: false },
+    },
+    "owner",
+  );
+  const identity = await state.allow(instance.id, {
+    repository: null,
+    operation: "identity.read",
+    refs: [],
+  });
+  assert.ok(identity.allowed);
+  assert.equal(identity.token, "access-owner/a-b");
+  assert.equal((await state.logs(instance.id))[0]?.repository, "owner/a-b");
 });
 
 test("stale policy revisions and missing authorization fail closed", async () => {

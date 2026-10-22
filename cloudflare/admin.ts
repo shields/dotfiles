@@ -4,7 +4,11 @@ import os from "node:os";
 import path from "node:path";
 import YAML from "yaml";
 import { AppAuth } from "../gateway/auth.ts";
-import { normalizeRepository, type Grant } from "../gateway/policy.ts";
+import {
+  compareCodeUnits,
+  normalizeRepository,
+  type Grant,
+} from "../gateway/policy.ts";
 import type { CloudInstance } from "./authority.ts";
 
 const root = path.resolve(import.meta.dirname, "..");
@@ -89,9 +93,8 @@ function profile(name: string): Grant {
   }
   const grant = selected as Record<string, unknown>;
   if (
-    Object.keys(grant)
-      .toSorted((a, b) => Number(a > b) - Number(a < b))
-      .join(",") !== "pushTaskBranches,read" ||
+    Object.keys(grant).toSorted(compareCodeUnits).join(",") !==
+      "pushTaskBranches,read" ||
     grant.read !== true ||
     typeof grant.pushTaskBranches !== "boolean"
   ) {

@@ -8,7 +8,12 @@ import { setTimeout as delay } from "node:timers/promises";
 import YAML from "yaml";
 import { AppAuth } from "./auth.ts";
 import { ensureCertificates } from "./cert.ts";
-import { normalizeRepository, taskPrefix, type Grant } from "./policy.ts";
+import {
+  compareCodeUnits,
+  normalizeRepository,
+  taskPrefix,
+  type Grant,
+} from "./policy.ts";
 import { Gateway } from "./server.ts";
 import { State, type Instance } from "./state.ts";
 
@@ -82,9 +87,8 @@ function parseProfiles(file: string): Record<string, Grant> {
     }
     const grant = input as Record<string, unknown>;
     if (
-      Object.keys(grant)
-        .toSorted((a, b) => Number(a > b) - Number(a < b))
-        .join(",") !== "pushTaskBranches,read" ||
+      Object.keys(grant).toSorted(compareCodeUnits).join(",") !==
+        "pushTaskBranches,read" ||
       grant.read !== true ||
       typeof grant.pushTaskBranches !== "boolean"
     ) {
@@ -124,9 +128,8 @@ function parseEdit(
   }
   const data = raw as Record<string, unknown>;
   if (
-    Object.keys(data)
-      .toSorted((a, b) => Number(a > b) - Number(a < b))
-      .join(",") !== "branchPrefix,id,repositories,revision,vm" ||
+    Object.keys(data).toSorted(compareCodeUnits).join(",") !==
+      "branchPrefix,id,repositories,revision,vm" ||
     data.vm !== instance.name ||
     data.id !== instance.id ||
     data.branchPrefix !==

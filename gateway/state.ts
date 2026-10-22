@@ -2,7 +2,12 @@ import { randomUUID } from "node:crypto";
 import { chmodSync, mkdirSync } from "node:fs";
 import path from "node:path";
 import { DatabaseSync } from "node:sqlite";
-import { normalizeRepository, type Grant, type Operation } from "./policy.ts";
+import {
+  compareCodeUnits,
+  normalizeRepository,
+  type Grant,
+  type Operation,
+} from "./policy.ts";
 
 export interface Instance {
   id: string;
@@ -264,9 +269,8 @@ export class State {
         }
         const grant = rawGrant as Record<string, unknown>;
         if (
-          Object.keys(grant)
-            .toSorted((a, b) => Number(a > b) - Number(a < b))
-            .join(",") !== "pushTaskBranches,read" ||
+          Object.keys(grant).toSorted(compareCodeUnits).join(",") !==
+            "pushTaskBranches,read" ||
           grant.read !== true ||
           typeof grant.pushTaskBranches !== "boolean"
         ) {
