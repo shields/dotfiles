@@ -21,13 +21,19 @@
 # them, while leaving the custom Commit Mono build alone: every glyph outside
 # the ranges the patcher owns keeps its shape and advance, the OpenType
 # substitutions that carry the chosen alternates are unchanged, and the
-# vertical metrics that set the line height are unchanged.
+# vertical metrics that set the line height are unchanged. Running
+# tools/add_commit_mono_glyph.py reproduces the glyphs it added to the fonts, so
+# a change to the tool needs a rebuild.
 
+import copy
+import importlib.util
 import math
 import os
+import re
 import shutil
 import subprocess
 import sys
+from enum import IntEnum
 from hashlib import sha256
 from pathlib import Path
 from typing import TYPE_CHECKING, NamedTuple, Protocol, cast
@@ -35,6 +41,7 @@ from typing import TYPE_CHECKING, NamedTuple, Protocol, cast
 import pytest
 from fontTools.pens.boundsPen import BoundsPen
 from fontTools.pens.recordingPen import RecordingPen
+from fontTools.pens.t2CharStringPen import T2CharStringPen
 from fontTools.ttLib import TTFont
 
 if TYPE_CHECKING:
@@ -45,6 +52,7 @@ if TYPE_CHECKING:
 REPO = Path(__file__).resolve().parents[1]
 SOURCE_DIR = REPO / "commit-mono"
 OUTPUT_DIR = REPO / "Library" / "Fonts"
+TOOL = REPO / "tools" / "add_commit_mono_glyph.py"
 FAMILY = "CommitMonoShields Nerd Font"
 
 # Name records are compared on the Windows and Macintosh platforms; macOS
@@ -59,6 +67,10 @@ DONOR_COPYRIGHT = (
 )
 DONOR_DIR = SOURCE_DIR / "noto-sans-mono"
 DOUBLE_OBLIQUE_HYPHEN = 0x2E17
+OPEN_BOX = 0x2423
+SHOULDERED_OPEN_BOX = 0x237D
+ADDED_CODEPOINTS = (DOUBLE_OBLIQUE_HYPHEN, SHOULDERED_OPEN_BOX)
+CELL_UNITS = 600
 
 # Codepoint ranges the Nerd Fonts patcher writes into (setup_patch_set in
 # font-patcher v3.5.1, with --complete on a monospaced font). Source glyphs in
@@ -108,6 +120,19 @@ SAMPLE_ICONS = {
     0xF0001: "Material Design Icons",
 }
 MIN_ADDED_CODEPOINTS = 10_000
+
+# The shouldered open box is the open box with its sides moved inward and an
+# arm out from the top of each, drawn with the box's own strokes, so it weighs
+# what the open box does; the tolerance leaves room for the taller sides.
+WEIGHT_TOLERANCE = 0.05
+# Slope of the slanted edges, in x per y, to within the rounding of integer
+# coordinates on edges at least 68 units tall.
+SLOPE_TOLERANCE = 0.01
+ITALIC_SLOPE = 1 / 6
+# How much narrower the box's bottom must be than the open box's, and how many
+# times longer the ink along the top must be, for the two to differ at a glance.
+MAX_BOTTOM_SHARE = 0.7
+MIN_TOP_RUN_RATIO = 2
 
 # Powerline separators are stretched to fill the whole cell so adjacent
 # segments join seamlessly. This is why the build doesn't pass --careful:
@@ -191,6 +216,30 @@ class NameTable(Protocol):
 
 class HmtxTable(Protocol):
     metrics: dict[str, tuple[int, int]]
+
+
+class CmapSubtable(Protocol):
+    platformID: int  # noqa: N815
+    platEncID: int  # noqa: N815
+    cmap: dict[int, str]
+
+
+class CmapTable(Protocol):
+    tables: list[CmapSubtable]
+
+
+class TopDict(Protocol):
+    CharStrings: dict[str, object]
+    Private: object
+    GlobalSubrs: object
+
+
+class CffRoot(Protocol):
+    topDictIndex: list[TopDict]  # noqa: N815
+
+
+class CffTable(Protocol):
+    cff: CffRoot
 
 
 class Coverage(Protocol):
@@ -397,6 +446,35 @@ class Font:
     def layout(self, tag: str) -> LayoutRoot | None:
         table = cast("LayoutTable | None", self.ttf.get(tag))
         return None if table is None else table.table
+
+
+def polygon(font: Font, glyph: str) -> list[Point]:
+    """The corners of a glyph that is one closed polygon of straight edges."""
+    segments = font.outline(glyph)
+    operators = [operator for operator, _ in segments]
+    assert operators == ["moveTo", *["lineTo"] * (len(segments) - 2), "closePath"]
+    return [points[0] for _, points in segments[:-1]]
+
+
+def edges(corners: list[Point]) -> list[tuple[Point, Point]]:
+    return list(zip(corners, [*corners[1:], corners[0]], strict=True))
+
+
+def ink_weight(corners: list[Point]) -> float:
+    """Twice the area over the perimeter, which is a stroke's width."""
+    area = abs(sum(x0 * y1 - x1 * y0 for (x0, y0), (x1, y1) in edges(corners))) / 2
+    perimeter = sum(math.dist(start, end) for start, end in edges(corners))
+    return 2 * area / perimeter
+
+
+def ink_runs(corners: list[Point], height: float) -> list[tuple[float, float]]:
+    """The stretches of ink along a horizontal line."""
+    crossings = sorted(
+        x0 + (height - y0) * (x1 - x0) / (y1 - y0)
+        for (x0, y0), (x1, y1) in edges(corners)
+        if y0 <= height < y1 or y1 <= height < y0
+    )
+    return list(zip(crossings[::2], crossings[1::2], strict=True))
 
 
 def in_patched_range(codepoint: int) -> bool:
@@ -841,7 +919,7 @@ def test_additions_stay_inside_the_patchers_ranges(fonts: Fonts) -> None:
     outside = [
         f"U+{codepoint:04X}"
         for codepoint in fonts.added
-        if not in_patched_range(codepoint) and codepoint != DOUBLE_OBLIQUE_HYPHEN
+        if not in_patched_range(codepoint) and codepoint not in ADDED_CODEPOINTS
     ]
     assert not outside, summarize(outside)
 
@@ -887,40 +965,333 @@ def test_double_oblique_hyphen_has_two_sloping_strokes(fonts: Fonts) -> None:
         assert all(0 < y < patched.ascent for _, y in points)
 
 
-def test_graft_preserves_all_existing_glyphs_and_is_repeatable(
-    fonts: Fonts, tmp_path: Path
+@pytest.mark.parametrize("codepoint", ADDED_CODEPOINTS, ids=hex)
+def test_added_glyph_is_present_and_one_cell_wide(fonts: Fonts, codepoint: int) -> None:
+    patched = fonts.patched
+    assert codepoint in fonts.added
+    assert patched.advance(patched.cmap[codepoint]) == CELL_UNITS == patched.cell
+
+
+class OpenBoxes(NamedTuple):
+    box: list[Point]
+    shouldered: list[Point]
+    top: float
+    bottom: float
+    stroke: float
+
+
+def open_boxes(fonts: Fonts) -> OpenBoxes:
+    patched = fonts.patched
+    assert SHOULDERED_OPEN_BOX in patched.cmap, "U+237D is missing"
+    box = polygon(patched, patched.cmap[OPEN_BOX])
+    shouldered = polygon(patched, patched.cmap[SHOULDERED_OPEN_BOX])
+    bottom, inner_bottom, top = sorted({y for _, y in box})
+    return OpenBoxes(box, shouldered, top, bottom, inner_bottom - bottom)
+
+
+def test_shouldered_open_box_spans_the_open_box(fonts: Fonts) -> None:
+    box, shouldered, top, bottom, _ = open_boxes(fonts)
+    patched = fonts.patched
+    expected_bounds = {
+        "Regular": (34, -168, 566, 68),
+        "Italic": (-16, -168, 527, 68),
+        "Bold": (20, -200, 580, 100),
+        "Bold Italic": (-30, -200, 546, 100),
+    }
+    assert (
+        patched.bounds(patched.cmap[SHOULDERED_OPEN_BOX])
+        == expected_bounds[fonts.face.style]
+    )
+    assert min(y for _, y in shouldered) == bottom
+    box_runs = ink_runs(box, top - 1)
+    shouldered_runs = ink_runs(shouldered, top + 1)
+    assert shouldered_runs[0][0] == pytest.approx(box_runs[0][0], abs=1)
+    assert shouldered_runs[-1][1] == pytest.approx(box_runs[-1][1], abs=1)
+
+
+def test_shouldered_open_box_rests_its_arms_on_the_open_boxs_top(
+    fonts: Fonts,
 ) -> None:
-    outputs = [tmp_path / "first.otf", tmp_path / "second.otf"]
-    for output in outputs:
-        _ = shutil.copyfile(fonts.source.path, output)
-    _ = subprocess.run(
-        [
-            sys.executable,
-            str(REPO / "tools/add_commit_mono_glyph.py"),
-            *map(str, outputs),
-        ],
-        check=True,
-        capture_output=True,
-        timeout=60,
+    _, shouldered, top, bottom, stroke = open_boxes(fonts)
+    assert sorted({y for _, y in shouldered}) == [
+        bottom,
+        bottom + stroke,
+        top,
+        top + stroke,
+    ]
+
+
+def test_shouldered_open_box_has_the_open_boxs_weight(fonts: Fonts) -> None:
+    boxes = open_boxes(fonts)
+    assert ink_weight(boxes.shouldered) == pytest.approx(
+        ink_weight(boxes.box), rel=WEIGHT_TOLERANCE
     )
-    assert outputs[0].read_bytes() == outputs[1].read_bytes()
-    grafted = Font(outputs[0])
-    assert set(grafted.cmap) - set(fonts.source.cmap) == {DOUBLE_OBLIQUE_HYPHEN}
-    assert all(
-        grafted.outline(glyph) == fonts.source.outline(glyph)
-        and grafted.advance(glyph) == fonts.source.advance(glyph)
-        for glyph in fonts.source.glyph_names
+
+
+def test_shouldered_open_box_has_the_open_boxs_slant(fonts: Fonts) -> None:
+    expected = ITALIC_SLOPE if fonts.face.italic else 0
+    boxes = open_boxes(fonts)
+    for corners in (boxes.box, boxes.shouldered):
+        slopes = [
+            (x1 - x0) / (y1 - y0) for (x0, y0), (x1, y1) in edges(corners) if y0 != y1
+        ]
+        assert slopes == pytest.approx([expected] * len(slopes), abs=SLOPE_TOLERANCE)
+
+
+def test_shouldered_open_box_differs_from_the_open_box(fonts: Fonts) -> None:
+    box, shouldered, top, bottom, _ = open_boxes(fonts)
+    (box_bottom,) = ink_runs(box, bottom + 1)
+    (shouldered_bottom,) = ink_runs(shouldered, bottom + 1)
+    assert shouldered_bottom[1] - shouldered_bottom[0] <= MAX_BOTTOM_SHARE * (
+        box_bottom[1] - box_bottom[0]
     )
-    before = outputs[0].read_bytes()
-    result = subprocess.run(
-        [sys.executable, str(REPO / "tools/add_commit_mono_glyph.py"), str(outputs[0])],
+    box_left = ink_runs(box, top - 1)[0]
+    shouldered_left = ink_runs(shouldered, top + 1)[0]
+    assert shouldered_left[1] - shouldered_left[0] >= MIN_TOP_RUN_RATIO * (
+        box_left[1] - box_left[0]
+    )
+
+
+def run_tool(*fonts: Path) -> subprocess.CompletedProcess[bytes]:
+    return subprocess.run(
+        [sys.executable, str(TOOL), *map(str, fonts)],
         check=False,
         capture_output=True,
         timeout=60,
     )
+
+
+@pytest.fixture(scope="module")
+def grafted(fonts: Fonts, tmp_path_factory: pytest.TempPathFactory) -> list[Path]:
+    directory = tmp_path_factory.mktemp(fonts.face.output)
+    outputs = [directory / "first.otf", directory / "second.otf"]
+    for output in outputs:
+        _ = shutil.copyfile(fonts.source.path, output)
+    result = run_tool(*outputs)
+    assert result.returncode == 0, result.stderr
+    return outputs
+
+
+def test_graft_preserves_all_existing_glyphs_and_is_repeatable(
+    fonts: Fonts, grafted: list[Path], tmp_path: Path
+) -> None:
+    assert grafted[0].read_bytes() == grafted[1].read_bytes()
+    rebuilt = Font(grafted[0])
+    assert set(rebuilt.cmap) - set(fonts.source.cmap) == set(ADDED_CODEPOINTS)
+    assert all(
+        rebuilt.outline(glyph) == fonts.source.outline(glyph)
+        and rebuilt.advance(glyph) == fonts.source.advance(glyph)
+        for glyph in fonts.source.glyph_names
+    )
+    again = tmp_path / "again.otf"
+    _ = shutil.copyfile(grafted[0], again)
+    before = again.read_bytes()
+    result = run_tool(again)
     assert result.returncode != 0
     assert b"U+2E17 already present" in result.stderr
-    assert outputs[0].read_bytes() == before
+    assert again.read_bytes() == before
+
+
+# The patcher writes nowhere near U+2E17, U+237D, or U+2423, so the tool draws
+# the same glyphs on a source font as on the patched one.
+def test_graft_reproduces_the_committed_additions(
+    fonts: Fonts, grafted: list[Path]
+) -> None:
+    def additions(font: Font) -> dict[int, tuple[str, list[Segment], tuple[int, int]]]:
+        return {
+            codepoint: (
+                font.cmap[codepoint],
+                font.outline(font.cmap[codepoint]),
+                font.metrics[font.cmap[codepoint]],
+            )
+            for codepoint in ADDED_CODEPOINTS
+        }
+
+    assert additions(Font(grafted[0])) == additions(fonts.patched)
+
+
+def test_graft_requires_the_open_box(tmp_path: Path) -> None:
+    source = tmp_path / "source.otf"
+    with TTFont(SOURCE_DIR / f"{FACES[0].source}.otf") as font:
+        for table in cast("CmapTable", font["cmap"]).tables:
+            _ = table.cmap.pop(OPEN_BOX, None)
+        font.save(source)
+    result = run_tool(source)
+    assert result.returncode != 0
+    assert b"U+2423 is missing" in result.stderr
+
+
+def test_graft_maps_every_unicode_cmap_subtable(tmp_path: Path) -> None:
+    source = tmp_path / "source.otf"
+    with TTFont(SOURCE_DIR / f"{FACES[0].source}.otf") as font:
+        tables = cast("CmapTable", font["cmap"]).tables
+        (original,) = tables
+        macintosh = {ord("a"): original.cmap[ord("a")]}
+        # Equal subtables share one dict once loaded, so each of these has
+        # contents of its own.
+        contents = {
+            (0, 3): {**original.cmap, 0xE000: "space"},
+            (1, 0): macintosh,
+            (3, 10): {**original.cmap, 0xE001: "space"},
+        }
+        for (platform, encoding), cmap in contents.items():
+            twin = copy.deepcopy(original)
+            twin.platformID, twin.platEncID, twin.cmap = platform, encoding, cmap
+            tables.append(twin)
+        font.save(source)
+    result = run_tool(source)
+    assert result.returncode == 0, result.stderr
+    with TTFont(source) as font:
+        tables = cast("CmapTable", font["cmap"]).tables
+        mapped = {
+            (table.platformID, table.platEncID): {
+                codepoint: table.cmap.get(codepoint) for codepoint in ADDED_CODEPOINTS
+            }
+            for table in tables
+        }
+        unmapped = dict.fromkeys(ADDED_CODEPOINTS)
+        glyphs = mapped[3, 1]
+        assert None not in glyphs.values()
+        assert mapped == {
+            (0, 3): glyphs,
+            (1, 0): unmapped,
+            (3, 1): glyphs,
+            (3, 10): glyphs,
+        }
+        assert next(t for t in tables if t.platformID == 1).cmap == macintosh
+
+
+class GlyphTool(Protocol):
+    def shouldered_open_box(
+        self, font: TTFont, cmap: dict[int, str]
+    ) -> Callable[[AbstractPen], None]: ...
+
+
+@pytest.fixture(scope="module")
+def tool() -> GlyphTool:
+    spec = importlib.util.spec_from_file_location("add_commit_mono_glyph", TOOL)
+    assert spec is not None
+    assert spec.loader is not None
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return cast("GlyphTool", cast("object", module))
+
+
+class Corner(IntEnum):
+    """Index of each point of U+2423, which starts at the outer bottom left."""
+
+    OUTER_BOTTOM_LEFT = 0
+    OUTER_BOTTOM_RIGHT = 1
+    OUTER_TOP_RIGHT = 2
+    INNER_TOP_RIGHT = 3
+    INNER_BOTTOM_RIGHT = 4
+    INNER_BOTTOM_LEFT = 5
+    INNER_TOP_LEFT = 6
+    OUTER_TOP_LEFT = 7
+
+
+type Mutation = Callable[[list[Segment]], list[Segment]]
+type Move = tuple[Corner, int, int]
+
+
+def moving(*moves: Move) -> Mutation:
+    def mutate(outline: list[Segment]) -> list[Segment]:
+        result = list(outline)
+        for corner, dx, dy in moves:
+            operator, ((x, y),) = result[corner]
+            result[corner] = (operator, ((x + dx, y + dy),))
+        return result
+
+    return mutate
+
+
+def with_seven_points(outline: list[Segment]) -> list[Segment]:
+    return [*outline[: Corner.INNER_TOP_LEFT], *outline[Corner.INNER_TOP_LEFT + 1 :]]
+
+
+def with_nine_points(outline: list[Segment]) -> list[Segment]:
+    return [
+        *outline[: Corner.OUTER_TOP_LEFT + 1],
+        # Off the line through its neighbors, which the encoder would drop.
+        ("lineTo", ((300, 50),)),
+        *outline[Corner.OUTER_TOP_LEFT + 1 :],
+    ]
+
+
+def with_curve(outline: list[Segment]) -> list[Segment]:
+    _, (corner,) = outline[Corner.INNER_TOP_RIGHT]
+    return [
+        *outline[: Corner.INNER_TOP_RIGHT],
+        ("curveTo", (corner, corner, corner)),
+        *outline[Corner.INNER_TOP_RIGHT + 1 :],
+    ]
+
+
+def assert_rejected(tool: GlyphTool, mutate: Mutation, message: str) -> None:
+    font = Font(SOURCE_DIR / f"{FACES[0].source}.otf")
+    glyph = font.cmap[OPEN_BOX]
+    recording = RecordingPen()
+    recording.value = mutate(font.outline(glyph))
+    pen = T2CharStringPen(0, None)
+    cast("Callable[[AbstractPen], None]", recording.replay)(pen)
+    top = cast("CffTable", cast("object", font.ttf["CFF "])).cff.topDictIndex[0]
+    top.CharStrings[glyph] = cast(
+        "Callable[[object, object], object]", pen.getCharString
+    )(top.Private, top.GlobalSubrs)
+    with pytest.raises(ValueError, match=re.escape(message)):
+        _ = tool.shouldered_open_box(font.ttf, font.cmap)
+
+
+@pytest.mark.parametrize(
+    "mutate",
+    [
+        pytest.param(with_seven_points, id="seven points"),
+        pytest.param(with_nine_points, id="nine points"),
+        pytest.param(with_curve, id="curve"),
+    ],
+)
+def test_shouldered_open_box_rejects_other_polygons(
+    tool: GlyphTool, mutate: Mutation
+) -> None:
+    assert_rejected(tool, mutate, "U+2423 is not a polygon of eight points")
+
+
+@pytest.mark.parametrize(
+    "mutate",
+    [
+        pytest.param(moving((Corner.OUTER_BOTTOM_RIGHT, 0, 1)), id="uneven bottom"),
+        pytest.param(moving((Corner.INNER_BOTTOM_RIGHT, 0, 1)), id="uneven bar"),
+        pytest.param(moving((Corner.INNER_TOP_RIGHT, 0, -1)), id="uneven inner right"),
+        pytest.param(moving((Corner.INNER_TOP_LEFT, 0, -1)), id="uneven inner left"),
+        pytest.param(moving((Corner.OUTER_TOP_LEFT, 0, -1)), id="uneven outer left"),
+        pytest.param(
+            moving(
+                (Corner.INNER_BOTTOM_RIGHT, 0, -1000),
+                (Corner.INNER_BOTTOM_LEFT, 0, -1000),
+            ),
+            id="bar below the bottom",
+        ),
+        pytest.param(
+            moving(
+                (Corner.INNER_BOTTOM_RIGHT, 0, 1000),
+                (Corner.INNER_BOTTOM_LEFT, 0, 1000),
+            ),
+            id="bar above the top",
+        ),
+        pytest.param(moving((Corner.INNER_BOTTOM_RIGHT, -1000, 0)), id="crossed sides"),
+        pytest.param(
+            moving((Corner.INNER_BOTTOM_LEFT, -1000, 0)), id="left side outside the box"
+        ),
+        pytest.param(
+            moving((Corner.INNER_BOTTOM_RIGHT, 1000, 0)),
+            id="right side outside the box",
+        ),
+    ],
+)
+def test_shouldered_open_box_rejects_other_eight_point_shapes(
+    tool: GlyphTool, mutate: Mutation
+) -> None:
+    assert_rejected(tool, mutate, "U+2423 is not an open box")
 
 
 def test_rebuild_with_read_only_patcher_outputs(tmp_path: Path) -> None:
@@ -981,7 +1352,7 @@ os.execv(sys.executable, [sys.executable, *sys.argv[6:]])
     outputs = list((repo / "Library" / "Fonts").glob("*.otf"))
     assert len(outputs) == 1
     with TTFont(outputs[0]) as font:
-        assert DOUBLE_OBLIQUE_HYPHEN in (font.getBestCmap() or {})
+        assert set(ADDED_CODEPOINTS) <= set(font.getBestCmap() or {})
 
 
 def test_every_glyph_advances_one_cell(fonts: Fonts) -> None:

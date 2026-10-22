@@ -22,15 +22,24 @@ which the site writes into the zip. `tools/create_nerd_commit_mono.sh` patches
 them into the "CommitMonoShields Nerd Font" in `Library/Fonts/`, and
 `tests/test_nerd_commit_mono.py` checks the result.
 
-## Double oblique hyphen
+## Added glyphs
 
-The build also adds U+2E17 DOUBLE OBLIQUE HYPHEN (`⸗`) from Noto Sans Mono,
-so the character is available in the font itself in Emacs and terminal
-emulators such as iTerm2. `tools/add_commit_mono_glyph.py` runs after the Nerd
-Fonts patcher. It adds the glyph at weights 350 and 700, matching the regular
-and bold faces, and applies Commit Mono's 1:6 shear and horizontal centering
-to the italic faces. Both fonts use 1000 units per em and a 600-unit advance.
-The existing glyphs, line metrics, and OpenType substitutions are preserved.
+Emacs and Vim use two characters as whitespace markers that neither Commit Mono
+nor the Nerd Fonts patcher provides, so the build adds them to all four faces
+and they are available in the font itself in Emacs and terminal emulators such
+as iTerm2. `tools/add_commit_mono_glyph.py` runs after the patcher. Each glyph
+has Commit Mono's 600-unit advance, and the existing glyphs, line metrics, and
+OpenType substitutions are preserved. `tests/test_nerd_commit_mono.py` runs the
+tool on the source OTFs and requires the result to match the glyphs in
+`Library/Fonts/`, so after changing the tool, rerun
+`tools/create_nerd_commit_mono.sh` (it needs Docker) and commit the fonts.
+
+### Double oblique hyphen
+
+U+2E17 DOUBLE OBLIQUE HYPHEN (`⸗`) comes from Noto Sans Mono. The tool adds it
+at weights 350 and 700, matching the regular and bold faces, and applies Commit
+Mono's 1:6 shear and horizontal centering to the italic faces. Both fonts use
+1000 units per em and a 600-unit advance.
 
 `noto-sans-mono/NotoSansMono-DoubleObliqueHyphen.ttf` is a subset of the
 Noto Sans Mono 2.014 variable font containing only U+2E17 and `.notdef`.
@@ -56,6 +65,23 @@ Its original notices are retained, and the unmodified upstream license is in
 [`noto-sans-mono/OFL.txt`](noto-sans-mono/OFL.txt). The final OTFs retain Commit
 Mono's notices and additionally embed the donor's copyright and full OFL
 license in their name tables.
+
+### Shouldered open box
+
+U+237D SHOULDERED OPEN BOX (`⍽`) is the ISO/IEC 9995-7 symbol for a no-break
+space. Fonts that have it, such as Menlo, draw an open box like `␣` (U+2423)
+with an arm running outward from the top of each side
+([Unicode code chart](https://www.unicode.org/charts/PDF/U2300.pdf)). The tool
+draws it from each face's own `␣`, so it needs no donor font or license text:
+the sides move inward by a fifth of the box's width, and an arm as thick as the
+bottom stroke runs outward from each side to where `␣`'s sides were. The arms
+rest on the line `␣`'s top edge is on, which is the baseline, and the sides rise
+to their tops, so the glyph is a stroke taller than `␣`. That is what keeps it
+legible at 12pt: three pixel rows on a 1x display (`␣`'s is two, Menlo's `⍽`
+four) and six on a 2x one (eight for Menlo's). The bottom is where `␣`'s is,
+the arms start at `␣`'s top corners, and every stroke has `␣`'s thickness, so
+the weight is `␣`'s. The italic faces keep `␣`'s 1:6 shear, which moves the
+tops of the arms to the right.
 
 ## Spacing
 
