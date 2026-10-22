@@ -375,6 +375,34 @@ void test("a denied push larger than the drain limit gets a plain denial", async
   assert.ok(cancelled);
 });
 
+void test("a denied push whose body fails while it is being read out gets a plain denial", async (t) => {
+  t.mock.method(console, "error", t.mock.fn());
+  let pulled = 0;
+  const response = await handleOutbound(
+    new Request("https://github.com/shields/dotfiles.git/git-receive-pack", {
+      method: "POST",
+      body: new ReadableStream<Uint8Array>({
+        pull(controller) {
+          if (pulled === 0) {
+            controller.enqueue(push("refs/heads/main"));
+          } else {
+            controller.error(new Error("client connection lost"));
+          }
+          pulled += 1;
+        },
+      }),
+      duplex: "half",
+    } as RequestInit),
+    instanceId,
+    authority([]),
+    () => {
+      throw new Error("denied request reached GitHub");
+    },
+  );
+  assert.equal(response.status, 403);
+  assert.match(await response.text(), /^push destination is outside/);
+});
+
 void test("GraphQL reads retain their body and mutations are denied", async () => {
   const events: string[] = [];
   const query = JSON.stringify({

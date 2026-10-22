@@ -18,6 +18,7 @@ import {
 import { tmpdir } from "node:os";
 import path from "node:path";
 import test, { mock, type TestContext } from "node:test";
+import { setImmediate as nextTurn } from "node:timers/promises";
 import { gzipSync } from "node:zlib";
 import { AppAuth } from "./auth.ts";
 import { Gateway } from "./server.ts";
@@ -114,6 +115,7 @@ async function startGateway(
   instance: Instance;
   state: State;
   auth: AppAuth;
+  gateway: Gateway;
   incoming: Forwarded[];
   listener: https.Server;
   closed: () => Promise<void>;
@@ -248,7 +250,17 @@ async function startGateway(
     const closed = async (): Promise<void> => {
       await Promise.all(responses);
     };
-    return { socket, instance, state, auth, incoming, listener, closed, stop };
+    return {
+      socket,
+      instance,
+      state,
+      auth,
+      gateway,
+      incoming,
+      listener,
+      closed,
+      stop,
+    };
   } catch (error) {
     await stop();
     throw error;
@@ -724,7 +736,7 @@ async function within<T>(what: string, pending: Promise<T>): Promise<T> {
 }
 
 const requestShapes: Record<
-  "get" | "post" | "upload" | "push",
+  "get" | "post" | "upload" | "push" | "deniedPush",
   { method: string; path: string; body?: string; ends: boolean }
 > = {
   get: {
@@ -748,6 +760,12 @@ const requestShapes: Record<
     method: "POST",
     path: "/shields/dotfiles.git/git-receive-pack",
     body: "00",
+    ends: false,
+  },
+  deniedPush: {
+    method: "POST",
+    path: "/shields/dotfiles.git/git-receive-pack",
+    body: `${packet(`${"0".repeat(40)} ${"1".repeat(40)} refs/heads/main\0report-status\n`).toString()}0000`,
     ends: false,
   },
 };
@@ -1197,6 +1215,53 @@ void test("a client that leaves while its push commands are being read is audite
   );
   assert.deepEqual(audit.calls, [{ status: null, outcome: "interrupted" }]);
   assert.deepEqual(incoming, []);
+});
+
+void test("a client that leaves while the rest of a denied push is being read does not crash the gateway", async (t) => {
+  const { socket, instance, state, closed, stop } = await startGateway();
+  const audit = recordFinishes(t, state);
+  const { request, response } = open(socket, "deniedPush");
+  const hungUp = assert.rejects(response, { message: "socket hang up" });
+  let rows;
+  try {
+    await within("the audit row", audit.first);
+    request.destroy();
+    await within("the client's request to fail", hungUp);
+    await within("the gateway's response to close", closed());
+    // Yield so Node reports an unhandled rejection from the gateway while this
+    // test is still running.
+    await nextTurn();
+    rows = auditRows(state, instance);
+  } finally {
+    request.destroy();
+    await stop();
+  }
+  assert.deepEqual(rows, [{ outcome: "denied", upstreamStatus: null }]);
+  assert.deepEqual(audit.calls, [{ status: null, outcome: "denied" }]);
+});
+
+void test("a failed listener refresh does not fail the refreshes queued behind it", async (t) => {
+  const { gateway, state, stop } = await startGateway();
+  try {
+    t.mock.method(
+      state,
+      "active",
+      (): never => {
+        throw new Error("state unavailable");
+      },
+      { times: 1 },
+    );
+    const settled = await Promise.allSettled([
+      gateway.refresh(),
+      gateway.refresh(),
+    ]);
+    assert.deepEqual(
+      settled.map(({ status }) => status),
+      ["rejected", "fulfilled"],
+    );
+  } finally {
+    await stop();
+  }
 });
 
 void test("an upstream that answers before the upload ends has its request aborted when the client connection closes", async (t) => {
