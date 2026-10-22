@@ -6,13 +6,12 @@ import path from "node:path";
 import test from "node:test";
 import { AppAuth } from "./auth.ts";
 
-void test("device flow requests one repository and checks the resulting token", async () => {
+void test("device flow requests one repository and checks the resulting token", async (t) => {
   const directory = mkdtempSync(path.join(tmpdir(), "vm-access-device-"));
   const gh = path.join(directory, "gh");
   writeFileSync(gh, "#!/bin/sh\nprintf '4242\\n'\n");
   chmodSync(gh, 0o700);
   const originalPath = process.env.PATH;
-  const originalFetch = globalThis.fetch;
   process.env.PATH = `${directory}:${originalPath ?? ""}`;
   let verifiedId = 4242;
   const requests: {
@@ -20,7 +19,7 @@ void test("device flow requests one repository and checks the resulting token", 
     repositoryId: string | null;
     authorization: string | null;
   }[] = [];
-  globalThis.fetch = (input, init) => {
+  const fakeFetch: typeof fetch = (input, init) => {
     const url = new URL(
       input instanceof Request
         ? input.url
@@ -56,6 +55,7 @@ void test("device flow requests one repository and checks the resulting token", 
     return Promise.resolve(Response.json(payload));
   };
   try {
+    t.mock.method(globalThis, "fetch", fakeFetch);
     const auth = new AppAuth(path.join(directory, "secrets"));
     const issued = await auth.issue("shields/dotfiles");
     assert.equal(issued.access_token, "ghu_scoped");
@@ -80,7 +80,6 @@ void test("device flow requests one repository and checks the resulting token", 
     );
     assert.equal(auth.load("shields/dotfiles").access_token, "ghu_scoped");
   } finally {
-    globalThis.fetch = originalFetch;
     process.env.PATH = originalPath;
     rmSync(directory, { recursive: true, force: true });
   }

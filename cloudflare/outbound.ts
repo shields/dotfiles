@@ -108,6 +108,8 @@ async function drained(request: Request, limit: number): Promise<boolean> {
         return false;
       }
     }
+  } catch {
+    return false;
   } finally {
     void reader.cancel().catch((error: unknown) => {
       console.error("vm-access: denied body cancellation failed", error);
@@ -270,7 +272,7 @@ export async function handleOutbound(
       // ref statuses, unless the whole body is read.
       error instanceof PushDenied &&
       error.report !== null &&
-      (await drained(request, 67_108_864).catch(() => false))
+      (await drained(request, 67_108_864))
     ) {
       return new Response(error.report, {
         status: 200,

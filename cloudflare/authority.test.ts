@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import { compareCodeUnits } from "../gateway/policy.ts";
 import { CloudAuthority, type CloudAuthorization } from "./authority.ts";
 
 const now = Math.floor(Date.now() / 1000);
@@ -21,15 +22,14 @@ class MemoryStorage {
   delete(key: string): Promise<boolean>;
   delete(keys: string[]): Promise<number>;
   delete(input: string | string[]): Promise<boolean | number> {
-    if (Array.isArray(input)) {
-      return Promise.resolve(
-        input.reduce(
-          (count, key) => count + Number(this.values.delete(key)),
-          0,
-        ),
-      );
-    }
-    return Promise.resolve(this.values.delete(input));
+    return Promise.resolve(
+      Array.isArray(input)
+        ? input.reduce(
+            (count, key) => count + Number(this.values.delete(key)),
+            0,
+          )
+        : this.values.delete(input),
+    );
   }
 
   list<T>(options: {
@@ -44,7 +44,7 @@ class MemoryStorage {
           key.startsWith(options.prefix ?? "") &&
           (options.startAfter === undefined || key > options.startAfter),
       )
-      .toSorted();
+      .toSorted(compareCodeUnits);
     if (options.reverse) {
       keys.reverse();
     }
@@ -262,6 +262,35 @@ void test("revoking a grant removes credentials while preserving anonymous reads
   assert.equal(read.token, null);
 });
 
+void test("identity reads use the first granted repository in code-unit order", async () => {
+  const state = authority();
+  for (const repository of ["owner/a_b", "owner/a-b"]) {
+    await state.installAuthorization({
+      ...authorization(),
+      repository,
+      accessToken: `access-${repository}`,
+    });
+  }
+  const instance = await state.register("work", "owner");
+  await state.update(
+    instance.id,
+    0,
+    {
+      "owner/a_b": { read: true, pushTaskBranches: false },
+      "owner/a-b": { read: true, pushTaskBranches: false },
+    },
+    "owner",
+  );
+  const identity = await state.allow(instance.id, {
+    repository: null,
+    operation: "identity.read",
+    refs: [],
+  });
+  assert.ok(identity.allowed);
+  assert.equal(identity.token, "access-owner/a-b");
+  assert.equal((await state.logs(instance.id))[0]?.repository, "owner/a-b");
+});
+
 void test("stale policy revisions and missing authorization fail closed", async () => {
   const state = authority();
   const instance = await state.register("work", "owner");
@@ -306,9 +335,9 @@ void test("revocation during token refresh prevents forwarding", async () => {
           ? input.href
           : input.url;
     if (url.includes("/login/oauth/access_token")) {
-      return new Promise<Response>((resolve) => {
-        release = resolve;
-      });
+      const { promise, resolve } = Promise.withResolvers<Response>();
+      release = resolve;
+      return promise;
     }
     return Promise.resolve(new Response(null, { status: 200 }));
   }) as typeof fetch;

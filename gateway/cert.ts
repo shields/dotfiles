@@ -22,11 +22,11 @@ export function ensureCertificates(directory: string): Certificates {
   mkdirSync(directory, { recursive: true, mode: 0o700 });
   const ca = path.join(directory, "ca.pem");
   const caKey = path.join(directory, "ca-key.pem");
-  const cert = path.join(directory, "github.pem");
-  const key = path.join(directory, "github-key.pem");
   if (existsSync(ca) !== existsSync(caKey)) {
     throw new Error("gateway CA files are incomplete");
   }
+  const cert = path.join(directory, "github.pem");
+  const key = path.join(directory, "github-key.pem");
   if (!existsSync(ca)) {
     openssl(
       "req",
