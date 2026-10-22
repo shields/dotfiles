@@ -1,8 +1,12 @@
 import assert from "node:assert/strict";
-import { test } from "bun:test";
+import { afterEach, mock, spyOn, test } from "bun:test";
 import { gzipSync } from "node:zlib";
 import { authorize, type Classification } from "../gateway/policy.ts";
 import { handleOutbound, type OutboundAuthority } from "./outbound.ts";
+
+afterEach(() => {
+  mock.restore();
+});
 
 const instanceId = "01234567-89ab-4cde-8fab-0123456789ab";
 
@@ -373,6 +377,34 @@ test("a denied push larger than the drain limit gets a plain denial", async () =
   assert.match(await response.text(), /^push destination is outside/);
   assert.ok(pulled > 64 && pulled < 80, String(pulled));
   assert.ok(cancelled);
+});
+
+test("a denied push whose body fails while it is being read out gets a plain denial", async () => {
+  spyOn(console, "error").mockImplementation(mock());
+  let pulled = 0;
+  const response = await handleOutbound(
+    new Request("https://github.com/shields/dotfiles.git/git-receive-pack", {
+      method: "POST",
+      body: new ReadableStream<Uint8Array>({
+        pull(controller) {
+          if (pulled === 0) {
+            controller.enqueue(push("refs/heads/main"));
+          } else {
+            controller.error(new Error("client connection lost"));
+          }
+          pulled += 1;
+        },
+      }),
+      duplex: "half",
+    } as RequestInit),
+    instanceId,
+    authority([]),
+    () => {
+      throw new Error("denied request reached GitHub");
+    },
+  );
+  assert.equal(response.status, 403);
+  assert.match(await response.text(), /^push destination is outside/);
 });
 
 test("GraphQL reads retain their body and mutations are denied", async () => {
