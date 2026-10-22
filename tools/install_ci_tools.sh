@@ -56,10 +56,10 @@ download() {
 
 # bsdtar is what tests/test_stage_tree.py runs an extra variant against when it
 # is on PATH. Without it the variant is dropped, not skipped, so the skip gate
-# cannot see it.
+# cannot see it. tests/test_whitespace.py needs a full vim, not vim-tiny.
 retry sudo apt-get update
 retry sudo env DEBIAN_FRONTEND=noninteractive apt-get install --yes --no-install-recommends \
-    bubblewrap libarchive-tools tmux zsh
+    bubblewrap libarchive-tools tmux vim zsh
 
 # The image makes /usr/share world-writable, so compaudit rejects the zsh
 # directories that other packages created there and compinit aborts.
