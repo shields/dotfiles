@@ -12,16 +12,47 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import re
 from pathlib import Path
 
 REPO = Path(__file__).resolve().parents[1]
 GHOSTTY_CONFIG = REPO / ".config/ghostty/config"
+VIMRC = REPO / ".vimrc"
 
 
-def test_ghostty_asks_before_programs_read_the_clipboard() -> None:
+def _settings() -> dict[str, str]:
     settings: dict[str, str] = {}
     for line in GHOSTTY_CONFIG.read_text().splitlines():
         name, _, value = line.partition(" = ")
-        if name.startswith("clipboard-"):
-            settings[name] = value
+        settings[name] = value
+    return settings
+
+
+def _luminance(hex_color: str) -> float:
+    digits = hex_color.removeprefix("#")
+    red, green, blue = (
+        value / 12.92 if value <= 0.04045 else ((value + 0.055) / 1.055) ** 2.4
+        for value in (int(digits[i : i + 2], 16) / 255 for i in (0, 2, 4))
+    )
+    return 0.2126 * red + 0.7152 * green + 0.0722 * blue
+
+
+def test_ghostty_asks_before_programs_read_the_clipboard() -> None:
+    settings = {
+        name: value
+        for name, value in _settings().items()
+        if name.startswith("clipboard-")
+    }
     assert settings == {"clipboard-read": "ask", "clipboard-write": "allow"}
+
+
+def test_ghostty_minimum_contrast_keeps_the_no_break_space_gray() -> None:
+    settings = _settings()
+    match = re.search(
+        r"highlight ShieldsNoBreakSpace\b.*\bguifg=(#[0-9a-f]{6})\b",
+        VIMRC.read_text(encoding="utf-8"),
+    )
+    assert match
+    luminances = (_luminance(match[1]), _luminance(settings["background"]))
+    ratio = (max(luminances) + 0.05) / (min(luminances) + 0.05)
+    assert ratio >= float(settings["minimum-contrast"]) + 0.05

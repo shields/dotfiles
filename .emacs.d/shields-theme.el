@@ -53,9 +53,23 @@
 ;; The match and region faces name NSColor system colors, which only an ns frame
 ;; can resolve.  Every other frame, such as a terminal, gets fixed colors: yellow
 ;; for match and #dfecff, the macOS highlight color, for region.
+;;
+;; In 256 colors the whitespace markers use #005f87 and #d7ffff, xterm colors 24
+;; and 195 as in Vim, because Emacs approximates the pale blue with a gray.  The
+;; condition is `supports', not (min-colors 256) alone: Emacs registers the
+;; 256-color palette only for terminal types it recognizes.  The no-break space
+;; marker is #949494, the lightest gray with 3:1 contrast against white, so that
+;; a terminal enforcing that contrast, like Ghostty, does not draw it in black.
+;; With fewer than 16 colors the other markers are blue on white, because the
+;; nearest color to the dark blue can be cyan, the no-break space marker's.
+;;
+;; In a terminal the default face names no colors, so the terminal's own white
+;; background shows.  "White" would be xterm color 7: #e5e5e5 in true color.
 (custom-theme-set-faces
  'shields
- '(default ((t (:inherit nil :extend nil :stipple nil :background "White" :foreground "Black" :inverse-video nil :box nil :strike-through nil :overline nil :underline nil :slant normal :weight semi-light :height 120 :width normal :font "CommitMonoShields Nerd Font"))))
+ '(default ((default (:inherit nil :extend nil :stipple nil :inverse-video nil :box nil :strike-through nil :overline nil :underline nil :slant normal :weight semi-light :height 120 :width normal :font "CommitMonoShields Nerd Font"))
+           (((type tty)) nil)
+           (t (:background "White" :foreground "Black"))))
  '(Info-quoted ((t (:inherit fixed-pitch))))
  '(completions-annotations ((t (:inherit shadow))))
  '(cperl-array-face ((t (:foreground "Blue"))))
@@ -102,7 +116,16 @@
  '(parenthesis ((t (:inherit font-lock-bracket-face))))
  '(region ((((type ns)) (:background "selectedTextBackgroundColor" :extend nil))
            (t (:background "#dfecff" :extend nil))))
- '(shields/whitespace ((t (:inherit fixed-pitch :foreground "#365773" :background "#e8f4ff"))))
+ '(shields/nobreak-marker ((((min-colors 16777216)) (:inherit fixed-pitch :foreground "#949494"))
+                          (((supports :foreground "#949494")) (:inherit fixed-pitch :foreground "#949494"))
+                          (t (:inherit fixed-pitch :foreground "cyan"))))
+ '(shields/whitespace ((((min-colors 16777216))
+                        (:inherit fixed-pitch :foreground "#365773" :background "#e8f4ff"))
+                       (((type tty) (min-colors 256) (supports :foreground "#005f87"))
+                        (:inherit fixed-pitch :foreground "#005f87" :background "#d7ffff"))
+                       (((min-colors 16))
+                        (:inherit fixed-pitch :foreground "#365773" :background "#e8f4ff"))
+                       (t (:inherit fixed-pitch :foreground "blue" :background "white"))))
  '(shields/line-marker ((t (:inherit shields/whitespace))))
  '(show-paren-match ((t (:foreground "magenta" :weight bold))))
  '(show-paren-match-expression ((t (:background "#f4f4ff"))))

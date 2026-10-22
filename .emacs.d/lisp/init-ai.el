@@ -36,7 +36,21 @@
   (when-let* ((key (auth-source-pick-first-password :host "api.anthropic.com")))
     (setopt chatgpt-shell-anthropic-key key))
   (when-let* ((key (auth-source-pick-first-password :host "api.openai.com")))
-    (setopt chatgpt-shell-openai-key key)))
+    (setopt chatgpt-shell-openai-key key))
+
+  ;; A hex string, not "white": a terminal frame maps the name to palette color
+  ;; 7, which is #e5e5e5.
+  (define-advice chatgpt-shell--fader-palette
+      (:around (palette) shields/terminal-background)
+    "Fade to white in a terminal, whose default face names no background."
+    (let ((white (lambda (face-background face &rest args)
+                   (let ((color (apply face-background face args)))
+                     (if (and (eq face 'default) (equal color "unspecified-bg"))
+                         "#ffffff"
+                       color)))))
+      (advice-add 'face-background :around white)
+      (unwind-protect (funcall palette)
+        (advice-remove 'face-background white)))))
 
 (provide 'init-ai)
 ;;; init-ai.el ends here

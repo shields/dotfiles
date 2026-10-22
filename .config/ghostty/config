@@ -53,8 +53,13 @@ cursor-text = ffffff
 selection-background = e1ecfd
 selection-foreground = 000000
 
-# Minimum contrast (WCAG 1-21 scale; iTerm2 0.404 ≈ 3)
-minimum-contrast = 3
+# Minimum contrast (WCAG 1-21 scale): text below it is replaced with black or
+# white.  Low enough to keep #949494 (3.03 on white), the color of the no-break
+# space marker in Vim and Emacs, and above 2.93 so that xterm colors 140 and 205
+# (under 3 on white) are replaced like the other low-contrast colors.  iTerm2's
+# 0.2018 is a difference in gamma-encoded brightness, not a WCAG ratio; for gray
+# on white it is about 1.6.
+minimum-contrast = 2.95
 
 # ANSI colors (palette 0-15)
 # Normal colors (0-7)

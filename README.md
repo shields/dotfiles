@@ -37,42 +37,145 @@ Many preferences can be translated to `defaults write` settings using
 
 Emacs and Vim wrap long lines without inserting newlines. Display markers use
 dark blue (`#365773`) on pale blue (`#e8f4ff`) to distinguish them from file
-contents. CommitMonoShields Nerd Font contains all three glyphs; iTerm2 uses
-the same font as graphical Emacs.
+contents, except that a no-break space that is not trailing is gray (`#949494`)
+with no background of its own. That is the lightest gray with 3:1 contrast
+against white, the background in Vim and graphical Emacs. Terminal Emacs uses
+the terminal's own background and foreground, which are white and black in
+Ghostty and iTerm2, and assumes that background is white, so the gray keeps its
+3:1 contrast there too. Ghostty's `minimum-contrast = 2.95` then keeps the gray
+in Vim and terminal Emacs instead of replacing it with black. CommitMonoShields
+Nerd Font contains all four glyphs, two of which its build adds (see
+`commit-mono/README.md`); iTerm2 uses the same font as graphical Emacs.
 
-| Meaning        | Marker       | Emacs                  | Vim                       |
-| -------------- | ------------ | ---------------------- | ------------------------- |
-| Soft wrap      | `⸗` (U+2E17) | End of the screen line | Start of the continuation |
-| Tab            | `⇥` (U+21E5) | Preserves tab stops    | Preserves tab stops       |
-| Trailing space | `␣` (U+2423) | One per space          | One per space             |
+| Meaning        | Marker       | Emacs                                        | Vim                       |
+| -------------- | ------------ | -------------------------------------------- | ------------------------- |
+| Soft wrap      | `⸗` (U+2E17) | End of the screen line                       | Start of the continuation |
+| Tab            | `⇥` (U+21E5) | Preserves tab stops, except a one-column tab | Preserves tab stops       |
+| Trailing space | `␣` (U+2423) | One per space, except at point               | One per space             |
+| No-break space | `⍽` (U+237D) | Gray; marker colors if trailing              | Same                      |
+
+In Emacs the tab marker is `⇥` followed by the tab itself, so a tab that is only
+one column wide (it starts in the last column before a tab stop) pushes the text
+after it a full tab width to the right. With tab width 8, `abcdefg<Tab>X` puts
+`X` 16 columns from the left edge instead of 8. Tabs two or more columns wide,
+and the blank tabs described below, keep their stops.
 
 Ordinary spaces remain blank. Tabs remain blank in Go source, `go.mod`,
 `go.work`, and Makefiles, including trailing tabs. Trailing spaces remain
-visible in those files. TSV tabs remain visible as `⇥`. For another format
-that requires tabs, add its mode to `shields/tab-required-modes` in Emacs or
-its filetype to
+visible in those files. TSV tabs remain visible as `⇥`. Emacs recognizes these
+formats by major mode: `go-ts-mode`, `go-mod-ts-mode`, `go-work-ts-mode`, and
+`makefile-mode` with the modes derived from it. Vim recognizes them by
+filetype: `go`, `gomod`, `gowork`, `make`, and `automake`. The editors do not
+agree on every file name: `Makefile.common` has blank tabs in Vim, where it is a
+Makefile, but `⇥` in Emacs, where it is not. For another format that requires
+tabs, add its mode to `shields/tab-required-modes` in Emacs or its filetype to
 `g:shields_tab_required_filetypes` in Vim. Emacs buffer-local
 `shields/show-tabs` and Vim buffer-local `b:shields_show_tabs` can also disable
-tab markers.
+tab markers. Emacs applies `shields/show-tabs` when a major mode starts and
+after file-local and directory-local variables load, so set it there, for
+example with `-*- shields/show-tabs: nil -*-` on a file's first line. After
+changing it by hand, evaluate `(shields/update-whitespace-style)` with `M-:`; a
+hand-set value lasts only until the next major mode change, including
+`M-x normal-mode` and `M-x revert-buffer`. In Emacs, a `whitespace-style` set by
+`.dir-locals.el` or a file's local variables replaces this configuration's style
+for that buffer, tab handling included, and a `space-mark` in it draws U+00A0 as
+its own mark (`¤`) instead of `⍽`. The `␣` markers and the `⍽` markers on
+trailing no-break spaces are not part of the style: every style keeps them
+except `nil`, which turns them off too, leaving every no-break space a gray
+`⍽`.
+
+Both editors draw U+00A0 and U+202F as `⍽`: in the marker colors in trailing
+whitespace, a run of spaces, tabs, and no-break spaces that ends the line, and
+in gray elsewhere. In Emacs, trailing whitespace that ends at point stays
+unmarked, so a `␣` does not flash while you type a word and a space; the markers
+return when point moves away, but its no-break spaces stay gray. Vim marks
+trailing whitespace always. Vim's `trail:` draws `␣` only for spaces followed by
+nothing but spaces and tabs, so a space before a trailing no-break space is
+blank in Vim, where Emacs draws `␣`; Vim gives that cell the marker colors, so
+only the glyph differs. Emacs also keeps `whitespace-mode`'s highlights for a
+space before a tab (orange), `tab-width` or more spaces after a tab (yellow),
+and a missing final newline (olive, on the last character, except while point is
+at the end of the buffer), including in buffers where tabs are blank. They cover
+the spaces when `indent-tabs-mode` is on, as in Makefiles, and the tab when it
+is off. Vim has none of them.
+
+In Emacs the `␣` and trailing `⍽` markers are overlays, not a `display` text
+property set by font-lock. Indirect buffers share text properties but each has
+its own point and `whitespace-mode` state, and copied text would carry the
+property into other buffers. A hook mirrors edits among the buffers that share
+text so that each refreshes its own overlays.
+
+Vim paints every cell that `'listchars'` draws for a tab, a trailing space, or a
+no-break space with the `SpecialKey` group, in every window. To let tabs be
+blank, `.vimrc` gives `SpecialKey` no attributes (set explicitly, because Vim
+restores the defaults of a cleared group when `'background'` changes) and colors
+the markers with window-local `matchadd()` matches below `hlsearch`. At priority
+-1 they cover `⇥`, `␣`, the spaces and no-break spaces in trailing whitespace,
+and the characters Vim shows as `^X` or `<xx>`; at priority -2 a gray match
+covers every no-break space, so trailing ones keep the marker colors. `⸗`
+and `…` come from `NonText`. Vim applies the matches when a buffer is displayed,
+when its filetype changes, when a window is created, and when `'list'` is set,
+so after changing `b:shields_show_tabs` by hand, run `:doautocmd BufWinEnter`.
+The tradeoffs: `:map` listings no longer color special keys, `clearmatches()`
+removes the marker and no-break space colors from a window until one of those
+events, `'cursorcolumn'` and `'colorcolumn'` do not tint marker cells, a line of
+a million characters redraws slowly (about 0.35 s), and a long stretch of
+alternating spaces and tabs followed by more text takes time that grows with the
+square of its length: 0.3 s at 8,000 characters. From about 22,000 characters a
+redraw reaches Vim's `'redrawtime'` of 2 s, and Vim stops coloring that line and
+the lines below it.
 
 Vim uses true color in iTerm2 and terminals advertising it through `COLORTERM`;
-its 256-color fallback uses colors 24 and 195. Emacs maps the face colors to
-the terminal's available palette. With wrapping explicitly disabled, both
+its 256-color fallback uses colors 24 and 195, and 246 for the gray. Emacs
+uses the exact colors in true-color terminals and graphical frames, and the same
+palette colors in terminals whose xterm palette it knows: the xterm family and
+those it treats alike, such as rxvt, st, screen, and tmux. Other terminals get
+the nearest of the colors Emacs registers for them, which for putty-256color,
+gnome-256color, vte-256color, mlterm-256color, and nsterm-256color are only 8.
+With 16 colors the markers are bright blue on bright white and the gray `⍽` is
+bright black, the nearest color to the gray. With 8, or without bright black,
+the markers are blue on white and the `⍽` is cyan, because the nearest color to
+the gray is the white background. With wrapping explicitly disabled, both
 editors use `…` to mark truncated text.
 
 `bin/pager` keeps less's normal line wrapping. Less 710 has no setting for a
 soft-wrap marker, custom tab markers, trailing-space markers, or filetype
 exceptions. Its `--rscroll` option marks **truncation**, not wrapping, so the
-pager uses `…` with the same 256-color approximation when `-S` is requested.
-Input is passed through unchanged, preserving searching, copying, and ANSI
-formatting. The optional `--PROC-TAB` flag can reveal tabs as `^I` for
-inspection. See `man less`, the [less release notes][less-rscroll], and
+pager uses `…` with colors 24 and 195 when `-S` is requested. It sets
+`LESSCHARSET=utf-8` because less otherwise reads only the first byte of `…` in
+the C locale or in a UTF-8 locale that is not installed. Input is passed
+through unchanged, preserving searching, copying, and ANSI formatting. The
+optional `--PROC-TAB` flag can reveal tabs as `^I` for inspection. See
+`man less`, the [less release notes][less-rscroll], and
 [Vim's display options][vim-display].
 
-These settings change display only. Emacs's existing ws-butler setup still
-removes trailing whitespace from edited lines on save. Run `./provision.sh`
-to install the configuration, then restart Emacs and Vim; new pager processes
-use it immediately. Restart iTerm2 if it still has the old font cached.
+These settings change display only. In Emacs, `whitespace-style` does not
+include `trailing`, because the `␣` and trailing `⍽` markers replace its
+highlight, but `whitespace-cleanup`, `whitespace-cleanup-region`,
+`whitespace-report` and `whitespace-report-region` see `trailing` in this
+configuration's style while they run. They trim and count trailing spaces, tabs
+and U+00A0 as they do with whitespace.el's own style (which does not treat
+U+202F as trailing). The style's `space-before-tab`, `space-after-tab` and
+`missing-newline-at-eof` apply too, so the cleanup commands add a missing final
+newline and rewrite tabs next to spaces. With `indent-tabs-mode` off, as it is
+by default here, a tab that follows spaces or precedes `tab-width` or more
+spaces becomes spaces. With it on, the spaces before a tab are deleted and
+`tab-width` spaces after one become a tab. Do not run the cleanup commands on
+tab-separated files. The `cleanup`, `auto-cleanup`, `report-on-bogus` and
+`abort-on-bogus` values of `whitespace-action`, which call these commands,
+behave the same way.
+Only the current buffer sees the added `trailing`, and only while the command
+runs, even if it fails or is interrupted. A `whitespace-style` set by
+`.dir-locals.el` or a file's local variables is used exactly as given: without
+`trailing`, these commands neither trim nor count trailing blanks, and with
+`nil` they change and report nothing. On save, ws-butler removes trailing
+whitespace from the lines that were edited; `whitespace-cleanup` trims the whole
+buffer.
+
+Run `./provision.sh` to install the configuration and the font (it copies the
+font into `~/Library/Fonts/` rather than linking it, so run it again after the
+font is rebuilt), then restart Emacs and Vim; new pager processes use the
+configuration immediately. Restart iTerm2 if it still has the old font cached.
 
 [less-rscroll]: https://www.greenwoodsoftware.com/less/news.661.html
 [vim-display]: https://vimhelp.org/options.txt.html#%27listchars%27

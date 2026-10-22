@@ -19,6 +19,11 @@ set -euo pipefail
 # 0.382 ≈ 1/φ. 16.226 matches the macOS findHighlightColor.
 export LESS='-eFiMX -j.382 --incsearch --mouse --use-color --color=PWc --color=S16.226 --rscroll=… --color=R24.195'
 
+# Less reads only the first byte of the multibyte --rscroll character outside
+# UTF-8 mode, which it does not enter in the C locale or in a UTF-8 locale that
+# is not installed.
+export LESSCHARSET=utf-8
+
 # Exit immediately if the content fits in 61.8% of the terminal height.
 if height=$(stty size </dev/tty 2>/dev/null | cut -d' ' -f1) && [ "$height" -gt 0 ]; then
     export LESS_SHELL_LINES=$((height - height * 618 / 1000))
