@@ -9,6 +9,8 @@ cloudflare/wrangler.jsonc
 .venv/
 .pytest_cache/
 
-# git excludes nested worktrees through .git/info/exclude, which Prettier does
-# not read.
+# git hides nested worktrees through .git/info/exclude and Playwright MCP output
+# through the global ignore file, and Prettier reads neither.
+.worktrees/
 .claude/worktrees/
+.playwright-mcp/
