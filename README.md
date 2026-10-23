@@ -47,12 +47,12 @@ in Vim and terminal Emacs instead of replacing it with black. CommitMonoShields
 Nerd Font contains all four glyphs, two of which its build adds (see
 `commit-mono/README.md`); iTerm2 uses the same font as graphical Emacs.
 
-| Meaning        | Marker       | Emacs                                        | Vim                       |
-| -------------- | ------------ | -------------------------------------------- | ------------------------- |
-| Soft wrap      | `⸗` (U+2E17) | End of the screen line                       | Start of the continuation |
-| Tab            | `⇥` (U+21E5) | Preserves tab stops, except a one-column tab | Preserves tab stops       |
-| Trailing space | `␣` (U+2423) | One per space, except at point               | One per space             |
-| No-break space | `⍽` (U+237D) | Gray; marker colors if trailing              | Same                      |
+| Meaning        | Marker       | Emacs                                        | Vim                                 |
+| -------------- | ------------ | -------------------------------------------- | ----------------------------------- |
+| Soft wrap      | `⸗` (U+2E17) | End of the screen line                       | Start of the continuation           |
+| Tab            | `⇥` (U+21E5) | Preserves tab stops, except a one-column tab | Preserves tab stops                 |
+| Trailing space | `␣` (U+2423) | One per space, except at point               | One per space, except at the cursor |
+| No-break space | `⍽` (U+237D) | Gray; marker colors if trailing              | Same                                |
 
 In Emacs the tab marker is `⇥` followed by the tab itself, so a tab that is only
 one column wide (it starts in the last column before a tab stop) pushes the text
@@ -88,16 +88,21 @@ Both editors draw U+00A0 and U+202F as `⍽`: in the marker colors in trailing
 whitespace, a run of spaces, tabs, and no-break spaces that ends the line, and
 in gray elsewhere. In Emacs, trailing whitespace that ends at point stays
 unmarked, so a `␣` does not flash while you type a word and a space; the markers
-return when point moves away, but its no-break spaces stay gray. Vim marks
-trailing whitespace always. Vim's `trail:` draws `␣` only for spaces followed by
-nothing but spaces and tabs, so a space before a trailing no-break space is
-blank in Vim, where Emacs draws `␣`; Vim gives that cell the marker colors, so
-only the glyph differs. Emacs also keeps `whitespace-mode`'s highlights for a
-space before a tab (orange), `tab-width` or more spaces after a tab (yellow),
-and a missing final newline (olive, on the last character, except while point is
-at the end of the buffer), including in buffers where tabs are blank. They cover
-the spaces when `indent-tabs-mode` is on, as in Makefiles, and the tab when it
-is off. Vim has none of them.
+return when point moves away, but its no-break spaces stay gray. Vim does the
+same for trailing whitespace that ends at the cursor when the cursor is past the
+end of its line: in Insert and Replace mode, after `$` in Visual mode, in a
+prompt buffer, and with `'virtualedit'` past the end. In Normal mode the cursor
+rests on the last character, so after `<Esc>` the run is marked, as it is in
+Emacs with point before its last blank. Each window follows its own cursor, and
+GUI Vim marks trailing whitespace always. Vim's `trail:` draws `␣` only for
+spaces followed by nothing but spaces and tabs, so a space before a trailing
+no-break space is blank in Vim, where Emacs draws `␣`; Vim gives that cell the
+marker colors, so only the glyph differs. Emacs also keeps `whitespace-mode`'s
+highlights for a space before a tab (orange), `tab-width` or more spaces after a
+tab (yellow), and a missing final newline (olive, on the last character, except
+while point is at the end of the buffer), including in buffers where tabs are
+blank. They cover the spaces when `indent-tabs-mode` is on, as in Makefiles, and
+the tab when it is off. Vim has none of them.
 
 In Emacs the `␣` and trailing `⍽` markers are overlays, not a `display` text
 property set by font-lock. Indirect buffers share text properties but each has
@@ -118,12 +123,35 @@ when its filetype changes, when a window is created, and when `'list'` is set,
 so after changing `b:shields_show_tabs` by hand, run `:doautocmd BufWinEnter`.
 The tradeoffs: `:map` listings no longer color special keys, `clearmatches()`
 removes the marker and no-break space colors from a window until one of those
-events, `'cursorcolumn'` and `'colorcolumn'` do not tint marker cells, a line of
-a million characters redraws slowly (about 0.35 s), and a long stretch of
+events (moving the cursor onto trailing whitespace restores only the trailing
+markers), `'cursorcolumn'` and `'colorcolumn'` do not tint marker cells, a line
+of a million characters redraws slowly (about 0.35 s), and a long stretch of
 alternating spaces and tabs followed by more text takes time that grows with the
 square of its length: 0.3 s at 8,000 characters. From about 22,000 characters a
 redraw reaches Vim's `'redrawtime'` of 2 s, and Vim stops coloring that line and
 the lines below it.
+
+On the line where the cursor ends trailing whitespace, the marker match skips
+the line, and a match at priority -3 gives the spaces there `ShieldsHidden`,
+whose only attribute is standout. No highlight attribute hides a glyph, and
+terminals that enforce a minimum contrast, as Ghostty does here, show a
+foreground that matches the background, so in a terminal with colors `.vimrc`
+sets `t_so` and `t_se` to SGR 8 and 28, the terminal's invisible attribute, in
+place of standout. Strikethrough would hide the text that the syntax files for
+Markdown and HTML strike. These matches name the line, and Vim replaces them
+when the cursor moves, when Insert mode is entered or left, when a window is
+entered, and when an edit moves the cursor of another window on the buffer. The
+tradeoffs: any highlight with standout is invisible in a terminal with colors,
+though Vim's default colors do not use it there and only the `lss` syntax, the
+`quiet` and `sorbet` color schemes, and `blue` with true color do; a terminal
+without SGR 8 shows the `␣` there in the default colors (tmux passes SGR 8 on
+when the outer terminal's terminfo has `invis`), and one without colors shows it
+as it shows the other markers; a search match there shows its `␣`, because the
+hiding match is below `hlsearch` too; an edit to a buffer that is not current,
+such as `setbufline()` from a timer, leaves the matches in the windows on it
+where they were until their cursors move; and an edit from a timer or job
+callback while Vim waits in Insert mode, as in a prompt buffer that shows
+output, takes effect at the next key.
 
 Vim uses true color in iTerm2 and terminals advertising it through `COLORTERM`;
 its 256-color fallback uses colors 24 and 195, and 246 for the gray. Emacs

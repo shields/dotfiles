@@ -166,6 +166,7 @@ class Cell:
     char: str
     fg: str = DEFAULT
     bg: str = DEFAULT
+    hidden: bool = False
 
     @property
     def colors(self) -> tuple[str, str]:
@@ -181,6 +182,8 @@ def parse_sgr(style: Cell, params: list[int]) -> Cell:
             style = Cell(" ")
         elif code in {1, 4, 22, 24}:
             continue
+        elif code in {8, 28}:
+            style = replace(style, hidden=code == 8)
         elif 30 <= code <= 37:
             style = replace(style, fg=str(code - 30))
         elif 90 <= code <= 97:

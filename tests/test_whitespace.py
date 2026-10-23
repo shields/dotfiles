@@ -5,11 +5,14 @@ import os
 import shutil
 import subprocess
 import sys
+import time
 import unicodedata
 from pathlib import Path
 from typing import TYPE_CHECKING, NamedTuple, TypedDict, cast
 
 import pytest
+
+from tests.test_emacs_render import DEFAULT_COLORS, Cell, Terminal
 
 if TYPE_CHECKING:
     from collections.abc import Iterable
@@ -161,11 +164,7 @@ class VimReport(TypedDict):
     regexpengine: int
 
 
-VIM_SCRIPT = r"""
-set lines=30 columns=40
-" Shaping would put the presentation form of an Arabic test base on the screen.
-set noarabicshape
-execute 'set regexpengine=' . $WHITESPACE_REGEXPENGINE
+VIM_CELLS = r"""
 function! Cells(row, first, last) abort
     let cols = range(a:first, a:last)
     return {'text': join(map(copy(cols), {_, col -> screenstring(a:row, col)}), ''),
@@ -175,6 +174,17 @@ function! WindowCells(winid, line) abort
     let [row, col] = win_screenpos(a:winid)
     return Cells(row + a:line - 1, col, col + winwidth(a:winid) - 1)
 endfunction
+"""
+
+VIM_SCRIPT = (
+    r"""
+set lines=30 columns=40
+" Shaping would put the presentation form of an Arabic test base on the screen.
+set noarabicshape
+execute 'set regexpengine=' . $WHITESPACE_REGEXPENGINE
+"""
+    + VIM_CELLS
+    + r"""
 function! Rows(last) abort
     return map(range(1, a:last), {_, row -> Cells(row, 1, 40)})
 endfunction
@@ -375,6 +385,7 @@ call writefile([json_encode({'marker': marker, 'light': light,
             \ 'regexpengine': &regexpengine})], $WHITESPACE_REPORT)
 qa!
 """
+)
 
 TABS_VISIBLE_BY_STEP = {
     "split": [False, True],
@@ -640,6 +651,350 @@ def test_vim_whitespace_display(
         (tmp_path / name).read_text(encoding="utf-8") == NBSP_SAMPLE
         for name in NBSP_FILES
     )
+
+
+TERMINAL_LINES = ["one  ", "z \u00a0\t\u202f ", "three  "]
+CURSOR_LINES = ["one \u202f", TERMINAL_LINES[1], "three \t"]
+CURSOR_SCRIPT = (
+    r"""
+set lines=12 columns=40
+" An <Esc> at the end of the keys would wait to be told apart from a key code.
+set ttimeout ttimeoutlen=0
+execute 'set regexpengine=' . $WHITESPACE_REGEXPENGINE
+"""
+    + VIM_CELLS
+    + r"""
+function! ClickBottom() abort
+    let [row, col] = win_screenpos(win_getid(2))
+    call test_setmouse(row, col + 3)
+    call feedkeys("\<LeftMouse>", 'nt')
+endfunction
+function! OpenPrompt() abort
+    new
+    setlocal buftype=prompt
+    call prompt_setprompt(bufnr(), '>> ')
+    startinsert
+endfunction
+
+new
+setlocal buftype=nofile bufhidden=wipe
+call setline(1, ['Z', 'Y', 'X', 'W'])
+call matchadd('ShieldsWhitespace', 'Z')
+call matchadd('ShieldsNoBreakSpace', 'Y')
+call matchadd('ShieldsHidden', 'X')
+redraw!
+let s:top = win_screenpos(0)[0]
+let s:attrs = map({'M': 0, 'G': 1, 'H': 2, '.': 3},
+            \ {_, offset -> screenattr(s:top + offset, 1)})
+close
+
+execute 'edit ' . fnameescape($WHITESPACE_FILE)
+let s:plan = [
+            \ ['append', 'A'],
+            \ ['left', "\<Left>"],
+            \ ['end', "\<End>"],
+            \ ['down', "\<Down>"],
+            \ ['nonblank', 'x'],
+            \ ['backspace', "\<BS>"],
+            \ ['escape', "\<Esc>"],
+            \ ['virtualedit', ":set virtualedit=onemore\<CR>$l"],
+            \ ['split', ":split\<CR>"],
+            \ ['other window', 'gg'],
+            \ ['back', "\<C-w>j"],
+            \ ['insert elsewhere', "\<C-w>kotwo  "],
+            \ ['edit elsewhere', "\<Esc>"],
+            \ ['hlsearch', ":let @/ = '\\s\\+$' | set hlsearch\<CR>"],
+            \ ['reset', ":set nohlsearch virtualedit=\<CR>:only\<CR>gg$"],
+            \ ['split plain', ":split\<CR>"],
+            \ ['delete plain', "A\<BS>"],
+            \ ['escape plain', "\<Esc>"],
+            \ ['append plain', "A"],
+            \ ['click', "\<Cmd>call ClickBottom()\<CR>"],
+            \ ['return', "\<Esc>l\<C-w>k"],
+            \ ['append escape', "A\<Esc>"],
+            \ ['last line', "GA"],
+            \ ['last line escape', "\<Esc>"],
+            \ ['virtual plain', ":set virtualedit=onemore\<CR>gg$l"],
+            \ ['nolist', ":setlocal nolist\<CR>"],
+            \ ['nolist move', "j$l"],
+            \ ['list', ":setlocal list\<CR>"],
+            \ ['scratch', ":set virtualedit=\<CR>:only\<CR>:enew!\<CR>"],
+            \ ['prompt', ":call OpenPrompt()\<CR>"],
+            \ ['leave prompt', "\<C-w>w"],
+            \ ]
+let s:steps = []
+
+" SafeState waits for the keys and the autocommands they trigger; a timer can
+" run while an <Esc> is still pending.
+function! Step() abort
+    if exists('s:name')
+        redraw
+        let windows = []
+        for nr in range(1, winnr('$'))
+            let id = win_getid(nr)
+            call add(windows, map(range(1, line('$', id)),
+                        \ {_, lnum -> WindowCells(id, lnum)}))
+        endfor
+        call add(s:steps, {'step': s:name, 'mode': mode(), 'windows': windows})
+    endif
+    if empty(s:plan)
+        call Finish()
+    endif
+    let [s:name, keys] = remove(s:plan, 0)
+    call feedkeys(keys, 'nt')
+endfunction
+
+function! Finish() abort
+    let report = {'attrs': s:attrs, 'steps': s:steps, 'codes': [&t_so, &t_se]}
+    set term=xterm-256color
+    let report.term_changed = [&t_so, &t_se]
+    colorscheme default
+    let group = synIDtrans(hlID('ShieldsHidden'))
+    let report.standout = [synIDattr(group, 'standout', 'cterm'),
+                \ synIDattr(group, 'standout', 'gui')]
+    set term=vt100
+    let report.mono = [&t_Co, &t_so, &t_se]
+    call writefile([json_encode(report)], $WHITESPACE_REPORT)
+    qa!
+endfunction
+
+autocmd SafeState * ++nested call Step()
+"""
+)
+
+# The classes of the first cells of a line, for each state of the cursor around
+# it: M marker colors, G gray, H hidden, S search, . none of these, and T a tab
+# cell, which is M where tabs are visible and . where they are blank. The lines
+# are CURSOR_LINES, "two  " typed below the first, and "one " after its last
+# character is deleted. A window with 'list' off shows no class.
+ONE, ONE_AT_END = "...MM", "...HG"
+TWO, TWO_AT_END = "...MM", "...HH"
+Z, Z_AT_END, Z_TYPED = ".MMTTTTTMM", ".HGTTTTTGH", "..GTTTTTG.."
+THREE, THREE_AT_END = ".....MTT", ".....HTT"
+ONE_BLANK, ONE_BLANK_AT_END = "...M", "...H"
+PROMPT, PROMPT_AT_END = "..M", "..H"
+TWO_SEARCHED, THREE_SEARCHED = "...SS", ".....SSS"
+Z_SEARCHED, Z_AT_END_SEARCHED = ".MMTTTTTMS", ".HGTTTTTGS"
+# For each step, the mode and the lines of each window from the top.
+CURSOR_STEPS = {
+    "append": ("i", [(ONE_AT_END, Z, THREE)]),
+    "left": ("i", [(ONE, Z, THREE)]),
+    "end": ("i", [(ONE_AT_END, Z, THREE)]),
+    "down": ("i", [(ONE, Z_AT_END, THREE)]),
+    "nonblank": ("i", [(ONE, Z_TYPED, THREE)]),
+    "backspace": ("i", [(ONE, Z_AT_END, THREE)]),
+    "escape": ("n", [(ONE, Z, THREE)]),
+    "virtualedit": ("n", [(ONE, Z_AT_END, THREE)]),
+    "split": ("n", [(ONE, Z_AT_END, THREE)] * 2),
+    "other window": ("n", [(ONE, Z, THREE), (ONE, Z_AT_END, THREE)]),
+    "back": ("n", [(ONE, Z, THREE), (ONE, Z_AT_END, THREE)]),
+    "insert elsewhere": (
+        "i",
+        [(ONE, TWO_AT_END, Z, THREE), (ONE, TWO, Z_AT_END, THREE)],
+    ),
+    "edit elsewhere": ("n", [(ONE, TWO, Z, THREE), (ONE, TWO, Z_AT_END, THREE)]),
+    "hlsearch": (
+        "n",
+        [
+            (ONE, TWO_SEARCHED, Z_SEARCHED, THREE_SEARCHED),
+            (ONE, TWO_SEARCHED, Z_AT_END_SEARCHED, THREE_SEARCHED),
+        ],
+    ),
+    "reset": ("n", [(ONE, TWO, Z, THREE)]),
+    "split plain": ("n", [(ONE, TWO, Z, THREE)] * 2),
+    "delete plain": (
+        "i",
+        [(ONE_BLANK_AT_END, TWO, Z, THREE), (ONE_BLANK, TWO, Z, THREE)],
+    ),
+    "escape plain": ("n", [(ONE_BLANK, TWO, Z, THREE)] * 2),
+    "append plain": (
+        "i",
+        [(ONE_BLANK_AT_END, TWO, Z, THREE), (ONE_BLANK, TWO, Z, THREE)],
+    ),
+    "click": ("i", [(ONE_BLANK_AT_END, TWO, Z, THREE), (ONE_BLANK, TWO, Z, THREE)]),
+    "return": ("n", [(ONE_BLANK, TWO, Z, THREE)] * 2),
+    "append escape": ("n", [(ONE_BLANK, TWO, Z, THREE)] * 2),
+    "last line": (
+        "i",
+        [(ONE_BLANK, TWO, Z, THREE_AT_END), (ONE_BLANK, TWO, Z, THREE)],
+    ),
+    "last line escape": ("n", [(ONE_BLANK, TWO, Z, THREE)] * 2),
+    "virtual plain": (
+        "n",
+        [(ONE_BLANK_AT_END, TWO, Z, THREE), (ONE_BLANK, TWO, Z, THREE)],
+    ),
+    "nolist": ("n", [("", "", "", ""), (ONE_BLANK, TWO, Z, THREE)]),
+    "nolist move": ("n", [("", "", "", ""), (ONE_BLANK, TWO, Z, THREE)]),
+    "list": (
+        "n",
+        [(ONE_BLANK, TWO_AT_END, Z, THREE), (ONE_BLANK, TWO, Z, THREE)],
+    ),
+    "scratch": ("n", [("",)]),
+    "prompt": ("i", [(PROMPT_AT_END,), ("",)]),
+    "leave prompt": ("n", [(PROMPT,), ("",)]),
+}
+HIDE_CODES = ["\x1b[8m", "\x1b[28m"]
+
+
+class CursorStep(TypedDict):
+    step: str
+    mode: str
+    windows: list[list[VimCells]]
+
+
+class CursorReport(TypedDict):
+    attrs: dict[str, int]
+    steps: list[CursorStep]
+    codes: list[str]
+    term_changed: list[str]
+    standout: list[str]
+    mono: list[str]
+
+
+@pytest.mark.parametrize("regexpengine", [0, 1, 2])
+@pytest.mark.parametrize("truecolor", [False, True])
+@pytest.mark.parametrize("name", ["cursor.txt", "cursor.go"])
+def test_vim_cursor_run(
+    tmp_path: Path, *, name: str, truecolor: bool, regexpengine: int
+) -> None:
+    vim = shutil.which("vim")
+    assert vim, "vim is required"
+    path = tmp_path / name
+    _ = path.write_text("".join(f"{line}\n" for line in CURSOR_LINES))
+    script = tmp_path / "check.vim"
+    _ = script.write_text(CURSOR_SCRIPT)
+    report_path = tmp_path / "report.json"
+    # Vim reads standard input between steps and quits at its end, so the pipe
+    # stays open until Vim exits.
+    keys, keep_open = os.pipe()
+    try:
+        result = subprocess.run(
+            [
+                vim,
+                "-N",
+                "-n",
+                "-i",
+                "NONE",
+                "-u",
+                str(REPO / ".vimrc"),
+                "--not-a-term",
+                "-S",
+                str(script),
+            ],
+            env=os.environ
+            | {
+                "HOME": str(tmp_path),
+                "LC_ALL": "C",
+                "TERM": "xterm-256color",
+                "TERM_PROGRAM": "iTerm.app" if truecolor else "",
+                "COLORTERM": "",
+                "WHITESPACE_FILE": str(path),
+                "WHITESPACE_REGEXPENGINE": str(regexpengine),
+                "WHITESPACE_REPORT": str(report_path),
+            },
+            stdin=keys,
+            capture_output=True,
+            check=False,
+            timeout=30,
+        )
+    finally:
+        os.close(keys)
+        os.close(keep_open)
+    assert result.returncode == 0, result.stdout + result.stderr
+    data = cast("CursorReport", json.loads(report_path.read_text()))
+    classes = {attr: cls for cls, attr in data["attrs"].items()}
+    assert len(classes) == len(data["attrs"])
+    searched = next(step for step in data["steps"] if step["step"] == "hlsearch")
+    search = searched["windows"][0][1]["attrs"][3]
+    assert search not in classes
+    classes[search] = "S"
+    tab = "M" if name.endswith(".txt") else "."
+    assert [step["step"] for step in data["steps"]] == list(CURSOR_STEPS)
+    for step in data["steps"]:
+        mode, windows = CURSOR_STEPS[step["step"]]
+        assert step["mode"] == mode, step
+        assert len(step["windows"]) == len(windows), step
+        for window, rows in zip(step["windows"], windows, strict=True):
+            for cells, row in zip(window, rows, strict=True):
+                got = "".join(classes.get(attr, "?") for attr in cells["attrs"])
+                assert got == row.replace("T", tab).ljust(len(got), "."), (
+                    step["step"],
+                    cells,
+                )
+    assert data["codes"] == HIDE_CODES
+    assert data["term_changed"] == HIDE_CODES
+    assert data["standout"] == ["1", "1"]
+    colors, *codes = data["mono"]
+    assert int(colors or 0) < 2
+    assert codes != HIDE_CODES
+
+
+@pytest.mark.parametrize("typeahead", [False, True])
+@pytest.mark.parametrize("truecolor", [False, True])
+def test_vim_hides_trailing_spaces_in_terminal(
+    tmp_path: Path, *, truecolor: bool, typeahead: bool
+) -> None:
+    vim = shutil.which("vim")
+    assert vim, "vim is required"
+    path = tmp_path / "cursor.txt"
+    _ = path.write_text("".join(f"{line}\n" for line in TERMINAL_LINES))
+    marker = ("#365773", "#e8f4ff") if truecolor else ("24", "195")
+    terminal = Terminal(tmp_path, truecolor=truecolor)
+    terminal.pane = "t"
+
+    def wait_for(*, hidden: bool) -> list[list[Cell]]:
+        deadline = time.monotonic() + 30
+        while True:
+            screen = terminal.capture()
+            if any(cell.hidden for cell in screen.rows[0]) == hidden:
+                return screen.rows
+            assert time.monotonic() < deadline, screen.dump()
+            time.sleep(0.005)
+
+    try:
+        _ = terminal.tmux(
+            "new-session",
+            "-d",
+            "-s",
+            "t",
+            "-x",
+            "40",
+            "-y",
+            "10",
+            "env",
+            "-i",
+            f"PATH={os.environ['PATH']}",
+            f"HOME={tmp_path}",
+            "LC_ALL=C.UTF-8",
+            "TERM=xterm-256color",
+            f"COLORTERM={'truecolor' if truecolor else ''}",
+            vim,
+            "-N",
+            "-n",
+            "-i",
+            "NONE",
+            "-u",
+            str(REPO / ".vimrc"),
+            "--cmd",
+            "set ttimeout ttimeoutlen=0",
+            *([] if typeahead else ["+startinsert!"]),
+            str(path),
+            # A key typed while Vim starts is still pending when Insert mode
+            # starts, and then Vim skips CursorMovedI.
+            *([";", "send-keys", "-t", "t", "A"] if typeahead else []),
+        )
+        rows = wait_for(hidden=True)
+        assert "".join(cell.char for cell in rows[0][:5]) == "one␣␣", rows[0]
+        assert all(cell.hidden for cell in rows[0][3:5]), rows[0]
+        assert [cell.colors for cell in rows[0][3:5]] == [DEFAULT_COLORS] * 2, rows[0]
+        assert not any(cell.hidden for cell in rows[0][:3]), rows[0]
+        assert [cell.colors for cell in rows[2][5:7]] == [marker] * 2, rows[2]
+        assert not any(cell.hidden for row in rows[1:] for cell in row), rows
+        _ = terminal.tmux("send-keys", "-t", "t", "Escape")
+        rows = wait_for(hidden=False)
+        assert [cell.colors for cell in rows[0][3:5]] == [marker] * 2, rows[0]
+    finally:
+        terminal.close()
 
 
 def test_pager_keeps_input_and_arguments(tmp_path: Path) -> None:
