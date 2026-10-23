@@ -24,7 +24,7 @@ limitations under the License.
   `MODULES` selects Brewfile modules (`dev` by default, and `make test lint`
   needs its tools). The first run takes tens of minutes.
 - **CI**: `.github/workflows/ci.yml` runs `make lint build test` on
-  ubuntu-24.04 as the "Lint and test" check, after `make ci-tools`
+  ubuntu-26.04 as the "Lint and test" check, after `make ci-tools`
   (`tools/install_ci_tools.sh`) installs the tools the tests need and
   `make setup` installs the locked dependencies. `DOTFILES_FAIL_ON_SKIP=1` makes
   any skipped pytest test fail the run, so a test that needs a new tool needs it

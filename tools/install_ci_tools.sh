@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 
-# Install what `make lint build test` needs on a GitHub-hosted ubuntu-24.04
+# Install what `make lint build test` needs on a GitHub-hosted ubuntu-26.04
 # runner, which has none of the Homebrew toolset the Mac and the Linux image are
 # provisioned with.
 #
