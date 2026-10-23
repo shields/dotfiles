@@ -1382,3 +1382,47 @@ void test("uploads in sequence on one connection leave no listeners behind on it
   assert.equal(watched.connections.size, 1);
   assert.equal(new Set(watched.counts).size, 1);
 });
+
+void test("uploads that fail in sequence on one connection leave no listeners behind on its socket", async () => {
+  const { socket, listener, stop } = await startGateway({
+    handler: (request) => {
+      request.socket.destroy();
+    },
+    tls: false,
+  });
+  const watched = watchCloseListeners(listener);
+  const agent = new https.Agent({ keepAlive: true, maxSockets: 1 });
+  try {
+    for (let round = 0; round < 8; round += 1) {
+      const request = https.request({
+        socketPath: socket,
+        servername: "github.com",
+        rejectUnauthorized: false,
+        agent,
+        method: "POST",
+        path: "/shields/dotfiles.git/git-upload-pack",
+        headers: { host: "github.com" },
+      });
+      const failed = signal();
+      const answered = new Promise<number>((resolve, reject) => {
+        request.once("error", reject);
+        request.once("response", (incoming) => {
+          failed.resolve();
+          incoming.resume();
+          incoming.once("end", () => {
+            resolve(incoming.statusCode ?? 0);
+          });
+        });
+      });
+      request.write("0000");
+      await within("the gateway to answer the failed upload", failed.promise);
+      request.end("0000");
+      assert.equal(await within("the response to end", answered), 503);
+    }
+  } finally {
+    agent.destroy();
+    await stop();
+  }
+  assert.equal(watched.connections.size, 1);
+  assert.equal(new Set(watched.counts).size, 1, watched.counts.join(","));
+});

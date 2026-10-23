@@ -608,7 +608,7 @@ export class Gateway {
         upstream.destroy();
       };
       socket.once("close", abandon);
-      incoming.once("end", () => {
+      upstream.once("close", () => {
         socket.off("close", abandon);
       });
     }
