@@ -1146,6 +1146,54 @@ for (const [name, mode] of [
   });
 }
 
+for (const [name, mode] of [
+  ["a GET", "get"],
+  ["a POST that arrived whole", "post"],
+] as const) {
+  void test(`a client whose socket is destroyed as its token arrives (${name}) is not forwarded over a warm upstream connection`, async (t) => {
+    const { socket, instance, state, auth, listener, incoming, closed, stop } =
+      await startGateway();
+    const target = "/shields/dotfiles.git/info/refs?service=git-upload-pack";
+    let rows;
+    let forwarded;
+    let calls;
+    try {
+      const warm = await send(socket, "GET", target);
+      assert.equal(warm.status, 200);
+      const audit = recordFinishes(t, state);
+      let serverSide: Socket | undefined;
+      listener.prependOnceListener("request", (request) => {
+        serverSide = request.socket;
+      });
+      t.mock.method(auth, "token", (): Promise<string> => {
+        serverSide?.destroy();
+        return Promise.resolve("ghu_secret");
+      });
+      const { request, response } = open(socket, mode);
+      const hungUp = assert.rejects(response, { message: "socket hang up" });
+      await within("the client's request to fail", hungUp);
+      await within("the audit row", audit.first);
+      await within("the gateway's response to close", closed());
+      request.destroy();
+      const sentinel = await send(socket, "GET", target);
+      assert.equal(sentinel.status, 200);
+      rows = auditRows(state, instance).filter(
+        ({ outcome }) => outcome === "interrupted",
+      );
+      forwarded = incoming.map(({ target: sent }) => sent);
+      calls = audit.calls;
+    } finally {
+      await stop();
+    }
+    assert.deepEqual(rows, [{ outcome: "interrupted", upstreamStatus: null }]);
+    assert.deepEqual(calls, [
+      { status: null, outcome: "interrupted" },
+      { status: 200, outcome: "completed" },
+    ]);
+    assert.deepEqual(forwarded, [target, target]);
+  });
+}
+
 void test("a client that leaves while uploading is audited as interrupted and the upstream request is aborted", async (t) => {
   const asked = signal();
   const upstreamClosed = signal();

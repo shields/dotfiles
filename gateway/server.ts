@@ -543,9 +543,10 @@ export class Gateway {
     if (upstreamUrl.origin !== base.origin) {
       throw new Error("upstream target escaped its host");
     }
-    // The client's "close" has already been emitted if it left while the
-    // request was being authorized.
-    if (response.destroyed) {
+    // The client may have left while the request was being authorized. The
+    // response counts as destroyed only once it emits "close", which can trail
+    // the destruction of its socket, so both are checked.
+    if (response.destroyed || incoming.socket.destroyed) {
       this.state.finish(requestId, null, Date.now() - started, "interrupted");
       return;
     }
