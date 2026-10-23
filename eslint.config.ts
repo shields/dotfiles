@@ -19,7 +19,7 @@ import tseslint from "typescript-eslint";
 
 // eslint-disable-next-line @typescript-eslint/no-deprecated
 export default tseslint.config(
-  { ignores: ["node_modules/"] },
+  { ignores: ["node_modules/", ".claude/worktrees/", ".worktrees/"] },
   eslint.configs.recommended,
   ...tseslint.configs.strictTypeChecked,
   ...tseslint.configs.stylisticTypeChecked,
