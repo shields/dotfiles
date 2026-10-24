@@ -119,6 +119,41 @@ function issueLeaf(directory: string, days: number): void {
   rmSync(request);
 }
 
+function listing(directory: string): string[] {
+  return readdirSync(directory).toSorted((a, b) => a.localeCompare(b));
+}
+
+function refused(directory: string): Error {
+  const names = listing(directory);
+  const before = snapshot(directory, names);
+  let thrown: unknown;
+  try {
+    ensureCertificates(directory);
+  } catch (error) {
+    thrown = error;
+  }
+  assert.ok(thrown instanceof Error, "ensureCertificates did not throw");
+  assert.deepEqual(listing(directory), names);
+  assert.deepEqual(snapshot(directory, names), before);
+  return thrown;
+}
+
+function assertKeyUnparseable(directory: string): void {
+  const error = refused(directory);
+  assert.equal(
+    error.message,
+    `gateway TLS key ${path.join(directory, "github-key.pem")} cannot be parsed as a private key; remove it and ${path.join(directory, "github.pem")} to issue a new pair`,
+  );
+  assert.ok(error.cause instanceof Error);
+}
+
+function assertKeyMissing(directory: string): void {
+  assert.equal(
+    refused(directory).message,
+    `gateway TLS key is missing; remove ${path.join(directory, "github.pem")} to issue a new pair`,
+  );
+}
+
 test("a fresh directory gets a CA and a leaf that chains to it, with private keys", () => {
   withDirectory((directory) => {
     const certificates = ensureCertificates(directory);
@@ -171,15 +206,39 @@ test("a missing leaf is issued from the existing CA", () => {
   });
 });
 
-test("a leaf without its key is an error and nothing is rewritten", () => {
+test("a leaf without its key is an error that names the file to remove and nothing is rewritten", () => {
   withDirectory((directory) => {
     ensureCertificates(directory);
     rmSync(path.join(directory, "github-key.pem"));
-    const names = ["ca.pem", "ca-key.pem", "github.pem"];
-    const before = snapshot(directory, names);
-    assert.throws(() => ensureCertificates(directory), /TLS key is missing/);
-    assert.deepEqual(snapshot(directory, names), before);
-    assert.ok(!existsSync(path.join(directory, "github-key.pem")));
+    assertKeyMissing(directory);
+  });
+});
+
+test("an unparseable leaf key is an error that names the files to remove, and removing them issues a new pair under the same CA", () => {
+  withDirectory((directory) => {
+    ensureCertificates(directory);
+    const authority = snapshot(directory, ["ca.pem", "ca-key.pem"]);
+    const key = read(directory, "github-key.pem");
+    for (const content of [key.slice(0, 400), "", "not a key\n"]) {
+      writeFileSync(path.join(directory, "github-key.pem"), content);
+      assertKeyUnparseable(directory);
+    }
+    rmSync(path.join(directory, "github-key.pem"));
+    rmSync(path.join(directory, "github.pem"));
+    const certificates = ensureCertificates(directory);
+    assert.deepEqual(snapshot(directory, ["ca.pem", "ca-key.pem"]), authority);
+    assertConsistent(certificates);
+    assertKeysPrivate(directory);
+  });
+});
+
+test("an unparseable leaf key is an error even when the leaf is due for renewal", () => {
+  withDirectory((directory) => {
+    ensureCertificates(directory);
+    issueLeaf(directory, 1);
+    assert.ok(daysLeft(directory) < 30);
+    writeFileSync(path.join(directory, "github-key.pem"), "not a key\n");
+    assertKeyUnparseable(directory);
   });
 });
 

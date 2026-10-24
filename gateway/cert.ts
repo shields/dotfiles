@@ -1,5 +1,5 @@
 import { spawnSync, type SpawnSyncReturns } from "node:child_process";
-import { createPrivateKey, X509Certificate } from "node:crypto";
+import { createPrivateKey, X509Certificate, type KeyObject } from "node:crypto";
 import {
   chmodSync,
   existsSync,
@@ -42,10 +42,20 @@ function succeeds(...arguments_: string[]): boolean {
   return run(arguments_, 30_000).status === 0;
 }
 
-function paired(cert: string, key: string): boolean {
-  return new X509Certificate(readFileSync(cert)).checkPrivateKey(
-    createPrivateKey(readFileSync(key)),
-  );
+function paired(cert: string, key: KeyObject): boolean {
+  return new X509Certificate(readFileSync(cert)).checkPrivateKey(key);
+}
+
+function readLeafKey(key: string, cert: string): KeyObject {
+  const pem = readFileSync(key);
+  try {
+    return createPrivateKey(pem);
+  } catch (error) {
+    throw new Error(
+      `gateway TLS key ${key} cannot be parsed as a private key; remove it and ${cert} to issue a new pair`,
+      { cause: error },
+    );
+  }
 }
 
 export function ensureCertificates(directory: string): Certificates {
@@ -83,15 +93,18 @@ export function ensureCertificates(directory: string): Certificates {
   }
   if (existsSync(cert)) {
     if (!existsSync(key)) {
-      throw new Error("gateway TLS key is missing");
+      throw new Error(
+        `gateway TLS key is missing; remove ${cert} to issue a new pair`,
+      );
     }
+    const leafKey = readLeafKey(key, cert);
     // A leaf issued by any other CA is unexpired but fails every handshake, and
     // a key that is not the leaf's fails when the first listener starts, so the
     // chain and the key pair are checked as well as the dates.
     if (
       succeeds("x509", "-checkend", "2592000", "-noout", "-in", cert) &&
       succeeds("verify", "-CAfile", ca, cert) &&
-      paired(cert, key)
+      paired(cert, leafKey)
     ) {
       return { ca, cert, key };
     }
