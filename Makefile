@@ -12,7 +12,9 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-.PHONY: setup ci-tools build test test-node test-zsh test-python test-linux lint lint-ts lint-python lint-shell fmt run bench bench-startup
+.PHONY: setup ci-tools build test test-node test-zsh test-python test-linux lint lint-ts lint-python lint-shell fmt fmt-check run bench bench-startup
+
+PRETTIER_SOURCES = "**/*.ts" "**/*.json" "**/*.md"
 
 # Shell scripts to lint and format with shellcheck and shfmt. zsh files
 # (.zshrc, .zprofile, .zsh.d/*.zsh, tests/*.zsh) and vendored files
@@ -85,7 +87,7 @@ test-linux:
 	docker build --build-arg "MODULES=$(MODULES)" -t "$(LINUX_IMAGE)" -f cloudflare/Dockerfile "$$stage/tree"; \
 	docker run --rm "$(LINUX_IMAGE)" zsh -c 'bun install --frozen-lockfile && make test lint'
 
-lint: lint-ts lint-python lint-shell
+lint: fmt-check lint-ts lint-python lint-shell
 
 lint-ts:
 	bun run eslint .
@@ -97,10 +99,14 @@ lint-python:
 
 lint-shell:
 	shellcheck --exclude=SC1091 $(SHELL_SOURCES)
+
+fmt-check:
+	bun run prettier --check $(PRETTIER_SOURCES)
+	uv run ruff format --check
 	shfmt -i 4 -d $(SHELL_SOURCES)
 
 fmt:
-	bun run prettier --write "**/*.ts" "**/*.json" "**/*.md"
+	bun run prettier --write $(PRETTIER_SOURCES)
 	uv run ruff format
 	shfmt -i 4 -w $(SHELL_SOURCES)
 

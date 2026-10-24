@@ -174,7 +174,9 @@ async function command(args: string[]): Promise<void> {
         (third !== "read" && third !== "task") ||
         !second
       ) {
-        throw new Error(`usage: ${commandName} grant VM-ID OWNER/REPO read|task`);
+        throw new Error(
+          `usage: ${commandName} grant VM-ID OWNER/REPO read|task`,
+        );
       }
       const id = instanceId(first);
       const repository = normalizeRepository(second);
