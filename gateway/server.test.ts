@@ -17,7 +17,15 @@ import {
 } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import { afterAll, afterEach, beforeAll, mock, spyOn, test } from "bun:test";
+import {
+  afterAll,
+  afterEach,
+  beforeAll,
+  mock,
+  onTestFinished,
+  spyOn,
+  test,
+} from "bun:test";
 import { setImmediate as nextTurn } from "node:timers/promises";
 import { gzipSync } from "node:zlib";
 import { AppAuth } from "./auth.ts";
@@ -145,6 +153,22 @@ afterAll(() => {
   rmSync(throwaway, { recursive: true, force: true });
 });
 
+// Undo functions run last-in-first-out. A gateway's stop() waits for open
+// client connections, which only undo functions registered after it can close.
+let teardown: AsyncDisposableStack | undefined;
+
+function defer(undo: () => void | Promise<void>): void {
+  if (!teardown) {
+    const created = new AsyncDisposableStack();
+    teardown = created;
+    onTestFinished(() => {
+      teardown = undefined;
+      return created.disposeAsync();
+    });
+  }
+  teardown.defer(undo);
+}
+
 async function startGateway(
   upstreamOptions: { handler: RequestListener; tls: boolean } | null = null,
 ): Promise<{
@@ -156,10 +180,15 @@ async function startGateway(
   incoming: Forwarded[];
   listener: https.Server;
   closed: () => Promise<void>;
-  stop: () => Promise<void>;
 }> {
   const root = mkdtempSync(path.join(tmpdir(), "vm-access-server-"));
+  defer(() => {
+    rmSync(root, { recursive: true, force: true });
+  });
   const state = new State(path.join(root, "state"));
+  defer(() => {
+    state.close();
+  });
   const secretDirectory = path.join(root, "secrets");
   mkdirSync(secretDirectory);
   const auth = new AppAuth(secretDirectory);
@@ -194,6 +223,17 @@ async function startGateway(
     : createServer(serve);
   const agentOptions = https.globalAgent.options;
   const trusted = agentOptions.ca;
+  defer(() => {
+    agentOptions.ca = trusted;
+  });
+  defer(async () => {
+    upstream.closeAllConnections();
+    await new Promise<void>((resolve) => {
+      upstream.close(() => {
+        resolve();
+      });
+    });
+  });
   if (upstreamOptions?.tls) {
     agentOptions.ca = readFileSync(certificate);
   }
@@ -235,492 +275,446 @@ async function startGateway(
     apiUpstream: origin,
   });
   const created = spyOn(https, "createServer");
-  const stop = async (): Promise<void> => {
-    await gateway.stop();
-    upstream.closeAllConnections();
-    agentOptions.ca = trusted;
-    await new Promise<void>((resolve) => {
-      upstream.close(() => {
-        resolve();
-      });
-    });
-    state.close();
-    rmSync(root, { recursive: true, force: true });
+  defer(() => gateway.stop());
+  await gateway.start();
+  const result = created.mock.results[0];
+  assert.equal(result?.type, "return");
+  const listener = result.value;
+  const responses: Promise<void>[] = [];
+  listener.on("request", (_request, response) => {
+    responses.push(
+      new Promise((resolve) => {
+        response.once("close", resolve);
+      }),
+    );
+  });
+  const closed = async (): Promise<void> => {
+    await Promise.all(responses);
   };
-  try {
-    await gateway.start();
-    const result = created.mock.results[0];
-    assert.equal(result?.type, "return");
-    const listener = result.value;
-    const responses: Promise<void>[] = [];
-    listener.on("request", (_request, response) => {
-      responses.push(
-        new Promise((resolve) => {
-          response.once("close", resolve);
-        }),
-      );
-    });
-    const closed = async (): Promise<void> => {
-      await Promise.all(responses);
-    };
-    return {
-      socket,
-      instance,
-      state,
-      auth,
-      gateway,
-      incoming,
-      listener,
-      closed,
-      stop,
-    };
-  } catch (error) {
-    await stop();
-    throw error;
-  }
+  return {
+    socket,
+    instance,
+    state,
+    auth,
+    gateway,
+    incoming,
+    listener,
+    closed,
+  };
 }
 
 test("the HTTPS socket injects a repo token only after checking the full push and live grant", async () => {
-  const { socket, instance, state, incoming, listener, stop } =
-    await startGateway();
-  try {
-    assert.equal(listener.requestTimeout, 3_600_000);
-    assert.equal(listener.headersTimeout, 60_000);
-    assert.equal(
-      (
-        await send(
-          socket,
-          "GET",
-          "/__vm_access__/health",
-          Buffer.alloc(0),
-          "api.github.com",
-        )
-      ).status,
-      200,
-    );
-    assert.equal(incoming.length, 0);
-    const fetched = await send(
-      socket,
-      "GET",
-      "/shields/dotfiles.git/info/refs?service=git-upload-pack",
-    );
-    assert.equal(fetched.status, 200);
-    assert.equal(
-      incoming[0]?.authorization,
-      `Basic ${Buffer.from("x-access-token:ghu_secret").toString("base64")}`,
-    );
-    const good = Buffer.concat([
-      packet(
-        `${"0".repeat(40)} ${"1".repeat(40)} ${idRef(instance.id)}\0report-status\n`,
-      ),
+  const { socket, instance, state, incoming, listener } = await startGateway();
+  assert.equal(listener.requestTimeout, 3_600_000);
+  assert.equal(listener.headersTimeout, 60_000);
+  assert.equal(
+    (
+      await send(
+        socket,
+        "GET",
+        "/__vm_access__/health",
+        Buffer.alloc(0),
+        "api.github.com",
+      )
+    ).status,
+    200,
+  );
+  assert.equal(incoming.length, 0);
+  const fetched = await send(
+    socket,
+    "GET",
+    "/shields/dotfiles.git/info/refs?service=git-upload-pack",
+  );
+  assert.equal(fetched.status, 200);
+  assert.equal(
+    incoming[0]?.authorization,
+    `Basic ${Buffer.from("x-access-token:ghu_secret").toString("base64")}`,
+  );
+  const good = Buffer.concat([
+    packet(
+      `${"0".repeat(40)} ${"1".repeat(40)} ${idRef(instance.id)}\0report-status\n`,
+    ),
+    Buffer.from("0000PACK"),
+  ]);
+  assert.equal(
+    (await send(socket, "POST", "/shields/dotfiles.git/git-receive-pack", good))
+      .status,
+    200,
+  );
+  assert.deepEqual(incoming[1]?.body, good);
+  const identity = await send(
+    socket,
+    "GET",
+    "/user",
+    Buffer.alloc(0),
+    "api.github.com",
+  );
+  assert.equal(identity.status, 200);
+  assert.equal(identity.headers.link, pages("repositories/1296269"));
+  assert.equal(incoming[2]?.authorization, "Bearer ghu_secret");
+  const discovery = Buffer.from(
+    JSON.stringify({
+      query:
+        '{ viewer { login } repo_000: repository(owner: "shields", name: "dotfiles") { name } }',
+      variables: null,
+    }),
+  );
+  assert.equal(
+    (await send(socket, "POST", "/graphql", discovery, "api.github.com"))
+      .status,
+    200,
+  );
+  assert.equal(incoming[3]?.authorization, "Bearer ghu_secret");
+  assert.deepEqual(incoming[3].body, discovery);
+  const bad = Buffer.concat([
+    packet(
+      `${"0".repeat(40)} ${"1".repeat(40)} ${idRef(instance.id)}\0report-status\n`,
+    ),
+    packet(`${"0".repeat(40)} ${"1".repeat(40)} refs/heads/main\n`),
+    Buffer.from("0000PACK"),
+    Buffer.alloc(4_194_304),
+  ]);
+  const reported = await send(
+    socket,
+    "POST",
+    "/shields/dotfiles.git/git-receive-pack",
+    bad,
+  );
+  assert.deepEqual(
+    { status: reported.status, type: reported.type, body: reported.body },
+    {
+      status: 200,
+      type: "application/x-git-receive-pack-result",
+      body: Buffer.concat([
+        packet("unpack ok\n"),
+        packet(
+          `ng ${idRef(instance.id)} another ref update in this push is denied\n`,
+        ),
+        packet(
+          `ng refs/heads/main push destination is outside this VM's task namespace; allowed namespace: task/${instance.id}/*\n`,
+        ),
+        Buffer.from("0000"),
+      ]).toString(),
+    },
+  );
+  const unreported = await send(
+    socket,
+    "POST",
+    "/shields/dotfiles.git/git-receive-pack",
+    Buffer.concat([
+      packet(`${"0".repeat(40)} ${"1".repeat(40)} refs/heads/main\0quiet`),
       Buffer.from("0000PACK"),
-    ]);
+    ]),
+  );
+  assert.equal(unreported.status, 403);
+  assert.equal(unreported.type, "text/plain; charset=utf-8");
+  assert.equal(
+    unreported.body.split("\n", 1)[0],
+    `push destination is outside this VM's task namespace; allowed namespace: task/${instance.id}/*`,
+  );
+  assert.match(unreported.body, /^[^\n]+\nrequest ID: [0-9a-f-]{36}\n$/);
+  assert.equal(incoming.length, 4);
+  for (const log of state.logs(instance.id).slice(0, 2)) {
+    assert.equal(log.allowed, false);
     assert.equal(
-      (
-        await send(
-          socket,
-          "POST",
-          "/shields/dotfiles.git/git-receive-pack",
-          good,
-        )
-      ).status,
-      200,
-    );
-    assert.deepEqual(incoming[1]?.body, good);
-    const identity = await send(
-      socket,
-      "GET",
-      "/user",
-      Buffer.alloc(0),
-      "api.github.com",
-    );
-    assert.equal(identity.status, 200);
-    assert.equal(identity.headers.link, pages("repositories/1296269"));
-    assert.equal(incoming[2]?.authorization, "Bearer ghu_secret");
-    const discovery = Buffer.from(
-      JSON.stringify({
-        query:
-          '{ viewer { login } repo_000: repository(owner: "shields", name: "dotfiles") { name } }',
-        variables: null,
-      }),
-    );
-    assert.equal(
-      (await send(socket, "POST", "/graphql", discovery, "api.github.com"))
-        .status,
-      200,
-    );
-    assert.equal(incoming[3]?.authorization, "Bearer ghu_secret");
-    assert.deepEqual(incoming[3].body, discovery);
-    const bad = Buffer.concat([
-      packet(
-        `${"0".repeat(40)} ${"1".repeat(40)} ${idRef(instance.id)}\0report-status\n`,
-      ),
-      packet(`${"0".repeat(40)} ${"1".repeat(40)} refs/heads/main\n`),
-      Buffer.from("0000PACK"),
-      Buffer.alloc(4_194_304),
-    ]);
-    const reported = await send(
-      socket,
-      "POST",
-      "/shields/dotfiles.git/git-receive-pack",
-      bad,
-    );
-    assert.deepEqual(
-      { status: reported.status, type: reported.type, body: reported.body },
-      {
-        status: 200,
-        type: "application/x-git-receive-pack-result",
-        body: Buffer.concat([
-          packet("unpack ok\n"),
-          packet(
-            `ng ${idRef(instance.id)} another ref update in this push is denied\n`,
-          ),
-          packet(
-            `ng refs/heads/main push destination is outside this VM's task namespace; allowed namespace: task/${instance.id}/*\n`,
-          ),
-          Buffer.from("0000"),
-        ]).toString(),
-      },
-    );
-    const unreported = await send(
-      socket,
-      "POST",
-      "/shields/dotfiles.git/git-receive-pack",
-      Buffer.concat([
-        packet(`${"0".repeat(40)} ${"1".repeat(40)} refs/heads/main\0quiet`),
-        Buffer.from("0000PACK"),
-      ]),
-    );
-    assert.equal(unreported.status, 403);
-    assert.equal(unreported.type, "text/plain; charset=utf-8");
-    assert.equal(
-      unreported.body.split("\n", 1)[0],
+      log.reason,
       `push destination is outside this VM's task namespace; allowed namespace: task/${instance.id}/*`,
     );
-    assert.match(unreported.body, /^[^\n]+\nrequest ID: [0-9a-f-]{36}\n$/);
-    assert.equal(incoming.length, 4);
-    for (const log of state.logs(instance.id).slice(0, 2)) {
-      assert.equal(log.allowed, false);
-      assert.equal(
-        log.reason,
-        `push destination is outside this VM's task namespace; allowed namespace: task/${instance.id}/*`,
-      );
-      assert.equal(log.outcome, "denied");
-    }
-    const probe = Buffer.from("0000");
-    assert.equal(
-      (
-        await send(
-          socket,
-          "POST",
-          "/shields/dotfiles.git/git-receive-pack",
-          probe,
-        )
-      ).status,
-      200,
-    );
-    assert.equal(
-      incoming[4]?.authorization,
-      `Basic ${Buffer.from("x-access-token:ghu_secret").toString("base64")}`,
-    );
-    assert.deepEqual(incoming[4].body, probe);
-    const large = Buffer.concat([good, Buffer.alloc(2 * 1_048_576, 1)]);
-    assert.equal(
-      (
-        await send(socket, "POST", "/shields/dotfiles.git/git-receive-pack", [
-          large.subarray(0, 20),
-          large.subarray(20),
-        ])
-      ).status,
-      200,
-    );
-    assert.equal(incoming[5]?.transferEncoding, "chunked");
-    assert.equal(incoming[5].authorization, incoming[4].authorization);
-    assert.equal(incoming[5].body.length, large.length);
-    assert.ok(incoming[5].body.equals(large));
-    const shallow = Buffer.concat([
-      packet(`shallow ${"2".repeat(40)}\n`),
-      good,
-    ]);
-    assert.equal(
-      (
-        await send(socket, "POST", "/shields/dotfiles.git/git-receive-pack", [
-          shallow.subarray(0, 20),
-          shallow.subarray(20),
-        ])
-      ).status,
-      200,
-    );
-    assert.equal(incoming[6]?.authorization, incoming[4].authorization);
-    assert.deepEqual(incoming[6].body, shallow);
-    assert.equal(
-      (
-        await send(
-          socket,
-          "POST",
-          "/shields/dotfiles.git/git-receive-pack",
-          Buffer.from("0000PACK"),
-        )
-      ).status,
-      403,
-    );
-    assert.equal(
-      (
-        await send(socket, "POST", "/shields/dotfiles.git/git-receive-pack", [
-          probe,
-          good,
-        ])
-      ).status,
-      403,
-    );
-    assert.equal(incoming.length, 7);
-    const listed = await send(
-      socket,
-      "GET",
-      "/repos/Shields/Dotfiles/pulls",
-      Buffer.alloc(0),
-      "api.github.com",
-    );
-    assert.equal(listed.headers.link, pages("repos/shields/dotfiles"));
-    const next = /<https:\/\/api\.github\.com([^>]+)>; rel="next"/.exec(
-      listed.headers.link,
-    )?.[1];
-    assert.equal(next, "/repos/shields/dotfiles/pulls?page=2");
-    assert.equal(
-      (await send(socket, "GET", next, Buffer.alloc(0), "api.github.com"))
-        .status,
-      200,
-    );
-    assert.equal(incoming[8]?.target, next);
-    assert.equal(incoming[8].authorization, "Bearer ghu_secret");
-    state.update("lima:work", 1, {}, "tester");
-    assert.equal(
-      (await send(socket, "POST", "/graphql", discovery, "api.github.com"))
-        .status,
-      403,
-    );
-    assert.equal(
-      (
-        await send(
-          socket,
-          "GET",
-          "/shields/dotfiles.git/info/refs?service=git-upload-pack",
-        )
-      ).status,
-      200,
-    );
-    assert.equal(incoming.length, 10);
-    assert.equal(incoming[9]?.authorization, undefined);
-    const logs = state.logs(instance.id);
-    assert.equal(logs.length, 16);
-    assert.equal(logs[0]?.revision, 2);
-    assert.equal(logs[0].allowed, true);
-    assert.equal(logs[0].reason, "anonymous read");
+    assert.equal(log.outcome, "denied");
+  }
+  const probe = Buffer.from("0000");
+  assert.equal(
+    (
+      await send(
+        socket,
+        "POST",
+        "/shields/dotfiles.git/git-receive-pack",
+        probe,
+      )
+    ).status,
+    200,
+  );
+  assert.equal(
+    incoming[4]?.authorization,
+    `Basic ${Buffer.from("x-access-token:ghu_secret").toString("base64")}`,
+  );
+  assert.deepEqual(incoming[4].body, probe);
+  const large = Buffer.concat([good, Buffer.alloc(2 * 1_048_576, 1)]);
+  assert.equal(
+    (
+      await send(socket, "POST", "/shields/dotfiles.git/git-receive-pack", [
+        large.subarray(0, 20),
+        large.subarray(20),
+      ])
+    ).status,
+    200,
+  );
+  assert.equal(incoming[5]?.transferEncoding, "chunked");
+  assert.equal(incoming[5].authorization, incoming[4].authorization);
+  assert.equal(incoming[5].body.length, large.length);
+  assert.ok(incoming[5].body.equals(large));
+  const shallow = Buffer.concat([packet(`shallow ${"2".repeat(40)}\n`), good]);
+  assert.equal(
+    (
+      await send(socket, "POST", "/shields/dotfiles.git/git-receive-pack", [
+        shallow.subarray(0, 20),
+        shallow.subarray(20),
+      ])
+    ).status,
+    200,
+  );
+  assert.equal(incoming[6]?.authorization, incoming[4].authorization);
+  assert.deepEqual(incoming[6].body, shallow);
+  assert.equal(
+    (
+      await send(
+        socket,
+        "POST",
+        "/shields/dotfiles.git/git-receive-pack",
+        Buffer.from("0000PACK"),
+      )
+    ).status,
+    403,
+  );
+  assert.equal(
+    (
+      await send(socket, "POST", "/shields/dotfiles.git/git-receive-pack", [
+        probe,
+        good,
+      ])
+    ).status,
+    403,
+  );
+  assert.equal(incoming.length, 7);
+  const listed = await send(
+    socket,
+    "GET",
+    "/repos/Shields/Dotfiles/pulls",
+    Buffer.alloc(0),
+    "api.github.com",
+  );
+  assert.equal(listed.headers.link, pages("repos/shields/dotfiles"));
+  const next = /<https:\/\/api\.github\.com([^>]+)>; rel="next"/.exec(
+    listed.headers.link,
+  )?.[1];
+  assert.equal(next, "/repos/shields/dotfiles/pulls?page=2");
+  assert.equal(
+    (await send(socket, "GET", next, Buffer.alloc(0), "api.github.com")).status,
+    200,
+  );
+  assert.equal(incoming[8]?.target, next);
+  assert.equal(incoming[8].authorization, "Bearer ghu_secret");
+  state.update("lima:work", 1, {}, "tester");
+  assert.equal(
+    (await send(socket, "POST", "/graphql", discovery, "api.github.com"))
+      .status,
+    403,
+  );
+  assert.equal(
+    (
+      await send(
+        socket,
+        "GET",
+        "/shields/dotfiles.git/info/refs?service=git-upload-pack",
+      )
+    ).status,
+    200,
+  );
+  assert.equal(incoming.length, 10);
+  assert.equal(incoming[9]?.authorization, undefined);
+  const logs = state.logs(instance.id);
+  assert.equal(logs.length, 16);
+  assert.equal(logs[0]?.revision, 2);
+  assert.equal(logs[0].allowed, true);
+  assert.equal(logs[0].reason, "anonymous read");
 
-    for (const repository of [
-      "shields/dotfiles",
-      "octocat/Hello-World",
-      "shields/private",
-    ]) {
-      for (const [host, method, target, body] of [
-        [
-          "github.com",
-          "GET",
-          `/${repository}.git/info/refs?service=git-upload-pack`,
-          Buffer.alloc(0),
-        ],
-        [
-          "github.com",
-          "POST",
-          `/${repository}.git/git-upload-pack`,
-          Buffer.from("0000"),
-        ],
-        [
-          "github.com",
-          "GET",
-          `/${repository}/info/refs?service=git-upload-pack`,
-          Buffer.alloc(0),
-        ],
-        [
-          "github.com",
-          "POST",
-          `/${repository}/git-upload-pack`,
-          Buffer.from("0000"),
-        ],
-        [
-          "api.github.com",
-          "GET",
-          `/repos/${repository}/pulls`,
-          Buffer.alloc(0),
-        ],
-        ["api.github.com", "HEAD", `/repos/${repository}`, Buffer.alloc(0)],
-        ["github.com", "GET", `/${repository}`, Buffer.alloc(0)],
-        [
-          "github.com",
-          "HEAD",
-          `/${repository}/archive/refs/heads/main.zip`,
-          Buffer.alloc(0),
-        ],
-      ] as const) {
-        const response = await send(socket, method, target, body, host);
-        assert.equal(
-          response.status,
-          repository === "shields/private" ? 404 : 200,
-          target,
-        );
-        assert.equal(incoming.at(-1)?.authorization, undefined, target);
-        assert.equal(incoming.at(-1)?.cookie, undefined, target);
-        assert.deepEqual(incoming.at(-1)?.body, body, target);
-        assert.equal(
-          response.headers.link,
-          pages(
-            host === "api.github.com"
-              ? `repos/${repository.toLowerCase()}`
-              : "repositories/1296269",
-          ),
-          target,
-        );
-      }
-    }
-    const forwarded = incoming.length;
+  for (const repository of [
+    "shields/dotfiles",
+    "octocat/Hello-World",
+    "shields/private",
+  ]) {
     for (const [host, method, target, body] of [
       [
         "github.com",
         "GET",
-        "/shields/dotfiles.git/info/refs?service=git-receive-pack",
+        `/${repository}.git/info/refs?service=git-upload-pack`,
         Buffer.alloc(0),
       ],
-      ["github.com", "POST", "/shields/dotfiles.git/git-receive-pack", good],
-      ["github.com", "POST", "/shields/dotfiles.git/git-receive-pack", probe],
       [
-        "api.github.com",
+        "github.com",
         "POST",
-        "/repos/shields/dotfiles/issues",
-        Buffer.from("{}"),
+        `/${repository}.git/git-upload-pack`,
+        Buffer.from("0000"),
       ],
-      ["api.github.com", "POST", "/graphql", discovery],
-      ["api.github.com", "GET", "/user", Buffer.alloc(0)],
+      [
+        "github.com",
+        "GET",
+        `/${repository}/info/refs?service=git-upload-pack`,
+        Buffer.alloc(0),
+      ],
+      [
+        "github.com",
+        "POST",
+        `/${repository}/git-upload-pack`,
+        Buffer.from("0000"),
+      ],
+      ["api.github.com", "GET", `/repos/${repository}/pulls`, Buffer.alloc(0)],
+      ["api.github.com", "HEAD", `/repos/${repository}`, Buffer.alloc(0)],
+      ["github.com", "GET", `/${repository}`, Buffer.alloc(0)],
+      [
+        "github.com",
+        "HEAD",
+        `/${repository}/archive/refs/heads/main.zip`,
+        Buffer.alloc(0),
+      ],
     ] as const) {
-      const denied = await send(socket, method, target, body, host);
-      assert.equal(denied.status, 403, target);
-      if (host === "github.com") {
-        assert.equal(denied.type, "text/plain; charset=utf-8", target);
-        assert.match(denied.body, /^repository is not granted to this VM\n/);
-      } else {
-        assert.equal(denied.type, "application/json", target);
-        assert.equal(
-          (JSON.parse(denied.body) as { message: unknown }).message,
-          target === "/repos/shields/dotfiles/issues"
-            ? "unsupported GitHub API operation"
-            : "repository is not granted to this VM",
-          target,
-        );
-      }
+      const response = await send(socket, method, target, body, host);
+      assert.equal(
+        response.status,
+        repository === "shields/private" ? 404 : 200,
+        target,
+      );
+      assert.equal(incoming.at(-1)?.authorization, undefined, target);
+      assert.equal(incoming.at(-1)?.cookie, undefined, target);
+      assert.deepEqual(incoming.at(-1)?.body, body, target);
+      assert.equal(
+        response.headers.link,
+        pages(
+          host === "api.github.com"
+            ? `repos/${repository.toLowerCase()}`
+            : "repositories/1296269",
+        ),
+        target,
+      );
     }
-    state.disable("lima:work", "tester");
-    assert.equal((await send(socket, "GET", "/shields/dotfiles")).status, 403);
-    assert.equal(incoming.length, forwarded);
-  } finally {
-    await stop();
   }
+  const forwarded = incoming.length;
+  for (const [host, method, target, body] of [
+    [
+      "github.com",
+      "GET",
+      "/shields/dotfiles.git/info/refs?service=git-receive-pack",
+      Buffer.alloc(0),
+    ],
+    ["github.com", "POST", "/shields/dotfiles.git/git-receive-pack", good],
+    ["github.com", "POST", "/shields/dotfiles.git/git-receive-pack", probe],
+    [
+      "api.github.com",
+      "POST",
+      "/repos/shields/dotfiles/issues",
+      Buffer.from("{}"),
+    ],
+    ["api.github.com", "POST", "/graphql", discovery],
+    ["api.github.com", "GET", "/user", Buffer.alloc(0)],
+  ] as const) {
+    const denied = await send(socket, method, target, body, host);
+    assert.equal(denied.status, 403, target);
+    if (host === "github.com") {
+      assert.equal(denied.type, "text/plain; charset=utf-8", target);
+      assert.match(denied.body, /^repository is not granted to this VM\n/);
+    } else {
+      assert.equal(denied.type, "application/json", target);
+      assert.equal(
+        (JSON.parse(denied.body) as { message: unknown }).message,
+        target === "/repos/shields/dotfiles/issues"
+          ? "unsupported GitHub API operation"
+          : "repository is not granted to this VM",
+        target,
+      );
+    }
+  }
+  state.disable("lima:work", "tester");
+  assert.equal((await send(socket, "GET", "/shields/dotfiles")).status, 403);
+  assert.equal(incoming.length, forwarded);
 });
 
 test("Content-Encoding reaches GitHub only on fetch bodies, and inspected bodies must be unencoded", async () => {
-  const { socket, instance, incoming, stop } = await startGateway();
-  try {
-    const negotiation = gzipSync(
-      Buffer.concat([packet(`want ${"1".repeat(40)}\n`), Buffer.from("0000")]),
+  const { socket, instance, incoming } = await startGateway();
+  const negotiation = gzipSync(
+    Buffer.concat([packet(`want ${"1".repeat(40)}\n`), Buffer.from("0000")]),
+  );
+  assert.equal(
+    (
+      await send(
+        socket,
+        "POST",
+        "/shields/dotfiles.git/git-upload-pack",
+        negotiation,
+        "github.com",
+        { "content-encoding": "gzip" },
+      )
+    ).status,
+    200,
+  );
+  assert.equal(incoming.at(-1)?.contentEncoding, "gzip");
+  assert.deepEqual(incoming.at(-1)?.body, negotiation);
+  assert.equal(
+    (
+      await send(
+        socket,
+        "GET",
+        "/shields/dotfiles.git/info/refs?service=git-upload-pack",
+        Buffer.alloc(0),
+        "github.com",
+        { "content-encoding": "gzip" },
+      )
+    ).status,
+    200,
+  );
+  assert.equal(incoming.at(-1)?.contentEncoding, undefined);
+
+  const push = Buffer.concat([
+    packet(
+      `${"0".repeat(40)} ${"1".repeat(40)} ${idRef(instance.id)}\0report-status\n`,
+    ),
+    Buffer.from("0000PACK"),
+  ]);
+  const query = Buffer.from(
+    JSON.stringify({
+      query: '{ repository(owner: "shields", name: "dotfiles") { name } }',
+    }),
+  );
+  const forwarded = incoming.length;
+  for (const [host, target, body, encoding] of [
+    ["github.com", "/shields/dotfiles.git/git-receive-pack", push, "gzip"],
+    [
+      "github.com",
+      "/shields/dotfiles.git/git-receive-pack",
+      gzipSync(push),
+      "gzip",
+    ],
+    ["github.com", "/shields/dotfiles.git/git-receive-pack", push, ""],
+    ["api.github.com", "/graphql", query, "br"],
+    ["api.github.com", "/graphql", query, "identity, gzip"],
+  ] as const) {
+    const response = await send(socket, "POST", target, body, host, {
+      "content-encoding": encoding,
+    });
+    assert.equal(response.status, 403, `${target} ${encoding}`);
+    assert.match(
+      response.body,
+      host === "github.com"
+        ? /^encoded request bodies are unsupported\n/
+        : /"message":"encoded request bodies are unsupported"/,
     );
+  }
+  assert.equal(incoming.length, forwarded);
+
+  for (const [host, target, body, encoding] of [
+    ["github.com", "/shields/dotfiles.git/git-receive-pack", push, "identity"],
+    ["api.github.com", "/graphql", query, "Identity"],
+  ] as const) {
     assert.equal(
       (
-        await send(
-          socket,
-          "POST",
-          "/shields/dotfiles.git/git-upload-pack",
-          negotiation,
-          "github.com",
-          { "content-encoding": "gzip" },
-        )
+        await send(socket, "POST", target, body, host, {
+          "content-encoding": encoding,
+        })
       ).status,
       200,
+      target,
     );
-    assert.equal(incoming.at(-1)?.contentEncoding, "gzip");
-    assert.deepEqual(incoming.at(-1)?.body, negotiation);
-    assert.equal(
-      (
-        await send(
-          socket,
-          "GET",
-          "/shields/dotfiles.git/info/refs?service=git-upload-pack",
-          Buffer.alloc(0),
-          "github.com",
-          { "content-encoding": "gzip" },
-        )
-      ).status,
-      200,
-    );
-    assert.equal(incoming.at(-1)?.contentEncoding, undefined);
-
-    const push = Buffer.concat([
-      packet(
-        `${"0".repeat(40)} ${"1".repeat(40)} ${idRef(instance.id)}\0report-status\n`,
-      ),
-      Buffer.from("0000PACK"),
-    ]);
-    const query = Buffer.from(
-      JSON.stringify({
-        query: '{ repository(owner: "shields", name: "dotfiles") { name } }',
-      }),
-    );
-    const forwarded = incoming.length;
-    for (const [host, target, body, encoding] of [
-      ["github.com", "/shields/dotfiles.git/git-receive-pack", push, "gzip"],
-      [
-        "github.com",
-        "/shields/dotfiles.git/git-receive-pack",
-        gzipSync(push),
-        "gzip",
-      ],
-      ["github.com", "/shields/dotfiles.git/git-receive-pack", push, ""],
-      ["api.github.com", "/graphql", query, "br"],
-      ["api.github.com", "/graphql", query, "identity, gzip"],
-    ] as const) {
-      const response = await send(socket, "POST", target, body, host, {
-        "content-encoding": encoding,
-      });
-      assert.equal(response.status, 403, `${target} ${encoding}`);
-      assert.match(
-        response.body,
-        host === "github.com"
-          ? /^encoded request bodies are unsupported\n/
-          : /"message":"encoded request bodies are unsupported"/,
-      );
-    }
-    assert.equal(incoming.length, forwarded);
-
-    for (const [host, target, body, encoding] of [
-      [
-        "github.com",
-        "/shields/dotfiles.git/git-receive-pack",
-        push,
-        "identity",
-      ],
-      ["api.github.com", "/graphql", query, "Identity"],
-    ] as const) {
-      assert.equal(
-        (
-          await send(socket, "POST", target, body, host, {
-            "content-encoding": encoding,
-          })
-        ).status,
-        200,
-        target,
-      );
-      assert.equal(incoming.at(-1)?.contentEncoding, undefined, target);
-      assert.deepEqual(incoming.at(-1)?.body, body, target);
-    }
-  } finally {
-    await stop();
+    assert.equal(incoming.at(-1)?.contentEncoding, undefined, target);
+    assert.deepEqual(incoming.at(-1)?.body, body, target);
   }
 });
 
@@ -800,6 +794,9 @@ function open(
     path,
     agent: false,
     headers: { host: "github.com" },
+  });
+  defer(() => {
+    request.destroy();
   });
   const firstData = signal();
   const response = new Promise<{
@@ -940,7 +937,7 @@ const endsEarly: {
 for (const { name, tls, begin, end } of endsEarly) {
   test(`an upstream that ends its body early (${name}) fails the client's response and is audited as a gateway error`, async () => {
     const clientHasData = signal();
-    const { socket, instance, state, closed, stop } = await startGateway({
+    const { socket, instance, state, closed } = await startGateway({
       handler: (request, response) => {
         begin(request, response);
         void clientHasData.promise.then(() => {
@@ -950,22 +947,14 @@ for (const { name, tls, begin, end } of endsEarly) {
       tls,
     });
     const audit = recordFinishes(state);
-    const { request, firstData, response } = open(socket);
+    const { firstData, response } = open(socket);
     void firstData.then(clientHasData.resolve);
-    let rows;
-    let fetched;
-    try {
-      fetched = await within("the client's response to close", response);
-      await within("the audit row", audit.first);
-      await within("the gateway's response to close", closed());
-      rows = auditRows(state, instance);
-    } finally {
-      request.destroy();
-      await stop();
-    }
+    const fetched = await within("the client's response to close", response);
+    await within("the audit row", audit.first);
+    await within("the gateway's response to close", closed());
     assert.equal(fetched.status, 200);
     assert.equal(fetched.complete, false);
-    assert.deepEqual(rows, [
+    assert.deepEqual(auditRows(state, instance), [
       { outcome: "gateway-error", upstreamStatus: null },
     ]);
     assert.deepEqual(audit.calls, [{ status: null, outcome: "gateway-error" }]);
@@ -995,25 +984,19 @@ for (const { name, respond } of [
   },
 ]) {
   test(`a complete response (${name}) is audited once, as completed`, async () => {
-    const { socket, instance, state, closed, stop } = await startGateway({
+    const { socket, instance, state, closed } = await startGateway({
       handler: respond,
       tls: false,
     });
     const audit = recordFinishes(state);
-    const { request, response } = open(socket);
-    let rows;
-    let fetched;
-    try {
-      fetched = await within("the client's response to close", response);
-      await within("the audit row", audit.first);
-      await within("the gateway's response to close", closed());
-      rows = auditRows(state, instance);
-    } finally {
-      request.destroy();
-      await stop();
-    }
+    const { response } = open(socket);
+    const fetched = await within("the client's response to close", response);
+    await within("the audit row", audit.first);
+    await within("the gateway's response to close", closed());
     assert.deepEqual(fetched, { status: 200, body: "partial", complete: true });
-    assert.deepEqual(rows, [{ outcome: "completed", upstreamStatus: 200 }]);
+    assert.deepEqual(auditRows(state, instance), [
+      { outcome: "completed", upstreamStatus: 200 },
+    ]);
     assert.deepEqual(audit.calls, [{ status: 200, outcome: "completed" }]);
   });
 }
@@ -1033,26 +1016,18 @@ for (const [name, respond] of [
   ],
 ] as [string, RequestListener][]) {
   test(`an upstream that ${name} before sending headers is a gateway error with a 503`, async () => {
-    const { socket, instance, state, closed, stop } = await startGateway({
+    const { socket, instance, state, closed } = await startGateway({
       handler: respond,
       tls: false,
     });
     const audit = recordFinishes(state);
-    const { request, response } = open(socket);
-    let rows;
-    let fetched;
-    try {
-      fetched = await within("the client's response to close", response);
-      await within("the audit row", audit.first);
-      await within("the gateway's response to close", closed());
-      rows = auditRows(state, instance);
-    } finally {
-      request.destroy();
-      await stop();
-    }
+    const { response } = open(socket);
+    const fetched = await within("the client's response to close", response);
+    await within("the audit row", audit.first);
+    await within("the gateway's response to close", closed());
     assert.equal(fetched.status, 503);
     assert.equal(fetched.complete, true);
-    assert.deepEqual(rows, [
+    assert.deepEqual(auditRows(state, instance), [
       { outcome: "gateway-error", upstreamStatus: null },
     ]);
     assert.deepEqual(audit.calls, [{ status: null, outcome: "gateway-error" }]);
@@ -1061,7 +1036,7 @@ for (const [name, respond] of [
 
 test("a client that leaves mid-body is audited as interrupted and the upstream request is aborted", async () => {
   const upstreamClosed = signal();
-  const { socket, instance, state, closed, stop } = await startGateway({
+  const { socket, instance, state, closed } = await startGateway({
     handler: (request, response) => {
       request.socket.once("close", upstreamClosed.resolve);
       response.writeHead(200, { "content-length": 100_000 });
@@ -1071,26 +1046,21 @@ test("a client that leaves mid-body is audited as interrupted and the upstream r
   });
   const audit = recordFinishes(state);
   const { request, firstData } = open(socket);
-  let rows;
-  try {
-    await within("the first byte of the body", firstData);
-    request.destroy();
-    await within("the audit row", audit.first);
-    await within("the upstream connection to close", upstreamClosed.promise);
-    await within("the gateway's response to close", closed());
-    rows = auditRows(state, instance);
-  } finally {
-    request.destroy();
-    await stop();
-  }
-  assert.deepEqual(rows, [{ outcome: "interrupted", upstreamStatus: 200 }]);
+  await within("the first byte of the body", firstData);
+  request.destroy();
+  await within("the audit row", audit.first);
+  await within("the upstream connection to close", upstreamClosed.promise);
+  await within("the gateway's response to close", closed());
+  assert.deepEqual(auditRows(state, instance), [
+    { outcome: "interrupted", upstreamStatus: 200 },
+  ]);
   assert.deepEqual(audit.calls, [{ status: 200, outcome: "interrupted" }]);
 });
 
 test("a client that leaves before the upstream answers is audited as interrupted and the upstream request is aborted", async () => {
   const asked = signal();
   const upstreamClosed = signal();
-  const { socket, instance, state, closed, stop } = await startGateway({
+  const { socket, instance, state, closed } = await startGateway({
     handler: (request) => {
       asked.resolve();
       request.socket.once("close", upstreamClosed.resolve);
@@ -1100,20 +1070,15 @@ test("a client that leaves before the upstream answers is audited as interrupted
   const audit = recordFinishes(state);
   const { request, response } = open(socket);
   const hungUp = assert.rejects(response, { message: "socket hang up" });
-  let rows;
-  try {
-    await within("the upstream to receive the request", asked.promise);
-    request.destroy();
-    await within("the client's request to fail", hungUp);
-    await within("the audit row", audit.first);
-    await within("the upstream connection to close", upstreamClosed.promise);
-    await within("the gateway's response to close", closed());
-    rows = auditRows(state, instance);
-  } finally {
-    request.destroy();
-    await stop();
-  }
-  assert.deepEqual(rows, [{ outcome: "interrupted", upstreamStatus: null }]);
+  await within("the upstream to receive the request", asked.promise);
+  request.destroy();
+  await within("the client's request to fail", hungUp);
+  await within("the audit row", audit.first);
+  await within("the upstream connection to close", upstreamClosed.promise);
+  await within("the gateway's response to close", closed());
+  assert.deepEqual(auditRows(state, instance), [
+    { outcome: "interrupted", upstreamStatus: null },
+  ]);
   assert.deepEqual(audit.calls, [{ status: null, outcome: "interrupted" }]);
 });
 
@@ -1122,11 +1087,12 @@ for (const [name, mode] of [
   ["a POST that arrived whole", "post"],
 ] as const) {
   test(`a client that leaves while its token is being fetched (${name}) is audited as interrupted and never reaches the upstream`, async () => {
-    const { socket, instance, state, auth, incoming, closed, stop } =
+    const { socket, instance, state, auth, incoming, closed } =
       await startGateway();
     const audit = recordFinishes(state);
     const asked = signal();
     const resume = signal();
+    defer(resume.resolve);
     spyOn(auth, "token").mockImplementation(async (): Promise<string> => {
       asked.resolve();
       await resume.promise;
@@ -1134,21 +1100,15 @@ for (const [name, mode] of [
     });
     const { request, response } = open(socket, mode);
     const hungUp = assert.rejects(response, { message: "socket hang up" });
-    let rows;
-    try {
-      await within("the gateway to ask for a token", asked.promise);
-      request.destroy();
-      await within("the client's request to fail", hungUp);
-      await within("the gateway's response to close", closed());
-      resume.resolve();
-      await within("the audit row", audit.first);
-      rows = auditRows(state, instance);
-    } finally {
-      request.destroy();
-      resume.resolve();
-      await stop();
-    }
-    assert.deepEqual(rows, [{ outcome: "interrupted", upstreamStatus: null }]);
+    await within("the gateway to ask for a token", asked.promise);
+    request.destroy();
+    await within("the client's request to fail", hungUp);
+    await within("the gateway's response to close", closed());
+    resume.resolve();
+    await within("the audit row", audit.first);
+    assert.deepEqual(auditRows(state, instance), [
+      { outcome: "interrupted", upstreamStatus: null },
+    ]);
     assert.deepEqual(audit.calls, [{ status: null, outcome: "interrupted" }]);
     assert.deepEqual(incoming, []);
   });
@@ -1159,53 +1119,49 @@ for (const [name, mode] of [
   ["a POST that arrived whole", "post"],
 ] as const) {
   test(`a client whose socket is destroyed as its token arrives (${name}) is not forwarded over a warm upstream connection`, async () => {
-    const { socket, instance, state, auth, listener, incoming, closed, stop } =
+    const { socket, instance, state, auth, listener, incoming, closed } =
       await startGateway();
     const target = "/shields/dotfiles.git/info/refs?service=git-upload-pack";
-    let rows;
-    let forwarded;
-    let calls;
-    try {
-      const warm = await send(socket, "GET", target);
-      assert.equal(warm.status, 200);
-      const audit = recordFinishes(state);
-      let serverSide: Socket | undefined;
-      listener.prependOnceListener("request", (request) => {
-        serverSide = request.socket;
-      });
-      spyOn(auth, "token").mockImplementation((): Promise<string> => {
-        serverSide?.destroy();
-        return Promise.resolve("ghu_secret");
-      });
-      const { request, response } = open(socket, mode);
-      const hungUp = assert.rejects(response, { message: "socket hang up" });
-      await within("the client's request to fail", hungUp);
-      await within("the audit row", audit.first);
-      await within("the gateway's response to close", closed());
-      request.destroy();
-      const sentinel = await send(socket, "GET", target);
-      assert.equal(sentinel.status, 200);
-      rows = auditRows(state, instance).filter(
+    const warm = await send(socket, "GET", target);
+    assert.equal(warm.status, 200);
+    const audit = recordFinishes(state);
+    let serverSide: Socket | undefined;
+    listener.prependOnceListener("request", (request) => {
+      serverSide = request.socket;
+    });
+    spyOn(auth, "token").mockImplementation((): Promise<string> => {
+      serverSide?.destroy();
+      return Promise.resolve("ghu_secret");
+    });
+    const { request, response } = open(socket, mode);
+    const hungUp = assert.rejects(response, { message: "socket hang up" });
+    await within("the client's request to fail", hungUp);
+    await within("the audit row", audit.first);
+    await within("the gateway's response to close", closed());
+    request.destroy();
+    const sentinel = await send(socket, "GET", target);
+    assert.equal(sentinel.status, 200);
+    assert.deepEqual(
+      auditRows(state, instance).filter(
         ({ outcome }) => outcome === "interrupted",
-      );
-      forwarded = incoming.map(({ target: sent }) => sent);
-      calls = audit.calls;
-    } finally {
-      await stop();
-    }
-    assert.deepEqual(rows, [{ outcome: "interrupted", upstreamStatus: null }]);
-    assert.deepEqual(calls, [
+      ),
+      [{ outcome: "interrupted", upstreamStatus: null }],
+    );
+    assert.deepEqual(audit.calls, [
       { status: null, outcome: "interrupted" },
       { status: 200, outcome: "completed" },
     ]);
-    assert.deepEqual(forwarded, [target, target]);
+    assert.deepEqual(
+      incoming.map(({ target: sent }) => sent),
+      [target, target],
+    );
   });
 }
 
 test("a client that leaves while uploading is audited as interrupted and the upstream request is aborted", async () => {
   const asked = signal();
   const upstreamClosed = signal();
-  const { socket, instance, state, closed, stop } = await startGateway({
+  const { socket, instance, state, closed } = await startGateway({
     handler: (request) => {
       request.resume();
       asked.resolve();
@@ -1216,45 +1172,33 @@ test("a client that leaves while uploading is audited as interrupted and the ups
   const audit = recordFinishes(state);
   const { request, response } = open(socket, "upload");
   const hungUp = assert.rejects(response, { message: "socket hang up" });
-  let rows;
-  try {
-    await within("the upstream to receive the request", asked.promise);
-    request.destroy();
-    await within("the client's request to fail", hungUp);
-    await within("the audit row", audit.first);
-    await within("the upstream connection to close", upstreamClosed.promise);
-    await within("the gateway's response to close", closed());
-    rows = auditRows(state, instance);
-  } finally {
-    request.destroy();
-    await stop();
-  }
-  assert.deepEqual(rows, [{ outcome: "interrupted", upstreamStatus: null }]);
+  await within("the upstream to receive the request", asked.promise);
+  request.destroy();
+  await within("the client's request to fail", hungUp);
+  await within("the audit row", audit.first);
+  await within("the upstream connection to close", upstreamClosed.promise);
+  await within("the gateway's response to close", closed());
+  assert.deepEqual(auditRows(state, instance), [
+    { outcome: "interrupted", upstreamStatus: null },
+  ]);
   assert.deepEqual(audit.calls, [{ status: null, outcome: "interrupted" }]);
 });
 
 test("a client that leaves while its push commands are being read is audited as interrupted, not denied", async () => {
-  const { socket, instance, state, listener, incoming, closed, stop } =
+  const { socket, instance, state, listener, incoming, closed } =
     await startGateway();
   const audit = recordFinishes(state);
   const requested = signal();
   listener.on("request", requested.resolve);
   const { request, response } = open(socket, "push");
   const hungUp = assert.rejects(response, { message: "socket hang up" });
-  let logs;
-  try {
-    await within("the gateway to receive the request", requested.promise);
-    request.destroy();
-    await within("the client's request to fail", hungUp);
-    await within("the audit row", audit.first);
-    await within("the gateway's response to close", closed());
-    logs = state.logs(instance.id);
-  } finally {
-    request.destroy();
-    await stop();
-  }
+  await within("the gateway to receive the request", requested.promise);
+  request.destroy();
+  await within("the client's request to fail", hungUp);
+  await within("the audit row", audit.first);
+  await within("the gateway's response to close", closed());
   assert.deepEqual(
-    logs.map(({ allowed, operation, reason, outcome }) => ({
+    state.logs(instance.id).map(({ allowed, operation, reason, outcome }) => ({
       allowed,
       operation,
       reason,
@@ -1274,50 +1218,41 @@ test("a client that leaves while its push commands are being read is audited as 
 });
 
 test("a client that leaves while the rest of a denied push is being read does not crash the gateway", async () => {
-  const { socket, instance, state, closed, stop } = await startGateway();
+  const { socket, instance, state, closed } = await startGateway();
   const audit = recordFinishes(state);
   const { request, response } = open(socket, "deniedPush");
   const hungUp = assert.rejects(response, { message: "socket hang up" });
-  let rows;
-  try {
-    await within("the audit row", audit.first);
-    request.destroy();
-    await within("the client's request to fail", hungUp);
-    await within("the gateway's response to close", closed());
-    // Yield so an unhandled rejection from the gateway is reported while this
-    // test is still running.
-    await nextTurn();
-    rows = auditRows(state, instance);
-  } finally {
-    request.destroy();
-    await stop();
-  }
-  assert.deepEqual(rows, [{ outcome: "denied", upstreamStatus: null }]);
+  await within("the audit row", audit.first);
+  request.destroy();
+  await within("the client's request to fail", hungUp);
+  await within("the gateway's response to close", closed());
+  // Yield so an unhandled rejection from the gateway is reported while this
+  // test is still running.
+  await nextTurn();
+  assert.deepEqual(auditRows(state, instance), [
+    { outcome: "denied", upstreamStatus: null },
+  ]);
   assert.deepEqual(audit.calls, [{ status: null, outcome: "denied" }]);
 });
 
 test("a failed listener refresh does not fail the refreshes queued behind it", async () => {
-  const { gateway, state, stop } = await startGateway();
-  try {
-    spyOn(state, "active").mockImplementationOnce((): never => {
-      throw new Error("state unavailable");
-    });
-    const settled = await Promise.allSettled([
-      gateway.refresh(),
-      gateway.refresh(),
-    ]);
-    assert.deepEqual(
-      settled.map(({ status }) => status),
-      ["rejected", "fulfilled"],
-    );
-  } finally {
-    await stop();
-  }
+  const { gateway, state } = await startGateway();
+  spyOn(state, "active").mockImplementationOnce((): never => {
+    throw new Error("state unavailable");
+  });
+  const settled = await Promise.allSettled([
+    gateway.refresh(),
+    gateway.refresh(),
+  ]);
+  assert.deepEqual(
+    settled.map(({ status }) => status),
+    ["rejected", "fulfilled"],
+  );
 });
 
 test("an upstream that answers before the upload ends has its request aborted when the client connection closes", async () => {
   const upstreamClosed = signal();
-  const { socket, instance, state, closed, stop } = await startGateway({
+  const { socket, instance, state, closed } = await startGateway({
     handler: (request, response) => {
       request.socket.once("close", upstreamClosed.resolve);
       response.writeHead(200, { "content-length": 2 }).end("ok");
@@ -1325,21 +1260,15 @@ test("an upstream that answers before the upload ends has its request aborted wh
     tls: false,
   });
   const audit = recordFinishes(state);
-  const { request, response } = open(socket, "upload");
-  let rows;
-  let fetched;
-  try {
-    fetched = await within("the client's response to close", response);
-    await within("the audit row", audit.first);
-    await within("the upstream connection to close", upstreamClosed.promise);
-    await within("the gateway's response to close", closed());
-    rows = auditRows(state, instance);
-  } finally {
-    request.destroy();
-    await stop();
-  }
+  const { response } = open(socket, "upload");
+  const fetched = await within("the client's response to close", response);
+  await within("the audit row", audit.first);
+  await within("the upstream connection to close", upstreamClosed.promise);
+  await within("the gateway's response to close", closed());
   assert.deepEqual(fetched, { status: 200, body: "ok", complete: true });
-  assert.deepEqual(rows, [{ outcome: "completed", upstreamStatus: 200 }]);
+  assert.deepEqual(auditRows(state, instance), [
+    { outcome: "completed", upstreamStatus: 200 },
+  ]);
   assert.deepEqual(audit.calls, [{ status: 200, outcome: "completed" }]);
 });
 
@@ -1357,31 +1286,29 @@ function watchCloseListeners(listener: https.Server): {
 }
 
 test("GraphQL queries in sequence on one connection leave no listeners behind on its socket", async () => {
-  const { socket, listener, stop } = await startGateway();
+  const { socket, listener } = await startGateway();
   const watched = watchCloseListeners(listener);
   const agent = new https.Agent({ keepAlive: true, maxSockets: 1 });
-  try {
-    for (let round = 0; round < 8; round += 1) {
-      const query = await send(
-        socket,
-        "POST",
-        "/graphql",
-        Buffer.from(
-          JSON.stringify({
-            query:
-              '{ repo_000: repository(owner: "shields", name: "dotfiles") { name } }',
-            variables: null,
-          }),
-        ),
-        "api.github.com",
-        {},
-        agent,
-      );
-      assert.equal(query.status, 200);
-    }
-  } finally {
+  defer(() => {
     agent.destroy();
-    await stop();
+  });
+  for (let round = 0; round < 8; round += 1) {
+    const query = await send(
+      socket,
+      "POST",
+      "/graphql",
+      Buffer.from(
+        JSON.stringify({
+          query:
+            '{ repo_000: repository(owner: "shields", name: "dotfiles") { name } }',
+          variables: null,
+        }),
+      ),
+      "api.github.com",
+      {},
+      agent,
+    );
+    assert.equal(query.status, 200);
   }
   assert.equal(watched.connections.size, 1);
   assert.equal(new Set(watched.counts).size, 1);
@@ -1390,7 +1317,7 @@ test("GraphQL queries in sequence on one connection leave no listeners behind on
 test("uploads in sequence on one connection leave no listeners behind on its socket", async () => {
   const uploads = Array.from({ length: 8 }, () => signal());
   let forwarded = 0;
-  const { socket, listener, stop } = await startGateway({
+  const { socket, listener } = await startGateway({
     handler: (request, response) => {
       uploads[forwarded]?.resolve();
       forwarded += 1;
@@ -1403,39 +1330,37 @@ test("uploads in sequence on one connection leave no listeners behind on its soc
   });
   const watched = watchCloseListeners(listener);
   const agent = new https.Agent({ keepAlive: true, maxSockets: 1 });
-  try {
-    for (const upload of uploads) {
-      const request = https.request({
-        socketPath: socket,
-        servername: "github.com",
-        rejectUnauthorized: false,
-        agent,
-        method: "POST",
-        path: "/shields/dotfiles.git/git-upload-pack",
-        headers: { host: "github.com" },
-      });
-      const answered = new Promise<void>((resolve, reject) => {
-        request.once("error", reject);
-        request.once("response", (incoming) => {
-          incoming.resume();
-          incoming.once("end", resolve);
-        });
-      });
-      request.write("0000");
-      await within("the gateway to forward the upload", upload.promise);
-      request.end("0000");
-      await within("the response to end", answered);
-    }
-  } finally {
+  defer(() => {
     agent.destroy();
-    await stop();
+  });
+  for (const upload of uploads) {
+    const request = https.request({
+      socketPath: socket,
+      servername: "github.com",
+      rejectUnauthorized: false,
+      agent,
+      method: "POST",
+      path: "/shields/dotfiles.git/git-upload-pack",
+      headers: { host: "github.com" },
+    });
+    const answered = new Promise<void>((resolve, reject) => {
+      request.once("error", reject);
+      request.once("response", (incoming) => {
+        incoming.resume();
+        incoming.once("end", resolve);
+      });
+    });
+    request.write("0000");
+    await within("the gateway to forward the upload", upload.promise);
+    request.end("0000");
+    await within("the response to end", answered);
   }
   assert.equal(watched.connections.size, 1);
   assert.equal(new Set(watched.counts).size, 1);
 });
 
 test("uploads that fail in sequence on one connection leave no listeners behind on its socket", async () => {
-  const { socket, listener, stop } = await startGateway({
+  const { socket, listener } = await startGateway({
     handler: (request) => {
       request.socket.destroy();
     },
@@ -1443,36 +1368,34 @@ test("uploads that fail in sequence on one connection leave no listeners behind 
   });
   const watched = watchCloseListeners(listener);
   const agent = new https.Agent({ keepAlive: true, maxSockets: 1 });
-  try {
-    for (let round = 0; round < 8; round += 1) {
-      const request = https.request({
-        socketPath: socket,
-        servername: "github.com",
-        rejectUnauthorized: false,
-        agent,
-        method: "POST",
-        path: "/shields/dotfiles.git/git-upload-pack",
-        headers: { host: "github.com" },
-      });
-      const failed = signal();
-      const answered = new Promise<number>((resolve, reject) => {
-        request.once("error", reject);
-        request.once("response", (incoming) => {
-          failed.resolve();
-          incoming.resume();
-          incoming.once("end", () => {
-            resolve(incoming.statusCode ?? 0);
-          });
+  defer(() => {
+    agent.destroy();
+  });
+  for (let round = 0; round < 8; round += 1) {
+    const request = https.request({
+      socketPath: socket,
+      servername: "github.com",
+      rejectUnauthorized: false,
+      agent,
+      method: "POST",
+      path: "/shields/dotfiles.git/git-upload-pack",
+      headers: { host: "github.com" },
+    });
+    const failed = signal();
+    const answered = new Promise<number>((resolve, reject) => {
+      request.once("error", reject);
+      request.once("response", (incoming) => {
+        failed.resolve();
+        incoming.resume();
+        incoming.once("end", () => {
+          resolve(incoming.statusCode ?? 0);
         });
       });
-      request.write("0000");
-      await within("the gateway to answer the failed upload", failed.promise);
-      request.end("0000");
-      assert.equal(await within("the response to end", answered), 503);
-    }
-  } finally {
-    agent.destroy();
-    await stop();
+    });
+    request.write("0000");
+    await within("the gateway to answer the failed upload", failed.promise);
+    request.end("0000");
+    assert.equal(await within("the response to end", answered), 503);
   }
   assert.equal(watched.connections.size, 1);
   assert.equal(new Set(watched.counts).size, 1, watched.counts.join(","));
