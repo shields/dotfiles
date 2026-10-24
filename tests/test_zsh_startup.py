@@ -682,7 +682,7 @@ printf '%s\\n' "$@" > "$HOME/claude-args"
 printf '%s' "$TMPDIR" > "$HOME/claude-tmpdir"
 """
 SANDBOXED_CLAUDE = [
-    "--model=sonnet",
+    "--model=opus",
     "--effort",
     "high",
     "--permission-mode=auto",
@@ -733,7 +733,7 @@ def test_c_leaves_the_mode_and_the_sandbox_to_managed_settings_in_a_throwaway(
     _ = shell.run_command("c --worktree -p 'two words'")
     argv = (shell.home / "claude-args").read_text().splitlines()
     assert argv == [
-        "--model=sonnet",
+        "--model=opus",
         "--effort",
         "high",
         "--settings",
