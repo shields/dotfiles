@@ -684,7 +684,7 @@ printf '%s' "$TMPDIR" > "$HOME/claude-tmpdir"
 SANDBOXED_CLAUDE = [
     "--model=sonnet",
     "--effort",
-    "xhigh",
+    "high",
     "--permission-mode=auto",
     "--settings",
 ]
@@ -735,7 +735,7 @@ def test_c_leaves_the_mode_and_the_sandbox_to_managed_settings_in_a_throwaway(
     assert argv == [
         "--model=sonnet",
         "--effort",
-        "xhigh",
+        "high",
         "--settings",
         '{"ultracode":true}',
         "--worktree",

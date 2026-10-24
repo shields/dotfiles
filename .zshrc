@@ -433,12 +433,12 @@ _startup_overrides() {
         # A throwaway environment's managed settings choose the permission mode
         # and turn the sandbox off, and the flags below would override them.
         if [[ "$OSTYPE" == linux* && -e "${DOTFILES_THROWAWAY_MARKER:-/etc/dotfiles-throwaway}" ]]; then
-            TMPDIR="$tmpdir" claude --model=sonnet --effort xhigh --settings '{"ultracode":true}' "$@"
+            TMPDIR="$tmpdir" claude --model=sonnet --effort high --settings '{"ultracode":true}' "$@"
             return
         fi
         # Permit sandbox writes to this session's tmpdir; scoped to this run only.
         TMPDIR="$tmpdir" claude \
-            --model=sonnet --effort xhigh \
+            --model=sonnet --effort high \
             --permission-mode=auto \
             --settings "{\"ultracode\":true,\"sandbox\":{\"filesystem\":{\"allowWrite\":[\"$tmpdir\"]}}}" "$@"
     }
