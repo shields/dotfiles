@@ -26,6 +26,13 @@ limitations under the License.
   any later small or straightforward change to the reviewed code, look over just
   what changed; don't start another full sweep.
 
+## Artifacts
+
+- Never publish with the Artifact tool unless the user explicitly asks for an
+  artifact. This overrides the tool's default of publishing reports,
+  dashboards, and write-ups. Write the page or document to a local file and
+  report its path.
+
 ## Web access
 
 - For online PDFs, download with `curl` and open with Read.
