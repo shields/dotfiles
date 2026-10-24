@@ -780,6 +780,7 @@ const requestShapes: Record<
 function open(
   socket: string,
   mode: keyof typeof requestShapes = "get",
+  agent: https.Agent | false = false,
 ): {
   request: ClientRequest;
   firstData: Promise<void>;
@@ -792,7 +793,7 @@ function open(
     rejectUnauthorized: false,
     method,
     path,
-    agent: false,
+    agent,
     headers: { host: "github.com" },
   });
   defer(() => {
@@ -1270,6 +1271,38 @@ test("an upstream that answers before the upload ends has its request aborted wh
     { outcome: "completed", upstreamStatus: 200 },
   ]);
   assert.deepEqual(audit.calls, [{ status: 200, outcome: "completed" }]);
+});
+
+test("an upstream that answers before the upload ends has its request aborted when a keep-alive client leaves", async () => {
+  const upstreamClosed = signal();
+  const { socket, instance, state, listener, closed } = await startGateway({
+    handler: (request, response) => {
+      request.socket.once("close", upstreamClosed.resolve);
+      response.writeHead(403, { "content-length": 2 }).end("no");
+    },
+    tls: false,
+  });
+  let clientSide: Socket | undefined;
+  listener.prependOnceListener("request", (request) => {
+    clientSide = request.socket;
+  });
+  const audit = recordFinishes(state);
+  const agent = new https.Agent({ keepAlive: true });
+  defer(() => {
+    agent.destroy();
+  });
+  const { request, response } = open(socket, "upload", agent);
+  const fetched = await within("the client's response to close", response);
+  await within("the audit row", audit.first);
+  await within("the gateway's response to close", closed());
+  assert.equal(clientSide?.destroyed, false);
+  request.destroy();
+  await within("the upstream connection to close", upstreamClosed.promise);
+  assert.deepEqual(fetched, { status: 403, body: "no", complete: true });
+  assert.deepEqual(auditRows(state, instance), [
+    { outcome: "completed", upstreamStatus: 403 },
+  ]);
+  assert.deepEqual(audit.calls, [{ status: 403, outcome: "completed" }]);
 });
 
 function watchCloseListeners(listener: https.Server): {
