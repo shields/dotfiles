@@ -17,7 +17,7 @@ import {
 } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import { afterEach, mock, spyOn, test } from "bun:test";
+import { afterAll, afterEach, beforeAll, mock, spyOn, test } from "bun:test";
 import { setImmediate as nextTurn } from "node:timers/promises";
 import { gzipSync } from "node:zlib";
 import { AppAuth } from "./auth.ts";
@@ -112,22 +112,11 @@ interface Forwarded {
   body: Buffer;
 }
 
-async function startGateway(
-  upstreamOptions: { handler: RequestListener; tls: boolean } | null = null,
-): Promise<{
-  socket: string;
-  instance: Instance;
-  state: State;
-  auth: AppAuth;
-  gateway: Gateway;
-  incoming: Forwarded[];
-  listener: https.Server;
-  closed: () => Promise<void>;
-  stop: () => Promise<void>;
-}> {
-  const root = mkdtempSync(path.join(tmpdir(), "vm-access-server-"));
-  const certificate = path.join(root, "cert.pem");
-  const key = path.join(root, "key.pem");
+const throwaway = mkdtempSync(path.join(tmpdir(), "vm-access-cert-"));
+const certificate = path.join(throwaway, "cert.pem");
+const key = path.join(throwaway, "key.pem");
+
+beforeAll(() => {
   const generated = spawnSync(
     "openssl",
     [
@@ -150,6 +139,26 @@ async function startGateway(
     { encoding: "utf8" },
   );
   assert.equal(generated.status, 0, generated.stderr);
+});
+
+afterAll(() => {
+  rmSync(throwaway, { recursive: true, force: true });
+});
+
+async function startGateway(
+  upstreamOptions: { handler: RequestListener; tls: boolean } | null = null,
+): Promise<{
+  socket: string;
+  instance: Instance;
+  state: State;
+  auth: AppAuth;
+  gateway: Gateway;
+  incoming: Forwarded[];
+  listener: https.Server;
+  closed: () => Promise<void>;
+  stop: () => Promise<void>;
+}> {
+  const root = mkdtempSync(path.join(tmpdir(), "vm-access-server-"));
   const state = new State(path.join(root, "state"));
   const secretDirectory = path.join(root, "secrets");
   mkdirSync(secretDirectory);
@@ -227,7 +236,6 @@ async function startGateway(
   });
   const created = spyOn(https, "createServer");
   const stop = async (): Promise<void> => {
-    created.mockRestore();
     await gateway.stop();
     upstream.closeAllConnections();
     agentOptions.ca = trusted;
