@@ -5,8 +5,8 @@ import path from "node:path";
 import YAML from "yaml";
 import { AppAuth } from "../gateway/auth.ts";
 import {
-  compareCodeUnits,
   normalizeRepository,
+  parseGrant,
   type Grant,
 } from "../gateway/policy.ts";
 import type { CloudInstance } from "./authority.ts";
@@ -91,16 +91,11 @@ function profile(name: string): Grant {
   if (!selected || typeof selected !== "object" || Array.isArray(selected)) {
     throw new Error(`unknown profile ${name}`);
   }
-  const grant = selected as Record<string, unknown>;
-  if (
-    Object.keys(grant).toSorted(compareCodeUnits).join(",") !==
-      "pushTaskBranches,read" ||
-    grant.read !== true ||
-    typeof grant.pushTaskBranches !== "boolean"
-  ) {
+  const grant = parseGrant(selected);
+  if (!grant) {
     throw new Error(`invalid profile ${name}`);
   }
-  return { read: true, pushTaskBranches: grant.pushTaskBranches };
+  return grant;
 }
 
 function instanceId(value: string | undefined): string {

@@ -328,6 +328,28 @@ test("stale policy revisions and missing authorization fail closed", async () =>
   );
 });
 
+test("grants that are not a mapping of valid grants are rejected", async () => {
+  const state = authority();
+  await state.installAuthorization(authorization());
+  const instance = await state.register("work", "owner");
+  const grant = { read: true, pushTaskBranches: false };
+  const rejected: [unknown, string][] = [
+    [null, "repositories must be a mapping"],
+    [{ "shields/dotfiles": "read" }, "invalid grant for shields/dotfiles"],
+    [
+      { "Shields/Dotfiles": grant, "shields/dotfiles": grant },
+      "duplicate repository shields/dotfiles",
+    ],
+  ];
+  for (const [grants, message] of rejected) {
+    await assert.rejects(state.update(instance.id, 0, grants, "owner"), {
+      name: "PolicyError",
+      message,
+    });
+  }
+  assert.equal((await state.instance(instance.id))?.revision, 0);
+});
+
 test("revocation during token refresh prevents forwarding", async () => {
   const refreshStarted = Promise.withResolvers<undefined>();
   const refreshResponse = Promise.withResolvers<Response>();

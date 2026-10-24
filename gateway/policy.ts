@@ -159,6 +159,22 @@ export function normalizeRepository(repository: string): string {
   return repository.toLowerCase();
 }
 
+export function parseGrant(input: unknown): Grant | null {
+  if (!input || typeof input !== "object" || Array.isArray(input)) {
+    return null;
+  }
+  if (
+    Object.keys(input).toSorted(compareCodeUnits).join(",") !==
+    "pushTaskBranches,read"
+  ) {
+    return null;
+  }
+  const { read, pushTaskBranches } = input as Record<string, unknown>;
+  return read === true && typeof pushTaskBranches === "boolean"
+    ? { read, pushTaskBranches }
+    : null;
+}
+
 export function taskPrefix(instanceId: string): string {
   if (!/^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$/.test(instanceId)) {
     throw new PolicyError("invalid VM identity");

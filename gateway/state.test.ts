@@ -76,6 +76,36 @@ test("live grants are additive, conflict checked, and tied to immutable VM ident
   }
 });
 
+test("a policy that repeats a repository in another case changes nothing", () => {
+  const directory = mkdtempSync(path.join(tmpdir(), "vm-access-state-"));
+  const state = new State(directory);
+  try {
+    const instance = state.register(
+      "lima:work",
+      path.join(directory, "work.sock"),
+      "tester",
+    );
+    const read = { read: true, pushTaskBranches: false };
+    const task = { read: true, pushTaskBranches: true };
+    state.update("lima:work", 0, { "shields/dotfiles": read }, "tester");
+    assert.throws(
+      () =>
+        state.update(
+          "lima:work",
+          1,
+          { "Shields/Dotfiles": read, "shields/dotfiles": task },
+          "tester",
+        ),
+      /duplicate repository shields\/dotfiles/,
+    );
+    assert.equal(state.byName("lima:work")?.revision, 1);
+    assert.deepEqual(state.grants(instance.id), { "shields/dotfiles": read });
+  } finally {
+    state.close();
+    rmSync(directory, { recursive: true, force: true });
+  }
+});
+
 test("audit record precedes a request and an interrupted request retains an unknown outcome", () => {
   const directory = mkdtempSync(path.join(tmpdir(), "vm-access-audit-"));
   const state = new State(directory);

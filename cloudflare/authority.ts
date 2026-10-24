@@ -2,6 +2,7 @@ import {
   authorize,
   compareCodeUnits,
   normalizeRepository,
+  parseGrant,
   PolicyError,
   type Access,
   type Classification,
@@ -70,25 +71,15 @@ function grantsFrom(raw: unknown): Record<string, Grant> {
   for (const [repository, input] of Object.entries(
     raw as Record<string, unknown>,
   )) {
-    if (
-      !input ||
-      typeof input !== "object" ||
-      Array.isArray(input) ||
-      Object.keys(input).toSorted(compareCodeUnits).join(",") !==
-        "pushTaskBranches,read" ||
-      (input as Record<string, unknown>).read !== true ||
-      typeof (input as Record<string, unknown>).pushTaskBranches !== "boolean"
-    ) {
+    const grant = parseGrant(input);
+    if (!grant) {
       throw new PolicyError(`invalid grant for ${repository}`);
     }
     const key = normalizeRepository(repository);
     if (Object.hasOwn(normalized, key)) {
       throw new PolicyError(`duplicate repository ${repository}`);
     }
-    normalized[key] = {
-      read: true,
-      pushTaskBranches: (input as Grant).pushTaskBranches,
-    };
+    normalized[key] = grant;
   }
   return normalized;
 }

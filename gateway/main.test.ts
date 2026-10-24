@@ -1,8 +1,9 @@
 import assert from "node:assert/strict";
-import { spawn, spawnSync } from "node:child_process";
+import { spawn, spawnSync, type SpawnSyncReturns } from "node:child_process";
 import { once } from "node:events";
 import {
   chmodSync,
+  existsSync,
   mkdirSync,
   mkdtempSync,
   rmSync,
@@ -10,7 +11,7 @@ import {
 } from "node:fs";
 import http from "node:http";
 import path from "node:path";
-import { test } from "bun:test";
+import { onTestFinished, test } from "bun:test";
 import YAML from "yaml";
 import { State } from "./state.ts";
 
@@ -160,3 +161,71 @@ test("CLI grants and edits apply live and disabled VM logs stay addressable by I
     rmSync(root, { recursive: true, force: true });
   }
 }, 60_000);
+
+interface Sandbox {
+  root: string;
+  ghCalls: string;
+  run: (args: string[], extra?: NodeJS.ProcessEnv) => SpawnSyncReturns<string>;
+}
+
+// gh records its arguments and fails, so reaching GitHub authorization shows
+// up as a call.
+function sandbox(): Sandbox {
+  const root = mkdtempSync("/tmp/vma-");
+  onTestFinished(() => {
+    rmSync(root, { recursive: true, force: true });
+  });
+  const bin = path.join(root, "bin");
+  const ghCalls = path.join(root, "gh-calls");
+  mkdirSync(bin);
+  writeFileSync(
+    path.join(bin, "gh"),
+    `#!/bin/sh\necho "$*" >> ${ghCalls}\nexit 1\n`,
+    { mode: 0o700 },
+  );
+  const state = new State(path.join(root, "state"));
+  try {
+    state.register("lima:trial", path.join(root, "trial.sock"), "tester");
+  } finally {
+    state.close();
+  }
+  return {
+    root,
+    ghCalls,
+    run: (args, extra = {}) =>
+      spawnSync(
+        process.execPath,
+        [path.join(import.meta.dirname, "main.ts"), ...args],
+        {
+          env: {
+            ...process.env,
+            PATH: `${bin}:${process.env.PATH ?? ""}`,
+            VM_ACCESS_ROOT: root,
+            ...extra,
+          },
+          encoding: "utf8",
+          timeout: 30_000,
+        },
+      ),
+  };
+}
+
+test("grant rejects an invalid profile definition before it authorizes anything", () => {
+  const { root, ghCalls, run } = sandbox();
+  const read = { read: true, pushTaskBranches: false };
+  const task = { read: true, pushTaskBranches: true };
+  const profiles = path.join(root, "profiles.yaml");
+  for (const [name, profile] of [
+    ["task", { ...task, pushTaskBranches: "false" }],
+    ["Task", task],
+  ] as const) {
+    writeFileSync(profiles, YAML.stringify({ read, task, [name]: profile }));
+    const result = run(
+      ["grant", "lima:trial", "shields/dotfiles", "--profile", "task"],
+      { VM_ACCESS_PROFILES: profiles },
+    );
+    assert.equal(result.status, 1, result.stdout);
+    assert.equal(result.stderr, `vm-access: invalid profile ${name}\n`);
+  }
+  assert.equal(existsSync(ghCalls), false);
+});

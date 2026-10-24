@@ -11,6 +11,7 @@ import { ensureCertificates } from "./cert.ts";
 import {
   compareCodeUnits,
   normalizeRepository,
+  parseGrant,
   taskPrefix,
   type Grant,
 } from "./policy.ts";
@@ -77,24 +78,11 @@ function parseProfiles(file: string): Record<string, Grant> {
   }
   const profiles: Record<string, Grant> = {};
   for (const [name, input] of Object.entries(raw as Record<string, unknown>)) {
-    if (
-      !/^[a-z][a-z0-9-]*$/.test(name) ||
-      !input ||
-      typeof input !== "object" ||
-      Array.isArray(input)
-    ) {
+    const grant = /^[a-z][a-z0-9-]*$/.test(name) ? parseGrant(input) : null;
+    if (!grant) {
       throw new Error(`invalid profile ${name}`);
     }
-    const grant = input as Record<string, unknown>;
-    if (
-      Object.keys(grant).toSorted(compareCodeUnits).join(",") !==
-        "pushTaskBranches,read" ||
-      grant.read !== true ||
-      typeof grant.pushTaskBranches !== "boolean"
-    ) {
-      throw new Error(`invalid profile ${name}`);
-    }
-    profiles[name] = { read: true, pushTaskBranches: grant.pushTaskBranches };
+    profiles[name] = grant;
   }
   if (!profiles.read || !profiles.task) {
     throw new Error("read and task profiles are required");

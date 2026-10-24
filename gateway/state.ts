@@ -3,8 +3,8 @@ import { chmodSync, mkdirSync } from "node:fs";
 import path from "node:path";
 import { DatabaseSync } from "node:sqlite";
 import {
-  compareCodeUnits,
   normalizeRepository,
+  parseGrant,
   type Grant,
   type Operation,
 } from "./policy.ts";
@@ -260,30 +260,15 @@ export class State {
       for (const [repository, rawGrant] of Object.entries(
         nextGrants as Record<string, unknown>,
       )) {
-        if (
-          !rawGrant ||
-          typeof rawGrant !== "object" ||
-          Array.isArray(rawGrant)
-        ) {
-          throw new Error(`invalid grant for ${repository}`);
-        }
-        const grant = rawGrant as Record<string, unknown>;
-        if (
-          Object.keys(grant).toSorted(compareCodeUnits).join(",") !==
-            "pushTaskBranches,read" ||
-          grant.read !== true ||
-          typeof grant.pushTaskBranches !== "boolean"
-        ) {
+        const grant = parseGrant(rawGrant);
+        if (!grant) {
           throw new Error(`invalid grant for ${repository}`);
         }
         const key = normalizeRepository(repository);
         if (Object.hasOwn(normalized, key)) {
           throw new Error(`duplicate repository ${repository}`);
         }
-        normalized[key] = {
-          read: true,
-          pushTaskBranches: grant.pushTaskBranches,
-        };
+        normalized[key] = grant;
       }
       const old = this.grants(instance.id);
       const added = Object.fromEntries(
