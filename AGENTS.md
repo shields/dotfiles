@@ -64,6 +64,9 @@ effect only after running `./provision.sh`.
 - `provision.sh` and everything else that runs on macOS must work in bash 3.2:
   no `mapfile`, associative arrays or `${var,,}`, and no expansion of an empty
   array under `set -u`.
+- Check whether a change is needed before invoking `sudo`. Provisioning steps
+  that are already satisfied must not invoke `sudo`, including for temporary
+  files, cleanup, or permissions that are already correct.
 
 Homebrew packages are modules, `brew/*.Brewfile`. The `Brewfile` in the root is
 a loader for `base`, `macos` or `linux`, and the selected optional modules.

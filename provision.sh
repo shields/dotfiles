@@ -132,6 +132,10 @@ if [[ $os == linux ]]; then
     sudo "$dotfiles_root/provision/linux-system.sh" "$user"
 fi
 
+if [[ $os == macos ]]; then
+    macos_emudhra_workaround
+fi
+
 # Install Homebrew (which will take tens of minutes).
 if [[ $os == linux ]]; then
     HOMEBREW_PREFIX="/home/linuxbrew/.linuxbrew"
@@ -237,6 +241,7 @@ if [[ $os == macos ]]; then
     bin/docker-prune
     macos_xcode
     macos_login_shell
+    macos_emudhra_workaround
 fi
 
 # Plugins!

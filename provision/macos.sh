@@ -26,6 +26,42 @@ macos_vm_access_cleanup() {
     fi
 }
 
+macos_emudhra_workaround() {
+    (
+        bundle=/etc/ssl/cert.pem
+        filtered=$(mktemp)
+        staged=
+        trap 'rm -f "$filtered"; if [[ -n $staged ]]; then sudo rm -f "$staged"; fi' EXIT
+        awk '/^(###|===) / { skip=0 }
+            /^=== .*\/CN=(AAA Certificate Services|emSign ECC Root CA - G3)$/ { skip=1 }
+            !skip' "$bundle" >"$filtered"
+        if [[ ! -s $filtered ]]; then
+            echo "provision.sh: eMudhra workaround produced an empty CA bundle" >&2
+            exit 1
+        fi
+        if ! cmp -s "$bundle" "$filtered"; then
+            staged=$(sudo mktemp "$bundle.XXXXXX")
+            sudo cp -p "$bundle" "$staged"
+            cat "$filtered" | sudo tee "$staged" >/dev/null
+            if [[ ! -e $bundle.bak ]]; then
+                sudo cp -p "$bundle" "$bundle.bak"
+            fi
+            sudo mv -f "$staged" "$bundle"
+            staged=
+        fi
+
+        sitecustomize="$(/usr/bin/python3 -I -c 'import sysconfig; print(sysconfig.get_path("stdlib"))')/sitecustomize.py"
+        pip_cert='import os; os.environ.setdefault("PIP_CERT", "/etc/ssl/cert.pem")'
+        if [[ ! -f $sitecustomize ]] || ! grep -Fxq "$pip_cert" "$sitecustomize"; then
+            printf '\n%s\n' "$pip_cert" | sudo tee -a "$sitecustomize" >/dev/null
+        fi
+        sitecustomize_mode=$(stat -f '%Lp' "$sitecustomize")
+        if [[ $sitecustomize_mode != 644 ]]; then
+            sudo chmod 644 "$sitecustomize"
+        fi
+    )
+}
+
 macos_preflight() {
     softwareupdate --install --recommended
 

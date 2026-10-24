@@ -20,6 +20,7 @@
 import json
 import os
 import re
+import runpy
 import shlex
 import shutil
 import stat
@@ -45,6 +46,7 @@ MACOS_GUARD = "if [[ $os == macos ]]; then"
 LINUX_GUARD = "if [[ $os == linux ]]; then"
 MACOS_FUNCTIONS = (
     "macos_vm_access_cleanup",
+    "macos_emudhra_workaround",
     "macos_preflight",
     "macos_vm_access_install",
     "macos_xcode",
@@ -318,20 +320,33 @@ def test_macos_functions_are_defined_in_macos_sh() -> None:
 def test_macos_functions_are_called_as_plain_statements_in_the_guard() -> None:
     for name in MACOS_FUNCTIONS:
         uses = [i for i, line in enumerate(LINES) if re.search(rf"\b{name}\b", line)]
-        assert len(uses) == 1, name
-        assert LINES[uses[0]].strip() == name
-        assert openers(uses[0])[:1] == [MACOS_GUARD]
+        assert len(uses) == (2 if name == "macos_emudhra_workaround" else 1), name
+        for use in uses:
+            assert LINES[use].strip() == name
+            assert openers(use)[:1] == [MACOS_GUARD]
 
 
 def test_macos_functions_are_called_in_the_original_order() -> None:
     calls = [find(rf"^\s+{name}$") for name in MACOS_FUNCTIONS]
     assert calls == sorted(calls)
-    cleanup, preflight, install, xcode, login_shell, defaults, emacs_app, finish = calls
+    (
+        cleanup,
+        emudhra,
+        preflight,
+        install,
+        xcode,
+        login_shell,
+        defaults,
+        emacs_app,
+        finish,
+    ) = calls
     analytics = find(r"^brew analytics off")
     oh_my_zsh = find(r"Oh My Zsh installation")
-    assert cleanup < analytics < preflight < oh_my_zsh < install < xcode
+    assert cleanup < emudhra < find(r"^# Install Homebrew") < analytics
+    assert analytics < preflight < oh_my_zsh < install < xcode
     assert find(r"^\s+bin/docker-prune$") < xcode
     assert login_shell == xcode + 1
+    assert find(r"^\s+macos_emudhra_workaround$", emudhra + 1) == login_shell + 1
     assert find(r"gcloud --quiet components update") < defaults
     emacs = find(r"^emacs --batch --script \.emacs\.d/provision\.el")
     assert defaults < emacs < emacs_app
@@ -1043,6 +1058,210 @@ MACOS_SH_PLAIN_COMMANDS = (
 def test_macos_sh_commands_that_must_stop_the_run_are_plain() -> None:
     stripped = {line.strip() for line in MACOS.read_text().splitlines()}
     assert [c for c in MACOS_SH_PLAIN_COMMANDS if c not in stripped] == []
+
+
+EMUDHRA_HARNESS = r"""
+set -euo pipefail
+sudo() {
+    printf '%s\n' "$*" >>"$SUDO_LOG"
+    if [[ $FAIL_COMMAND == sudo || $1 == "$FAIL_COMMAND" ]]; then
+        return 7
+    fi
+    "$@"
+}
+awk() {
+    if [[ $FAIL_COMMAND == awk ]]; then
+        printf 'partial output\n'
+        return 7
+    fi
+    command awk "$@"
+}
+python3() { printf '%s\n' "$STDLIB"; }
+stat() {
+    if [[ $(uname -s) == Darwin ]]; then
+        command stat "$@"
+    else
+        command stat -c '%a' "$3"
+    fi
+}
+source "$1"
+macos_emudhra_workaround
+echo finished
+"""
+
+
+def run_emudhra(
+    tmp_path: Path, *, fail_command: str = ""
+) -> subprocess.CompletedProcess[str]:
+    script = tmp_path / "macos.sh"
+    _ = script.write_text(
+        MACOS.read_text()
+        .replace(
+            "bundle=/etc/ssl/cert.pem",
+            f"bundle={shlex.quote(str(tmp_path / 'cert.pem'))}",
+        )
+        .replace("/usr/bin/python3", "python3")
+    )
+    stdlib = tmp_path / "stdlib"
+    stdlib.mkdir(exist_ok=True)
+    return subprocess.run(
+        ["/bin/bash", "-c", EMUDHRA_HARNESS, "bash", str(script)],
+        env={
+            "PATH": "/usr/bin:/bin",
+            "STDLIB": str(stdlib),
+            "FAIL_COMMAND": fail_command,
+            "SUDO_LOG": str(tmp_path / "sudo.log"),
+        },
+        capture_output=True,
+        text=True,
+        check=False,
+        timeout=15,
+    )
+
+
+def certificate_section(common_name: str) -> str:
+    return (
+        f"=== /C=US/O=Example/CN={common_name}\n"
+        "Certificate:\n"
+        "-----BEGIN CERTIFICATE-----\n"
+        f"{common_name}\n"
+        "-----END CERTIFICATE-----\n\n"
+    )
+
+
+def emudhra_bundle() -> tuple[str, str]:
+    prefix = "### First group\n\n" + certificate_section("Unrelated root")
+    middle = certificate_section("AAA Certificate Services Extra")
+    suffix = "### Last group\n\n" + certificate_section("emSign Root CA - G1")
+    original = (
+        prefix
+        + certificate_section("AAA Certificate Services")
+        + middle
+        + certificate_section("emSign ECC Root CA - G3")
+        + suffix
+        + certificate_section("AAA Certificate Services")
+    )
+    return original, prefix + middle + suffix
+
+
+def test_emudhra_removes_only_affected_roots_and_is_idempotent(tmp_path: Path) -> None:
+    bundle = tmp_path / "cert.pem"
+    original, expected = emudhra_bundle()
+    _ = bundle.write_text(original)
+    bundle.chmod(0o644)
+    original_stat = bundle.stat()
+    result = run_emudhra(tmp_path)
+    assert result.returncode == 0, result.stderr
+    assert result.stdout == "finished\n"
+    assert bundle.read_text() == expected
+    backup = tmp_path / "cert.pem.bak"
+    assert backup.read_text() == original
+    for cert_file in (bundle, backup):
+        info = cert_file.stat()
+        assert stat.S_IMODE(info.st_mode) == stat.S_IMODE(original_stat.st_mode)
+        assert (info.st_uid, info.st_gid) == (
+            original_stat.st_uid,
+            original_stat.st_gid,
+        )
+    modified = bundle.stat().st_mtime_ns
+    result = run_emudhra(tmp_path, fail_command="sudo")
+    assert result.returncode == 0, result.stderr
+    assert bundle.read_text() == expected
+    assert bundle.stat().st_mtime_ns == modified
+    assert backup.read_text() == original
+    assert sorted(p.name for p in tmp_path.glob("cert.pem.*")) == ["cert.pem.bak"]
+
+
+def test_emudhra_filters_updated_bundle_without_restoring_old_roots(
+    tmp_path: Path,
+) -> None:
+    bundle = tmp_path / "cert.pem"
+    original, expected = emudhra_bundle()
+    _ = bundle.write_text(original)
+    result = run_emudhra(tmp_path)
+    assert result.returncode == 0, result.stderr
+    added = certificate_section("New root")
+    _ = bundle.write_text(
+        expected + added + certificate_section("AAA Certificate Services")
+    )
+    result = run_emudhra(tmp_path)
+    assert result.returncode == 0, result.stderr
+    assert bundle.read_text() == expected + added
+    assert (tmp_path / "cert.pem.bak").read_text() == original
+
+
+@pytest.mark.parametrize("existing", [None, "existing_customization = True"])
+def test_emudhra_configures_pip_once_preserving_python_customizations(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, existing: str | None
+) -> None:
+    _ = (tmp_path / "cert.pem").write_text(certificate_section("Unaffected root"))
+    stdlib = tmp_path / "stdlib"
+    stdlib.mkdir()
+    sitecustomize = stdlib / "sitecustomize.py"
+    if existing is not None:
+        _ = sitecustomize.write_text(existing)
+        sitecustomize.chmod(0o600)
+    for fail_command in ("", "sudo"):
+        result = run_emudhra(tmp_path, fail_command=fail_command)
+        assert result.returncode == 0, result.stderr
+    text = sitecustomize.read_text()
+    assert text.startswith(existing or "")
+    assert text.count('os.environ.setdefault("PIP_CERT", "/etc/ssl/cert.pem")') == 1
+    assert stat.S_IMODE(sitecustomize.stat().st_mode) == 0o644
+    assert not (tmp_path / "cert.pem.bak").exists()
+    monkeypatch.setenv("PIP_CERT", "/custom/ca.pem")
+    _ = runpy.run_path(str(sitecustomize))
+    assert os.environ["PIP_CERT"] == "/custom/ca.pem"
+    monkeypatch.delenv("PIP_CERT")
+    _ = runpy.run_path(str(sitecustomize))
+    assert os.environ["PIP_CERT"] == "/etc/ssl/cert.pem"
+
+
+def test_emudhra_only_uses_sudo_for_permissions_when_contents_are_correct(
+    tmp_path: Path,
+) -> None:
+    _ = (tmp_path / "cert.pem").write_text(certificate_section("Unaffected root"))
+    result = run_emudhra(tmp_path)
+    assert result.returncode == 0, result.stderr
+    sitecustomize = tmp_path / "stdlib/sitecustomize.py"
+    contents = sitecustomize.read_text()
+    modified = sitecustomize.stat().st_mtime_ns
+    sitecustomize.chmod(0o600)
+    log = tmp_path / "sudo.log"
+    _ = log.write_text("")
+    result = run_emudhra(tmp_path)
+    assert result.returncode == 0, result.stderr
+    assert log.read_text().splitlines() == [f"chmod 644 {sitecustomize}"]
+    assert sitecustomize.read_text() == contents
+    assert sitecustomize.stat().st_mtime_ns == modified
+    assert stat.S_IMODE(sitecustomize.stat().st_mode) == 0o644
+
+
+@pytest.mark.parametrize("fail_command", ["awk", "cp", "tee", "mv"])
+def test_emudhra_failure_preserves_bundle_and_stops_provisioning(
+    tmp_path: Path, fail_command: str
+) -> None:
+    bundle = tmp_path / "cert.pem"
+    original, _ = emudhra_bundle()
+    _ = bundle.write_text(original)
+    result = run_emudhra(tmp_path, fail_command=fail_command)
+    assert result.returncode == 7, result.stderr
+    assert "finished" not in result.stdout
+    assert bundle.read_text() == original
+    assert not (tmp_path / "stdlib/sitecustomize.py").exists()
+    assert all(p.name == "cert.pem.bak" for p in tmp_path.glob("cert.pem.*"))
+
+
+def test_emudhra_refuses_an_empty_filtered_bundle(tmp_path: Path) -> None:
+    bundle = tmp_path / "cert.pem"
+    original = certificate_section("AAA Certificate Services")
+    _ = bundle.write_text(original)
+    result = run_emudhra(tmp_path)
+    assert result.returncode != 0
+    assert "empty CA bundle" in result.stderr
+    assert "finished" not in result.stdout
+    assert bundle.read_text() == original
+    assert not list(tmp_path.glob("cert.pem.*"))
 
 
 GATEWAY_INSTALL_HARNESS = r"""
