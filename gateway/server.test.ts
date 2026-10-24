@@ -859,11 +859,23 @@ function auditRows(
     .map(({ outcome, upstreamStatus }) => ({ outcome, upstreamStatus }));
 }
 
+const endings = {
+  fin: (socket: Socket) => {
+    socket.end();
+  },
+  destroy: (socket: Socket) => {
+    socket.destroy();
+  },
+  reset: (socket: Socket) => {
+    socket.resetAndDestroy();
+  },
+};
+
 const endsEarly: {
   name: string;
   tls: boolean;
   begin: RequestListener;
-  end: (socket: Socket) => void;
+  end: keyof typeof endings;
 }[] = [
   {
     name: "FIN after a chunk, without the final chunk",
@@ -872,9 +884,7 @@ const endsEarly: {
       response.writeHead(200);
       response.write("partial");
     },
-    end: (socket) => {
-      socket.end();
-    },
+    end: "fin",
   },
   {
     name: "FIN in the middle of a chunk",
@@ -884,9 +894,7 @@ const endsEarly: {
       response.flushHeaders();
       request.socket.write("64\r\npart");
     },
-    end: (socket) => {
-      socket.end();
-    },
+    end: "fin",
   },
   {
     name: "FIN before the end of a Content-Length body",
@@ -895,9 +903,7 @@ const endsEarly: {
       response.writeHead(200, { "content-length": 100_000 });
       response.write("partial");
     },
-    end: (socket) => {
-      socket.end();
-    },
+    end: "fin",
   },
   {
     name: "TLS close_notify without the final chunk",
@@ -906,9 +912,7 @@ const endsEarly: {
       response.writeHead(200);
       response.write("partial");
     },
-    end: (socket) => {
-      socket.end();
-    },
+    end: "fin",
   },
   {
     name: "TLS EOF without close_notify",
@@ -917,9 +921,7 @@ const endsEarly: {
       response.writeHead(200);
       response.write("partial");
     },
-    end: (socket) => {
-      socket.destroy();
-    },
+    end: "destroy",
   },
   {
     name: "TCP reset",
@@ -928,9 +930,7 @@ const endsEarly: {
       response.writeHead(200, { "content-length": 100_000 });
       response.write("partial");
     },
-    end: (socket) => {
-      socket.resetAndDestroy();
-    },
+    end: "reset",
   },
 ];
 
@@ -941,7 +941,7 @@ for (const { name, tls, begin, end } of endsEarly) {
       handler: (request, response) => {
         begin(request, response);
         void clientHasData.promise.then(() => {
-          end(request.socket);
+          endings[end](request.socket);
         });
       },
       tls,
