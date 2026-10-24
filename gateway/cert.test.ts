@@ -6,6 +6,7 @@ import {
   X509Certificate,
 } from "node:crypto";
 import {
+  cpSync,
   existsSync,
   mkdtempSync,
   readdirSync,
@@ -16,7 +17,7 @@ import {
 } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import { test } from "bun:test";
+import { afterAll, beforeAll, test } from "bun:test";
 import { ensureCertificates, type Certificates } from "./cert.ts";
 
 const files = ["ca.pem", "ca-key.pem", "github.pem", "github-key.pem"];
@@ -29,6 +30,24 @@ function withDirectory(run: (directory: string) => void): void {
   } finally {
     rmSync(directory, { recursive: true, force: true });
   }
+}
+
+let issuedDirectory = "";
+
+beforeAll(() => {
+  issuedDirectory = mkdtempSync(path.join(tmpdir(), "vm-access-cert-issued-"));
+  ensureCertificates(issuedDirectory);
+});
+
+afterAll(() => {
+  rmSync(issuedDirectory, { recursive: true, force: true });
+});
+
+function withIssued(run: (directory: string) => void): void {
+  withDirectory((directory) => {
+    cpSync(issuedDirectory, directory, { recursive: true });
+    run(directory);
+  });
 }
 
 function openssl(...arguments_: string[]): void {
@@ -170,9 +189,9 @@ test("a fresh directory gets a CA and a leaf that chains to it, with private key
 });
 
 test("a valid CA and leaf are reused without rewriting any file", () => {
-  withDirectory((directory) => {
-    const first = ensureCertificates(directory);
+  withIssued((directory) => {
     const before = snapshot(directory);
+    const first = ensureCertificates(directory);
     assert.deepEqual(ensureCertificates(directory), first);
     assert.deepEqual(snapshot(directory), before);
     assertConsistent(first);
@@ -181,8 +200,7 @@ test("a valid CA and leaf are reused without rewriting any file", () => {
 });
 
 test("a leaf inside the renewal window is reissued under the same CA", () => {
-  withDirectory((directory) => {
-    ensureCertificates(directory);
+  withIssued((directory) => {
     issueLeaf(directory, 29);
     assert.ok(daysLeft(directory) < 30);
     const authority = snapshot(directory, ["ca.pem", "ca-key.pem"]);
@@ -195,8 +213,7 @@ test("a leaf inside the renewal window is reissued under the same CA", () => {
 });
 
 test("a missing leaf is issued from the existing CA", () => {
-  withDirectory((directory) => {
-    ensureCertificates(directory);
+  withIssued((directory) => {
     const authority = snapshot(directory, ["ca.pem", "ca-key.pem"]);
     rmSync(path.join(directory, "github.pem"));
     const certificates = ensureCertificates(directory);
@@ -207,16 +224,14 @@ test("a missing leaf is issued from the existing CA", () => {
 });
 
 test("a leaf without its key is an error that names the file to remove and nothing is rewritten", () => {
-  withDirectory((directory) => {
-    ensureCertificates(directory);
+  withIssued((directory) => {
     rmSync(path.join(directory, "github-key.pem"));
     assertKeyMissing(directory);
   });
 });
 
 test("an unparseable leaf key is an error that names the files to remove, and removing them issues a new pair under the same CA", () => {
-  withDirectory((directory) => {
-    ensureCertificates(directory);
+  withIssued((directory) => {
     const authority = snapshot(directory, ["ca.pem", "ca-key.pem"]);
     const key = read(directory, "github-key.pem");
     for (const content of [key.slice(0, 400), "", "not a key\n"]) {
@@ -233,8 +248,7 @@ test("an unparseable leaf key is an error that names the files to remove, and re
 });
 
 test("an unparseable leaf key is an error even when the leaf is due for renewal", () => {
-  withDirectory((directory) => {
-    ensureCertificates(directory);
+  withIssued((directory) => {
     issueLeaf(directory, 1);
     assert.ok(daysLeft(directory) < 30);
     writeFileSync(path.join(directory, "github-key.pem"), "not a key\n");
@@ -243,8 +257,7 @@ test("an unparseable leaf key is an error even when the leaf is due for renewal"
 });
 
 test("a key that is not the leaf's is replaced together with the leaf", () => {
-  withDirectory((directory) => {
-    ensureCertificates(directory);
+  withIssued((directory) => {
     const { privateKey } = generateKeyPairSync("rsa", { modulusLength: 2048 });
     writeFileSync(
       path.join(directory, "github-key.pem"),
@@ -257,8 +270,7 @@ test("a key that is not the leaf's is replaced together with the leaf", () => {
 });
 
 test("half of a CA pair is an error and nothing is regenerated", () => {
-  withDirectory((directory) => {
-    ensureCertificates(directory);
+  withIssued((directory) => {
     for (const missing of ["ca.pem", "ca-key.pem"]) {
       const saved = read(directory, missing);
       rmSync(path.join(directory, missing));
@@ -276,7 +288,7 @@ test("half of a CA pair is an error and nothing is regenerated", () => {
 });
 
 test("deleting the CA files issues a new CA and a leaf that chains to it", () => {
-  withDirectory((directory) => {
+  withIssued((directory) => {
     const first = ensureCertificates(directory);
     const authority = read(directory, "ca.pem");
     rmSync(first.ca);
@@ -290,8 +302,7 @@ test("deleting the CA files issues a new CA and a leaf that chains to it", () =>
 });
 
 test("a failed reissue keeps the previous pair and leaves no work files", () => {
-  withDirectory((directory) => {
-    ensureCertificates(directory);
+  withIssued((directory) => {
     issueLeaf(directory, 1);
     writeFileSync(path.join(directory, "ca-key.pem"), "");
     const before = snapshot(directory);
@@ -302,8 +313,7 @@ test("a failed reissue keeps the previous pair and leaves no work files", () => 
 });
 
 test("an openssl that cannot run is an error and the pair is kept", () => {
-  withDirectory((directory) => {
-    ensureCertificates(directory);
+  withIssued((directory) => {
     const before = snapshot(directory);
     const originalPath = process.env.PATH;
     process.env.PATH = directory;
