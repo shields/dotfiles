@@ -17,7 +17,7 @@
 set -euo pipefail
 
 # 0.382 ≈ 1/φ. 16.226 matches the macOS findHighlightColor.
-export LESS='-eFiMX -j.382 --incsearch --mouse --use-color --color=PWc --color=S16.226 --rscroll=… --color=R24.195'
+export LESS='-eFiMRX -j.382 --incsearch --mouse --use-color --color=PWc --color=S16.226 --rscroll=… --color=R24.195'
 
 # Less reads only the first byte of the multibyte --rscroll character outside
 # UTF-8 mode, which it does not enter in the C locale or in a UTF-8 locale that
