@@ -14,7 +14,7 @@
 
 .PHONY: setup ci-tools build diff apply test test-bun test-zsh test-python test-linux lint lint-ts lint-python lint-shell fmt fmt-check run bench bench-startup
 
-PRETTIER_SOURCES = "**/*.ts" "**/*.json" "**/*.md"
+PRETTIER_SOURCES = .
 
 # Shell scripts to lint and format with shellcheck and shfmt. zsh files
 # (.zshrc, .zprofile, .zsh.d/*.zsh, tests/*.zsh) and vendored files
