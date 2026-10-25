@@ -171,6 +171,8 @@ export class Gateway {
   private admin: http.Server | null = null;
   private refreshTimer: NodeJS.Timeout | null = null;
   private syncing: Promise<void> = Promise.resolve();
+  private readonly pending = new Set<Promise<void>>();
+  private stopped = false;
 
   constructor(state: State, auth: AppAuth, options: GatewayOptions) {
     this.state = state;
@@ -179,21 +181,36 @@ export class Gateway {
   }
 
   async start(): Promise<void> {
+    if (this.stopped) {
+      throw new Error("gateway is stopped");
+    }
     await this.refresh();
     await this.startAdmin();
     this.refreshTimer = setInterval(() => {
-      void (async () => {
-        try {
-          await this.refresh();
-          this.state.prune();
-        } catch (error) {
-          process.stderr.write(
-            `vm-access: listener refresh failed: ${String(error)}\n`,
-          );
-          throw error;
-        }
-      })();
+      this.track(this.refreshAndPrune());
     }, 60_000);
+  }
+
+  private async refreshAndPrune(): Promise<void> {
+    try {
+      await this.refresh();
+      this.state.prune();
+    } catch (error) {
+      process.stderr.write(
+        `vm-access: listener refresh failed: ${String(error)}\n`,
+      );
+      throw error;
+    }
+  }
+
+  // The set holds the work itself. The promise that finally() returns stays
+  // unobserved so that a failure of the work is reported as an unhandled
+  // rejection; waiting on it in stop() would mark the failure as handled.
+  private track(work: Promise<void>): void {
+    this.pending.add(work);
+    void work.finally(() => {
+      this.pending.delete(work);
+    });
   }
 
   refresh(): Promise<void> {
@@ -219,6 +236,9 @@ export class Gateway {
       if (this.listeners.has(instance.id)) {
         continue;
       }
+      if (this.stopped) {
+        return;
+      }
       if (existsSync(instance.socket)) {
         rmSync(instance.socket);
       }
@@ -232,7 +252,7 @@ export class Gateway {
           headersTimeout: 60_000,
         },
         (request, response) => {
-          void this.handle(instance.id, request, response);
+          this.track(this.handle(instance.id, request, response));
         },
       );
       await new Promise<void>((resolve, reject) => {
@@ -255,18 +275,7 @@ export class Gateway {
     }
     this.admin = http.createServer((request, response) => {
       if (request.method === "POST" && request.url === "/sync") {
-        void this.refresh()
-          .then(() => {
-            response
-              .writeHead(200, { "content-type": "application/json" })
-              .end('{"ok":true}');
-          })
-          .catch((error: unknown) => {
-            process.stderr.write(
-              `vm-access: listener sync failed: ${String(error)}\n`,
-            );
-            response.writeHead(503).end();
-          });
+        this.track(this.sync(response));
       } else if (request.method === "GET" && request.url === "/health") {
         response
           .writeHead(200, { "content-type": "application/json" })
@@ -287,11 +296,29 @@ export class Gateway {
     });
   }
 
+  private async sync(response: ServerResponse): Promise<void> {
+    try {
+      await this.refresh();
+      response
+        .writeHead(200, { "content-type": "application/json" })
+        .end('{"ok":true}');
+    } catch (error) {
+      process.stderr.write(
+        `vm-access: listener sync failed: ${String(error)}\n`,
+      );
+      response.writeHead(503).end();
+    }
+  }
+
   async stop(): Promise<void> {
+    this.stopped = true;
     if (this.refreshTimer) {
       clearInterval(this.refreshTimer);
       this.refreshTimer = null;
     }
+    // A refresh that is starting a server adds it before the servers to close
+    // are collected.
+    await Promise.allSettled([this.syncing]);
     const servers = [
       ...this.listeners.values(),
       ...(this.admin ? [this.admin] : []),
@@ -307,6 +334,9 @@ export class Gateway {
     );
     this.listeners.clear();
     this.admin = null;
+    while (this.pending.size > 0) {
+      await Promise.allSettled(this.pending);
+    }
   }
 
   private async handle(

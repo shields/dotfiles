@@ -2,12 +2,14 @@ import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
 import {
   createServer,
+  request as httpRequest,
   type ClientRequest,
   type IncomingHttpHeaders,
   type RequestListener,
 } from "node:http";
+import { once } from "node:events";
 import https from "node:https";
-import type { Socket } from "node:net";
+import { connect, type Socket } from "node:net";
 import {
   mkdtempSync,
   mkdirSync,
@@ -22,6 +24,7 @@ import {
   afterEach,
   beforeAll,
   mock,
+  type Mock,
   onTestFinished,
   spyOn,
   test,
@@ -35,6 +38,8 @@ import { State, type Instance } from "./state.ts";
 afterEach(() => {
   mock.restore();
 });
+
+const createHttpsServer = https.createServer;
 
 const idRef = (id: string): string => `refs/heads/task/${id}/one`;
 const pages = (repository: string): string =>
@@ -179,6 +184,7 @@ async function startGateway(
   gateway: Gateway;
   incoming: Forwarded[];
   listener: https.Server;
+  created: Mock<typeof https.createServer>;
   closed: () => Promise<void>;
 }> {
   const root = mkdtempSync(path.join(tmpdir(), "vm-access-server-"));
@@ -187,7 +193,9 @@ async function startGateway(
   });
   const state = new State(path.join(root, "state"));
   defer(() => {
-    state.close();
+    if (state.db.isOpen) {
+      state.close();
+    }
   });
   const secretDirectory = path.join(root, "secrets");
   mkdirSync(secretDirectory);
@@ -299,6 +307,7 @@ async function startGateway(
     gateway,
     incoming,
     listener,
+    created,
     closed,
   };
 }
@@ -1433,3 +1442,350 @@ test("uploads that fail in sequence on one connection leave no listeners behind 
   assert.equal(watched.connections.size, 1);
   assert.equal(new Set(watched.counts).size, 1, watched.counts.join(","));
 });
+
+function accepting(socketPath: string): Promise<boolean> {
+  return new Promise((resolve) => {
+    const connection = connect(socketPath);
+    connection.once("connect", () => {
+      connection.destroy();
+      resolve(true);
+    });
+    connection.once("error", () => {
+      resolve(false);
+    });
+  });
+}
+
+async function holdAuthorization(): Promise<
+  Awaited<ReturnType<typeof startGateway>> & {
+    events: string[];
+    release: () => void;
+  }
+> {
+  const started = await startGateway();
+  const events: string[] = [];
+  const asked = signal();
+  const resume = signal();
+  defer(resume.resolve);
+  spyOn(started.auth, "token").mockImplementation(async (): Promise<string> => {
+    asked.resolve();
+    await resume.promise;
+    events.push("token");
+    return "ghu_secret";
+  });
+  const { request, response } = open(started.socket);
+  const hungUp = assert.rejects(response, { message: "socket hang up" });
+  await within("the gateway to ask for a token", asked.promise);
+  request.destroy();
+  await within("the client's request to fail", hungUp);
+  await within("the gateway's response to close", started.closed());
+  return { ...started, events, release: resume.resolve };
+}
+
+test("stop() waits for a request whose client left while it was authorizing, so its audit row is written before the database closes", async () => {
+  const { gateway, state, instance, listener, events, release } =
+    await holdAuthorization();
+  const audit = recordFinishes(state);
+  const decisions = spyOn(state, "logDecision");
+  const shutdown = (async () => {
+    await gateway.stop();
+    events.push("stopped");
+    const rows = auditRows(state, instance);
+    state.close();
+    return rows;
+  })();
+  await within("the listener to close", once(listener, "close"));
+  // A stop() that does not wait for requests has resolved by now.
+  await nextTurn();
+  release();
+  const rows = await within("the gateway to stop", shutdown);
+  // Yield so a late write to the closed database is reported while this test
+  // is still running.
+  await nextTurn();
+  assert.deepEqual(
+    decisions.mock.results.map(({ type }) => type),
+    ["return"],
+  );
+  assert.deepEqual(events, ["token", "stopped"]);
+  assert.deepEqual(rows, [{ outcome: "interrupted", upstreamStatus: null }]);
+  assert.deepEqual(audit.calls, [{ status: null, outcome: "interrupted" }]);
+});
+
+test("every one of several concurrent stop() calls waits for the in-flight requests", async () => {
+  const { gateway, state, instance, listener, events, release } =
+    await holdAuthorization();
+  const shutdown = Promise.all(
+    [0, 1, 2].map(async (call) => {
+      await gateway.stop();
+      events.push(`stopped ${String(call)}`);
+      return auditRows(state, instance);
+    }),
+  );
+  await within("the listener to close", once(listener, "close"));
+  await nextTurn();
+  release();
+  const rows = await within("the gateway to stop", shutdown);
+  assert.equal(events[0], "token");
+  assert.deepEqual(
+    events.slice(1).toSorted((a, b) => a.localeCompare(b)),
+    ["stopped 0", "stopped 1", "stopped 2"],
+  );
+  assert.deepEqual(
+    rows,
+    Array.from({ length: 3 }, () => [
+      { outcome: "interrupted", upstreamStatus: null },
+    ]),
+  );
+});
+
+test("a request that fails while stop() waits for it is still reported as an unhandled rejection, once", () => {
+  const result = spawnSync(
+    process.execPath,
+    [
+      path.join(import.meta.dirname, "stop-rejection.fixture.ts"),
+      certificate,
+      key,
+    ],
+    { encoding: "utf8", timeout: 30_000 },
+  );
+  assert.equal(result.status, 0, result.stderr);
+  assert.deepEqual(JSON.parse(result.stdout), {
+    events: ["token", "stopped"],
+    rejections: ["audit write failed"],
+  });
+}, 60_000);
+
+function holdNextServer(created: Mock<typeof https.createServer>): {
+  starting: Promise<undefined>;
+  proceed: () => void;
+} {
+  const starting = signal();
+  const proceed = signal();
+  created.mockImplementationOnce(((
+    ...args: Parameters<typeof https.createServer>
+  ) => {
+    const server = createHttpsServer(...args);
+    const emit = server.emit.bind(server);
+    server.emit = (event: string | symbol, ...rest: unknown[]) => {
+      if (event !== "listening") {
+        return emit(event, ...rest);
+      }
+      starting.resolve();
+      void proceed.promise.then(() => emit(event, ...rest));
+      return true;
+    };
+    return server;
+  }) as typeof https.createServer);
+  return { starting: starting.promise, proceed: proceed.resolve };
+}
+
+function requestSync(adminSocket: string): Promise<number> {
+  return new Promise((resolve, reject) => {
+    const sync = httpRequest(
+      { socketPath: adminSocket, path: "/sync", method: "POST", agent: false },
+      (response) => {
+        response.resume();
+        response.once("end", () => {
+          resolve(response.statusCode ?? 0);
+        });
+      },
+    );
+    sync.once("error", reject);
+    sync.end();
+  });
+}
+
+interface Intervals {
+  tick: (ms: number) => void;
+}
+
+function mockIntervals(): Intervals {
+  const registered = new Map<object, { callback: () => void; delay: number }>();
+  const clear = clearInterval;
+  spyOn(globalThis, "setInterval").mockImplementation(((
+    callback: () => void,
+    delay: number,
+  ) => {
+    const handle = {
+      ref: () => handle,
+      unref: () => handle,
+      hasRef: () => true,
+      refresh: () => handle,
+    };
+    registered.set(handle, { callback, delay });
+    return handle;
+  }) as unknown as typeof setInterval);
+  spyOn(globalThis, "clearInterval").mockImplementation(((
+    handle: Parameters<typeof clearInterval>[0],
+  ) => {
+    if (typeof handle !== "object" || !registered.delete(handle)) {
+      clear(handle);
+    }
+  }) as typeof clearInterval);
+  return {
+    tick: (ms) => {
+      for (const { callback, delay } of registered.values()) {
+        for (let elapsed = delay; elapsed <= ms; elapsed += delay) {
+          callback();
+        }
+      }
+    },
+  };
+}
+
+interface RefreshRace {
+  name: string;
+  servers: number;
+  race: (context: {
+    gateway: Gateway;
+    state: State;
+    created: Mock<typeof https.createServer>;
+    adminSocket: string;
+    intervals: Intervals;
+  }) => Promise<void>;
+}
+
+for (const { name, servers, race } of [
+  {
+    name: "stop() begins after it read the active VMs",
+    servers: 1,
+    race: async ({ gateway, state }) => {
+      const stops: Promise<void>[] = [];
+      const active = state.active.bind(state);
+      spyOn(state, "active").mockImplementationOnce((): Instance[] => {
+        stops.push(gateway.stop());
+        return active();
+      });
+      await gateway.refresh();
+      await Promise.all(stops);
+    },
+  },
+  {
+    name: "stop() begins before it runs",
+    servers: 1,
+    race: async ({ gateway }) => {
+      await Promise.all([gateway.refresh(), gateway.stop()]);
+    },
+  },
+  {
+    name: "stop() begins while its server is starting",
+    servers: 2,
+    race: async ({ gateway, created }) => {
+      const held = holdNextServer(created);
+      const refreshed = gateway.refresh();
+      await within("the new server to start", held.starting);
+      const stopped = gateway.stop();
+      held.proceed();
+      await Promise.all([refreshed, stopped]);
+    },
+  },
+  {
+    name: "stop() begins while the periodic refresh's server is starting",
+    servers: 2,
+    race: async ({ gateway, created, intervals }) => {
+      const held = holdNextServer(created);
+      intervals.tick(60_000);
+      await within("the new server to start", held.starting);
+      const stopped = gateway.stop();
+      held.proceed();
+      await stopped;
+    },
+  },
+  {
+    name: "stop() begins while a /sync request's server is starting",
+    servers: 2,
+    race: async ({ gateway, created, adminSocket }) => {
+      const held = holdNextServer(created);
+      const synced = requestSync(adminSocket);
+      await within("the new server to start", held.starting);
+      const stopped = gateway.stop();
+      held.proceed();
+      assert.equal(await within("the /sync response", synced), 200);
+      await stopped;
+    },
+  },
+] satisfies RefreshRace[]) {
+  test(`a listener refresh in flight when ${name} leaves no listener behind`, async () => {
+    const intervals = mockIntervals();
+    const { socket, gateway, state, created } = await startGateway();
+    defer(() => {
+      for (const result of created.mock.results) {
+        if (result.type === "return") {
+          result.value.close();
+        }
+      }
+    });
+    const added = path.join(path.dirname(socket), "added.sock");
+    const adminSocket = path.join(path.dirname(socket), "admin.sock");
+    state.register("lima:added", added, "tester");
+    await race({ gateway, state, created, adminSocket, intervals });
+    await gateway.refresh();
+    assert.equal(await accepting(added), false);
+    assert.equal(created.mock.calls.length, servers);
+    assert.deepEqual(
+      created.mock.results.map((result) =>
+        result.type === "return" ? result.value.listening : undefined,
+      ),
+      Array.from({ length: servers }, () => false),
+    );
+  });
+}
+
+for (const { name, listenerDirectory, adminDirectory, starts } of [
+  {
+    name: "before start()",
+    listenerDirectory: "present",
+    adminDirectory: "present",
+    starts: false,
+  },
+  {
+    name: "after start() failed to open a VM listener",
+    listenerDirectory: "missing",
+    adminDirectory: "present",
+    starts: true,
+  },
+  {
+    name: "after start() failed to open the admin socket",
+    listenerDirectory: "present",
+    adminDirectory: "missing",
+    starts: true,
+  },
+]) {
+  test(`stop() ${name} and again afterwards does not throw, and the stopped gateway cannot start`, async () => {
+    const root = mkdtempSync(path.join(tmpdir(), "vm-access-server-"));
+    const state = new State(path.join(root, "state"));
+    const secrets = path.join(root, "secrets");
+    mkdirSync(secrets);
+    defer(() => {
+      state.close();
+      rmSync(root, { recursive: true, force: true });
+    });
+    const missing = path.join(root, "x");
+    const listener = path.join(
+      listenerDirectory === "missing" ? missing : root,
+      "work.sock",
+    );
+    const adminSocket = path.join(
+      adminDirectory === "missing" ? missing : root,
+      "admin.sock",
+    );
+    state.register("lima:work", listener, "tester");
+    const gateway = new Gateway(state, new AppAuth(secrets), {
+      cert: certificate,
+      key,
+      adminSocket,
+    });
+    defer(() => gateway.stop());
+    if (starts) {
+      await assert.rejects(gateway.start(), {
+        code: "ENOENT",
+        syscall: "listen",
+      });
+    }
+    await gateway.stop();
+    await gateway.stop();
+    await assert.rejects(gateway.start(), { message: "gateway is stopped" });
+    assert.equal(await accepting(listener), false);
+    assert.equal(await accepting(adminSocket), false);
+  });
+}
