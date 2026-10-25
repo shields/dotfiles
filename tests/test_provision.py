@@ -25,6 +25,7 @@ import shlex
 import shutil
 import stat
 import subprocess
+from dataclasses import dataclass
 from pathlib import Path
 
 import pytest
@@ -95,6 +96,19 @@ MACOS_EXCLUDES = (
     "bin/setup-github-gateway",
     "bin/github-gateway-credential",
 )
+CHEZMOI_EXCLUDES = (
+    ".chezmoi*",
+    ".gitconfig",
+    ".config/bat/config",
+    ".config/git/ignore",
+    ".config/yt-dlp/config",
+)
+BASE_COPY_PATHS = [
+    ".*",
+    "bin",
+    ":(exclude).github",
+    *(f":(exclude){p}" for p in CHEZMOI_EXCLUDES),
+]
 
 COPY_COMMAND = (
     'git ls-files -z -- "${copy_paths[@]}"'
@@ -210,6 +224,8 @@ def git_ls_files(
 def selected(path: str, os_name: str) -> bool:
     """Which tracked paths each OS copies, written independently of the pathspecs."""
     if path == ".github" or path.startswith(".github/"):
+        return False
+    if path.startswith(".chezmoi") or path in CHEZMOI_EXCLUDES:
         return False
     if os_name == "macos":
         in_scope = path.startswith((".", "bin/", "Library/"))
@@ -378,36 +394,23 @@ def test_macos_sh_holds_the_macos_only_commands() -> None:
         assert re.search(rf"\b{command}\b", text), command
 
 
-NOT_ENROLLED = "! (profiles status -type enrollment | grep -q ': Yes')"
-MACOS_IDENTITY_IF = f'    if [[ "$(whoami)" == shields ]] && {NOT_ENROLLED}; then'
-
-
-def test_git_identity_is_set_for_shields_on_both_systems() -> None:
-    macos = find(r"^if \[\[ \$os == macos \]\]; then", find(r"Set email address"))
-    elif_index = find(r"^elif \[\[ \$user == shields \]\]; then", macos)
-    assert LINES[macos + 1 : elif_index] == [
-        MACOS_IDENTITY_IF,
-        "        git config --global user.email shields@msrl.com",
-        "        git config --global github.user shields # For Magit Forge",
-        "    fi",
-    ]
-    assert LINES[elif_index + 1 : elif_index + 3] == [
-        "    git config --global user.email shields@msrl.com",
-        "    git config --global github.user shields # For Magit Forge",
-    ]
+def test_chezmoi_applies_after_its_package_is_installed() -> None:
+    apply = find(r'^chezmoi --source "\$dotfiles_root"')
+    assert LINES[apply].endswith(" --less-interactive --error-on-conflict apply")
+    assert find(r"^brew autoremove$") < apply < find(r"^    macos_vm_access_install$")
+    assert "git config --global user.email" not in TEXT
+    assert "git config --global github.user" not in TEXT
 
 
 def test_copy_uses_git_ls_files_through_tar() -> None:
     assert COPY_COMMAND in TEXT
-    assert array_items(TEXT, "copy_paths=(") == [".*", "bin", ":(exclude).github"]
+    assert array_items(TEXT, "copy_paths=(") == BASE_COPY_PATHS
     assert "tar cf - -T - bin Library" not in TEXT
 
 
 def test_macos_copy_adds_library_and_leaves_out_the_guest_only_scripts() -> None:
     assert copy_pathspecs("macos") == [
-        ".*",
-        "bin",
-        ":(exclude).github",
+        *BASE_COPY_PATHS,
         "Library",
         *(f":(exclude){p}" for p in MACOS_EXCLUDES),
     ]
@@ -415,9 +418,7 @@ def test_macos_copy_adds_library_and_leaves_out_the_guest_only_scripts() -> None
 
 def test_linux_copy_leaves_out_exactly_the_macos_only_files() -> None:
     assert copy_pathspecs("linux") == [
-        ".*",
-        "bin",
-        ":(exclude).github",
+        *BASE_COPY_PATHS,
         *(f":(exclude){p}" for p in LINUX_EXCLUDES),
     ]
 
@@ -441,6 +442,13 @@ def test_linux_copy_has_no_macos_files_and_macos_copy_has_library() -> None:
 
 
 SCRATCH_FILES = {
+    ".chezmoiroot": "home\n",
+    ".gitconfig": "",
+    ".config/bat/config": "",
+    ".config/git/ignore": "",
+    ".config/yt-dlp/config": "",
+    "home/dot_gitconfig.tmpl": "",
+    "home/dot_config/bat/config": "",
     ".zshrc": "",
     ".CFUserTextEncoding": "",
     ".iTerm2/com.googlecode.iterm2.plist": "",
@@ -961,9 +969,6 @@ QUIET_PIP = " | (grep -v '^Requirement already satisfied:' || true)"
 # may change, move or disappear.
 MACOS_SPINE = (
     "cat .codex/instructions.md",
-    MACOS_IDENTITY_IF.strip(),
-    "git config --global user.email shields@msrl.com",
-    "git config --global github.user shields # For Magit Forge",
     'UNAME_MACHINE="$(/usr/bin/uname -m)"',
     'if [[ ${UNAME_MACHINE} == "arm64" ]]; then',
     'HOMEBREW_PREFIX="/opt/homebrew"',
@@ -989,6 +994,7 @@ MACOS_SPINE = (
     "brew bundle cleanup --force",
     f"{BREW_OUTDATED} | sed '/^google-chrome$/d' | xargs -r brew upgrade --cask --yes",
     "brew autoremove",
+    'chezmoi --source "$dotfiles_root" --less-interactive --error-on-conflict apply',
     "brew cleanup --prune=all",
     "uv cache prune",
     "go clean -modcache",
@@ -1378,3 +1384,208 @@ def test_gateway_reload_stops_if_bootout_fails(tmp_path: Path) -> None:
     assert "finished" not in result.stdout
     assert "bootstrap" not in calls
     assert "wait" not in calls
+
+
+MANAGED = {
+    ".gitconfig",
+    ".config/bat/config",
+    ".config/git/ignore",
+    ".config/yt-dlp/config",
+}
+
+
+@dataclass
+class Chezmoi:
+    root: Path
+    home: Path
+    source: Path
+    env: dict[str, str]
+
+    def run(
+        self,
+        *args: str,
+        os_name: str = "linux",
+        username: str = "shields",
+        check: bool = True,
+    ) -> subprocess.CompletedProcess[str]:
+        return subprocess.run(
+            [
+                "chezmoi",
+                "--source",
+                str(self.source),
+                "--destination",
+                str(self.home),
+                "--config",
+                str(self.root / "chezmoi.toml"),
+                "--persistent-state",
+                str(self.root / "state.boltdb"),
+                "--cache",
+                str(self.root / "cache"),
+                "--override-data",
+                json.dumps({"chezmoi": {"os": os_name, "username": username}}),
+                "--no-tty",
+                "--no-pager",
+                "--use-builtin-diff",
+                "--color=false",
+                "--less-interactive",
+                "--error-on-conflict",
+                *args,
+            ],
+            env=self.env,
+            stdin=subprocess.DEVNULL,
+            capture_output=True,
+            text=True,
+            timeout=30,
+            check=check,
+        )
+
+    def git_value(self, key: str) -> str:
+        result = subprocess.run(
+            ["git", "config", "--file", str(self.home / ".gitconfig"), "--get", key],
+            env=self.env,
+            capture_output=True,
+            text=True,
+            timeout=10,
+            check=False,
+        )
+        assert result.returncode in {0, 1}, result.stderr
+        return result.stdout.strip()
+
+
+@pytest.fixture
+def chezmoi(tmp_path: Path) -> Chezmoi:
+    home = tmp_path / "home"
+    home.mkdir()
+    source = tmp_path / "source"
+    _ = shutil.copytree(REPO / "home", source / "home")
+    _ = shutil.copyfile(REPO / ".chezmoiroot", source / ".chezmoiroot")
+    _ = (tmp_path / "chezmoi.toml").write_text("")
+    shims = tmp_path / "shims"
+    shims.mkdir()
+    profiles = shims / "profiles"
+    _ = profiles.write_text(
+        r"""#!/bin/bash
+set -euo pipefail
+printf '%s\n' "$*" > "$PROFILES_LOG"
+printf '%s\n' "$PROFILES_STATUS"
+exit "$PROFILES_EXIT"
+"""
+    )
+    profiles.chmod(0o755)
+    env = {
+        "HOME": str(home),
+        "PATH": f"{shims}{os.pathsep}{os.environ['PATH']}",
+        "XDG_CONFIG_HOME": str(home / ".config"),
+        "XDG_CACHE_HOME": str(tmp_path / "cache"),
+        "XDG_DATA_HOME": str(tmp_path / "data"),
+        "PROFILES_LOG": str(tmp_path / "profiles.log"),
+        "PROFILES_STATUS": "Enrolled via DEP: No\nMDM enrollment: No",
+        "PROFILES_EXIT": "0",
+        "GIT_CONFIG_NOSYSTEM": "1",
+    }
+    return Chezmoi(tmp_path, home, source, env)
+
+
+@pytest.mark.parametrize(
+    ("os_name", "username", "enrollment", "personal"),
+    [
+        ("linux", "shields", "", True),
+        ("linux", "agent", "", False),
+        ("darwin", "shields", "Enrolled via DEP: No\nMDM enrollment: No", True),
+        ("darwin", "shields", "Enrolled via DEP: No\nMDM enrollment: Yes", False),
+        ("darwin", "shields", "Enrolled via DEP: Yes\nMDM enrollment: No", False),
+        ("darwin", "other", "", False),
+    ],
+)
+def test_git_identity(
+    chezmoi: Chezmoi,
+    os_name: str,
+    username: str,
+    enrollment: str,
+    *,
+    personal: bool,
+) -> None:
+    chezmoi.env["PROFILES_STATUS"] = enrollment
+    _ = chezmoi.run("apply", os_name=os_name, username=username)
+    assert chezmoi.git_value("user.name") == "Michael Shields"
+    assert chezmoi.git_value("user.email") == ("shields@msrl.com" if personal else "")
+    assert chezmoi.git_value("github.user") == ("shields" if personal else "")
+    assert chezmoi.git_value("hook.gitleaks.event") == "pre-commit"
+    log = chezmoi.root / "profiles.log"
+    if os_name == "darwin" and username == "shields":
+        assert log.read_text() == "status -type enrollment\n"
+    else:
+        assert not log.exists()
+
+
+def test_enrollment_failure_does_not_install_a_personal_identity(
+    chezmoi: Chezmoi,
+) -> None:
+    chezmoi.env["PROFILES_EXIT"] = "1"
+    result = chezmoi.run("apply", os_name="darwin", check=False)
+    assert result.returncode != 0
+    assert "profiles" in result.stderr
+    assert not (chezmoi.home / ".gitconfig").exists()
+
+
+@pytest.mark.parametrize("os_name", ["linux", "darwin"])
+def test_apply_owns_only_the_pilot_files_and_is_idempotent(
+    chezmoi: Chezmoi, os_name: str
+) -> None:
+    credentials = chezmoi.home / ".config/git/config"
+    credentials.parent.mkdir(parents=True)
+    _ = credentials.write_text('[credential "https://github.com"]\n\thelper = test\n')
+    assert set(chezmoi.run("managed", "--include=files").stdout.splitlines()) == MANAGED
+    preview = chezmoi.run("diff", os_name=os_name)
+    assert ".gitconfig" in preview.stdout
+    assert not (chezmoi.home / ".gitconfig").exists()
+    _ = chezmoi.run("apply", os_name=os_name)
+    assert {
+        str(p.relative_to(chezmoi.home)) for p in chezmoi.home.rglob("*") if p.is_file()
+    } == MANAGED | {".config/git/config"}
+    for name in MANAGED - {".gitconfig"}:
+        source = chezmoi.source / "home" / name.replace(".config/", "dot_config/", 1)
+        target = chezmoi.home / name
+        assert target.read_bytes() == source.read_bytes()
+        assert not target.is_symlink()
+    modified = {name: (chezmoi.home / name).stat().st_mtime_ns for name in MANAGED}
+    _ = chezmoi.run("apply", os_name=os_name)
+    _ = chezmoi.run("verify", os_name=os_name)
+    assert chezmoi.run("diff", os_name=os_name).stdout == ""
+    assert modified == {
+        name: (chezmoi.home / name).stat().st_mtime_ns for name in MANAGED
+    }
+    assert (
+        credentials.read_text()
+        == '[credential "https://github.com"]\n\thelper = test\n'
+    )
+
+
+def test_source_edits_apply_and_destination_edits_are_protected(
+    chezmoi: Chezmoi,
+) -> None:
+    _ = chezmoi.run("apply")
+    source = chezmoi.source / "home/dot_config/bat/config"
+    updated = source.read_text().replace("--style=plain", "--style=numbers")
+    _ = source.write_text(updated)
+    assert "--style=numbers" in chezmoi.run("diff").stdout
+    _ = chezmoi.run("apply")
+    target = chezmoi.home / ".config/bat/config"
+    assert target.read_text() == updated
+    local = updated + "\n--paging=never\n"
+    _ = target.write_text(local)
+    assert "--paging=never" in chezmoi.run("diff").stdout
+    assert chezmoi.run("apply", check=False).returncode != 0
+    assert target.read_text() == local
+    _ = chezmoi.run("re-add", str(target))
+    assert source.read_text() == local
+    _ = chezmoi.run("apply")
+    _ = chezmoi.run("verify")
+
+
+def test_first_apply_preserves_a_conflicting_existing_file(chezmoi: Chezmoi) -> None:
+    target = chezmoi.home / ".gitconfig"
+    local = "[user]\n\temail = work@example.com\n"
+    _ = target.write_text(local)
+    assert chezmoi.run("apply", check=False).returncode != 0
+    assert target.read_text() == local

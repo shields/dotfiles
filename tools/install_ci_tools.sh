@@ -72,7 +72,7 @@ zsh -fc 'autoload -Uz compaudit; compaudit' || die "zsh completion directories a
 # tests/test_github_app_token.py parses the token tool under when python3.13 is
 # on PATH, again without a skip when it is not.
 export HOMEBREW_NO_AUTO_UPDATE=1 HOMEBREW_NO_ANALYTICS=1 HOMEBREW_NO_ENV_HINTS=1
-retry "$brew_prefix/bin/brew" install emacs gitleaks node python@3.13 python@3.15 shfmt
+retry "$brew_prefix/bin/brew" install chezmoi emacs gitleaks node python@3.13 python@3.15 shfmt
 retry "$brew_prefix/bin/brew" install --cask codex
 export PATH="$brew_prefix/bin:$local_prefix/bin:$PATH"
 printf '%s\n' "$brew_prefix/bin" "$local_prefix/bin" >>"$GITHUB_PATH"

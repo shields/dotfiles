@@ -33,6 +33,51 @@ Additional steps not yet automated:
 Many preferences can be translated to `defaults write` settings using
 `tools/diff_defaults.py`.
 
+# Dotfile preview and apply
+
+Chezmoi manages four files from `home/`, selected by `.chezmoiroot`:
+
+| Source                          | Installed file            |
+| ------------------------------- | ------------------------- |
+| `home/dot_gitconfig.tmpl`       | `~/.gitconfig`            |
+| `home/dot_config/git/ignore`    | `~/.config/git/ignore`    |
+| `home/dot_config/bat/config`    | `~/.config/bat/config`    |
+| `home/dot_config/yt-dlp/config` | `~/.config/yt-dlp/config` |
+
+Edit the source files and, from this checkout, run:
+
+```sh
+make diff
+make apply
+```
+
+Applying updates only these four files. Both targets use this checkout
+explicitly, so they work from git worktrees too. Chezmoi reads the working files, including
+uncommitted and untracked files in `home/`. Keep only deployable configuration
+there. The other dotfiles still use `./provision.sh`.
+
+Chezmoi is in the base Brewfile module; on an existing machine, install it
+with `brew install chezmoi` before the first preview. `provision.sh` applies
+these files after installing packages. Both it and `make apply` fail if an
+existing file conflicts, including on the first adoption. After reviewing
+`make diff`, resolve the differences in the source files or use:
+
+```sh
+chezmoi --source "$PWD" --less-interactive apply
+```
+
+That command asks before replacing conflicting files. To keep edits made
+directly to an installed, untemplated file, use
+`chezmoi --source "$PWD" re-add ~/.config/bat/config` (substituting its path)
+and review the git diff. For `.gitconfig`, edit its template or use
+`chezmoi --source "$PWD" merge ~/.gitconfig`.
+
+The Git template sets the personal email and GitHub username for `shields`
+on Linux and on Macs with neither DEP nor MDM enrollment. Other accounts and
+enrolled Macs receive the shared settings without those identity fields. A
+failed enrollment query stops the update. `~/.config/git/config`, including
+the guest's credential helper, stays outside chezmoi's managed files.
+
 # Whitespace display
 
 Emacs and Vim wrap long lines without inserting newlines. Display markers use

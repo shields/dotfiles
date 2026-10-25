@@ -12,8 +12,16 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+{{ $personal := eq .chezmoi.username "shields" -}}
+{{ if and $personal (eq .chezmoi.os "darwin") -}}
+{{ $personal = not (regexMatch ": Yes" (output "profiles" "status" "-type" "enrollment")) -}}
+{{ end -}}
 [user]
 	name = Michael Shields
+{{ if $personal }}	email = shields@msrl.com
+[github]
+	user = shields
+{{ end -}}
 [init]
 	defaultBranch = main
 [core]

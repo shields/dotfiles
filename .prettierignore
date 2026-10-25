@@ -2,3 +2,4 @@
 .claude/worktrees/
 .worktrees/
 .venv/
+.pytest_cache/

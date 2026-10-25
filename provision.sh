@@ -68,7 +68,13 @@ modules_persist "$selection_file" "$modules_selection"
 export HOMEBREW_DOTFILES_BREW_MODULES=${modules_selection:-none}
 
 # Copy these files.
-copy_paths=('.*' bin ':(exclude).github')
+copy_paths=(
+    '.*' bin ':(exclude).github' ':(exclude).chezmoi*'
+    ':(exclude).gitconfig'
+    ':(exclude).config/bat/config'
+    ':(exclude).config/git/ignore'
+    ':(exclude).config/yt-dlp/config'
+)
 case $os in
 macos)
     copy_paths+=(
@@ -116,17 +122,6 @@ mkdir -p "$HOME/.codex"
     printf '\n'
     cat .codex/instructions.md
 } >"$HOME/.codex/AGENTS.md"
-
-# Set email address in .gitconfig. Do this early so we don't leave it missing.
-if [[ $os == macos ]]; then
-    if [[ "$(whoami)" == shields ]] && ! (profiles status -type enrollment | grep -q ': Yes'); then
-        git config --global user.email shields@msrl.com
-        git config --global github.user shields # For Magit Forge
-    fi
-elif [[ $user == shields ]]; then
-    git config --global user.email shields@msrl.com
-    git config --global github.user shields # For Magit Forge
-fi
 
 if [[ $os == linux ]]; then
     sudo "$dotfiles_root/provision/linux-system.sh" "$user"
@@ -219,6 +214,8 @@ brew bundle cleanup --force
 # Suppress upgrade of Chrome since it doesn't like to be upgraded while running.
 brew outdated --greedy-auto-updates --cask --quiet | sed '/^google-chrome$/d' | xargs -r brew upgrade --cask --yes
 brew autoremove
+
+chezmoi --source "$dotfiles_root" --less-interactive --error-on-conflict apply
 
 if [[ $os == macos ]]; then
     macos_vm_access_install

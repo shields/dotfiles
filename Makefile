@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-.PHONY: setup ci-tools build test test-node test-zsh test-python test-linux lint lint-ts lint-python lint-shell fmt fmt-check run bench bench-startup
+.PHONY: setup ci-tools build diff apply test test-node test-zsh test-python test-linux lint lint-ts lint-python lint-shell fmt fmt-check run bench bench-startup
 
 PRETTIER_SOURCES = "**/*.ts" "**/*.json" "**/*.md"
 
@@ -58,6 +58,12 @@ setup:
 
 ci-tools:
 	tools/install_ci_tools.sh
+
+diff:
+	chezmoi --source "$(CURDIR)" diff
+
+apply:
+	chezmoi --source "$(CURDIR)" --less-interactive --error-on-conflict apply
 
 test: test-node test-zsh test-python
 

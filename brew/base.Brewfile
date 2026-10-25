@@ -13,6 +13,7 @@
 # limitations under the License.
 
 brew "aspell"
+brew "chezmoi"
 brew "direnv"
 brew "fd"
 brew "fswatch"
