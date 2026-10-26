@@ -315,32 +315,37 @@ function argument(field: FieldNode, name: string): ArgumentNode | undefined {
   return field.arguments?.find((item) => item.name.value === name);
 }
 
+// Re-expanding a fragment adds no new fields, and doing so for every spread
+// costs time and memory exponential in the nesting depth.
 function rootFields(
   selections: readonly SelectionNode[],
   fragments: Map<string, FragmentDefinitionNode>,
-  visiting: Set<string>,
+  expanded = new Set<string>(),
 ): FieldNode[] {
   const fields: FieldNode[] = [];
-  for (const selection of selections) {
-    if (selection.kind === Kind.FIELD) {
-      fields.push(selection);
-    } else if (selection.kind === Kind.INLINE_FRAGMENT) {
-      fields.push(
-        ...rootFields(selection.selectionSet.selections, fragments, visiting),
-      );
-    } else {
-      const name = selection.name.value;
-      const fragment = fragments.get(name);
-      if (!fragment || visiting.has(name)) {
-        throw new PolicyError("unknown or recursive GraphQL fragment");
+  const visiting = new Set<string>();
+  const collect = (items: readonly SelectionNode[]): void => {
+    for (const selection of items) {
+      if (selection.kind === Kind.FIELD) {
+        fields.push(selection);
+      } else if (selection.kind === Kind.INLINE_FRAGMENT) {
+        collect(selection.selectionSet.selections);
+      } else {
+        const name = selection.name.value;
+        const fragment = fragments.get(name);
+        if (!fragment || visiting.has(name)) {
+          throw new PolicyError("unknown or recursive GraphQL fragment");
+        }
+        if (!expanded.has(name)) {
+          expanded.add(name);
+          visiting.add(name);
+          collect(fragment.selectionSet.selections);
+          visiting.delete(name);
+        }
       }
-      visiting.add(name);
-      fields.push(
-        ...rootFields(fragment.selectionSet.selections, fragments, visiting),
-      );
-      visiting.delete(name);
     }
-  }
+  };
+  collect(selections);
   return fields;
 }
 
@@ -390,10 +395,12 @@ export function graphqlRepository(body: Uint8Array): string {
   );
   const variables = (payload.variables ?? {}) as Record<string, unknown>;
   const repositories = new Set<string>();
+  // Every viewer selection is held to the same rule, so they share one set; the
+  // root fields follow a different rule and keep their own.
+  const viewerFragments = new Set<string>();
   for (const field of rootFields(
     operation.selectionSet.selections,
     fragments,
-    new Set(),
   )) {
     if (field.name.value === "__typename" || field.name.value === "rateLimit") {
       continue;
@@ -401,7 +408,11 @@ export function graphqlRepository(body: Uint8Array): string {
     if (field.name.value === "viewer") {
       if (
         !field.selectionSet ||
-        rootFields(field.selectionSet.selections, fragments, new Set()).some(
+        rootFields(
+          field.selectionSet.selections,
+          fragments,
+          viewerFragments,
+        ).some(
           (selection) =>
             selection.name.value !== "login" || selection.selectionSet,
         )

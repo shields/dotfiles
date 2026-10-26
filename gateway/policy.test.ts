@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { test } from "bun:test";
+import { afterEach, mock, spyOn, test } from "bun:test";
 import {
   authorize,
   classify,
@@ -11,6 +11,10 @@ import {
   type Classification,
   PushDenied,
 } from "./policy.ts";
+
+afterEach(() => {
+  mock.restore();
+});
 
 const id = "01234567-89ab-4cde-8fab-0123456789ab";
 const old = "1".repeat(40);
@@ -454,6 +458,108 @@ test("GraphQL viewer reads allow only the login alongside one repository", () =>
       ),
     /exactly one repository/,
   );
+});
+
+const repositoryField = 'repository(owner:"shields",name:"dotfiles"){name}';
+const graphqlBody = (query: string): Buffer =>
+  Buffer.from(JSON.stringify({ query }));
+
+test("classify expands each fragment of a deeply nested chain once", () => {
+  const spread = (name: string, count: number): string =>
+    `...${name} `.repeat(count);
+  const depth = 10;
+  const chain = Array.from({ length: depth }, (_, level) =>
+    level < depth - 1
+      ? `fragment F${String(level)} on Query { ${spread(`F${String(level + 1)}`, 10)} }`
+      : `fragment F${String(level)} on Query { ${repositoryField} }`,
+  );
+  const body = graphqlBody(
+    `query { ${spread("F0", 3000)} } ${chain.join("\n")}`,
+  );
+  const started = performance.now();
+  assert.deepEqual(
+    classify(
+      { host: "api.github.com", method: "POST", target: "/graphql", body },
+      id,
+    ),
+    { repository: "shields/dotfiles", operation: "graphql.read", refs: [] },
+  );
+  assert.ok(performance.now() - started < 5000, "classification was slow");
+});
+
+test("GraphQL accepts a fragment spread on several paths and rejects unknown and recursive ones", () => {
+  assert.equal(
+    graphqlRepository(
+      graphqlBody(`{ ...A ...B viewer { ...C ...C } }
+        fragment A on Query { ...D ${repositoryField} }
+        fragment B on Query { ...D ...A }
+        fragment C on User { login }
+        fragment D on Query { __typename }`),
+    ),
+    "shields/dotfiles",
+  );
+  assert.equal(
+    graphqlRepository(
+      graphqlBody(`{ ${repositoryField} viewer { ...A } viewer { ...A ...B } viewer { ...B ...A } }
+        fragment A on User { login ...B } fragment B on User { login }`),
+    ),
+    "shields/dotfiles",
+  );
+  for (const query of [
+    `{ ${repositoryField} ...Missing }`,
+    `{ ${repositoryField} ...A } fragment A on Query { ...Missing }`,
+    `{ ${repositoryField} ...A } fragment A on Query { ...A }`,
+    `{ ${repositoryField} ...A } fragment A on Query { ...B } fragment B on Query { ...A }`,
+    `{ ${repositoryField} ...A ...B } fragment A on Query { a } fragment B on Query { ...A ...B }`,
+    `{ ${repositoryField} ...A ...B } fragment A on Query { ...B } fragment B on Query { ...A }`,
+    `{ ${repositoryField} ...A } fragment A on Query { ... on Query { ...A } }`,
+    `{ ${repositoryField} viewer { ...A } } fragment A on User { ...A }`,
+    `{ ${repositoryField} viewer { ...A } viewer { ...B } } fragment A on User { login } fragment B on User { ...B }`,
+    `{ ${repositoryField} viewer { ...A } viewer { ...C } } fragment A on User { login } fragment C on User { ...A ...D } fragment D on User { ...C }`,
+    `{ ${repositoryField} viewer { ...A } viewer { ...A ...Missing } } fragment A on User { login }`,
+  ]) {
+    assert.throws(
+      () => graphqlRepository(graphqlBody(query)),
+      /unknown or recursive GraphQL fragment/,
+      query,
+    );
+  }
+});
+
+test("GraphQL holds each viewer, and the root, to its own rule for a repeated fragment", () => {
+  for (const query of [
+    `{ ${repositoryField} ...R viewer { ...R } } fragment R on Query { __typename }`,
+    `{ ${repositoryField} viewer { ...A } viewer { ...A name } } fragment A on User { login }`,
+    `{ ${repositoryField} viewer { ...A } viewer { ...B } } fragment A on User { login } fragment B on User { ...A name }`,
+  ]) {
+    assert.throws(
+      () => graphqlRepository(graphqlBody(query)),
+      /unsupported GraphQL viewer field/,
+      query,
+    );
+  }
+  assert.throws(
+    () =>
+      graphqlRepository(
+        graphqlBody(
+          `{ ${repositoryField} viewer { ...A } ...A } fragment A on User { login }`,
+        ),
+      ),
+    /unsupported GraphQL root field/,
+  );
+});
+
+test("GraphQL viewer selections expand a shared fragment once", () => {
+  const add = spyOn(Set.prototype, "add");
+  const additions = (viewers: number): number => {
+    add.mockClear();
+    graphqlRepository(
+      graphqlBody(`{ ${repositoryField} ${"viewer { ...F } ".repeat(viewers)} }
+        fragment F on User { login }`),
+    );
+    return add.mock.calls.length;
+  };
+  assert.equal(additions(100), additions(1));
 });
 
 test("REST reads can be anonymous and API writes have no classification", () => {
