@@ -447,10 +447,10 @@ export class Gateway {
         revision,
       });
       logged = true;
+      // The health path is the only public read with no repository.
       if (
-        host === "api.github.com" &&
-        method === "GET" &&
-        target === "/__vm_access__/health"
+        classification.operation === "public.read" &&
+        classification.repository === null
       ) {
         response
           .writeHead(200, { "content-type": "text/plain" })

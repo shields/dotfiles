@@ -877,6 +877,31 @@ test("repository web pages are always anonymous and accept only reads", () => {
   }
 });
 
+test("the health path is the only public read without a repository, however the target spells it", () => {
+  for (const target of [
+    "/__vm_access__/health",
+    "/x/../__vm_access__/health",
+    "/__vm_access__/./health",
+  ]) {
+    assert.deepEqual(
+      classify({ host: "api.github.com", method: "GET", target }, id),
+      { repository: null, operation: "public.read", refs: [] },
+      target,
+    );
+  }
+  for (const [host, target] of [
+    ["github.com", "/shields/dotfiles"],
+    ["github.com", "/shields/dotfiles/issues/1"],
+    ["github.com", "/shields/dotfiles/../dotfiles"],
+  ] as const) {
+    assert.equal(
+      classify({ host, method: "GET", target }, id).repository,
+      "shields/dotfiles",
+      target,
+    );
+  }
+});
+
 test("a request target is a path on the requested host and never names an authority", () => {
   for (const [host, target] of [
     [

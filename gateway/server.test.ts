@@ -1066,6 +1066,29 @@ test("a state failure that also stops the audit write is reported on stderr and 
   );
 });
 
+test("the health path is answered locally however the target spells it", async () => {
+  const { socket, incoming } = await startGateway();
+  for (const target of [
+    "/__vm_access__/health",
+    "/x/../__vm_access__/health",
+    "/__vm_access__/./health",
+  ]) {
+    const response = await send(
+      socket,
+      "GET",
+      target,
+      Buffer.alloc(0),
+      "api.github.com",
+    );
+    assert.equal(response.status, 200, target);
+    assert.equal(response.body, "vm-access ready\n", target);
+  }
+  assert.equal(incoming.length, 0);
+  const page = await send(socket, "GET", "/shields/dotfiles");
+  assert.equal(page.body, "ok");
+  assert.equal(incoming.length, 1);
+});
+
 function signal(): { promise: Promise<undefined>; resolve: () => void } {
   const { promise, resolve } = Promise.withResolvers<undefined>();
   return {
