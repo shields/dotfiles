@@ -887,7 +887,7 @@ first_disable=$(grep -n '^vm-access disable lima:t1$' "$STATE/all.log" | head -1
 first_delete=$(grep -n '^limactl delete --tty=false --force t1$' "$STATE/all.log" | head -1 | cut -d: -f1)
 assert_eq "rm revokes before deleting" 1 "$(( first_disable < first_delete ))"
 
-assert_eq "no case called security" 0 "$(cat "$TMPBASE"/state-*/security.log(N) | wc -l | tr -d ' ')"
+assert_eq "no case called security" 0 "$(cat "$TMPBASE"/state-*/security.log(N) </dev/null | wc -l | tr -d ' ')"
 
 echo ""
 echo "Results: $pass passed, $fail failed"
