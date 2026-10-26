@@ -9,7 +9,13 @@ import {
 } from "node:http";
 import { once } from "node:events";
 import https from "node:https";
-import { connect, type Socket } from "node:net";
+import {
+  connect,
+  createServer as createNetServer,
+  type Server,
+  type Socket,
+} from "node:net";
+import { connect as tlsConnect } from "node:tls";
 import {
   mkdtempSync,
   mkdirSync,
@@ -174,8 +180,32 @@ function defer(undo: () => void | Promise<void>): void {
   teardown.defer(undo);
 }
 
+function rawUpstream(connection: (socket: Socket) => void): Server & {
+  closeAllConnections: () => void;
+} {
+  const sockets = new Set<Socket>();
+  const server = createNetServer((socket) => {
+    sockets.add(socket);
+    socket.once("close", () => {
+      sockets.delete(socket);
+    });
+    connection(socket);
+  });
+  return Object.assign(server, {
+    closeAllConnections: () => {
+      for (const socket of sockets) {
+        socket.destroy();
+      }
+    },
+  });
+}
+
 async function startGateway(
-  upstreamOptions: { handler: RequestListener; tls: boolean } | null = null,
+  upstreamOptions: {
+    handler?: RequestListener;
+    tls?: boolean;
+    connection?: (socket: Socket) => void;
+  } | null = null,
 ): Promise<{
   socket: string;
   instance: Instance;
@@ -223,12 +253,14 @@ async function startGateway(
     });
   };
   const serve = upstreamOptions?.handler ?? record;
-  const upstream = upstreamOptions?.tls
-    ? https.createServer(
-        { cert: readFileSync(certificate), key: readFileSync(key) },
-        serve,
-      )
-    : createServer(serve);
+  const upstream = upstreamOptions?.connection
+    ? rawUpstream(upstreamOptions.connection)
+    : upstreamOptions?.tls
+      ? https.createServer(
+          { cert: readFileSync(certificate), key: readFileSync(key) },
+          serve,
+        )
+      : createServer(serve);
   const agentOptions = https.globalAgent.options;
   const trusted = agentOptions.ca;
   defer(() => {
@@ -725,6 +757,180 @@ test("Content-Encoding reaches GitHub only on fetch bodies, and inspected bodies
     assert.equal(incoming.at(-1)?.contentEncoding, undefined, target);
     assert.deepEqual(incoming.at(-1)?.body, body, target);
   }
+});
+
+async function exchange(
+  socket: string,
+  host: string,
+  request: string,
+): Promise<string> {
+  const client = tlsConnect({
+    path: socket,
+    servername: host,
+    rejectUnauthorized: false,
+  });
+  defer(() => {
+    client.destroy();
+  });
+  const chunks: Buffer[] = [];
+  client.on("data", (chunk: Buffer) => {
+    chunks.push(chunk);
+  });
+  client.write(request);
+  await within("the gateway to close the connection", once(client, "close"));
+  return Buffer.concat(chunks).toString();
+}
+
+function smugglingUpstream(): {
+  received: Buffer[];
+  connection: (socket: Socket) => void;
+} {
+  const received: Buffer[] = [];
+  return {
+    received,
+    connection: (socket) => {
+      let replied = false;
+      socket.on("data", (chunk: Buffer) => {
+        received.push(chunk);
+        if (replied || !Buffer.concat(received).includes("\r\n\r\n")) {
+          return;
+        }
+        replied = true;
+        socket.write("HTTP/1.1 200 OK\r\ncontent-length: 2\r\n\r\nok");
+      });
+    },
+  };
+}
+
+function rawRequest(
+  method: string,
+  target: string,
+  host: string,
+  headers: string,
+  payload: string,
+): string {
+  return `${method} ${target} HTTP/1.1\r\nhost: ${host}\r\nconnection: close\r\n${headers}\r\n\r\n${payload}`;
+}
+
+const hiddenRequest = "GET /user HTTP/1.1\r\nhost: api.github.com\r\n\r\n";
+const chunkedBody = `${hiddenRequest.length.toString(16)}\r\n${hiddenRequest}\r\n0\r\n\r\n`;
+
+test("a GET or HEAD with a chunked body is denied and none of it reaches the upstream", async () => {
+  const { received, connection } = smugglingUpstream();
+  const { socket, instance, state } = await startGateway({ connection });
+  const requests = [
+    ["api.github.com", "GET", "/repos/shields/dotfiles/pulls"],
+    ["api.github.com", "HEAD", "/repos/shields/dotfiles"],
+    [
+      "github.com",
+      "GET",
+      "/shields/dotfiles.git/info/refs?service=git-upload-pack",
+    ],
+  ] as const;
+  for (const [host, method, target] of requests) {
+    const reply = await exchange(
+      socket,
+      host,
+      rawRequest(
+        method,
+        target,
+        host,
+        "transfer-encoding: chunked",
+        chunkedBody,
+      ),
+    );
+    assert.equal(Buffer.concat(received).toString(), "", `${method} ${target}`);
+    assert.match(reply, /^HTTP\/1\.1 403 /, `${method} ${target}`);
+  }
+  assert.deepEqual(
+    state
+      .logs(instance.id)
+      .map(({ allowed, reason, outcome }) => ({ allowed, reason, outcome })),
+    requests.map(() => ({
+      allowed: false,
+      reason: "GET and HEAD requests must not have a body",
+      outcome: "denied",
+    })),
+  );
+});
+
+test("ambiguous request framing never reaches the upstream, and a GET with an empty body does", async () => {
+  const { received, connection } = smugglingUpstream();
+  const { socket, instance, state } = await startGateway({ connection });
+  const outcomes: [string, string, string, number][] = [
+    // The HTTP parser or the gateway rejects these; either way nothing
+    // reaches the upstream.
+    [
+      "GET",
+      "transfer-encoding: chunked\r\ncontent-length: 5",
+      chunkedBody,
+      400,
+    ],
+    [
+      "GET",
+      "content-length: 5\r\ntransfer-encoding: chunked",
+      chunkedBody,
+      400,
+    ],
+    [
+      "POST",
+      "transfer-encoding: chunked\r\ncontent-length: 5",
+      chunkedBody,
+      400,
+    ],
+    ["GET", "transfer-encoding: chunked, identity", chunkedBody, 400],
+    [
+      "GET",
+      "transfer-encoding: chunked\r\ntransfer-encoding: chunked",
+      chunkedBody,
+      400,
+    ],
+    ["GET", "transfer-encoding : chunked", chunkedBody, 400],
+    ["GET", "transfer-encoding: chunked\r\n\tfolded", chunkedBody, 400],
+    ["GET", "content-length: 5\r\ncontent-length: 6", "abcde", 400],
+    ["GET", "content-length: +5", "abcde", 400],
+    ["GET", "content-length: 5", "abcde", 403],
+    ["GET", "content-length: 1", "a", 403],
+    ["GET", "transfer-encoding: gzip, chunked", chunkedBody, 403],
+    ["GET", "transfer-encoding: gzip", chunkedBody, 403],
+    ["GET", "transfer-encoding: identity", "", 403],
+    ["GET", "transfer-encoding:\tchunked", chunkedBody, 403],
+    ["GET", "content-length: 0", "", 200],
+  ];
+  for (const [method, headers, payload, status] of outcomes) {
+    received.length = 0;
+    const reply = await exchange(
+      socket,
+      "api.github.com",
+      rawRequest(
+        method,
+        "/repos/shields/dotfiles/pulls",
+        "api.github.com",
+        headers,
+        payload,
+      ),
+    );
+    const label = `${method} ${JSON.stringify(headers)}`;
+    const replied = Number(reply.split(" ", 2)[1]);
+    assert.ok(
+      status === 400 ? replied === 400 || replied === 403 : replied === status,
+      `${label}: ${String(replied)}`,
+    );
+    const request = Buffer.concat(received).toString();
+    if (status === 200) {
+      assert.equal(request.split("\r\n\r\n").at(-1), "", label);
+      assert.doesNotMatch(request, /GET \/user/, label);
+    } else {
+      assert.equal(request, "", label);
+    }
+  }
+  const denied = state.logs(instance.id).filter(({ allowed }) => !allowed);
+  const must = outcomes.filter((outcome) => outcome[3] === 403).length;
+  const may = outcomes.filter((outcome) => outcome[3] === 400).length;
+  assert.ok(
+    denied.length >= must && denied.length <= must + may,
+    `${String(denied.length)} denials`,
+  );
 });
 
 function signal(): { promise: Promise<undefined>; resolve: () => void } {

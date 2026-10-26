@@ -122,6 +122,13 @@ async function sendBody(
   upstream.end();
 }
 
+function carriesBody(headers: IncomingHttpHeaders): boolean {
+  return (
+    headers["transfer-encoding"] !== undefined ||
+    Number(headers["content-length"] ?? 0) > 0
+  );
+}
+
 function requestHeaders(
   headers: IncomingHttpHeaders,
   token: string | null,
@@ -386,6 +393,13 @@ export class Gateway {
         { host, method, target, body: body.buffered },
         instanceId,
       );
+      // Node writes the body of a GET or HEAD upstream without framing unless
+      // the client gave a Content-Length, and GitHub would read it as the next
+      // request on a connection that every VM shares.
+      const verb = method.toUpperCase();
+      if ((verb === "GET" || verb === "HEAD") && carriesBody(request.headers)) {
+        throw new PolicyError("GET and HEAD requests must not have a body");
+      }
       const beforeRefresh = this.state.byId(instanceId);
       if (!beforeRefresh || beforeRefresh.disabled) {
         throw new PolicyError("VM access has been revoked");
