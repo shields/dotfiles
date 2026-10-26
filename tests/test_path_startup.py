@@ -88,6 +88,13 @@ def zshenv_path(home: Path, ostype: str, inherited: str = INHERITED) -> str:
     return run_zsh(home, 'print -rn -- "$PATH"', inherited)
 
 
+def exported_variables(
+    home: Path, environment: dict[str, str] | None, inherited: str = INHERITED
+) -> dict[str, str]:
+    dump = run_zsh(home, f"{shlex.quote(tool('env'))} -0", inherited, environment)
+    return dict(record.split("=", 1) for record in dump.split("\0") if record)
+
+
 def zshenv_certificates(
     home: Path,
     ostype: str,
@@ -97,16 +104,29 @@ def zshenv_certificates(
     prelude: str = "",
 ) -> dict[str, str]:
     write_zshenv(home, ostype, sourced=sourced, prelude=prelude)
-    variables = dict(
-        record.split("=", 1)
-        for record in run_zsh(home, "env -0", environment=environment).split("\0")
-        if record
-    )
+    variables = exported_variables(home, environment)
     return {
         name: variables[name]
         for name in ("SSL_CERT_FILE", "GODEBUG")
         if name in variables
     }
+
+
+def zshenv_uv_cache(
+    home: Path, environment: dict[str, str] | None = None, *, mounted: bool = True
+) -> str | None:
+    # A test cannot create /Volumes/Data, so a copy of the file probes a directory
+    # under home. The copy runs under nounset with an empty PATH because the tests
+    # that run the real file skip this block on a host without the volume.
+    volume = home / "Data"
+    if mounted:
+        volume.mkdir()
+    nowhere = home / "nowhere"
+    nowhere.mkdir()
+    text = ZSHENV.read_text()
+    copy = text.replace("/Volumes/Data", shlex.quote(str(volume)))
+    _ = (home / ".zshenv").write_text(f"OSTYPE={DARWIN}\nsetopt nounset\n{copy}")
+    return exported_variables(home, environment, str(nowhere)).get("UV_CACHE_DIR")
 
 
 def profile_path(home: Path, shell: str, prelude: str, sourced: int = 1) -> str:
@@ -255,6 +275,27 @@ def test_zshenv_exports_no_secrets(
     assert "CLAUDE_CODE_OAUTH_TOKEN" not in exported
     assert canary not in exported
     assert "TOKEN" not in ZSHENV.read_text()
+
+
+def test_zshenv_puts_the_uv_cache_on_the_data_volume(tmp_path: Path) -> None:
+    assert zshenv_uv_cache(tmp_path) == f"{tmp_path}/Data/uv-cache.noindex"
+
+
+def test_zshenv_leaves_the_uv_cache_alone_without_the_data_volume(
+    tmp_path: Path,
+) -> None:
+    assert zshenv_uv_cache(tmp_path, mounted=False) is None
+
+
+def test_zshenv_keeps_a_uv_cache_set_by_the_parent(tmp_path: Path) -> None:
+    inherited = str(tmp_path / "uv")
+    assert zshenv_uv_cache(tmp_path, {"UV_CACHE_DIR": inherited}) == inherited
+
+
+def test_zshenv_replaces_an_empty_uv_cache_setting(tmp_path: Path) -> None:
+    # uv rejects an empty UV_CACHE_DIR.
+    cache = zshenv_uv_cache(tmp_path, {"UV_CACHE_DIR": ""})
+    assert cache == f"{tmp_path}/Data/uv-cache.noindex"
 
 
 def test_zshenv_runs_no_external_command(tmp_path: Path) -> None:

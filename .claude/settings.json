@@ -200,6 +200,7 @@
         "~/go/pkg/mod",
         "~/.cache/pre-commit",
         "~/.cache/uv",
+        "/Volumes/Data/uv-cache.noindex",
         "~/.npm",
         "~/.ruff_cache",
         "/Volumes/Cache"

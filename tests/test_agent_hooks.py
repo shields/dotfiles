@@ -411,6 +411,7 @@ ALLOW_WRITE = [
     "~/Library/Caches/golangci-lint",
     "~/go/pkg/mod",
     "/Volumes/Cache",
+    "/Volumes/Data/uv-cache.noindex",
 ]
 
 

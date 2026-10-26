@@ -46,9 +46,11 @@ STATUS_LINE = [
     "weekly-limit",
     "fast-mode",
 ]
+UV_CACHE = "/Volumes/Data/uv-cache.noindex"
+UV_GRANTS = {"~/.cache/uv": "write", UV_CACHE: "write"}
 DEVELOPMENT_PERMISSIONS: Json = {
     "extends": ":workspace",
-    "filesystem": {"~/.cache/uv": "write"},
+    "filesystem": UV_GRANTS,
     "network": {"enabled": True},
 }
 
@@ -85,9 +87,15 @@ class Server(Protocol):
 class Tool(Protocol):
     LGTMCP_POLICY: str
     THROWAWAY_MARKER: Path
+    DATA_VOLUME: Path
 
     def settings(
-        self, config: Mapping[str, object], home: Path, *, throwaway: bool = False
+        self,
+        config: Mapping[str, object],
+        home: Path,
+        *,
+        throwaway: bool = False,
+        worktree_root: Path | None = None,
     ) -> Json: ...
 
     def app_server(self, codex_home: Path) -> AbstractAsyncContextManager[Server]: ...
@@ -114,6 +122,13 @@ def throwaway_marker(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
     marker = tmp_path / "dotfiles-throwaway"
     monkeypatch.setattr(tool, "THROWAWAY_MARKER", marker)
     return marker
+
+
+@pytest.fixture(autouse=True)
+def data_volume(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
+    volume = tmp_path / "Data"
+    monkeypatch.setattr(tool, "DATA_VOLUME", volume)
+    return volume
 
 
 async def effective_sandbox(codex_home: Path) -> Json:
@@ -199,6 +214,18 @@ def test_settings_follow_the_home_directory() -> None:
     ]
 
 
+def test_settings_put_worktrees_under_the_given_root() -> None:
+    root = Path("/Volumes/Data/codex-worktrees")
+    result = tool.settings({}, HOME, worktree_root=root)
+    assert result["desktop.git-worktree-root"] == str(root)
+    assert "desktop.git-worktree-root" not in tool.settings({}, HOME)
+
+
+def test_the_uv_cache_is_in_one_place_for_zshenv_claude_and_codex() -> None:
+    for config in (".zshenv", ".claude/settings.json"):
+        assert UV_CACHE in (REPO / config).read_text()
+
+
 def test_settings_keep_existing_permission_rules() -> None:
     development: Json = {
         "description": "Custom development rules",
@@ -217,7 +244,7 @@ def test_settings_keep_existing_permission_rules() -> None:
     )
     assert result["description"] == development["description"]
     assert result["workspace_roots"] == development["workspace_roots"]
-    assert result["filesystem"] == {"~/.ssh": "deny", "~/.cache/uv": "write"}
+    assert result["filesystem"] == {"~/.ssh": "deny", **UV_GRANTS}
     assert result["network"] == {
         "allow_upstream_proxy": False,
         "enabled": True,
@@ -498,7 +525,7 @@ def test_configure_permissions_with_the_real_cli(
     assert config["permissions"]["dev"] == {
         "description": "Keep this",
         "extends": ":workspace",
-        "filesystem": {"~/.ssh": "deny", "~/.cache/uv": "write"},
+        "filesystem": {"~/.ssh": "deny", **UV_GRANTS},
         "network": {
             "enabled": True,
             "domains": {"example.com": "deny"},
@@ -511,9 +538,28 @@ def test_configure_permissions_with_the_real_cli(
     assert sandbox["type"] == ("dangerFullAccess" if throwaway else "workspaceWrite")
     if not throwaway:
         assert sandbox["networkAccess"] is True
-        assert str(Path.home() / ".cache/uv") in cast(
-            "list[str]", sandbox["writableRoots"]
-        )
+        roots = cast("list[str]", sandbox["writableRoots"])
+        assert str(Path.home() / ".cache/uv") in roots
+        assert UV_CACHE in roots
+
+
+def test_configure_worktree_root_with_the_real_cli(
+    codex_home: Path, data_volume: Path
+) -> None:
+    if shutil.which("codex") is None:
+        pytest.skip("Codex CLI is not installed")
+    data_volume.mkdir()
+    config_file = codex_home / "config.toml"
+    _ = config_file.write_text('[mcp_servers.lgtmcp]\ncommand = "lgtmcp"\n')
+
+    tool.configure_codex(config_file, HOME)
+
+    config = tomllib.loads(config_file.read_text())
+    expected = {"git-worktree-root": str(data_volume / "codex-worktrees")}
+    assert config["desktop"] == expected
+    first = config_file.read_bytes()
+    tool.configure_codex(config_file, HOME)
+    assert config_file.read_bytes() == first
 
 
 def test_configure_after_becoming_throwaway(
@@ -571,6 +617,16 @@ def test_configure_leaves_an_existing_project_decision_alone(
     tool.configure_codex(config_file, HOME)
     edits = cast("list[Json]", codex.batch_write()["edits"])
     assert "projects" not in [item["keyPath"] for item in edits]
+
+
+def test_configure_puts_worktrees_on_the_data_volume(
+    codex: StubCodex, codex_home: Path, data_volume: Path
+) -> None:
+    data_volume.mkdir()
+    tool.configure_codex(codex_home / "config.toml", HOME)
+    edits = cast("list[Json]", codex.batch_write()["edits"])
+    root = str(data_volume / "codex-worktrees")
+    assert edit("desktop.git-worktree-root", root) in edits
 
 
 def test_configure_fails_when_no_hook_is_listed_from_the_installed_file(

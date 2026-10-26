@@ -59,3 +59,11 @@ if [[ $OSTYPE == darwin* && ${CLAUDECODE-} == 1 && ${SANDBOX_RUNTIME-} == 1 ]]; 
         export GODEBUG=${GODEBUG:+$GODEBUG,}x509sslcertoverrideplatform=1
     fi
 fi
+
+# uv links packages from its cache into each venv, which only works within one
+# volume, and the checkouts are on /Volumes/Data when this Mac has it. A venv on
+# another volume copies its packages and uv warns. Spotlight skips a .noindex
+# directory.
+if [[ -d /Volumes/Data ]]; then
+    export UV_CACHE_DIR=${UV_CACHE_DIR:-/Volumes/Data/uv-cache.noindex}
+fi

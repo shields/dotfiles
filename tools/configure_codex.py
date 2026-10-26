@@ -40,6 +40,9 @@ LGTMCP_POLICY = (
 # wildcard key trusts nothing.
 TRUSTED_PROJECT = "src/github.com/shields/dotfiles"
 THROWAWAY_MARKER = Path("/etc/dotfiles-throwaway")
+DATA_VOLUME = Path("/Volumes/Data")
+# .zshenv points uv here when DATA_VOLUME exists.
+UV_CACHE = str(DATA_VOLUME / "uv-cache.noindex")
 
 
 @final
@@ -112,7 +115,13 @@ def table(config: Json, name: str) -> Json:
     return cast("Json", value)
 
 
-def settings(config: Json, home: Path, *, throwaway: bool = False) -> Json:
+def settings(
+    config: Json,
+    home: Path,
+    *,
+    throwaway: bool = False,
+    worktree_root: Path | None = None,
+) -> Json:
     extra_policy = table(config, "auto_review").get("extra_policy", "")
     if not isinstance(extra_policy, str):
         msg = "auto_review.extra_policy must be a string"
@@ -149,6 +158,7 @@ def settings(config: Json, home: Path, *, throwaway: bool = False) -> Json:
             "filesystem": {
                 **table(development, "filesystem"),
                 "~/.cache/uv": "write",
+                UV_CACHE: "write",
             },
             "network": {
                 **network,
@@ -156,6 +166,8 @@ def settings(config: Json, home: Path, *, throwaway: bool = False) -> Json:
             },
         },
     }
+    if worktree_root is not None:
+        result["desktop.git-worktree-root"] = str(worktree_root)
     # A project key contains dots, so the whole table is the edit's key path.
     project = str(home / TRUSTED_PROJECT)
     if project not in table(config, "projects"):
@@ -220,7 +232,14 @@ def configure_codex(config_file: Path, home: Path) -> None:
     asyncio.run(
         write_config(
             config_file,
-            settings(config, home, throwaway=THROWAWAY_MARKER.exists()),
+            settings(
+                config,
+                home,
+                throwaway=THROWAWAY_MARKER.exists(),
+                worktree_root=DATA_VOLUME / "codex-worktrees"
+                if DATA_VOLUME.is_dir()
+                else None,
+            ),
             hooks_enabled=hooks_enabled,
         )
     )

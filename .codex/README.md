@@ -51,7 +51,8 @@ limits, and fast mode, with status-line colors disabled. These settings are
 provisioned on both macOS and Linux, including VM bases.
 
 It selects a `dev` permission profile extending `:workspace`, grants writes to
-`~/.cache/uv`, and enables network access with the Codex network proxy disabled.
+`~/.cache/uv` and `/Volumes/Data/uv-cache.noindex`, and enables network access
+with the Codex network proxy disabled.
 Commands can reach the network directly while filesystem writes remain
 sandboxed. Other filesystem and network settings in that profile are preserved;
 domain rules are inactive while the proxy is disabled. On machines marked by
@@ -61,6 +62,16 @@ the user-level `dev` selection cannot override the system's throwaway defaults.
 Subsequent provisioning keeps the proxy disabled.
 After converting an existing machine to a throwaway environment, rerun
 `tools/configure_codex.py` and restart Codex.
+
+`.zshenv` points `UV_CACHE_DIR` at `/Volumes/Data/uv-cache.noindex` when
+`/Volumes/Data` exists, so that uv can link packages into venvs on that volume;
+the `.noindex` suffix keeps Spotlight out of the cache. `.claude/settings.json`
+allows writes there in Claude Code's sandbox. When `/Volumes/Data` exists as the
+script runs, the script also sets `desktop.git-worktree-root` to
+`/Volumes/Data/codex-worktrees`, so that worktrees from `cxw` (the `.zshrc`
+alias for `codex --worktree`) share a volume with the cache. The script never
+removes that setting, so while the volume is unmounted, `cxw` fails with "cannot
+create worktree root" until the volume returns or you delete the setting.
 
 The same run seeds hook trust. The script asks the app server for `hooks/list`,
 then writes `hooks.state.<key>.trusted_hash` for every hook that
