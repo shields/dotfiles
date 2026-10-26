@@ -206,6 +206,15 @@ export function requireIdentityEncoding(
   }
 }
 
+// The names that git check-ref-format rejects for a ref that begins with refs/.
+// The task-namespace test is a prefix test, which admits
+// refs/heads/task/ID/../../main.
+export function isValidRefName(ref: string): boolean {
+  return !/[\0-\u{20}\u{7F}~^:?*[\\]|\.\.|@\{|\/\/|\/$|\.$|\/\.|\.lock(?:\/|$)/u.test(
+    ref,
+  );
+}
+
 export function parsePushCommands(
   body: Uint8Array,
   instanceId: string,
@@ -284,6 +293,9 @@ export function parsePushCommands(
     const ref = match[3] ?? "";
     if (denials.has(ref)) {
       throw new PolicyError("duplicate Git push destination");
+    }
+    if (!isValidRefName(ref)) {
+      throw new PolicyError("push destination is not a valid Git ref name");
     }
     denials.set(
       ref,

@@ -674,6 +674,29 @@ test("the HTTPS socket injects a repo token only after checking the full push an
   assert.equal(incoming.length, forwarded);
 });
 
+test("a push to a task branch name that Git would refuse is denied before anything reaches the upstream", async () => {
+  const { socket, instance, incoming, state } = await startGateway();
+  const reply = await send(
+    socket,
+    "POST",
+    "/shields/dotfiles.git/git-receive-pack",
+    Buffer.concat([
+      packet(
+        `${"0".repeat(40)} ${"1".repeat(40)} refs/heads/task/${instance.id}/../../main\0report-status\n`,
+      ),
+      Buffer.from("0000PACK"),
+    ]),
+  );
+  assert.equal(reply.status, 403);
+  assert.match(reply.body, /push destination is not a valid Git ref name/);
+  assert.equal(incoming.length, 0);
+  assert.equal(state.logs(instance.id)[0]?.allowed, false);
+  assert.equal(
+    state.logs(instance.id)[0]?.reason,
+    "push destination is not a valid Git ref name",
+  );
+});
+
 test("Content-Encoding reaches GitHub only on fetch bodies, and inspected bodies must be unencoded", async () => {
   const { socket, instance, incoming } = await startGateway();
   const negotiation = gzipSync(

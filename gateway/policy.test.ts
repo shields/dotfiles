@@ -5,6 +5,7 @@ import {
   classify,
   denial,
   graphqlRepository,
+  isValidRefName,
   parseGrant,
   parsePushCommands,
   rewriteLinks,
@@ -219,6 +220,92 @@ test("task branch creation and force updates are both accepted", () => {
   assert.deepEqual(parsePushCommands(forced, id)?.refs, [
     `refs/heads/task/${id}/new`,
   ]);
+});
+
+test("a push destination that Git would refuse as a ref name is denied, and every other task branch name is accepted", () => {
+  const command = (name: string): Buffer =>
+    push(`${old} ${next} refs/heads/task/${id}/${name}\0report-status\n`);
+  for (const name of [
+    "one",
+    "fix-123",
+    "a/b/c",
+    "v1.2.3",
+    "feature_x",
+    "UPPER",
+    "café",
+    "a#b",
+    "a+b",
+    "a=b,c",
+    "a%2e%2e",
+    "a@b",
+    "@",
+    "a{b}",
+    "-lead",
+    "a.lockx",
+    "a.lock.b",
+    "a./b",
+    "a\u{85}b",
+  ]) {
+    assert.deepEqual(
+      parsePushCommands(command(name), id)?.refs,
+      [`refs/heads/task/${id}/${name}`],
+      JSON.stringify(name),
+    );
+  }
+  for (const name of [
+    "../../main",
+    "..",
+    "a/..",
+    "a/../b",
+    "a..b",
+    ".",
+    "./x",
+    "a//b",
+    "/a",
+    "a/",
+    ".hidden",
+    "a/.hidden",
+    "a.lock",
+    "a.lock/b",
+    ".lock",
+    "a.",
+    "a@{b",
+    "a~b",
+    "a^b",
+    "a:b",
+    "a?b",
+    "a*b",
+    "a[b",
+    String.raw`a\b`,
+    "a\u{1}b",
+    "a\u{7F}b",
+  ]) {
+    assert.throws(
+      () => parsePushCommands(command(name), id),
+      /push destination is not a valid Git ref name/,
+      JSON.stringify(name),
+    );
+  }
+  assert.throws(
+    () =>
+      classify(
+        {
+          host: "github.com",
+          method: "POST",
+          target: "/shields/dotfiles.git/git-receive-pack",
+          body: command("../../main"),
+        },
+        id,
+      ),
+    /not a valid Git ref name/,
+  );
+  assert.throws(
+    () => parsePushCommands(push(`${old} ${next} refs/heads/ma..in\n`), id),
+    /not a valid Git ref name/,
+  );
+  for (const ref of ["refs/heads/a b", "refs/heads/a\tb", "refs/heads/a\nb"]) {
+    assert.equal(isValidRefName(ref), false, JSON.stringify(ref));
+  }
 });
 
 test("branch deletion, push options, and incomplete commands are denied", () => {
