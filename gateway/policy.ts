@@ -56,6 +56,11 @@ export class PushDenied extends PolicyError {
 const repositoryName = /^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/;
 const hexSha = /^(?:[0-9a-f]{40}|[0-9a-f]{64})$/;
 const shallowLine = /^shallow (?:[0-9a-f]{40}|[0-9a-f]{64})\n?$/;
+// After a second slash or a backslash the URL parser reads an authority, whose
+// credentials Node would send upstream as an Authorization header and whose
+// path GitHub resolves differently from the one that was classified. The
+// parser also drops tabs and line breaks, so "/\t/" reads as "//".
+const originForm = /^\/(?![/\\\t\n\r])/;
 const gitRoute =
   /^\/([A-Za-z0-9_.-]+)\/([A-Za-z0-9_.-]+?)(?:\.git)?\/(info\/refs|git-upload-pack|git-receive-pack)$/;
 const gitEndpoint = /\/(?:info\/refs|git-upload-pack|git-receive-pack)$/;
@@ -451,7 +456,7 @@ export function classify(
   } catch {
     throw new PolicyError("invalid request target");
   }
-  if (url.host !== host || !request.target.startsWith("/")) {
+  if (url.host !== host || !originForm.test(request.target)) {
     throw new PolicyError("request target must stay on its GitHub host");
   }
   if (host === "github.com") {

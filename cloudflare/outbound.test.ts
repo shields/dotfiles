@@ -348,6 +348,28 @@ test("unsupported writes and foreign refs are denied before forwarding", async (
   assert.equal(drained, 6);
 });
 
+test("a path that begins with a second slash is denied before forwarding", async () => {
+  for (const url of [
+    "https://github.com//github.com/shields/dotfiles.git/info/refs?service=git-upload-pack",
+    "https://api.github.com//api.github.com/repos/shields/dotfiles/pulls",
+  ]) {
+    const events: string[] = [];
+    const response = await handleOutbound(
+      new Request(url),
+      instanceId,
+      authority(events),
+      () => {
+        throw new Error("denied request reached GitHub");
+      },
+    );
+    assert.equal(response.status, 403, url);
+    assert.deepEqual(events, [
+      "deny:request target must stay on its GitHub host",
+      "finish:denied:null",
+    ]);
+  }
+});
+
 test("a denied push larger than the drain limit gets a plain denial", async () => {
   let pulled = 0;
   let cancelled = false;

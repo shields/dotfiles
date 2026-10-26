@@ -205,8 +205,10 @@ async function startGateway(
     handler?: RequestListener;
     tls?: boolean;
     connection?: (socket: Socket) => void;
+    githubOrigins?: boolean;
   } | null = null,
 ): Promise<{
+  origin: string;
   socket: string;
   instance: Instance;
   state: State;
@@ -311,8 +313,10 @@ async function startGateway(
     cert: certificate,
     key,
     adminSocket: path.join(root, "admin.sock"),
-    webUpstream: origin,
-    apiUpstream: origin,
+    webUpstream: upstreamOptions?.githubOrigins ? "https://github.com" : origin,
+    apiUpstream: upstreamOptions?.githubOrigins
+      ? "https://api.github.com"
+      : origin,
   });
   const created = spyOn(https, "createServer");
   defer(() => gateway.stop());
@@ -332,6 +336,7 @@ async function startGateway(
     await Promise.all(responses);
   };
   return {
+    origin,
     socket,
     instance,
     state,
@@ -806,10 +811,11 @@ function rawRequest(
   method: string,
   target: string,
   host: string,
-  headers: string,
-  payload: string,
+  headers = "",
+  payload = "",
 ): string {
-  return `${method} ${target} HTTP/1.1\r\nhost: ${host}\r\nconnection: close\r\n${headers}\r\n\r\n${payload}`;
+  const lines = [`host: ${host}`, "connection: close", headers].filter(Boolean);
+  return `${method} ${target} HTTP/1.1\r\n${lines.join("\r\n")}\r\n\r\n${payload}`;
 }
 
 const hiddenRequest = "GET /user HTTP/1.1\r\nhost: api.github.com\r\n\r\n";
@@ -931,6 +937,75 @@ test("ambiguous request framing never reaches the upstream, and a GET with an em
     denied.length >= must && denied.length <= must + may,
     `${String(denied.length)} denials`,
   );
+});
+
+test("a request target that names an authority is denied and sends no credentials upstream", async () => {
+  const { socket, instance, state, incoming, origin } = await startGateway({
+    githubOrigins: true,
+  });
+  const local = new URL(origin);
+  const reached: string[] = [];
+  const redirect = (url: URL, options: https.RequestOptions): ClientRequest => {
+    reached.push(url.href);
+    const redirected = new URL(url);
+    redirected.protocol = local.protocol;
+    redirected.host = local.host;
+    return httpRequest(redirected, options);
+  };
+  spyOn(https, "request").mockImplementation(redirect as typeof https.request);
+  const targets = [
+    [
+      "github.com",
+      "//attacker:ghp_token@github.com/octocat/Hello-World.git/info/refs?service=git-upload-pack",
+    ],
+    [
+      "github.com",
+      "//attacker:ghp_token@github.com/shields/dotfiles.git/info/refs?service=git-upload-pack",
+    ],
+    [
+      "api.github.com",
+      "//attacker:ghp_token@api.github.com/repos/octocat/Hello-World/pulls",
+    ],
+    ["github.com", "//github.com/octocat/Hello-World"],
+    [
+      "github.com",
+      String.raw`/\attacker:ghp_token@github.com/octocat/Hello-World`,
+    ],
+  ] as const;
+  for (const [host, target] of targets) {
+    const reply = await exchange(
+      socket,
+      host,
+      rawRequest("GET", target, host, "accept: */*", ""),
+    );
+    assert.equal(Number(reply.split(" ", 2)[1]), 403, `${host} ${target}`);
+  }
+  assert.equal(reached.length, 0);
+  assert.equal(incoming.length, 0);
+  const logs = state.logs(instance.id);
+  assert.equal(logs.length, targets.length);
+  for (const log of logs) {
+    assert.equal(log.allowed, false);
+    assert.equal(log.reason, "request target must stay on its GitHub host");
+    assert.equal(log.outcome, "denied");
+  }
+  const control = await exchange(
+    socket,
+    "github.com",
+    rawRequest(
+      "GET",
+      "/octocat/Hello-World.git/info/refs?service=git-upload-pack",
+      "github.com",
+      "accept: */*",
+      "",
+    ),
+  );
+  assert.equal(Number(control.split(" ", 2)[1]), 200);
+  assert.deepEqual(reached, [
+    "https://github.com/octocat/Hello-World.git/info/refs?service=git-upload-pack",
+  ]);
+  assert.equal(incoming.length, 1);
+  assert.equal(incoming[0]?.authorization, undefined);
 });
 
 function signal(): { promise: Promise<undefined>; resolve: () => void } {

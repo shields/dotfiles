@@ -790,6 +790,54 @@ test("repository web pages are always anonymous and accept only reads", () => {
   }
 });
 
+test("a request target is a path on the requested host and never names an authority", () => {
+  for (const [host, target] of [
+    [
+      "github.com",
+      "//attacker:ghp_token@github.com/octocat/Hello-World.git/info/refs?service=git-upload-pack",
+    ],
+    ["github.com", "//ghp_token@github.com/octocat/Hello-World"],
+    ["github.com", "//:ghp_token@github.com/octocat/Hello-World"],
+    ["github.com", "//%61ttacker:%74oken@github.com:443/octocat/Hello-World"],
+    [
+      "github.com",
+      String.raw`/\attacker:ghp_token@github.com/octocat/Hello-World`,
+    ],
+    ["github.com", "///attacker:ghp_token@github.com/octocat/Hello-World"],
+    ["github.com", "/\t/attacker:ghp_token@github.com/octocat/Hello-World"],
+    ["github.com", "/\r\n/github.com/octocat/Hello-World"],
+    [
+      "api.github.com",
+      "//attacker:ghp_token@api.github.com/repos/octocat/Hello-World/pulls",
+    ],
+    ["github.com", "//github.com/octocat/Hello-World"],
+    ["github.com", "//GitHub.com:443/octocat/Hello-World"],
+    ["github.com", String.raw`/\github.com/octocat/Hello-World`],
+    ["github.com", "//evil.example/octocat/Hello-World"],
+    ["github.com", "//github.com@evil.example/octocat/Hello-World"],
+    ["github.com", "https://github.com/octocat/Hello-World"],
+    ["github.com", "octocat/Hello-World"],
+    ["github.com", ""],
+  ] as const) {
+    assert.throws(
+      () => classify({ host, method: "GET", target }, id),
+      /request target must stay on its GitHub host/,
+      target,
+    );
+  }
+  for (const target of [
+    "/octocat/Hello-World/blob/main//README.md",
+    "/octocat/Hello-World/issues/1?q=//a:b@github.com",
+    "/octocat/Hello-World#//a:b@github.com",
+  ]) {
+    assert.equal(
+      classify({ host: "github.com", method: "GET", target }, id).repository,
+      "octocat/hello-world",
+      target,
+    );
+  }
+});
+
 test("a grant has exactly read true and a boolean pushTaskBranches", () => {
   for (const pushTaskBranches of [true, false]) {
     const input = { pushTaskBranches, read: true };
