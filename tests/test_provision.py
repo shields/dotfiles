@@ -672,6 +672,46 @@ def test_bundle_steps_and_comment() -> None:
     assert find(r"^\s+bin/docker-prune$") > find(r"^go clean -modcache")
 
 
+def provision_uv_cache(home: Path, environment: dict[str, str]) -> str:
+    header = find(r"-ef /Volumes/Data/src")
+    snippet = "\n".join([LINES[header], *block(header), "fi"])
+    volume = shlex.quote(str(home / "Data"))
+    result = subprocess.run(
+        [
+            "bash",
+            "-c",
+            "set -euo pipefail\n"
+            + snippet.replace("/Volumes/Data", volume)
+            + '\nprintf %s "${UV_CACHE_DIR-unset}"',
+        ],
+        env={"PATH": os.environ["PATH"], "HOME": str(home), **environment},
+        capture_output=True,
+        text=True,
+        timeout=15,
+        check=True,
+    )
+    assert result.stderr == ""
+    return result.stdout
+
+
+@pytest.mark.parametrize("linked", [True, False])
+def test_provision_selects_the_uv_cache_that_zshenv_does(
+    tmp_path: Path, *, linked: bool
+) -> None:
+    (tmp_path / "Data/src").mkdir(parents=True)
+    if linked:
+        (tmp_path / "src").symlink_to(tmp_path / "Data/src")
+    expected = f"{tmp_path}/Data/uv-cache.noindex" if linked else "unset"
+    assert provision_uv_cache(tmp_path, {}) == expected
+    assert provision_uv_cache(tmp_path, {"UV_CACHE_DIR": "/x"}) == "/x"
+
+
+def test_provision_selects_the_uv_cache_before_using_uv() -> None:
+    header = find(r"-ef /Volumes/Data/src")
+    assert header < find(r"^uv cache prune")
+    assert not [line for line in LINES[:header] if re.match(r"\s*uv ", line)]
+
+
 def test_homebrew_supports_selective_formula_upgrades() -> None:
     result = subprocess.run(
         [

@@ -63,15 +63,18 @@ Subsequent provisioning keeps the proxy disabled.
 After converting an existing machine to a throwaway environment, rerun
 `tools/configure_codex.py` and restart Codex.
 
-`.zshenv` points `UV_CACHE_DIR` at `/Volumes/Data/uv-cache.noindex` when
-`/Volumes/Data` exists, so that uv can link packages into venvs on that volume;
-the `.noindex` suffix keeps Spotlight out of the cache. `.claude/settings.json`
-allows writes there in Claude Code's sandbox. When `/Volumes/Data` exists as the
-script runs, the script also sets `desktop.git-worktree-root` to
+Machines differ in where the checkouts live. Where `~/src` is
+`/Volumes/Data/src` (an external drive), `.zshenv` and `provision.sh` point
+`UV_CACHE_DIR` at `/Volumes/Data/uv-cache.noindex`, so that uv can link packages
+into venvs on that volume; the `.noindex` suffix keeps Spotlight out of the
+cache. On such a machine the script also sets `desktop.git-worktree-root` to
 `/Volumes/Data/codex-worktrees`, so that worktrees from `cxw` (the `.zshrc`
-alias for `codex --worktree`) share a volume with the cache. The script never
-removes that setting, so while the volume is unmounted, `cxw` fails with "cannot
-create worktree root" until the volume returns or you delete the setting.
+alias for `codex --worktree`) share a volume with the cache. Everywhere else, uv
+keeps `~/.cache/uv`, Codex keeps its default worktree location, and the write
+grants for the missing path, here and in `.claude/settings.json`, do nothing.
+The script never removes the worktree setting, so while the drive is unmounted,
+`cxw` fails with "cannot create worktree root" until the drive returns or you
+delete `[desktop] git-worktree-root` from `~/.codex/config.toml`.
 
 The same run seeds hook trust. The script asks the app server for `hooks/list`,
 then writes `hooks.state.<key>.trusted_hash` for every hook that

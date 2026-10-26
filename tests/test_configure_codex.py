@@ -131,6 +131,15 @@ def data_volume(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
     return volume
 
 
+@pytest.fixture
+def home_on_data_volume(tmp_path: Path, data_volume: Path) -> Path:
+    (data_volume / "src").mkdir(parents=True)
+    home = tmp_path / "home"
+    home.mkdir(exist_ok=True)
+    (home / "src").symlink_to(data_volume / "src")
+    return home
+
+
 async def effective_sandbox(codex_home: Path) -> Json:
     async with asyncio.timeout(30), tool.app_server(codex_home) as server:
         result = await server.request(
@@ -221,8 +230,8 @@ def test_settings_put_worktrees_under_the_given_root() -> None:
     assert "desktop.git-worktree-root" not in tool.settings({}, HOME)
 
 
-def test_the_uv_cache_is_in_one_place_for_zshenv_claude_and_codex() -> None:
-    for config in (".zshenv", ".claude/settings.json"):
+def test_the_uv_cache_path_is_the_same_in_every_config() -> None:
+    for config in (".zshenv", "provision.sh", ".claude/settings.json"):
         assert UV_CACHE in (REPO / config).read_text()
 
 
@@ -544,21 +553,20 @@ def test_configure_permissions_with_the_real_cli(
 
 
 def test_configure_worktree_root_with_the_real_cli(
-    codex_home: Path, data_volume: Path
+    codex_home: Path, data_volume: Path, home_on_data_volume: Path
 ) -> None:
     if shutil.which("codex") is None:
         pytest.skip("Codex CLI is not installed")
-    data_volume.mkdir()
     config_file = codex_home / "config.toml"
     _ = config_file.write_text('[mcp_servers.lgtmcp]\ncommand = "lgtmcp"\n')
 
-    tool.configure_codex(config_file, HOME)
+    tool.configure_codex(config_file, home_on_data_volume)
 
     config = tomllib.loads(config_file.read_text())
     expected = {"git-worktree-root": str(data_volume / "codex-worktrees")}
     assert config["desktop"] == expected
     first = config_file.read_bytes()
-    tool.configure_codex(config_file, HOME)
+    tool.configure_codex(config_file, home_on_data_volume)
     assert config_file.read_bytes() == first
 
 
@@ -620,13 +628,28 @@ def test_configure_leaves_an_existing_project_decision_alone(
 
 
 def test_configure_puts_worktrees_on_the_data_volume(
-    codex: StubCodex, codex_home: Path, data_volume: Path
+    codex: StubCodex, codex_home: Path, data_volume: Path, home_on_data_volume: Path
 ) -> None:
-    data_volume.mkdir()
-    tool.configure_codex(codex_home / "config.toml", HOME)
+    tool.configure_codex(codex_home / "config.toml", home_on_data_volume)
     edits = cast("list[Json]", codex.batch_write()["edits"])
     root = str(data_volume / "codex-worktrees")
     assert edit("desktop.git-worktree-root", root) in edits
+
+
+@pytest.mark.parametrize("layout", ["no volume", "src elsewhere", "dangling src"])
+def test_configure_leaves_worktrees_alone_when_src_is_not_on_the_data_volume(
+    codex: StubCodex, codex_home: Path, data_volume: Path, tmp_path: Path, layout: str
+) -> None:
+    home = tmp_path / "home"
+    (home / "src").mkdir(parents=True)
+    if layout != "no volume":
+        (data_volume / "src").mkdir(parents=True)
+    if layout == "dangling src":
+        (home / "src").rmdir()
+        (home / "src").symlink_to(tmp_path / "unmounted/src")
+    tool.configure_codex(codex_home / "config.toml", home)
+    edits = cast("list[Json]", codex.batch_write()["edits"])
+    assert "desktop.git-worktree-root" not in [item["keyPath"] for item in edits]
 
 
 def test_configure_fails_when_no_hook_is_listed_from_the_installed_file(

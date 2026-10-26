@@ -41,7 +41,7 @@ LGTMCP_POLICY = (
 TRUSTED_PROJECT = "src/github.com/shields/dotfiles"
 THROWAWAY_MARKER = Path("/etc/dotfiles-throwaway")
 DATA_VOLUME = Path("/Volumes/Data")
-# .zshenv points uv here when DATA_VOLUME exists.
+# .zshenv points uv here when the checkouts are on DATA_VOLUME.
 UV_CACHE = str(DATA_VOLUME / "uv-cache.noindex")
 
 
@@ -219,6 +219,13 @@ async def write_config(config_file: Path, values: Json, *, hooks_enabled: bool) 
         )
 
 
+def checkouts_on_data_volume(home: Path) -> bool:
+    try:
+        return (home / "src").samefile(DATA_VOLUME / "src")
+    except FileNotFoundError:
+        return False
+
+
 def configure_codex(config_file: Path, home: Path) -> None:
     config_file = config_file.resolve()
     config = (
@@ -237,7 +244,7 @@ def configure_codex(config_file: Path, home: Path) -> None:
                 home,
                 throwaway=THROWAWAY_MARKER.exists(),
                 worktree_root=DATA_VOLUME / "codex-worktrees"
-                if DATA_VOLUME.is_dir()
+                if checkouts_on_data_volume(home)
                 else None,
             ),
             hooks_enabled=hooks_enabled,

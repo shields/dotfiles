@@ -228,6 +228,10 @@ else
     brew cleanup --prune=all
 fi
 
+# The same cache that .zshenv selects, for a run started outside zsh.
+if [[ $HOME/src -ef /Volumes/Data/src ]]; then
+    export UV_CACHE_DIR=${UV_CACHE_DIR:-/Volumes/Data/uv-cache.noindex}
+fi
 uv cache prune
 
 go clean -modcache

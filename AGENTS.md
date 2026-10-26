@@ -80,6 +80,11 @@ source of truth; edits take effect after `make apply` for the pilot files or
   that are already satisfied must not invoke `sudo`, including for temporary
   files, cleanup, or permissions that are already correct.
 
+Most machines keep everything on one volume, but one Mac's `~/src` is a symlink
+to `/Volumes/Data/src` on an external drive. Configuration must work in both
+layouts; `.codex/README.md` describes how the uv cache and Codex worktrees
+follow the checkouts there.
+
 Homebrew packages are modules, `brew/*.Brewfile`. The `Brewfile` in the root is
 a loader for `base`, `macos` or `linux`, and the selected optional modules.
 `./provision.sh [--remove-modules] [MODULE... | none]` saves the selection in

@@ -113,14 +113,20 @@ def zshenv_certificates(
 
 
 def zshenv_uv_cache(
-    home: Path, environment: dict[str, str] | None = None, *, mounted: bool = True
+    home: Path, environment: dict[str, str] | None = None, *, layout: str = "linked"
 ) -> str | None:
     # A test cannot create /Volumes/Data, so a copy of the file probes a directory
     # under home. The copy runs under nounset with an empty PATH because the tests
     # that run the real file skip this block on a host without the volume.
     volume = home / "Data"
-    if mounted:
-        volume.mkdir()
+    if layout != "no volume":
+        (volume / "src").mkdir(parents=True)
+    if layout == "linked":
+        (home / "src").symlink_to(volume / "src")
+    elif layout == "src elsewhere":
+        (home / "src").mkdir()
+    elif layout == "dangling src":
+        (home / "src").symlink_to(home / "unmounted/src")
     nowhere = home / "nowhere"
     nowhere.mkdir()
     text = ZSHENV.read_text()
@@ -281,10 +287,13 @@ def test_zshenv_puts_the_uv_cache_on_the_data_volume(tmp_path: Path) -> None:
     assert zshenv_uv_cache(tmp_path) == f"{tmp_path}/Data/uv-cache.noindex"
 
 
-def test_zshenv_leaves_the_uv_cache_alone_without_the_data_volume(
-    tmp_path: Path,
+@pytest.mark.parametrize(
+    "layout", ["no volume", "src elsewhere", "no src", "dangling src"]
+)
+def test_zshenv_leaves_the_uv_cache_alone_when_src_is_not_on_the_data_volume(
+    tmp_path: Path, layout: str
 ) -> None:
-    assert zshenv_uv_cache(tmp_path, mounted=False) is None
+    assert zshenv_uv_cache(tmp_path, layout=layout) is None
 
 
 def test_zshenv_keeps_a_uv_cache_set_by_the_parent(tmp_path: Path) -> None:
