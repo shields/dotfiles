@@ -1031,6 +1031,41 @@ test("a request target that names an authority is denied and sends no credential
   assert.equal(incoming[0]?.authorization, undefined);
 });
 
+test("a state failure as a request starts is a 503 with an audit row and does not crash the gateway", async () => {
+  const { socket, instance, state } = await startGateway();
+  spyOn(state, "byId").mockImplementationOnce((): never => {
+    throw new Error("database is locked");
+  });
+  const { response } = open(socket);
+  assert.equal((await within("the gateway to answer", response)).status, 503);
+  await nextTurn();
+  assert.deepEqual(
+    state
+      .logs(instance.id)
+      .map(({ allowed, reason, outcome }) => ({ allowed, reason, outcome })),
+    [{ allowed: false, reason: "gateway request failed", outcome: "denied" }],
+  );
+});
+
+test("a state failure that also stops the audit write is reported on stderr and answered with a 503", async () => {
+  const { socket, state } = await startGateway();
+  const stderr = spyOn(process.stderr, "write").mockImplementation(() => true);
+  const failure = (): never => {
+    throw new Error("database is locked");
+  };
+  spyOn(state, "byId").mockImplementation(failure);
+  spyOn(state, "logDecision").mockImplementation(failure);
+  const { response } = open(socket);
+  const reply = await within("the gateway to answer", response);
+  await nextTurn();
+  assert.equal(reply.status, 503);
+  assert.match(reply.body, /gateway audit unavailable/);
+  assert.deepEqual(
+    stderr.mock.calls.map((call) => String(call[0])),
+    ["vm-access audit failure: Error: database is locked\n"],
+  );
+});
+
 function signal(): { promise: Promise<undefined>; resolve: () => void } {
   const { promise, resolve } = Promise.withResolvers<undefined>();
   return {

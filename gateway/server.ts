@@ -354,10 +354,11 @@ export class Gateway {
     const requestId = randomUUID();
     const started = Date.now();
     let classification: Classification | null = null;
-    let revision = this.state.byId(instanceId)?.revision ?? 0;
+    let revision = 0;
     let logged = false;
     const remaining = bodyIterator(request);
     try {
+      revision = this.state.byId(instanceId)?.revision ?? 0;
       const host = request.headers.host?.toLowerCase();
       if (host !== "github.com" && host !== "api.github.com") {
         throw new PolicyError("unsupported GitHub host");
