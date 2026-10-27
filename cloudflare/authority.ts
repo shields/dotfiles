@@ -69,7 +69,9 @@ function grantsFrom(raw: unknown): Record<string, Grant> {
       !input ||
       typeof input !== "object" ||
       Array.isArray(input) ||
-      Object.keys(input).toSorted().join(",") !== "pushTaskBranches,read" ||
+      Object.keys(input)
+        .toSorted((a, b) => Number(a > b) - Number(a < b))
+        .join(",") !== "pushTaskBranches,read" ||
       (input as Record<string, unknown>).read !== true ||
       typeof (input as Record<string, unknown>).pushTaskBranches !== "boolean"
     ) {
@@ -377,7 +379,9 @@ export class CloudAuthority {
     }
     const repository =
       classification.operation === "identity.read"
-        ? (Object.keys(before.grants).toSorted()[0] ?? null)
+        ? (Object.keys(before.grants).toSorted(
+            (a, b) => Number(a > b) - Number(a < b),
+          )[0] ?? null)
         : classification.repository;
     let access: Access;
     try {

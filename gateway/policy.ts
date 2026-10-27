@@ -228,7 +228,7 @@ export function parsePushCommands(
       offset += size;
       continue;
     }
-    const [command, lineCapabilities, ...rest] = line.split("\0");
+    const [command = "", lineCapabilities, ...rest] = line.split("\0");
     if (rest.length > 0) {
       throw new PolicyError("unexpected Git push capabilities");
     }
@@ -244,9 +244,7 @@ export function parsePushCommands(
     } else if (lineCapabilities !== undefined) {
       throw new PolicyError("unexpected Git push capabilities");
     }
-    const match = /^([0-9a-f]+) ([0-9a-f]+) (refs\/[^\s\0]+)\n?$/.exec(
-      command ?? "",
-    );
+    const match = /^([0-9a-f]+) ([0-9a-f]+) (refs\/[^\s\0]+)\n?$/.exec(command);
     if (
       !match ||
       !hexSha.test(match[1] ?? "") ||
@@ -409,10 +407,10 @@ export function classify(
   instanceId: string,
 ): Classification {
   const host = request.host.toLowerCase();
-  const method = request.method.toUpperCase();
   if (host !== "github.com" && host !== "api.github.com") {
     throw new PolicyError("unsupported GitHub host");
   }
+  const method = request.method.toUpperCase();
   let url: URL;
   try {
     url = new URL(request.target, `https://${host}`);
@@ -512,16 +510,13 @@ export function rewriteLinks(
   link: string,
   classification: Classification,
 ): string {
-  if (
-    classification.operation !== "api.read" ||
+  return classification.operation !== "api.read" ||
     classification.repository === null
-  ) {
-    return link;
-  }
-  return link.replaceAll(
-    repositoryIdLink,
-    `<https://api.github.com/repos/${classification.repository}`,
-  );
+    ? link
+    : link.replaceAll(
+        repositoryIdLink,
+        `<https://api.github.com/repos/${classification.repository}`,
+      );
 }
 
 export function authorize(grant: Grant | null, operation: Operation): Access {

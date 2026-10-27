@@ -82,7 +82,9 @@ function parseProfiles(file: string): Record<string, Grant> {
     }
     const grant = input as Record<string, unknown>;
     if (
-      Object.keys(grant).toSorted().join(",") !== "pushTaskBranches,read" ||
+      Object.keys(grant)
+        .toSorted((a, b) => Number(a > b) - Number(a < b))
+        .join(",") !== "pushTaskBranches,read" ||
       grant.read !== true ||
       typeof grant.pushTaskBranches !== "boolean"
     ) {
@@ -122,8 +124,9 @@ function parseEdit(
   }
   const data = raw as Record<string, unknown>;
   if (
-    Object.keys(data).toSorted().join(",") !==
-      "branchPrefix,id,repositories,revision,vm" ||
+    Object.keys(data)
+      .toSorted((a, b) => Number(a > b) - Number(a < b))
+      .join(",") !== "branchPrefix,id,repositories,revision,vm" ||
     data.vm !== instance.name ||
     data.id !== instance.id ||
     data.branchPrefix !==

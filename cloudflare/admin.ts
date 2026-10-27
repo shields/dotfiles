@@ -55,7 +55,12 @@ async function api<T>(
     signal: AbortSignal.timeout(30_000),
   });
   if (!response.ok) {
-    const payload: unknown = await response.json().catch(() => null);
+    let payload: unknown;
+    try {
+      payload = await response.json();
+    } catch {
+      payload = null;
+    }
     const message =
       payload &&
       typeof payload === "object" &&
@@ -84,7 +89,9 @@ function profile(name: string): Grant {
   }
   const grant = selected as Record<string, unknown>;
   if (
-    Object.keys(grant).toSorted().join(",") !== "pushTaskBranches,read" ||
+    Object.keys(grant)
+      .toSorted((a, b) => Number(a > b) - Number(a < b))
+      .join(",") !== "pushTaskBranches,read" ||
     grant.read !== true ||
     typeof grant.pushTaskBranches !== "boolean"
   ) {

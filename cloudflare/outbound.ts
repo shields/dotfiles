@@ -269,16 +269,23 @@ export async function handleOutbound(
       // git keeps sending after a 200 and shows a transport error, not these
       // ref statuses, unless the whole body is read.
       error instanceof PushDenied &&
-      error.report !== null &&
-      (await drained(request, 67_108_864).catch(() => false))
+      error.report !== null
     ) {
-      return new Response(error.report, {
-        status: 200,
-        headers: {
-          "content-type": "application/x-git-receive-pack-result",
-          "cache-control": "no-cache",
-        },
-      });
+      let bodyDrained: boolean;
+      try {
+        bodyDrained = await drained(request, 67_108_864);
+      } catch {
+        bodyDrained = false;
+      }
+      if (bodyDrained) {
+        return new Response(error.report, {
+          status: 200,
+          headers: {
+            "content-type": "application/x-git-receive-pack-result",
+            "cache-control": "no-cache",
+          },
+        });
+      }
     }
     return respond(error instanceof PolicyError ? 403 : 503, reason, requestId);
   }
