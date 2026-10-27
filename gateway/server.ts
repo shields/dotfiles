@@ -12,11 +12,11 @@ import {
   authorize,
   classify,
   denial,
-  parsePushCommands,
   PolicyError,
   requireIdentityEncoding,
   rewriteLinks,
   PushDenied,
+  PushParser,
   type Classification,
 } from "./policy.ts";
 import { State } from "./state.ts";
@@ -60,27 +60,36 @@ function bodyIterator(request: IncomingMessage): AsyncIterator<Buffer> {
   return request[Symbol.asyncIterator]() as AsyncIterator<Buffer>;
 }
 
-async function readBody(
+export async function readBody(
   remaining: AsyncIterator<Buffer>,
   contentEncoding: string | undefined,
   limit: number,
   pushInstanceId?: string,
 ): Promise<RequestBody> {
   requireIdentityEncoding(contentEncoding);
-  let buffered = Buffer.alloc(0);
+  const parser =
+    pushInstanceId === undefined ? null : new PushParser(pushInstanceId);
+  let storage = Buffer.alloc(0);
+  let length = 0;
   for (;;) {
     const next = await remaining.next();
     if (next.done) {
+      return { buffered: storage.subarray(0, length), remaining };
+    }
+    if (length + next.value.length > storage.length) {
+      const grown = Buffer.allocUnsafe(
+        Math.max(length + next.value.length, storage.length * 2),
+      );
+      storage.copy(grown, 0, 0, length);
+      storage = grown;
+    }
+    next.value.copy(storage, length);
+    length += next.value.length;
+    const buffered = storage.subarray(0, length);
+    if (parser !== null && parser.parse(buffered) !== null) {
       return { buffered, remaining };
     }
-    buffered = Buffer.concat([buffered, next.value]);
-    if (
-      pushInstanceId !== undefined &&
-      parsePushCommands(buffered, pushInstanceId) !== null
-    ) {
-      return { buffered, remaining };
-    }
-    if (buffered.length > limit) {
+    if (length > limit) {
       throw new PolicyError("request prefix is too large");
     }
   }

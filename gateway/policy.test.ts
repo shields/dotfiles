@@ -11,6 +11,7 @@ import {
   rewriteLinks,
   type Classification,
   PushDenied,
+  PushParser,
 } from "./policy.ts";
 
 afterEach(() => {
@@ -253,6 +254,7 @@ test("a push destination that Git would refuse as a ref name is denied, and ever
     );
   }
   for (const name of [
+    "",
     "../../main",
     "..",
     "a/..",
@@ -334,6 +336,17 @@ test("branch deletion, push options, and incomplete commands are denied", () => 
       parsePushCommands(
         push(
           `${old} ${next} refs/heads/task/${id}/new\0report-status\0 push-options\n`,
+        ),
+        id,
+      ),
+    /capabilities/,
+  );
+  assert.throws(
+    () =>
+      parsePushCommands(
+        push(
+          `${old} ${next} refs/heads/task/${id}/one\0report-status\n`,
+          `${old} ${next} refs/heads/task/${id}/two\0push-options\n`,
         ),
         id,
       ),
@@ -441,6 +454,84 @@ test("a push from a shallow clone lists its shallow commits before the commands"
   assert.throws(
     () => receivePack(push(command, shallow)),
     /unsupported Git push command/,
+  );
+});
+
+test("a push parsed in pieces is judged as it would be whole", () => {
+  const command = (name: string, capabilities = ""): string =>
+    `${old} ${next} refs/heads/task/${id}/${name}${capabilities}\n`;
+  const outcome = (parse: () => unknown): unknown => {
+    try {
+      return parse();
+    } catch (error) {
+      assert.ok(error instanceof Error);
+      return {
+        name: error.name,
+        message: error.message,
+        report: error instanceof PushDenied ? error.report : undefined,
+      };
+    }
+  };
+  for (const body of [
+    push(command("one", "\0report-status side-band-64k"), command("two")),
+    push(
+      `shallow ${"3".repeat(40)}\n`,
+      `shallow ${"4".repeat(40)}\n`,
+      command("one", "\0report-status"),
+    ),
+    push(command("one", "\0report-status"), `${old} ${next} refs/heads/main\n`),
+    push(command("one", "\0report-status"), command("two"), command("one")),
+    push(command("one", "\0push-options")),
+    push(command("one", "\0report-status"), command("two", "\0quiet")),
+    push(command("one", "\0report-status"), "not a command\n"),
+    Buffer.from("0000"),
+    Buffer.concat([Buffer.from("0000"), push(command("one"))]),
+    Buffer.from("zzzz0000"),
+    Buffer.from("0003"),
+    Buffer.from("fff1"),
+  ]) {
+    for (const step of [1, 2, 3, 7, 40]) {
+      const parser = new PushParser(id);
+      for (let length = 0; length < body.length;) {
+        length = Math.min(length + step, body.length);
+        const prefix = body.subarray(0, length);
+        const resumed = outcome(() => parser.parse(prefix));
+        assert.deepEqual(
+          resumed,
+          outcome(() => parsePushCommands(prefix, id)),
+          `${String(length)} bytes in steps of ${String(step)}`,
+        );
+        if (resumed !== null) {
+          break;
+        }
+      }
+    }
+  }
+});
+
+test("a push fed a few bytes at a time has each packet parsed once", () => {
+  const packets = 40;
+  const body = push(
+    ...Array.from(
+      { length: packets },
+      (_, index) =>
+        `${old} ${next} refs/heads/task/${id}/${String(index)}${index === 0 ? "\0report-status" : ""}\n`,
+    ),
+  );
+  const decode = spyOn(TextDecoder.prototype, "decode");
+  const parser = new PushParser(id);
+  const step = 4;
+  let steps = 0;
+  let parsed = null;
+  for (let length = step; parsed === null; length += step) {
+    parsed = parser.parse(body.subarray(0, length));
+    steps += 1;
+  }
+  assert.equal(parsed.refs.length, packets);
+  assert.equal(parsed.bytes, body.length - 4);
+  assert.ok(
+    decode.mock.calls.length < 2 * steps,
+    `${String(decode.mock.calls.length)} decodes in ${String(steps)} steps`,
   );
 });
 

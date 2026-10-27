@@ -164,6 +164,36 @@ test("a streamed push beyond the inspection limit is forwarded whole", async () 
   }
 });
 
+test("a push streamed in small writes costs work linear in its length", async () => {
+  const encoder = new TextEncoder();
+  const body = encoder.encode(
+    `${Array.from({ length: 1200 }, (_, index) => {
+      const line = `${"1".repeat(40)} ${"2".repeat(40)} refs/heads/task/${instanceId}/${String(index)}${index === 0 ? "\0report-status" : ""}\n`;
+      return `${(line.length + 4).toString(16).padStart(4, "0")}${line}`;
+    }).join("")}0000PACK`,
+  );
+  const chunks: Uint8Array[] = [];
+  for (let offset = 0; offset < body.length; offset += 64) {
+    chunks.push(body.subarray(offset, offset + 64));
+  }
+  const decode = spyOn(TextDecoder.prototype, "decode");
+  const response = await handleOutbound(
+    streamedPush(...chunks),
+    instanceId,
+    authority([]),
+    async (request) => {
+      await request.arrayBuffer();
+      return new Response("ok", { status: 200 });
+    },
+  );
+  assert.equal(response.status, 200);
+  assert.ok(body.length > 100_000);
+  assert.ok(
+    decode.mock.calls.length < 5 * chunks.length,
+    `${String(decode.mock.calls.length)} decodes for ${String(chunks.length)} chunks`,
+  );
+});
+
 test("a push probe followed by more data is denied before forwarding", async () => {
   const events: string[] = [];
   const response = await handleOutbound(
@@ -496,6 +526,38 @@ test("oversized GraphQL bodies are denied before forwarding", async () => {
     },
   );
   assert.equal(response.status, 403);
+});
+
+test("an inspected body is read only up to the inspection limit", async () => {
+  let pulled = 0;
+  const events: string[] = [];
+  const response = await handleOutbound(
+    new Request("https://api.github.com/graphql", {
+      method: "POST",
+      body: new ReadableStream<Uint8Array>({
+        pull(controller) {
+          if (pulled === 128) {
+            controller.close();
+            return;
+          }
+          controller.enqueue(new Uint8Array(65_536));
+          pulled += 1;
+        },
+      }),
+      duplex: "half",
+    } as RequestInit),
+    instanceId,
+    authority(events),
+    () => {
+      throw new Error("oversized request reached GitHub");
+    },
+  );
+  assert.equal(response.status, 403);
+  assert.deepEqual(events, [
+    "deny:request prefix is too large",
+    "finish:denied:null",
+  ]);
+  assert.ok(pulled > 16 && pulled < 25, String(pulled));
 });
 
 test("audit failure stops forwarding", async () => {

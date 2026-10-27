@@ -2,11 +2,11 @@ import {
   authorize,
   classify,
   denial,
-  parsePushCommands,
   PolicyError,
   requireIdentityEncoding,
   rewriteLinks,
   PushDenied,
+  PushParser,
   type Access,
   type Classification,
 } from "../gateway/policy.ts";
@@ -63,24 +63,27 @@ async function bodyForPolicy(
   if (!reader) {
     return new Uint8Array();
   }
+  // The result is a copy of the filled part, so that this limit-sized buffer is
+  // not held while the request is forwarded.
   const buffered = new Uint8Array(limit + 1);
+  const parser = instanceId === undefined ? null : new PushParser(instanceId);
   let length = 0;
   try {
     for (;;) {
       const { done, value } = await reader.read();
       if (done) {
-        return buffered.subarray(0, length);
+        return buffered.slice(0, length);
       }
       const remaining = buffered.length - length;
       buffered.set(value.subarray(0, remaining), length);
       length += Math.min(value.length, remaining);
       if (
-        instanceId !== undefined &&
-        parsePushCommands(buffered.subarray(0, length), instanceId) !== null
+        parser !== null &&
+        parser.parse(buffered.subarray(0, length)) !== null
       ) {
-        return buffered.subarray(0, length);
+        return buffered.slice(0, length);
       }
-      if (length > limit || value.length > remaining) {
+      if (length > limit) {
         throw new PolicyError("request prefix is too large");
       }
     }

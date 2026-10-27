@@ -215,101 +215,118 @@ export function isValidRefName(ref: string): boolean {
   );
 }
 
+// Each parse() call must be given the whole body so far, which may only have
+// grown since the previous call.
+export class PushParser {
+  readonly #instanceId: string;
+  readonly #denials = new Map<string, string | null>();
+  #capabilities: string[] = [];
+  #offset = 0;
+
+  constructor(instanceId: string) {
+    this.#instanceId = instanceId;
+  }
+
+  parse(body: Uint8Array): { refs: string[]; bytes: number } | null {
+    const instanceId = this.#instanceId;
+    const denials = this.#denials;
+    while (this.#offset + 4 <= body.length) {
+      const offset = this.#offset;
+      const sizeText = decoder.decode(body.subarray(offset, offset + 4));
+      if (!/^[0-9a-fA-F]{4}$/.test(sizeText)) {
+        throw new PolicyError("invalid Git push packet");
+      }
+      const size = Number.parseInt(sizeText, 16);
+      if (size === 0) {
+        if (isPushProbe(body)) {
+          return null;
+        }
+        if (denials.size === 0) {
+          throw new PolicyError("Git push has no ref updates");
+        }
+        const denied = denials.values().find((reason) => reason !== null);
+        if (denied) {
+          throw new PushDenied(
+            denied,
+            pushReport(
+              this.#capabilities,
+              Array.from(
+                denials,
+                ([ref, reason]) =>
+                  `ng ${ref} ${reason ?? "another ref update in this push is denied"}`,
+              ),
+            ),
+          );
+        }
+        return { refs: [...denials.keys()], bytes: offset + 4 };
+      }
+      if (size < 5 || size > 65_520) {
+        throw new PolicyError("invalid Git push packet length");
+      }
+      if (offset + size > body.length) {
+        return null;
+      }
+      const line = decoder.decode(body.subarray(offset + 4, offset + size));
+      const first = denials.size === 0;
+      // A push from a shallow clone lists its shallow commits before the first
+      // command.
+      if (first && shallowLine.test(line)) {
+        this.#offset += size;
+        continue;
+      }
+      const [command = "", lineCapabilities, ...rest] = line.split("\0");
+      if (rest.length > 0) {
+        throw new PolicyError("unexpected Git push capabilities");
+      }
+      if (first) {
+        this.#capabilities = lineCapabilities?.split(/\s+/) ?? [];
+        if (
+          this.#capabilities.some((capability) =>
+            /^push-options(?:=|$)/.test(capability),
+          )
+        ) {
+          throw new PolicyError("Git push options are unsupported");
+        }
+      } else if (lineCapabilities !== undefined) {
+        throw new PolicyError("unexpected Git push capabilities");
+      }
+      const match = /^([0-9a-f]+) ([0-9a-f]+) (refs\/[^\s\0]+)\n?$/.exec(
+        command,
+      );
+      if (
+        !match ||
+        !hexSha.test(match[1] ?? "") ||
+        !hexSha.test(match[2] ?? "") ||
+        match[1]?.length !== match[2]?.length
+      ) {
+        throw new PolicyError("unsupported Git push command");
+      }
+      const ref = match[3] ?? "";
+      if (denials.has(ref)) {
+        throw new PolicyError("duplicate Git push destination");
+      }
+      if (!isValidRefName(ref)) {
+        throw new PolicyError("push destination is not a valid Git ref name");
+      }
+      denials.set(
+        ref,
+        ref.startsWith(taskPrefix(instanceId))
+          ? /^0+$/.test(match[2] ?? "")
+            ? "branch deletion is denied"
+            : null
+          : `push destination is outside this VM's task namespace; allowed namespace: task/${instanceId}/*`,
+      );
+      this.#offset += size;
+    }
+    return null;
+  }
+}
+
 export function parsePushCommands(
   body: Uint8Array,
   instanceId: string,
 ): { refs: string[]; bytes: number } | null {
-  const denials = new Map<string, string | null>();
-  let capabilities: string[] = [];
-  let offset = 0;
-  let first = true;
-  while (offset + 4 <= body.length) {
-    const sizeText = decoder.decode(body.subarray(offset, offset + 4));
-    if (!/^[0-9a-fA-F]{4}$/.test(sizeText)) {
-      throw new PolicyError("invalid Git push packet");
-    }
-    const size = Number.parseInt(sizeText, 16);
-    if (size === 0) {
-      if (isPushProbe(body)) {
-        return null;
-      }
-      if (denials.size === 0) {
-        throw new PolicyError("Git push has no ref updates");
-      }
-      const denied = denials.values().find((reason) => reason !== null);
-      if (denied) {
-        throw new PushDenied(
-          denied,
-          pushReport(
-            capabilities,
-            Array.from(
-              denials,
-              ([ref, reason]) =>
-                `ng ${ref} ${reason ?? "another ref update in this push is denied"}`,
-            ),
-          ),
-        );
-      }
-      return { refs: [...denials.keys()], bytes: offset + 4 };
-    }
-    if (size < 5 || size > 65_520) {
-      throw new PolicyError("invalid Git push packet length");
-    }
-    if (offset + size > body.length) {
-      return null;
-    }
-    const line = decoder.decode(body.subarray(offset + 4, offset + size));
-    // A push from a shallow clone lists its shallow commits before the first
-    // command.
-    if (first && shallowLine.test(line)) {
-      offset += size;
-      continue;
-    }
-    const [command = "", lineCapabilities, ...rest] = line.split("\0");
-    if (rest.length > 0) {
-      throw new PolicyError("unexpected Git push capabilities");
-    }
-    if (first) {
-      capabilities = lineCapabilities?.split(/\s+/) ?? [];
-      if (
-        capabilities.some((capability) =>
-          /^push-options(?:=|$)/.test(capability),
-        )
-      ) {
-        throw new PolicyError("Git push options are unsupported");
-      }
-    } else if (lineCapabilities !== undefined) {
-      throw new PolicyError("unexpected Git push capabilities");
-    }
-    const match = /^([0-9a-f]+) ([0-9a-f]+) (refs\/[^\s\0]+)\n?$/.exec(command);
-    if (
-      !match ||
-      !hexSha.test(match[1] ?? "") ||
-      !hexSha.test(match[2] ?? "") ||
-      match[1]?.length !== match[2]?.length
-    ) {
-      throw new PolicyError("unsupported Git push command");
-    }
-    const ref = match[3] ?? "";
-    if (denials.has(ref)) {
-      throw new PolicyError("duplicate Git push destination");
-    }
-    if (!isValidRefName(ref)) {
-      throw new PolicyError("push destination is not a valid Git ref name");
-    }
-    denials.set(
-      ref,
-      !ref.startsWith(taskPrefix(instanceId)) ||
-        ref.length === taskPrefix(instanceId).length
-        ? `push destination is outside this VM's task namespace; allowed namespace: task/${instanceId}/*`
-        : /^0+$/.test(match[2] ?? "")
-          ? "branch deletion is denied"
-          : null,
-    );
-    first = false;
-    offset += size;
-  }
-  return null;
+  return new PushParser(instanceId).parse(body);
 }
 
 function value(
