@@ -22,3 +22,5 @@ CLAUDE.local.md
 .serena/
 .DS_Store
 .playwright-mcp/
+
+**/.claude/.cc-writes/

@@ -215,7 +215,10 @@ brew bundle cleanup --force
 brew outdated --greedy-auto-updates --cask --quiet | sed '/^google-chrome$/d' | xargs -r brew upgrade --cask --yes
 brew autoremove
 
-chezmoi --source "$dotfiles_root" --less-interactive --error-on-conflict apply
+if ! chezmoi --source "$dotfiles_root" --less-interactive --error-on-conflict apply; then
+    echo "provision.sh: chezmoi apply failed; run 'make diff' and resolve any conflicts as described in README.md" >&2
+    exit 1
+fi
 
 if [[ $os == macos ]]; then
     macos_vm_access_install

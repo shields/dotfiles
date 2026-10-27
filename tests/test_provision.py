@@ -395,8 +395,8 @@ def test_macos_sh_holds_the_macos_only_commands() -> None:
 
 
 def test_chezmoi_applies_after_its_package_is_installed() -> None:
-    apply = find(r'^chezmoi --source "\$dotfiles_root"')
-    assert LINES[apply].endswith(" --less-interactive --error-on-conflict apply")
+    apply = find(r'^if ! chezmoi --source "\$dotfiles_root"')
+    assert LINES[apply].endswith(" --less-interactive --error-on-conflict apply; then")
     assert find(r"^brew autoremove$") < apply < find(r"^    macos_vm_access_install$")
     assert "git config --global user.email" not in TEXT
     assert "git config --global github.user" not in TEXT
@@ -1034,7 +1034,10 @@ MACOS_SPINE = (
     "brew bundle cleanup --force",
     f"{BREW_OUTDATED} | sed '/^google-chrome$/d' | xargs -r brew upgrade --cask --yes",
     "brew autoremove",
-    'chezmoi --source "$dotfiles_root" --less-interactive --error-on-conflict apply',
+    (
+        'if ! chezmoi --source "$dotfiles_root" '
+        "--less-interactive --error-on-conflict apply; then"
+    ),
     "brew cleanup --prune=all",
     "uv cache prune",
     "go clean -modcache",
@@ -1629,3 +1632,39 @@ def test_first_apply_preserves_a_conflicting_existing_file(chezmoi: Chezmoi) -> 
     _ = target.write_text(local)
     assert chezmoi.run("apply", check=False).returncode != 0
     assert target.read_text() == local
+
+
+@pytest.mark.parametrize("failure", ["", "conflict", "template"])
+def test_provision_chezmoi_apply_reports_failures(
+    chezmoi: Chezmoi, failure: str
+) -> None:
+    target = chezmoi.home / ".gitconfig"
+    local = "[user]\n\temail = work@example.com\n"
+    if failure == "conflict":
+        _ = target.write_text(local)
+    elif failure == "template":
+        template = chezmoi.source / "home/dot_gitconfig.tmpl"
+        _ = template.write_text(template.read_text() + '{{ fail "template failure" }}')
+    start = find(r"^if ! chezmoi ")
+    snippet = "\n".join([LINES[start], *block(start), "fi"])
+    result = subprocess.run(
+        ["/bin/bash", "-c", f"set -euo pipefail\n{snippet}\necho finished"],
+        env=chezmoi.env | {"dotfiles_root": str(chezmoi.source)},
+        stdin=subprocess.DEVNULL,
+        capture_output=True,
+        text=True,
+        timeout=30,
+        check=False,
+    )
+    if failure:
+        assert result.returncode == 1
+        assert "chezmoi apply failed" in result.stderr
+        assert "make diff" in result.stderr
+        assert "README.md" in result.stderr
+        assert "finished" not in result.stdout
+        if failure == "conflict":
+            assert target.read_text() == local
+    else:
+        assert result.returncode == 0, result.stderr
+        assert "finished" in result.stdout
+        assert target.exists()
