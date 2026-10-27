@@ -106,6 +106,7 @@ export class State {
         outcome TEXT NOT NULL
       );
       CREATE INDEX IF NOT EXISTS access_logs_instance_time ON access_logs(instance_id, created_at);
+      CREATE INDEX IF NOT EXISTS access_logs_created ON access_logs(created_at);
     `);
   }
 
