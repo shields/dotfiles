@@ -182,24 +182,25 @@ export class Gateway {
     await this.refresh();
     await this.startAdmin();
     this.refreshTimer = setInterval(() => {
-      void this.refresh()
-        .then(() => {
+      void (async () => {
+        try {
+          await this.refresh();
           this.state.prune();
-        })
-        .catch((error: unknown) => {
+        } catch (error) {
           process.stderr.write(
             `vm-access: listener refresh failed: ${String(error)}\n`,
           );
           throw error;
-        });
+        }
+      })();
     }, 60_000);
   }
 
   refresh(): Promise<void> {
-    const next = this.syncing.then(
-      () => this.refreshNow(),
-      () => this.refreshNow(),
-    );
+    const next = (async () => {
+      await Promise.allSettled([this.syncing]);
+      await this.refreshNow();
+    })();
     this.syncing = next;
     return next;
   }
@@ -372,10 +373,10 @@ export class Gateway {
           : this.state.grant(instanceId, classification.repository),
         classification.operation,
       );
-      let token: string | null = null;
-      if (access === "authenticated" && classification.repository !== null) {
-        token = await this.auth.token(classification.repository);
-      }
+      const token =
+        access === "authenticated" && classification.repository !== null
+          ? await this.auth.token(classification.repository)
+          : null;
       const current = this.state.byId(instanceId);
       if (!current || current.disabled) {
         throw new PolicyError("VM access has been revoked");
@@ -474,22 +475,31 @@ export class Gateway {
       }
       if (response.headersSent) {
         response.destroy();
-      } else if (
+        return;
+      }
+      if (
         // git keeps sending after a 200 and shows a transport error, not these
         // ref statuses, unless the whole body is read.
         error instanceof PushDenied &&
-        error.report !== null &&
-        (await drained(remaining, 67_108_864).catch(() => false))
+        error.report !== null
       ) {
-        response
-          .writeHead(200, {
-            "content-type": "application/x-git-receive-pack-result",
-            "cache-control": "no-cache",
-          })
-          .end(error.report);
-      } else {
-        respond(error instanceof PolicyError ? 403 : 503, reason);
+        let bodyDrained: boolean;
+        try {
+          bodyDrained = await drained(remaining, 67_108_864);
+        } catch {
+          bodyDrained = false;
+        }
+        if (bodyDrained) {
+          response
+            .writeHead(200, {
+              "content-type": "application/x-git-receive-pack-result",
+              "cache-control": "no-cache",
+            })
+            .end(error.report);
+          return;
+        }
       }
+      respond(error instanceof PolicyError ? 403 : 503, reason);
     }
   }
 
@@ -552,11 +562,13 @@ export class Gateway {
           resolve();
         });
         response.once("close", () => {
-          if (!response.writableFinished) {
-            finish(status, "interrupted");
-            upstream.destroy();
-            resolve();
+          if (response.writableFinished) {
+            return;
           }
+
+          finish(status, "interrupted");
+          upstream.destroy();
+          resolve();
         });
       });
       upstream.once("error", reject);

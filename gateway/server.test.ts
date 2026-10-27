@@ -323,7 +323,7 @@ void test("the HTTPS socket injects a repo token only after checking the full pu
     assert.equal(unreported.status, 403);
     assert.equal(unreported.type, "text/plain; charset=utf-8");
     assert.equal(
-      unreported.body.split("\n")[0],
+      unreported.body.split("\n", 1)[0],
       `push destination is outside this VM's task namespace; allowed namespace: task/${instance.id}/*`,
     );
     assert.match(unreported.body, /^[^\n]+\nrequest ID: [0-9a-f-]{36}\n$/);

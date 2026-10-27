@@ -21,15 +21,14 @@ class MemoryStorage {
   delete(key: string): Promise<boolean>;
   delete(keys: string[]): Promise<number>;
   delete(input: string | string[]): Promise<boolean | number> {
-    if (Array.isArray(input)) {
-      return Promise.resolve(
-        input.reduce(
-          (count, key) => count + Number(this.values.delete(key)),
-          0,
-        ),
-      );
-    }
-    return Promise.resolve(this.values.delete(input));
+    return Array.isArray(input)
+      ? Promise.resolve(
+          input.reduce(
+            (count, key) => count + Number(this.values.delete(key)),
+            0,
+          ),
+        )
+      : Promise.resolve(this.values.delete(input));
   }
 
   list<T>(options: {
@@ -44,7 +43,7 @@ class MemoryStorage {
           key.startsWith(options.prefix ?? "") &&
           (options.startAfter === undefined || key > options.startAfter),
       )
-      .toSorted();
+      .toSorted((a, b) => Number(a > b) - Number(a < b));
     if (options.reverse) {
       keys.reverse();
     }
@@ -297,7 +296,8 @@ void test("stale policy revisions and missing authorization fail closed", async 
 });
 
 void test("revocation during token refresh prevents forwarding", async () => {
-  let release: ((response: Response) => void) | undefined;
+  const refreshStarted = Promise.withResolvers<undefined>();
+  const refreshResponse = Promise.withResolvers<Response>();
   const request = ((input: RequestInfo | URL) => {
     const url =
       typeof input === "string"
@@ -306,9 +306,8 @@ void test("revocation during token refresh prevents forwarding", async () => {
           ? input.href
           : input.url;
     if (url.includes("/login/oauth/access_token")) {
-      return new Promise<Response>((resolve) => {
-        release = resolve;
-      });
+      refreshStarted.resolve(undefined);
+      return refreshResponse.promise;
     }
     return Promise.resolve(new Response(null, { status: 200 }));
   }) as typeof fetch;
@@ -331,10 +330,9 @@ void test("revocation during token refresh prevents forwarding", async () => {
     operation: "git.read",
     refs: [],
   });
-  await new Promise<void>((resolve) => setTimeout(resolve, 0));
-  assert.ok(release);
+  await refreshStarted.promise;
   await state.update(vm.id, 1, {}, "owner");
-  release(
+  refreshResponse.resolve(
     Response.json({
       access_token: "new-access-token",
       expires_in: 28_800,
