@@ -4,6 +4,7 @@
   // Automerge waits for passing checks; Renovate counts a branch with none as
   // not green.
   platformAutomerge: true,
+  lockFileMaintenance: { automerge: true },
   packageRules: [
     {
       description: "Automerge non-major updates",
