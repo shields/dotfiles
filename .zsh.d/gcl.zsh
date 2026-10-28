@@ -18,12 +18,13 @@
 # private repo auth is handled by git credential helpers.
 unalias gcl 2>/dev/null || true
 gcl() {
-    if [[ $# -ne 1 ]] || [[ -z "$1" ]]; then
-        echo "Usage: gcl <repo-url>" >&2
+    if [[ $# -lt 1 ]] || [[ -z "$1" ]]; then
+        echo "Usage: gcl <repo-url> [git-clone-options...]" >&2
         return 1
     fi
 
     local url="$1"
+    shift
     local root="${GCL_ROOT:-$HOME/src}"
     # Strip any trailing slashes (but never reduce "/" to empty) so $root is a
     # clean prefix for path joins and for the boundary check in the failure
@@ -55,7 +56,7 @@ gcl() {
 
     local parent="$(dirname "$target")"
     mkdir -p "$parent"
-    if ! git clone "https://$clean_url.git" "$target"; then
+    if ! git clone "$@" "https://$clean_url.git" "$target"; then
         # Remove the now-empty directories we just created, walking up from
         # $parent but stopping at $root so we never delete $GCL_ROOT or any
         # directory above it. (rmdir -p would happily ascend past $root.)

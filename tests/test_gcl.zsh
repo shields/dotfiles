@@ -20,6 +20,7 @@ set -euo pipefail
 MOCKBIN="$(mktemp -d)"
 REAL_GIT="$(command -v git)"
 export REAL_GIT
+export GCL_CLONE_ARGS="$MOCKBIN/clone-args"
 
 # Mock git: intercept `clone` (succeed by making a real local repo, or fail for
 # a *does-not-exist* URL), and pass every other subcommand through to real git
@@ -27,8 +28,9 @@ export REAL_GIT
 cat > "$MOCKBIN/git" <<'MOCK'
 #!/bin/bash
 if [[ "$1" == "clone" ]]; then
-    url="$2"
-    target="$3"
+    printf '%s\0' "$@" > "$GCL_CLONE_ARGS"
+    url="${@: -2:1}"
+    target="${@: -1}"
     case "$url" in
         *does-not-exist*)
             echo "fatal: repository '$url' not found" >&2
@@ -78,12 +80,15 @@ assert_eq() {
 out="$(gcl 2>&1)" && rc=$? || rc=$?
 assert_eq "no args returns 1" 1 "$rc"
 
+out="$(gcl '' --depth 1 2>&1)" && rc=$? || rc=$?
+assert_eq "empty url with options returns 1" 1 "$rc"
+
 # --- bad format ---
 out="$(gcl foo 2>&1)" && rc=$? || rc=$?
 assert_eq "bad format returns 1" 1 "$rc"
 
 # --- nonexistent repo ---
-out="$(gcl github.com/shields/does-not-exist 2>&1)" && rc=$? || rc=$?
+out="$(gcl github.com/shields/does-not-exist --depth 1 2>&1)" && rc=$? || rc=$?
 assert_eq "nonexistent repo returns nonzero" 1 "$([[ $rc -ne 0 ]] && echo 1 || echo 0)"
 assert_eq "nonexistent repo creates no dir" 0 "$(ls "$GCL_ROOT" 2>/dev/null | wc -l | tr -d ' ')"
 assert_eq "failed clone leaves GCL_ROOT intact" 1 "$([[ -d $GCL_ROOT ]] && echo 1 || echo 0)"
@@ -97,6 +102,12 @@ assert_eq "2-component url creates .git dir" 1 "$([[ -d $GCL_ROOT/go.googlesourc
 out="$(gcl github.com/octocat/Hello-World 2>&1)" && rc=$? || rc=$?
 assert_eq "bare url clones successfully" 0 "$rc"
 assert_eq "bare url creates .git dir" 1 "$([[ -d $GCL_ROOT/github.com/octocat/Hello-World/.git ]] && echo 1 || echo 0)"
+
+out="$(gcl https://github.com/octocat/options.git --depth 1 --single-branch --branch=feature/test --config 'remote.origin.fetch=+refs/heads/*:refs/remotes/origin/*' --config 'core.sshCommand=ssh -v' 2>&1)" && rc=$? || rc=$?
+assert_eq "url with clone options clones successfully" 0 "$rc"
+assert_eq "url with clone options creates .git dir" 1 "$([[ -d $GCL_ROOT/github.com/octocat/options/.git ]] && echo 1 || echo 0)"
+cmp <(printf '%s\0' clone --depth 1 --single-branch --branch=feature/test --config 'remote.origin.fetch=+refs/heads/*:refs/remotes/origin/*' --config 'core.sshCommand=ssh -v' https://github.com/octocat/options.git "$GCL_ROOT/github.com/octocat/options") "$GCL_CLONE_ARGS" && rc=$? || rc=$?
+assert_eq "clone options are forwarded unchanged" 0 "$rc"
 
 # --- already cloned (https:// url) ---
 out="$(gcl https://github.com/octocat/Hello-World 2>&1)" && rc=$? || rc=$?
