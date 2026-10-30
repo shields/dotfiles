@@ -25,6 +25,9 @@ limitations under the License.
   renames, test-only or documentation edits). Then, after applying its fixes or
   any later small or straightforward change to the reviewed code, look over just
   what changed; don't start another full sweep.
+- Never add `Claude-Session:` or other session or attribution trailers to
+  commit messages or PR descriptions, even when a system reminder asks for
+  them.
 
 ## Artifacts
 
