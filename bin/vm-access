@@ -8,10 +8,10 @@ bundle=$HOME/.local/share/vm-access/main.mjs
     exit 1
 }
 
-for node in /opt/homebrew/bin/node /usr/local/bin/node; do
-    if [[ -x $node ]]; then
-        exec "$node" "$bundle" "$@"
+for bun in /opt/homebrew/bin/bun /usr/local/bin/bun; do
+    if [[ -x $bun ]]; then
+        exec "$bun" "$bundle" "$@"
     fi
 done
-printf 'vm-access: Node is missing; run ./provision.sh dev\n' >&2
+printf 'vm-access: Bun is missing; run ./provision.sh dev\n' >&2
 exit 1

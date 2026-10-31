@@ -2,10 +2,10 @@ import assert from "node:assert/strict";
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import test from "node:test";
+import { test } from "bun:test";
 import { State } from "./state.ts";
 
-void test("live grants are additive, conflict checked, and tied to immutable VM identities", () => {
+test("live grants are additive, conflict checked, and tied to immutable VM identities", () => {
   const directory = mkdtempSync(path.join(tmpdir(), "vm-access-state-"));
   const state = new State(directory);
   try {
@@ -76,7 +76,7 @@ void test("live grants are additive, conflict checked, and tied to immutable VM 
   }
 });
 
-void test("audit record precedes a request and an interrupted request retains an unknown outcome", () => {
+test("audit record precedes a request and an interrupted request retains an unknown outcome", () => {
   const directory = mkdtempSync(path.join(tmpdir(), "vm-access-audit-"));
   const state = new State(directory);
   try {

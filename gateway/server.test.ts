@@ -5,11 +5,15 @@ import https from "node:https";
 import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import test from "node:test";
+import { afterEach, mock, spyOn, test } from "bun:test";
 import { gzipSync } from "node:zlib";
 import { AppAuth } from "./auth.ts";
 import { Gateway } from "./server.ts";
 import { State, type Instance } from "./state.ts";
+
+afterEach(() => {
+  mock.restore();
+});
 
 const idRef = (id: string): string => `refs/heads/task/${id}/one`;
 const pages = (repository: string): string =>
@@ -207,12 +211,13 @@ async function startGateway(): Promise<{
   return { socket, instance, state, incoming, stop };
 }
 
-void test("the HTTPS socket injects a repo token only after checking the full push and live grant", async (t) => {
-  const listeners = t.mock.method(https, "createServer");
+test("the HTTPS socket injects a repo token only after checking the full push and live grant", async () => {
+  const listeners = spyOn(https, "createServer");
   const { socket, instance, state, incoming, stop } = await startGateway();
   try {
-    const listener = listeners.mock.calls[0]?.result;
-    assert.ok(listener);
+    const result = listeners.mock.results[0];
+    assert.equal(result?.type, "return");
+    const listener = result.value;
     assert.equal(listener.requestTimeout, 3_600_000);
     assert.equal(listener.headersTimeout, 60_000);
     assert.equal(
@@ -554,7 +559,7 @@ void test("the HTTPS socket injects a repo token only after checking the full pu
   }
 });
 
-void test("Content-Encoding reaches GitHub only on fetch bodies, and inspected bodies must be unencoded", async () => {
+test("Content-Encoding reaches GitHub only on fetch bodies, and inspected bodies must be unencoded", async () => {
   const { socket, instance, incoming, stop } = await startGateway();
   try {
     const negotiation = gzipSync(

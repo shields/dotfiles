@@ -28,7 +28,7 @@ limitations under the License.
   (`tools/install_ci_tools.sh`) installs the tools the tests need and
   `make setup` installs the locked dependencies. `DOTFILES_FAIL_ON_SKIP=1` makes
   any skipped pytest test fail the run, so a test that needs a new tool needs it
-  added to the script, not a skip. Node and zsh tests have no skip mechanism;
+  added to the script, not a skip. Bun and zsh tests have no skip mechanism;
   keep it that way. The script pins Lima with a checksum; bump it by hand.
   `zizmor.yml` audits the workflows.
 - **Fonts**: `tools/create_nerd_commit_mono.sh` rebuilds the Nerd Font in
@@ -116,8 +116,8 @@ Throwaway Lima VMs (the README describes them for users):
   the VM before deletion. `gateway/` contains the shared policy, service, state,
   authorization and CLI. `.config/vm-access/profiles.yaml` defines templates;
   edits affect future grants only. On the Mac, `provision.sh dev` bundles the
-  service and loads its launchd agent. The agent's `main.mjs` is built from this
-  checkout, not copied by `provision.sh`.
+  service for Bun and loads its launchd agent. The agent's `main.mjs` is built
+  from this checkout, not copied by `provision.sh`.
   `bin/github_app_token.py` remains for non-gateway throwaway machines; Lima
   bases run `provision/throwaway.sh --no-github-timer`. `limavm` never calls
   `security`.

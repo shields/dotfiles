@@ -374,8 +374,8 @@ replaces the name `dotfiles-base`.
 ## GitHub access
 
 Run `./provision.sh dev` on the Mac to build and start the `vm-access` launchd
-service. It holds the GitHub App access and refresh tokens under
-`~/.config/secrets/vm-access/`. A Lima guest receives only a public CA
+service, which runs under Bun. It holds the GitHub App access and refresh tokens
+under `~/.config/secrets/vm-access/`. A Lima guest receives only a public CA
 certificate and an immutable VM ID, never a GitHub token. Its HTTPS requests
 for `github.com` and `api.github.com` go through a per-VM Unix socket to the
 Mac. The gateway chooses the repository's token after checking the current

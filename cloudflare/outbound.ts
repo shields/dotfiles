@@ -140,7 +140,16 @@ function upstreamRequest(
         : `Bearer ${token}`,
     );
   }
-  return new Request(request, { headers, redirect: "manual" });
+  const upstream = new Request(request, { redirect: "manual" });
+  // An empty headers override can retain guest credentials in Bun's Request copy.
+  const inheritedHeaders = [...upstream.headers.keys()];
+  for (const name of inheritedHeaders) {
+    upstream.headers.delete(name);
+  }
+  for (const [name, value] of headers) {
+    upstream.headers.set(name, value);
+  }
+  return upstream;
 }
 
 function downstreamResponse(

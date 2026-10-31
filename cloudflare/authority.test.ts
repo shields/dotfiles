@@ -1,6 +1,10 @@
 import assert from "node:assert/strict";
-import test from "node:test";
-import { CloudAuthority, type CloudAuthorization } from "./authority.ts";
+import { test } from "bun:test";
+import {
+  CloudAuthority,
+  type CloudAuthorization,
+  type Fetch,
+} from "./authority.ts";
 
 const now = Math.floor(Date.now() / 1000);
 
@@ -68,8 +72,7 @@ class MemoryStorage {
 }
 
 function authority(
-  request: typeof fetch = () =>
-    Promise.resolve(new Response(null, { status: 200 })),
+  request: Fetch = () => Promise.resolve(new Response(null, { status: 200 })),
 ): CloudAuthority {
   return new CloudAuthority(
     new MemoryStorage() as unknown as DurableObjectStorage,
@@ -88,7 +91,7 @@ function authorization(): CloudAuthorization {
   };
 }
 
-void test("live grants and revocations use immutable VM IDs", async () => {
+test("live grants and revocations use immutable VM IDs", async () => {
   const state = authority();
   await state.installAuthorization(authorization());
   const instance = await state.register("work", "owner");
@@ -132,7 +135,7 @@ void test("live grants and revocations use immutable VM IDs", async () => {
   });
 });
 
-void test("refresh is shared across concurrent calls and never appears in logs", async () => {
+test("refresh is shared across concurrent calls and never appears in logs", async () => {
   let refreshes = 0;
   const request = ((input: RequestInfo | URL) => {
     const url =
@@ -153,7 +156,7 @@ void test("refresh is shared across concurrent calls and never appears in logs",
       );
     }
     return Promise.resolve(new Response(null, { status: 200 }));
-  }) as typeof fetch;
+  }) as Fetch;
   const state = authority(request);
   await state.installAuthorization({
     ...authorization(),
@@ -183,7 +186,7 @@ void test("refresh is shared across concurrent calls and never appears in logs",
   assert.doesNotMatch(JSON.stringify(await state.logs(instance.id)), /token/);
 });
 
-void test("ungranted repository reads are anonymous, audited, and revoked with the VM", async () => {
+test("ungranted repository reads are anonymous, audited, and revoked with the VM", async () => {
   const state = authority(() => {
     throw new Error("anonymous access must not request a token");
   });
@@ -230,7 +233,7 @@ void test("ungranted repository reads are anonymous, audited, and revoked with t
   );
 });
 
-void test("revoking a grant removes credentials while preserving anonymous reads", async () => {
+test("revoking a grant removes credentials while preserving anonymous reads", async () => {
   const state = authority();
   await state.installAuthorization(authorization());
   const instance = await state.register("work", "owner");
@@ -261,7 +264,7 @@ void test("revoking a grant removes credentials while preserving anonymous reads
   assert.equal(read.token, null);
 });
 
-void test("stale policy revisions and missing authorization fail closed", async () => {
+test("stale policy revisions and missing authorization fail closed", async () => {
   const state = authority();
   const instance = await state.register("work", "owner");
   await assert.rejects(
@@ -295,7 +298,7 @@ void test("stale policy revisions and missing authorization fail closed", async 
   );
 });
 
-void test("revocation during token refresh prevents forwarding", async () => {
+test("revocation during token refresh prevents forwarding", async () => {
   const refreshStarted = Promise.withResolvers<undefined>();
   const refreshResponse = Promise.withResolvers<Response>();
   const request = ((input: RequestInfo | URL) => {
@@ -310,7 +313,7 @@ void test("revocation during token refresh prevents forwarding", async () => {
       return refreshResponse.promise;
     }
     return Promise.resolve(new Response(null, { status: 200 }));
-  }) as typeof fetch;
+  }) as Fetch;
   const state = authority(request);
   await state.installAuthorization({
     ...authorization(),
@@ -347,7 +350,7 @@ void test("revocation during token refresh prevents forwarding", async () => {
   assert.deepEqual(await state.logs(vm.id), []);
 });
 
-void test("pruning preserves recent records across storage pages", async () => {
+test("pruning preserves recent records across storage pages", async () => {
   const storage = new MemoryStorage();
   const state = new CloudAuthority(
     storage as unknown as DurableObjectStorage,

@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import test from "node:test";
+import { test } from "bun:test";
 import { gzipSync } from "node:zlib";
 import { authorize, type Classification } from "../gateway/policy.ts";
 import { handleOutbound, type OutboundAuthority } from "./outbound.ts";
@@ -75,7 +75,7 @@ function streamedPush(...chunks: Uint8Array[]): Request {
   );
 }
 
-void test("GitHub reads inject a token without forwarding guest credentials", async () => {
+test("GitHub reads inject a token without forwarding guest credentials", async () => {
   const events: string[] = [];
   let authorization: string | null = null;
   let cookie: string | null = null;
@@ -102,7 +102,7 @@ void test("GitHub reads inject a token without forwarding guest credentials", as
   assert.deepEqual(events, ["allow:api.read", "finish:completed:200"]);
 });
 
-void test("task pushes and push probes are forwarded with the repository token", async () => {
+test("task pushes and push probes are forwarded with the repository token", async () => {
   for (const body of [
     push(`refs/heads/task/${instanceId}/check`),
     push(`refs/heads/task/${instanceId}/check`, {
@@ -137,7 +137,7 @@ void test("task pushes and push probes are forwarded with the repository token",
   }
 });
 
-void test("a streamed push beyond the inspection limit is forwarded whole", async () => {
+test("a streamed push beyond the inspection limit is forwarded whole", async () => {
   for (const commands of [
     push(`refs/heads/task/${instanceId}/check`),
     push(`refs/heads/task/${instanceId}/check`, { shallow: ["3".repeat(40)] }),
@@ -160,7 +160,7 @@ void test("a streamed push beyond the inspection limit is forwarded whole", asyn
   }
 });
 
-void test("a push probe followed by more data is denied before forwarding", async () => {
+test("a push probe followed by more data is denied before forwarding", async () => {
   const events: string[] = [];
   const response = await handleOutbound(
     streamedPush(
@@ -180,7 +180,7 @@ void test("a push probe followed by more data is denied before forwarding", asyn
   ]);
 });
 
-void test("gzipped fetch negotiation reaches GitHub with its Content-Encoding", async () => {
+test("gzipped fetch negotiation reaches GitHub with its Content-Encoding", async () => {
   const events: string[] = [];
   const body = new Uint8Array(gzipSync(`0032want ${"1".repeat(40)}\n0000`));
   let encoding: string | null = null;
@@ -205,7 +205,7 @@ void test("gzipped fetch negotiation reaches GitHub with its Content-Encoding", 
   assert.deepEqual(events, ["allow:git.read", "finish:completed:200"]);
 });
 
-void test("inspected bodies must be unencoded", async () => {
+test("inspected bodies must be unencoded", async () => {
   const body = push(`refs/heads/task/${instanceId}/check`);
   const query = JSON.stringify({
     query: '{ repository(owner: "shields", name: "dotfiles") { name } }',
@@ -273,7 +273,7 @@ void test("inspected bodies must be unencoded", async () => {
   }
 });
 
-void test("unsupported writes and foreign refs are denied before forwarding", async () => {
+test("unsupported writes and foreign refs are denied before forwarding", async () => {
   const pushed = push("refs/heads/main");
   let drained = 0;
   for (const [request, status, type, body] of [
@@ -344,7 +344,7 @@ void test("unsupported writes and foreign refs are denied before forwarding", as
   assert.equal(drained, 6);
 });
 
-void test("a denied push larger than the drain limit gets a plain denial", async () => {
+test("a denied push larger than the drain limit gets a plain denial", async () => {
   let pulled = 0;
   let cancelled = false;
   const response = await handleOutbound(
@@ -375,7 +375,7 @@ void test("a denied push larger than the drain limit gets a plain denial", async
   assert.ok(cancelled);
 });
 
-void test("GraphQL reads retain their body and mutations are denied", async () => {
+test("GraphQL reads retain their body and mutations are denied", async () => {
   const events: string[] = [];
   const query = JSON.stringify({
     query:
@@ -415,7 +415,7 @@ void test("GraphQL reads retain their body and mutations are denied", async () =
   assert.equal(denied.status, 403);
 });
 
-void test("GitHub over HTTP is denied", async () => {
+test("GitHub over HTTP is denied", async () => {
   const response = await handleOutbound(
     new Request(
       "http://github.com/shields/dotfiles.git/info/refs?service=git-upload-pack",
@@ -429,7 +429,7 @@ void test("GitHub over HTTP is denied", async () => {
   assert.equal(response.status, 403);
 });
 
-void test("oversized GraphQL bodies are denied before forwarding", async () => {
+test("oversized GraphQL bodies are denied before forwarding", async () => {
   const response = await handleOutbound(
     new Request("https://api.github.com/graphql", {
       method: "POST",
@@ -444,7 +444,7 @@ void test("oversized GraphQL bodies are denied before forwarding", async () => {
   assert.equal(response.status, 403);
 });
 
-void test("audit failure stops forwarding", async () => {
+test("audit failure stops forwarding", async () => {
   const unavailable: OutboundAuthority = {
     allow() {
       return Promise.reject(new Error("audit unavailable"));
@@ -467,7 +467,7 @@ void test("audit failure stops forwarding", async () => {
   assert.equal(response.status, 503);
 });
 
-void test("a missing repository token stops forwarding", async () => {
+test("a missing repository token stops forwarding", async () => {
   const events: string[] = [];
   const missing = authority(events);
   missing.allow = () =>
@@ -488,7 +488,7 @@ void test("a missing repository token stops forwarding", async () => {
   assert.deepEqual(events, ["finish:gateway-error:null"]);
 });
 
-void test("public release downloads receive no repository token", async () => {
+test("public release downloads receive no repository token", async () => {
   let authorization: string | null = null;
   const response = await handleOutbound(
     new Request(
@@ -505,7 +505,7 @@ void test("public release downloads receive no repository token", async () => {
   assert.equal(authorization, null);
 });
 
-void test("ungranted reads forward anonymously and preserve GitHub's private-repository denial", async () => {
+test("ungranted reads forward anonymously and preserve GitHub's private-repository denial", async () => {
   for (const repository of [
     "shields/public",
     "octocat/Hello-World",
@@ -535,15 +535,16 @@ void test("ungranted reads forward anonymously and preserve GitHub's private-rep
     ] as const) {
       const events: string[] = [];
       const status = repository === "shields/private" ? 404 : 200;
+      const original = new Request(url, {
+        method,
+        ...(body ? { body } : {}),
+        headers: {
+          authorization: "Bearer guest-token",
+          cookie: "session=guest",
+        },
+      });
       const response = await handleOutbound(
-        new Request(url, {
-          method,
-          ...(body ? { body } : {}),
-          headers: {
-            authorization: "Bearer guest-token",
-            cookie: "session=guest",
-          },
-        }),
+        original,
         instanceId,
         authority(events),
         async (request) => {
@@ -556,11 +557,13 @@ void test("ungranted reads forward anonymously and preserve GitHub's private-rep
       );
       assert.equal(response.status, status, url);
       assert.equal(events.at(-1), `finish:completed:${String(status)}`);
+      assert.equal(original.headers.get("authorization"), "Bearer guest-token");
+      assert.equal(original.headers.get("cookie"), "session=guest");
     }
   }
 });
 
-void test("anonymous access does not allow push discovery, pushes, or API writes", async () => {
+test("anonymous access does not allow push discovery, pushes, or API writes", async () => {
   for (const request of [
     new Request(
       "https://github.com/shields/public.git/info/refs?service=git-receive-pack",
@@ -596,7 +599,7 @@ void test("anonymous access does not allow push discovery, pushes, or API writes
   }
 });
 
-void test("pagination links name the repository so later pages are checked like the first", async () => {
+test("pagination links name the repository so later pages are checked like the first", async () => {
   const link = (repository: string): string =>
     `<https://api.github.com/${repository}/actions/runs?per_page=1&page=2>; rel="next", <https://api.github.com/${repository}/actions/runs?per_page=1&page=9>; rel="last"`;
   for (const [requested, repository, authorization] of [

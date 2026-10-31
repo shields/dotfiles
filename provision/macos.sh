@@ -75,7 +75,7 @@ macos_vm_access_install() {
     if modules_has "${modules_selection:-}" dev; then
         bun install --frozen-lockfile
         mkdir -p "$HOME/.local/share/vm-access"
-        bun build gateway/main.ts --target=node --outfile "$HOME/.local/share/vm-access/main.mjs"
+        bun build gateway/main.ts --target=bun --outfile "$HOME/.local/share/vm-access/main.mjs"
         "$HOME/bin/vm-access" init
         if launchctl print "gui/$UID/com.msrl.dotfiles.vm-access" >/dev/null 2>&1; then
             launchctl bootout "gui/$UID/com.msrl.dotfiles.vm-access"

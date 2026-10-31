@@ -52,6 +52,10 @@ export type AllowResult =
   | { allowed: true; requestId: string; token: string | null; access: Access }
   | { allowed: false; reason: string };
 
+export type Fetch = (
+  ...args: Parameters<typeof fetch>
+) => ReturnType<typeof fetch>;
+
 const tokenPattern = /^[A-Za-z0-9_.~+/=-]+$/;
 const namePattern = /^[A-Za-z0-9]+(?:[._-][A-Za-z0-9]+)*$/;
 const clientIdPattern = /^[A-Za-z0-9._-]+$/;
@@ -131,12 +135,12 @@ export class CloudAuthority {
   private readonly refreshing = new Map<string, Promise<string>>();
   private readonly storage: DurableObjectStorage;
   private readonly clientId: string;
-  private readonly request: typeof fetch;
+  private readonly request: Fetch;
 
   constructor(
     storage: DurableObjectStorage,
     clientId: string,
-    request: typeof fetch = (input, init) => fetch(input, init),
+    request: Fetch = (input, init) => fetch(input, init),
   ) {
     this.storage = storage;
     this.clientId = clientId;

@@ -3,10 +3,14 @@ import { createServer } from "node:http";
 import { chmodSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import test from "node:test";
+import { afterEach, mock, spyOn, test } from "bun:test";
 import { AppAuth } from "./auth.ts";
 
-void test("device flow requests one repository and checks the resulting token", async (t) => {
+afterEach(() => {
+  mock.restore();
+});
+
+test("device flow requests one repository and checks the resulting token", async () => {
   const directory = mkdtempSync(path.join(tmpdir(), "vm-access-device-"));
   const gh = path.join(directory, "gh");
   writeFileSync(gh, "#!/bin/sh\nprintf '4242\\n'\n");
@@ -19,7 +23,10 @@ void test("device flow requests one repository and checks the resulting token", 
     repositoryId: string | null;
     authorization: string | null;
   }[] = [];
-  const request: typeof fetch = (input, init) => {
+  const request = (
+    input: Parameters<typeof fetch>[0],
+    init?: Parameters<typeof fetch>[1],
+  ): Promise<Response> => {
     const url = new URL(
       input instanceof Request
         ? input.url
@@ -54,7 +61,9 @@ void test("device flow requests one repository and checks the resulting token", 
           : { id: verifiedId, full_name: "shields/dotfiles" };
     return Promise.resolve(Response.json(payload));
   };
-  t.mock.method(globalThis, "fetch", request);
+  spyOn(globalThis, "fetch").mockImplementation(
+    Object.assign(request, { preconnect: fetch.preconnect }),
+  );
   try {
     const auth = new AppAuth(path.join(directory, "secrets"));
     const issued = await auth.issue("shields/dotfiles");
@@ -85,7 +94,7 @@ void test("device flow requests one repository and checks the resulting token", 
   }
 });
 
-void test("concurrent callers spend one refresh token and persist its replacement", async () => {
+test("concurrent callers spend one refresh token and persist its replacement", async () => {
   const directory = mkdtempSync(path.join(tmpdir(), "vm-access-auth-"));
   let refreshes = 0;
   const upstream = createServer((request, response) => {

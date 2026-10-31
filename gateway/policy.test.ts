@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import test from "node:test";
+import { test } from "bun:test";
 import {
   authorize,
   classify,
@@ -57,7 +57,7 @@ function sideband(report: Uint8Array): Buffer {
   }
 }
 
-void test("a batch with another destination is denied before any ref can be forwarded", () => {
+test("a batch with another destination is denied before any ref can be forwarded", () => {
   const body = push(
     `${old} ${next} refs/heads/task/${id}/one\0report-status\n`,
     `${old} ${next} refs/heads/main\n`,
@@ -65,7 +65,7 @@ void test("a batch with another destination is denied before any ref can be forw
   assert.throws(() => parsePushCommands(body, id), /outside this VM/);
 });
 
-void test("denied ref updates are reported in the status format the client requested", () => {
+test("denied ref updates are reported in the status format the client requested", () => {
   const commands = (capabilities: string): Buffer =>
     push(
       `${old} ${next} refs/heads/task/${id}/one\0${capabilities}`,
@@ -113,7 +113,7 @@ void test("denied ref updates are reported in the status format the client reque
   );
 });
 
-void test("a sideband report larger than one packet is split across packets", () => {
+test("a sideband report larger than one packet is split across packets", () => {
   const refs = Array.from(
     { length: 1000 },
     (_, index) => `refs/heads/denied/${String(index).padStart(60, "0")}`,
@@ -137,7 +137,7 @@ void test("a sideband report larger than one packet is split across packets", ()
   );
 });
 
-void test("a push naming one destination twice is denied without a report", () => {
+test("a push naming one destination twice is denied without a report", () => {
   for (const ref of [`refs/heads/task/${id}/one`, "refs/heads/main"]) {
     assert.throws(
       () =>
@@ -157,7 +157,7 @@ void test("a push naming one destination twice is denied without a report", () =
   }
 });
 
-void test("a denial waits for the full command list", () => {
+test("a denial waits for the full command list", () => {
   assert.equal(
     parsePushCommands(
       packet(`${old} ${next} refs/heads/main\0report-status\n`),
@@ -167,7 +167,7 @@ void test("a denial waits for the full command list", () => {
   );
 });
 
-void test("denials reach git as text and gh as a JSON message", () => {
+test("denials reach git as text and gh as a JSON message", () => {
   for (const target of [
     "/shields/dotfiles.git/info/refs?service=git-receive-pack",
     "/shields/dotfiles/info/refs?service=git-upload-pack",
@@ -198,7 +198,7 @@ void test("denials reach git as text and gh as a JSON message", () => {
   }
 });
 
-void test("task branch creation and force updates are both accepted", () => {
+test("task branch creation and force updates are both accepted", () => {
   const created = push(
     `${"0".repeat(40)} ${next} refs/heads/task/${id}/new\0report-status\n`,
   );
@@ -216,7 +216,7 @@ void test("task branch creation and force updates are both accepted", () => {
   ]);
 });
 
-void test("branch deletion, push options, and incomplete commands are denied", () => {
+test("branch deletion, push options, and incomplete commands are denied", () => {
   assert.throws(
     () =>
       parsePushCommands(
@@ -256,7 +256,7 @@ void test("branch deletion, push options, and incomplete commands are denied", (
   );
 });
 
-void test("a lone flush packet is classified as a push probe", () => {
+test("a lone flush packet is classified as a push probe", () => {
   const probe = Buffer.from("0000");
   assert.equal(parsePushCommands(probe, id), null);
   assert.throws(() => parsePushCommands(push(), id), /no ref updates/);
@@ -284,7 +284,7 @@ void test("a lone flush packet is classified as a push probe", () => {
   );
 });
 
-void test("a push from a shallow clone lists its shallow commits before the commands", () => {
+test("a push from a shallow clone lists its shallow commits before the commands", () => {
   const shallow = `shallow ${"3".repeat(40)}\n`;
   const command = `${old} ${next} refs/heads/task/${id}/new\0report-status\n`;
   const receivePack = (body: Buffer): Classification =>
@@ -352,7 +352,7 @@ void test("a push from a shallow clone lists its shallow commits before the comm
   );
 });
 
-void test("GraphQL allows one scoped query and rejects mutation and cross-repository reads", () => {
+test("GraphQL allows one scoped query and rejects mutation and cross-repository reads", () => {
   const body = Buffer.from(
     JSON.stringify({
       query:
@@ -386,7 +386,7 @@ void test("GraphQL allows one scoped query and rejects mutation and cross-reposi
   );
 });
 
-void test("GraphQL accepts gh's interactive repository discovery query", () => {
+test("GraphQL accepts gh's interactive repository discovery query", () => {
   const query = `
     fragment repo on Repository {
       id
@@ -420,7 +420,7 @@ void test("GraphQL accepts gh's interactive repository discovery query", () => {
   }
 });
 
-void test("GraphQL viewer reads allow only the login alongside one repository", () => {
+test("GraphQL viewer reads allow only the login alongside one repository", () => {
   const repository = 'repository(owner:"shields",name:"dotfiles"){name}';
   const body = (query: string): Buffer =>
     Buffer.from(JSON.stringify({ query, variables: null }));
@@ -455,7 +455,7 @@ void test("GraphQL viewer reads allow only the login alongside one repository", 
   );
 });
 
-void test("REST reads can be anonymous and API writes have no classification", () => {
+test("REST reads can be anonymous and API writes have no classification", () => {
   const read = classify(
     {
       host: "api.github.com",
@@ -514,7 +514,7 @@ void test("REST reads can be anonymous and API writes have no classification", (
   });
 });
 
-void test("REST pagination links name the requested repository instead of its ID", () => {
+test("REST pagination links name the requested repository instead of its ID", () => {
   const read = classify(
     {
       host: "api.github.com",
@@ -575,7 +575,7 @@ void test("REST pagination links name the requested repository instead of its ID
   );
 });
 
-void test("anonymous access covers repository reads without granting writes or identity", () => {
+test("anonymous access covers repository reads without granting writes or identity", () => {
   for (const operation of ["git.read", "api.read", "public.read"] as const) {
     assert.equal(authorize(null, operation), "anonymous");
     assert.equal(
@@ -600,7 +600,7 @@ void test("anonymous access covers repository reads without granting writes or i
   );
 });
 
-void test("Git discovery separates fetches from pushes with and without a .git suffix", () => {
+test("Git discovery separates fetches from pushes with and without a .git suffix", () => {
   for (const repository of ["shields/dotfiles", "octocat/Hello-World"]) {
     for (const suffix of ["", ".git"]) {
       for (const service of ["git-upload-pack", "git-receive-pack"]) {
@@ -661,7 +661,7 @@ void test("Git discovery separates fetches from pushes with and without a .git s
   );
 });
 
-void test("repository web pages are always anonymous and accept only reads", () => {
+test("repository web pages are always anonymous and accept only reads", () => {
   for (const target of [
     "/shields/dotfiles",
     "/shields/dotfiles/blob/main/README.md",

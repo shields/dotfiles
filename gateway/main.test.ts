@@ -10,11 +10,11 @@ import {
 } from "node:fs";
 import http from "node:http";
 import path from "node:path";
-import test from "node:test";
+import { test } from "bun:test";
 import YAML from "yaml";
 import { State } from "./state.ts";
 
-void test("CLI grants and edits apply live and disabled VM logs stay addressable by ID", async () => {
+test("CLI grants and edits apply live and disabled VM logs stay addressable by ID", async () => {
   const root = mkdtempSync("/tmp/vma-");
   const lima = path.join(root, "lima");
   const secrets = path.join(root, "secrets");
@@ -42,7 +42,19 @@ void test("CLI grants and edits apply live and disabled VM logs stay addressable
       "../.config/vm-access/profiles.yaml",
     ),
   };
-  const main = path.join(import.meta.dirname, "main.ts");
+  const main = path.join(root, "main.mjs");
+  const build = spawnSync(
+    process.execPath,
+    [
+      "build",
+      path.join(import.meta.dirname, "main.ts"),
+      "--target=bun",
+      "--outfile",
+      main,
+    ],
+    { encoding: "utf8", timeout: 30_000 },
+  );
+  assert.equal(build.status, 0, build.stderr);
   const service = spawn(process.execPath, [main, "serve"], {
     env: environment,
     stdio: ["ignore", "ignore", "pipe"],
@@ -147,4 +159,4 @@ void test("CLI grants and edits apply live and disabled VM logs stay addressable
     }
     rmSync(root, { recursive: true, force: true });
   }
-});
+}, 60_000);
