@@ -98,7 +98,6 @@ linux)
         ':(exclude).config/emacs-plus'
         ':(exclude).gnupg/gpg-agent.conf'
         ':(exclude)bin/chrome-tabs-to-markdown'
-        ':(exclude)bin/*.applescript'
         ':(exclude)bin/clean_downloads.py'
         ':(exclude)bin/limavm'
         ':(exclude)bin/vm-access'

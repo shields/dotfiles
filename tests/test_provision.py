@@ -83,7 +83,6 @@ LINUX_EXCLUDES = (
     ".config/emacs-plus",
     ".gnupg/gpg-agent.conf",
     "bin/chrome-tabs-to-markdown",
-    "bin/*.applescript",
     "bin/clean_downloads.py",
     "bin/limavm",
     "bin/vm-access",
@@ -253,7 +252,6 @@ def selected(path: str, os_name: str) -> bool:
             "bin/vm-access",
             ".claude/skills/transcribe",
         }
-        or (path.startswith("bin/") and path.endswith(".applescript"))
     )
     return not excluded
 
@@ -473,7 +471,6 @@ SCRATCH_FILES = {
     "bin/github_app_token.py": "",
     "bin/setup-github-gateway": "",
     "bin/github-gateway-credential": "",
-    "bin/zoom-toggle-audio.applescript": "",
     "Library/Fonts/f.otf": "",
     "Library/Application Support/with space.txt": "",
     "README.md": "",

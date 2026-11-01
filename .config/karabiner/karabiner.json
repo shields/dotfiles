@@ -894,21 +894,6 @@
                                 "type": "basic"
                             }
                         ]
-                    },
-                    {
-                        "description": "Zoom toggles",
-                        "manipulators": [
-                            {
-                                "from": { "key_code": "f5" },
-                                "to": [{ "shell_command": "osascript ~/bin/zoom-toggle-audio.applescript" }],
-                                "type": "basic"
-                            },
-                            {
-                                "from": { "key_code": "f6" },
-                                "to": [{ "shell_command": "osascript ~/bin/zoom-toggle-video.applescript" }],
-                                "type": "basic"
-                            }
-                        ]
                     }
                 ]
             },
