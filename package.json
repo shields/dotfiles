@@ -9,7 +9,7 @@
     "@cloudflare/workers-types": "5.20261030.1",
     "@eslint/js": "10.0.1",
     "@types/bun": "1.4.4",
-    "eslint": "10.13.0",
+    "eslint": "10.14.0",
     "eslint-config-prettier": "10.1.8",
     "eslint-plugin-unicorn": "79.0.0",
     "jiti": "2.7.0",
