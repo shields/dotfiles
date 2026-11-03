@@ -1,13 +1,15 @@
 import assert from "node:assert/strict";
-import { spawnSync } from "node:child_process";
+import { spawn, spawnSync } from "node:child_process";
 import {
   createPrivateKey,
   generateKeyPairSync,
   X509Certificate,
 } from "node:crypto";
 import {
+  chmodSync,
   cpSync,
   existsSync,
+  mkdirSync,
   mkdtempSync,
   readdirSync,
   readFileSync,
@@ -22,6 +24,8 @@ import { ensureCertificates, type Certificates } from "./cert.ts";
 
 const files = ["ca.pem", "ca-key.pem", "github.pem", "github-key.pem"];
 const serverAuth = "1.3.6.1.5.5.7.3.1";
+
+const certModule = path.join(import.meta.dirname, "cert.ts");
 
 function withDirectory(run: (directory: string) => void): void {
   const directory = mkdtempSync(path.join(tmpdir(), "vm-access-cert-"));
@@ -55,6 +59,14 @@ function openssl(...arguments_: string[]): void {
   assert.equal(result.status, 0, result.stderr);
 }
 
+function realOpenssl(): string {
+  const real = spawnSync("sh", ["-c", "command -v openssl"], {
+    encoding: "utf8",
+  }).stdout.trim();
+  assert.notEqual(real, "");
+  return real;
+}
+
 function read(directory: string, name: string): string {
   return readFileSync(path.join(directory, name), "utf8");
 }
@@ -75,6 +87,15 @@ function assertConsistent(certificates: Certificates): void {
     { encoding: "utf8" },
   );
   assert.equal(result.status, 0, `${result.stdout}${result.stderr}`);
+  const authority = new X509Certificate(readFileSync(certificates.ca));
+  assert.ok(
+    authority.checkPrivateKey(
+      createPrivateKey(
+        readFileSync(path.join(path.dirname(certificates.ca), "ca-key.pem")),
+      ),
+    ),
+    "the CA key does not match the CA certificate",
+  );
   const leaf = new X509Certificate(readFileSync(certificates.cert));
   assert.ok(
     leaf.checkPrivateKey(createPrivateKey(readFileSync(certificates.key))),
@@ -269,17 +290,19 @@ test("a key that is not the leaf's is replaced together with the leaf", () => {
   });
 });
 
-test("half of a CA pair is an error and nothing is regenerated", () => {
+test("half of a CA pair is an error that names the file to remove, and nothing is regenerated", () => {
   withIssued((directory) => {
-    for (const missing of ["ca.pem", "ca-key.pem"]) {
+    for (const [present, missing] of [
+      ["ca-key.pem", "ca.pem"],
+      ["ca.pem", "ca-key.pem"],
+    ] as const) {
       const saved = read(directory, missing);
       rmSync(path.join(directory, missing));
       const names = files.filter((name) => name !== missing);
       const before = snapshot(directory, names);
-      assert.throws(
-        () => ensureCertificates(directory),
-        /gateway CA files are incomplete/,
-      );
+      assert.throws(() => ensureCertificates(directory), {
+        message: `gateway CA files are incomplete: ${present} exists without ${missing}; remove ${path.join(directory, present)} to issue a new CA`,
+      });
       assert.deepEqual(snapshot(directory, names), before);
       assert.ok(!existsSync(path.join(directory, missing)));
       writeFileSync(path.join(directory, missing), saved);
@@ -354,5 +377,211 @@ test("a leaf that does not verify once it is issued is an error", () => {
     );
     assert.ok(!existsSync(path.join(directory, "github.pem")));
     assert.ok(!existsSync(path.join(directory, "github-key.pem")));
+  });
+});
+
+test("a fresh directory whose path contains a dot keeps the serial file inside it", () => {
+  withDirectory((parent) => {
+    // LibreSSL's default serial file is the CA path cut at its first dot plus
+    // ".srl". A relative path makes that dot the one in ".config", so the
+    // stray file lands in the parent.
+    const original = process.cwd();
+    process.chdir(parent);
+    try {
+      const directory = path.join(".config", "vm-access");
+      assertConsistent(ensureCertificates(directory));
+      assert.ok(existsSync(path.join(directory, "ca.srl")));
+      assert.deepEqual(readdirSync(parent), [".config"]);
+    } finally {
+      process.chdir(original);
+    }
+  });
+});
+
+test("a lock left by a crashed run is an error that names the lock, and nothing is rewritten", () => {
+  withIssued((directory) => {
+    issueLeaf(directory, 1);
+    const lock = path.join(directory, ".lock");
+    mkdirSync(lock);
+    const names = listing(directory);
+    const before = snapshot(directory);
+    assert.throws(
+      () => ensureCertificates(directory, 200),
+      (error: Error) => error.message.includes(`remove ${lock}`),
+    );
+    assert.deepEqual(listing(directory), names);
+    assert.deepEqual(snapshot(directory), before);
+  });
+});
+
+test("a valid pair is returned without taking the lock", () => {
+  withIssued((directory) => {
+    mkdirSync(path.join(directory, ".lock"));
+    assertConsistent(ensureCertificates(directory, 200));
+  });
+});
+
+// Without the lock, the shim's waits make runs that do not exclude each other
+// end with a leaf its CA did not sign, whatever their timing.
+const recordingOpenssl = `#!${process.execPath}
+import { spawnSync } from "node:child_process";
+import { existsSync, mkdirSync, readFileSync } from "node:fs";
+import path from "node:path";
+
+const args = process.argv.slice(2);
+const { REAL_OPENSSL: real, RECORDS: records, SECRETS: secrets } = process.env;
+const sleep = (milliseconds) =>
+  Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, milliseconds);
+const claim = (name) => {
+  for (let rank = 0; ; rank++) {
+    try {
+      mkdirSync(path.join(records, name + "-" + String(rank)));
+      return rank;
+    } catch (error) {
+      if (error.code !== "EEXIST") throw error;
+    }
+  }
+};
+const waitFor = (condition) => {
+  const deadline = Date.now() + 30_000;
+  while (!condition()) {
+    if (Date.now() > deadline) throw new Error("the other run never arrived");
+    sleep(20);
+  }
+};
+const unlocked = () => !existsSync(path.join(secrets, ".lock"));
+const execute = () => {
+  const status = spawnSync(real, args, { stdio: "inherit" }).status ?? 1;
+  if (status !== 0) process.exit(status);
+};
+
+if (args[0] === "req" && args.includes("-x509")) {
+  const rank = claim("authority");
+  execute();
+  if (rank > 0 && unlocked()) {
+    waitFor(() => existsSync(path.join(records, "signed")));
+  }
+} else if (args[0] === "x509" && args.includes("-req")) {
+  const rank = claim("signature");
+  const ca = args[args.indexOf("-CA") + 1];
+  const before = readFileSync(ca);
+  execute();
+  if (rank === 0) {
+    mkdirSync(path.join(records, "signed"));
+    if (unlocked()) waitFor(() => !readFileSync(ca).equals(before));
+  }
+} else {
+  execute();
+}
+`;
+
+const child = `
+import { ensureCertificates } from ${JSON.stringify(certModule)};
+const [directory, startAt] = process.argv.slice(1);
+Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, Math.max(0, Number(startAt) - Date.now()));
+process.stdout.write(JSON.stringify(ensureCertificates(directory)));
+`;
+
+interface Outcome {
+  status: number | null;
+  stdout: string;
+  stderr: string;
+}
+
+function runChild(
+  directory: string,
+  startAt: number,
+  environment: NodeJS.ProcessEnv,
+): Promise<Outcome> {
+  return new Promise((resolve, reject) => {
+    const subprocess = spawn(
+      process.execPath,
+      ["--input-type=module", "-e", child, directory, String(startAt)],
+      { env: environment },
+    );
+    let stdout = "";
+    let stderr = "";
+    subprocess.stdout.setEncoding("utf8").on("data", (chunk: string) => {
+      stdout += chunk;
+    });
+    subprocess.stderr.setEncoding("utf8").on("data", (chunk: string) => {
+      stderr += chunk;
+    });
+    subprocess.on("error", reject);
+    subprocess.on("close", (status) => {
+      resolve({ status, stdout, stderr });
+    });
+  });
+}
+
+test("overlapping first runs issue one CA and one leaf and all return them", async () => {
+  const shims = mkdtempSync(path.join(tmpdir(), "vm-access-cert-shim-"));
+  const directory = mkdtempSync(path.join(tmpdir(), "vm-access-cert-race-"));
+  try {
+    const records = path.join(shims, "records");
+    mkdirSync(records);
+    const shim = path.join(shims, "openssl");
+    writeFileSync(shim, recordingOpenssl);
+    chmodSync(shim, 0o755);
+    const environment = {
+      ...process.env,
+      PATH: `${shims}${path.delimiter}${process.env.PATH ?? ""}`,
+      REAL_OPENSSL: realOpenssl(),
+      RECORDS: records,
+      SECRETS: directory,
+    };
+    const startAt = Date.now() + 300;
+    const outcomes = await Promise.all(
+      Array.from({ length: 6 }, () =>
+        runChild(directory, startAt, environment),
+      ),
+    );
+    for (const outcome of outcomes) {
+      assert.equal(outcome.status, 0, outcome.stderr);
+    }
+    assert.equal(new Set(outcomes.map((outcome) => outcome.stdout)).size, 1);
+    assert.deepEqual(
+      readdirSync(records)
+        .filter((name) => name !== "signed")
+        .toSorted((a, b) => a.localeCompare(b)),
+      ["authority-0", "signature-0"],
+    );
+    const before = snapshot(directory);
+    assertConsistent(ensureCertificates(directory));
+    assert.deepEqual(snapshot(directory), before);
+    assertKeysPrivate(directory);
+    assert.deepEqual(strays(directory), []);
+  } finally {
+    rmSync(shims, { recursive: true, force: true });
+    rmSync(directory, { recursive: true, force: true });
+  }
+}, 60_000);
+
+test("the leaf key is renamed into place before the leaf certificate", () => {
+  withIssued((directory) => {
+    const cert = path.join(directory, "github.pem");
+    const key = path.join(directory, "github-key.pem");
+    const oldKey = read(directory, "github-key.pem");
+    rmSync(cert);
+    mkdirSync(cert);
+    assert.throws(() => ensureCertificates(directory), { syscall: "rename" });
+    assert.notEqual(readFileSync(key, "utf8"), oldKey);
+    assert.deepEqual(strays(directory), []);
+  });
+});
+
+test("a lock that cannot be created for a reason other than existing is an error", () => {
+  withDirectory((directory) => {
+    chmodSync(directory, 0o500);
+    try {
+      assert.throws(() => ensureCertificates(directory, 200), {
+        code: "EACCES",
+        syscall: "mkdir",
+        path: path.join(directory, ".lock"),
+      });
+    } finally {
+      chmodSync(directory, 0o700);
+    }
+    assert.deepEqual(readdirSync(directory), []);
   });
 });
