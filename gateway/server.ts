@@ -95,6 +95,14 @@ export async function readBody(
   }
 }
 
+function closeServer(server: http.Server): Promise<void> {
+  return new Promise((resolve) => {
+    server.close(() => {
+      resolve();
+    });
+  });
+}
+
 async function drained(
   remaining: AsyncIterator<Buffer>,
   limit: number,
@@ -188,7 +196,10 @@ export class Gateway {
   private refreshTimer: NodeJS.Timeout | null = null;
   private syncing: Promise<void> = Promise.resolve();
   private readonly pending = new Set<Promise<void>>();
+  private readonly retired = new Map<https.Server, Promise<void>>();
   private stopped = false;
+  private starting: Promise<void> | null = null;
+  private stopping: Promise<void> | null = null;
 
   constructor(state: State, auth: AppAuth, options: GatewayOptions) {
     this.state = state;
@@ -197,14 +208,35 @@ export class Gateway {
   }
 
   async start(): Promise<void> {
-    if (this.stopped) {
-      throw new Error("gateway is stopped");
+    this.requireRunning();
+    if (this.starting) {
+      throw new Error("gateway is already started");
     }
+    this.starting = this.open();
+    try {
+      await this.starting;
+    } catch (error) {
+      await this.stop();
+      throw error;
+    }
+  }
+
+  private async open(): Promise<void> {
     await this.refresh();
+    this.requireRunning();
     await this.startAdmin();
+    this.requireRunning();
     this.refreshTimer = setInterval(() => {
       this.track(this.refreshAndPrune());
     }, 60_000);
+  }
+
+  // stop() closes servers only once open() has settled, so open() fails at
+  // the first step that finds the gateway stopped and leaves the closing to it.
+  private requireRunning(): void {
+    if (this.stopped) {
+      throw new Error("gateway is stopped");
+    }
   }
 
   private async refreshAndPrune(): Promise<void> {
@@ -244,7 +276,11 @@ export class Gateway {
     );
     for (const [id, server] of this.listeners) {
       if (!active.has(id)) {
-        server.close();
+        const closed = closeServer(server);
+        this.retired.set(server, closed);
+        void closed.then(() => {
+          this.retired.delete(server);
+        });
         this.listeners.delete(id);
       }
     }
@@ -268,6 +304,11 @@ export class Gateway {
           headersTimeout: 60_000,
         },
         (request, response) => {
+          // A connection that Bun hands over after the close has not been
+          // swept, and would stay open until the keep-alive timeout.
+          if (this.stopped) {
+            response.setHeader("connection", "close");
+          }
           this.track(this.handle(instance.id, request, response));
         },
       );
@@ -326,30 +367,52 @@ export class Gateway {
     }
   }
 
-  async stop(): Promise<void> {
+  stop(): Promise<void> {
     this.stopped = true;
+    this.stopping ??= this.shutdown();
+    return this.stopping;
+  }
+
+  private async shutdown(): Promise<void> {
     if (this.refreshTimer) {
       clearInterval(this.refreshTimer);
       this.refreshTimer = null;
     }
-    // A refresh that is starting a server adds it before the servers to close
-    // are collected.
-    await Promise.allSettled([this.syncing]);
-    const servers = [
+    // A refresh that is starting a server, and a start() that is opening the
+    // admin server, add theirs before the servers to close are collected.
+    await Promise.allSettled([this.starting, this.syncing]);
+    const serving = [
       ...this.listeners.values(),
       ...(this.admin ? [this.admin] : []),
     ];
-    await Promise.all(
-      servers.map(async (server) => {
-        await new Promise<void>((resolve) => {
-          server.close(() => {
-            resolve();
-          });
-        });
-      }),
-    );
+    const closes = [
+      ...serving.map((server) => closeServer(server)),
+      ...this.retired.values(),
+    ];
+    // A close completes only when every connection has ended. Connections
+    // that were busy are idle once their handlers finish, and would otherwise
+    // stay open until the keep-alive timeout. When nothing was busy, close()
+    // has already swept the idle connections, and Bun resets a connection that
+    // a second sweep finds still sending its last response.
+    const busy = this.pending.size > 0;
+    await this.awaitHandlers();
+    if (busy) {
+      for (const server of serving) {
+        server.closeIdleConnections();
+      }
+    }
+    // A retired server belongs to a disabled VM, whose requests are refused,
+    // so the connections it still has are cut.
+    for (const server of this.retired.keys()) {
+      server.closeAllConnections();
+    }
+    await Promise.all(closes);
     this.listeners.clear();
     this.admin = null;
+    await this.awaitHandlers();
+  }
+
+  private async awaitHandlers(): Promise<void> {
     while (this.pending.size > 0) {
       await Promise.allSettled(this.pending);
     }

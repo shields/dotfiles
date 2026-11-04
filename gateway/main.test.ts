@@ -344,3 +344,28 @@ test("edit authorizes a repository it adds", () => {
     "api repos/shields/new --jq .id\n",
   );
 });
+
+test("serve closes the listeners it opened and exits when it cannot open one for a registered VM", () => {
+  const { root, run } = sandbox();
+  const state = new State(path.join(root, "state"));
+  try {
+    // The listener for lima:trial is already open when this one fails.
+    state.register(
+      "lima:vanished",
+      path.join(root, "vanished", "vanished.sock"),
+      "tester",
+    );
+  } finally {
+    state.close();
+  }
+  const result = run(["serve"]);
+  assert.deepEqual(
+    { status: result.status, signal: result.signal },
+    { status: 1, signal: null },
+    result.stderr,
+  );
+  assert.match(
+    result.stderr,
+    /^vm-access: [^\n]*ENOENT[^\n]*vanished\.sock[^\n]*\n$/,
+  );
+}, 60_000);

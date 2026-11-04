@@ -1,13 +1,13 @@
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
-import {
+import http, {
   createServer,
   request as httpRequest,
   type ClientRequest,
   type IncomingHttpHeaders,
   type RequestListener,
 } from "node:http";
-import { once } from "node:events";
+import { once, type EventEmitter } from "node:events";
 import https from "node:https";
 import {
   connect,
@@ -36,6 +36,7 @@ import {
   test,
 } from "bun:test";
 import { setImmediate as nextTurn } from "node:timers/promises";
+import { promisify } from "node:util";
 import { gzipSync } from "node:zlib";
 import { AppAuth } from "./auth.ts";
 import { Gateway } from "./server.ts";
@@ -46,6 +47,7 @@ afterEach(() => {
 });
 
 const createHttpsServer = https.createServer;
+const createHttpServer = http.createServer;
 
 const idRef = (id: string): string => `refs/heads/task/${id}/one`;
 const pages = (repository: string): string =>
@@ -2112,51 +2114,61 @@ for (const { name, servers, race } of [
   });
 }
 
-for (const { name, listenerDirectory, adminDirectory, starts } of [
+function unstartedGateway(
+  sockets: string[],
+  adminSocket = "admin.sock",
+): {
+  root: string;
+  gateway: Gateway;
+  created: Mock<typeof https.createServer>;
+} {
+  const root = mkdtempSync(path.join(tmpdir(), "vm-access-server-"));
+  const state = new State(path.join(root, "state"));
+  const secrets = path.join(root, "secrets");
+  mkdirSync(secrets);
+  defer(() => {
+    state.close();
+    rmSync(root, { recursive: true, force: true });
+  });
+  for (const [index, socket] of sockets.entries()) {
+    state.register(
+      `lima:vm${String(index)}`,
+      path.join(root, socket),
+      "tester",
+    );
+  }
+  const gateway = new Gateway(state, new AppAuth(secrets), {
+    cert: certificate,
+    key,
+    adminSocket: path.join(root, adminSocket),
+  });
+  const created = spyOn(https, "createServer");
+  defer(() => gateway.stop());
+  return { root, gateway, created };
+}
+
+for (const { name, listener, admin, starts } of [
   {
     name: "before start()",
-    listenerDirectory: "present",
-    adminDirectory: "present",
+    listener: "work.sock",
+    admin: "admin.sock",
     starts: false,
   },
   {
     name: "after start() failed to open a VM listener",
-    listenerDirectory: "missing",
-    adminDirectory: "present",
+    listener: "x/work.sock",
+    admin: "admin.sock",
     starts: true,
   },
   {
     name: "after start() failed to open the admin socket",
-    listenerDirectory: "present",
-    adminDirectory: "missing",
+    listener: "work.sock",
+    admin: "x/admin.sock",
     starts: true,
   },
 ]) {
   test(`stop() ${name} and again afterwards does not throw, and the stopped gateway cannot start`, async () => {
-    const root = mkdtempSync(path.join(tmpdir(), "vm-access-server-"));
-    const state = new State(path.join(root, "state"));
-    const secrets = path.join(root, "secrets");
-    mkdirSync(secrets);
-    defer(() => {
-      state.close();
-      rmSync(root, { recursive: true, force: true });
-    });
-    const missing = path.join(root, "x");
-    const listener = path.join(
-      listenerDirectory === "missing" ? missing : root,
-      "work.sock",
-    );
-    const adminSocket = path.join(
-      adminDirectory === "missing" ? missing : root,
-      "admin.sock",
-    );
-    state.register("lima:work", listener, "tester");
-    const gateway = new Gateway(state, new AppAuth(secrets), {
-      cert: certificate,
-      key,
-      adminSocket,
-    });
-    defer(() => gateway.stop());
+    const { root, gateway } = unstartedGateway([listener], admin);
     if (starts) {
       await assert.rejects(gateway.start(), {
         code: "ENOENT",
@@ -2166,7 +2178,445 @@ for (const { name, listenerDirectory, adminDirectory, starts } of [
     await gateway.stop();
     await gateway.stop();
     await assert.rejects(gateway.start(), { message: "gateway is stopped" });
-    assert.equal(await accepting(listener), false);
-    assert.equal(await accepting(adminSocket), false);
+    assert.equal(await accepting(path.join(root, listener)), false);
+    assert.equal(await accepting(path.join(root, admin)), false);
   });
 }
+
+for (const { name, sockets, admin } of [
+  {
+    name: "a later VM listener cannot be opened",
+    sockets: ["first.sock", "gone/second.sock"],
+    admin: "admin.sock",
+  },
+  {
+    name: "the admin socket cannot be opened",
+    sockets: ["first.sock"],
+    admin: "gone/admin.sock",
+  },
+]) {
+  test(`start() fails with the original error and leaves nothing listening when ${name}`, async () => {
+    const { root, gateway, created } = unstartedGateway(sockets, admin);
+    await assert.rejects(gateway.start(), { syscall: "listen" });
+    assert.equal(created.mock.calls.length, sockets.length);
+    assert.equal(await accepting(path.join(root, "first.sock")), false);
+    assert.equal(await accepting(path.join(root, admin)), false);
+    assert.deepEqual(
+      created.mock.results.map((result) =>
+        result.type === "return" ? result.value.listening : undefined,
+      ),
+      sockets.map(() => false),
+    );
+  });
+}
+
+function interceptAdmin(intercept: (server: http.Server) => void): void {
+  spyOn(http, "createServer").mockImplementation(((
+    ...args: Parameters<typeof http.createServer>
+  ) => {
+    const server = createHttpServer(...args);
+    intercept(server);
+    return server;
+  }) as typeof http.createServer);
+}
+
+interface StartRace {
+  name: string;
+  arm: (context: {
+    gateway: Gateway;
+    created: Mock<typeof https.createServer>;
+    stops: Promise<void>[];
+  }) => {
+    race?: () => Promise<void>;
+    onAdmin?: (server: http.Server) => void;
+  };
+}
+
+const startRaces: StartRace[] = [
+  {
+    name: "start() is waiting for its first refresh",
+    arm: ({ gateway, stops }) => ({
+      race: () => {
+        stops.push(gateway.stop());
+        return Promise.resolve();
+      },
+    }),
+  },
+  {
+    name: "a VM listener is opening",
+    arm: ({ gateway, created, stops }) => {
+      const held = holdNextServer(created);
+      return {
+        race: async () => {
+          await within("the VM listener to open", held.starting);
+          stops.push(gateway.stop());
+          held.proceed();
+        },
+      };
+    },
+  },
+  {
+    name: "the admin server has just been asked to listen",
+    arm: ({ gateway, stops }) => ({
+      onAdmin: (server) => {
+        const listen = server.listen.bind(server);
+        server.listen = ((...args: Parameters<typeof server.listen>) => {
+          const result = listen(...args);
+          stops.push(gateway.stop());
+          return result;
+        }) as typeof server.listen;
+      },
+    }),
+  },
+  {
+    name: "the admin server emits listening",
+    arm: ({ gateway, stops }) => ({
+      onAdmin: (server) => {
+        const emit = server.emit.bind(server);
+        server.emit = (event: string | symbol, ...rest: unknown[]) => {
+          if (event === "listening") {
+            stops.push(gateway.stop());
+          }
+          return emit(event, ...rest);
+        };
+      },
+    }),
+  },
+];
+
+for (const { name, arm } of startRaces) {
+  test(`stop() while ${name} makes start() fail and leaves nothing listening or scheduled`, async () => {
+    const intervals = mockIntervals();
+    const { root, gateway, created } = unstartedGateway(["vm.sock"]);
+    const refresh = spyOn(gateway, "refresh");
+    const stops: Promise<void>[] = [];
+    const { race, onAdmin } = arm({ gateway, created, stops });
+    const admins: http.Server[] = [];
+    interceptAdmin((server) => {
+      admins.push(server);
+      onAdmin?.(server);
+    });
+    const started = assert.rejects(gateway.start(), {
+      message: "gateway is stopped",
+    });
+    await race?.();
+    await within("start() to settle", started);
+    assert.equal(stops.length, 1);
+    await within("stop()", Promise.all(stops));
+    assert.equal(admins.length, onAdmin ? 1 : 0);
+    assert.equal(await accepting(path.join(root, "vm.sock")), false);
+    assert.equal(await accepting(path.join(root, "admin.sock")), false);
+    intervals.tick(60_000);
+    await nextTurn();
+    assert.equal(refresh.mock.calls.length, 1);
+  });
+}
+
+test("a second start() fails without touching the gateway that is starting or started", async () => {
+  const { root, gateway } = unstartedGateway(["vm.sock"]);
+  const admins = spyOn(http, "createServer");
+  const first = gateway.start();
+  await assert.rejects(gateway.start(), {
+    message: "gateway is already started",
+  });
+  await first;
+  await assert.rejects(gateway.start(), {
+    message: "gateway is already started",
+  });
+  assert.equal(admins.mock.calls.length, 1);
+  assert.equal(await requestSync(path.join(root, "admin.sock")), 200);
+});
+
+function connectionCount(server: https.Server): Promise<number> {
+  return promisify(server.getConnections.bind(server))();
+}
+
+function holdEvent(
+  emitter: EventEmitter,
+  name: string,
+  until: Promise<unknown>,
+  reached?: () => void,
+): void {
+  const emit = emitter.emit.bind(emitter);
+  emitter.emit = (event: string | symbol, ...rest: unknown[]) => {
+    if (event !== name) {
+      return emit(event, ...rest);
+    }
+    reached?.();
+    void until.then(() => emit(event, ...rest));
+    return true;
+  };
+}
+
+test("stop() waits for the server of a VM that was disabled, and for its idle keep-alive connections to end", async () => {
+  const { socket, gateway, state, auth, listener } = await startGateway();
+  listener.keepAliveTimeout = 600_000;
+  const lingering = signal();
+  defer(lingering.resolve);
+  holdEvent(listener, "close", lingering.promise);
+  const agent = new https.Agent({ keepAlive: true });
+  defer(() => {
+    agent.destroy();
+  });
+  const asked = signal();
+  const resume = signal();
+  defer(resume.resolve);
+  spyOn(auth, "token").mockImplementation(async (): Promise<string> => {
+    asked.resolve();
+    await resume.promise;
+    return "ghu_secret";
+  });
+  const { response } = open(socket, "get", agent);
+  await within("the gateway to ask for a token", asked.promise);
+  state.disable("lima:work", "tester");
+  await gateway.refresh();
+  assert.equal(listener.listening, false);
+  assert.equal(await connectionCount(listener), 1);
+  let closed = false;
+  listener.once("close", () => {
+    closed = true;
+  });
+  const stopping = gateway.stop();
+  resume.resolve();
+  assert.equal((await within("the response", response)).status, 403);
+  let stopped = false;
+  void stopping.then(() => {
+    stopped = true;
+  });
+  await nextTurn();
+  await nextTurn();
+  assert.equal(stopped, false);
+  lingering.resolve();
+  await within("stop()", stopping);
+  assert.equal(closed, true);
+  assert.equal(await connectionCount(listener), 0);
+});
+
+test("stop() lets a transfer in flight finish and then ends its keep-alive connection without waiting for the keep-alive timeout", async () => {
+  const finish = signal();
+  const { socket, gateway, listener } = await startGateway({
+    handler: (_request, response) => {
+      response.writeHead(200, { "content-length": 2 });
+      response.write("a");
+      void finish.promise.then(() => response.end("b"));
+    },
+    tls: false,
+  });
+  listener.keepAliveTimeout = 600_000;
+  defer(finish.resolve);
+  const agent = new https.Agent({ keepAlive: true });
+  defer(() => {
+    agent.destroy();
+  });
+  const { firstData, response } = open(socket, "get", agent);
+  await within("the first part of the response", firstData);
+  let stopped = false;
+  const stopping = (async () => {
+    await gateway.stop();
+    stopped = true;
+  })();
+  await nextTurn();
+  await nextTurn();
+  assert.equal(stopped, false);
+  finish.resolve();
+  assert.deepEqual(await within("the response", response), {
+    status: 200,
+    body: "ab",
+    complete: true,
+  });
+  await within("stop()", stopping);
+  assert.equal(await connectionCount(listener), 0);
+});
+
+test("overlapping stop() calls during start() are one shutdown that waits for start() to fail and leaves nothing listening", async () => {
+  const { root, gateway, created } = unstartedGateway(["vm.sock"]);
+  const held = holdNextServer(created);
+  const started = assert.rejects(gateway.start(), {
+    message: "gateway is stopped",
+  });
+  await within("the VM listener to open", held.starting);
+  const stops = [gateway.stop(), gateway.stop()];
+  assert.equal(stops[0], stops[1]);
+  held.proceed();
+  await within("start() to settle", started);
+  await within("stop()", Promise.all(stops));
+  await gateway.stop();
+  assert.equal(await accepting(path.join(root, "vm.sock")), false);
+  assert.equal(await accepting(path.join(root, "admin.sock")), false);
+});
+
+function holdRequests(listener: https.Server): {
+  parsed: Promise<undefined>;
+  deliver: () => void;
+} {
+  const parsed = signal();
+  const delivered = signal();
+  defer(delivered.resolve);
+  holdEvent(listener, "request", delivered.promise, parsed.resolve);
+  return { parsed: parsed.promise, deliver: delivered.resolve };
+}
+
+test("a request that is dispatched once stop() has begun is answered with Connection: close", async () => {
+  const { socket, gateway, listener } = await startGateway();
+  const held = holdRequests(listener);
+  const agent = new https.Agent({ keepAlive: true });
+  defer(() => {
+    agent.destroy();
+  });
+  const answered = send(
+    socket,
+    "GET",
+    "/shields/dotfiles.git/info/refs?service=git-upload-pack",
+    Buffer.alloc(0),
+    "github.com",
+    {},
+    agent,
+  );
+  await within("the request to be parsed", held.parsed);
+  const stopping = gateway.stop();
+  held.deliver();
+  const response = await within("the response", answered);
+  assert.equal(response.status, 200);
+  assert.equal(response.headers.connection, "close");
+  await within("stop()", stopping);
+});
+
+test("stop() waits for a request that is dispatched after it closed the idle connections, so its audit row is written before the database closes", async () => {
+  const { socket, gateway, state, instance, auth, listener, closed } =
+    await startGateway();
+  const events: string[] = [];
+  const asked = signal();
+  const resume = signal();
+  defer(resume.resolve);
+  spyOn(auth, "token").mockImplementation(async (): Promise<string> => {
+    asked.resolve();
+    await resume.promise;
+    events.push("token");
+    return "ghu_secret";
+  });
+  const held = holdRequests(listener);
+  const { request, response } = open(socket);
+  const hungUp = assert.rejects(response, { message: "socket hang up" });
+  await within("the request to be parsed", held.parsed);
+  const audit = recordFinishes(state);
+  const decisions = spyOn(state, "logDecision");
+  const shutdown = (async () => {
+    await gateway.stop();
+    events.push("stopped");
+    const rows = auditRows(state, instance);
+    state.close();
+    return rows;
+  })();
+  await nextTurn();
+  held.deliver();
+  await within("the gateway to ask for a token", asked.promise);
+  const closing = once(listener, "close");
+  request.destroy();
+  await within("the client's request to fail", hungUp);
+  await within("the gateway's response to close", closed());
+  await within("the listener to close", closing);
+  // A stop() that does not wait for requests has resolved by now.
+  await nextTurn();
+  resume.resolve();
+  const rows = await within("the gateway to stop", shutdown);
+  // Yield so a late write to the closed database is reported while this test
+  // is still running.
+  await nextTurn();
+  assert.deepEqual(
+    decisions.mock.results.map(({ type }) => type),
+    ["return"],
+  );
+  assert.deepEqual(events, ["token", "stopped"]);
+  assert.deepEqual(rows, [{ outcome: "interrupted", upstreamStatus: null }]);
+  assert.deepEqual(audit.calls, [{ status: null, outcome: "interrupted" }]);
+});
+
+test("stop() does not sweep a server that had no request in flight, because a second sweep resets a connection still sending its last response", async () => {
+  const { gateway, listener } = await startGateway();
+  const sweep = spyOn(listener, "closeIdleConnections");
+  await gateway.stop();
+  assert.equal(sweep.mock.calls.length, 0);
+});
+
+test("stop() ends a refused upload that a disabled VM never finishes, without waiting for it", async () => {
+  const { socket, gateway, state } = await startGateway();
+  const client = tlsConnect({
+    path: socket,
+    servername: "github.com",
+    rejectUnauthorized: false,
+  });
+  defer(() => {
+    client.destroy();
+  });
+  const failures: Error[] = [];
+  client.on("error", (error) => {
+    failures.push(error);
+  });
+  const refused = signal();
+  client.once("data", refused.resolve);
+  client.write(
+    "POST /shields/dotfiles.git/git-receive-pack HTTP/1.1\r\nhost: example.invalid\r\ncontent-length: 1000\r\n\r\nx",
+  );
+  await within("the refusal", refused.promise);
+  state.disable("lima:work", "tester");
+  await gateway.refresh();
+  await within("stop()", gateway.stop());
+});
+
+test("stop() leaves alone a disabled VM's server that has already closed", async () => {
+  const { gateway, state, listener } = await startGateway();
+  const closed = once(listener, "close");
+  state.disable("lima:work", "tester");
+  await gateway.refresh();
+  await within("the listener to close", closed);
+  await nextTurn();
+  const cut = spyOn(listener, "closeAllConnections");
+  await gateway.stop();
+  assert.equal(cut.mock.calls.length, 0);
+});
+
+test("start() rejects only after the servers it opened have closed", async () => {
+  const { gateway, created } = unstartedGateway([
+    "first.sock",
+    "gone/second.sock",
+  ]);
+  const closing = signal();
+  const lingering = signal();
+  defer(lingering.resolve);
+  created.mockImplementationOnce(((
+    ...args: Parameters<typeof https.createServer>
+  ) => {
+    const server = createHttpsServer(...args);
+    const close = server.close.bind(server);
+    server.close = (...rest: Parameters<typeof server.close>) => {
+      closing.resolve();
+      return close(...rest);
+    };
+    holdEvent(server, "close", lingering.promise);
+    return server;
+  }) as typeof https.createServer);
+  let rejected = false;
+  const started = (async () => {
+    await assert.rejects(gateway.start(), { syscall: "listen" });
+    rejected = true;
+  })();
+  await within("the first server to be closed", closing.promise);
+  await nextTurn();
+  await nextTurn();
+  assert.equal(rejected, false);
+  lingering.resolve();
+  await within("start() to reject", started);
+});
+
+test("stop() cancels the periodic listener refresh", async () => {
+  const intervals = mockIntervals();
+  const { gateway } = await startGateway();
+  const refresh = spyOn(gateway, "refresh");
+  intervals.tick(60_000);
+  await nextTurn();
+  assert.equal(refresh.mock.calls.length, 1);
+  await gateway.stop();
+  intervals.tick(60_000);
+  await nextTurn();
+  assert.equal(refresh.mock.calls.length, 1);
+});
