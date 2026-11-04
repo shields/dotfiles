@@ -618,6 +618,30 @@ export function rewriteLinks(
       );
 }
 
+// The health path is the only public read with no repository.
+export function isHealthCheck(classification: Classification): boolean {
+  return (
+    classification.operation === "public.read" &&
+    classification.repository === null
+  );
+}
+
+const blockedResponseHeaders = new Set([
+  "connection",
+  "keep-alive",
+  "proxy-authenticate",
+  "proxy-authorization",
+  "te",
+  "trailer",
+  "transfer-encoding",
+  "upgrade",
+  "set-cookie",
+]);
+
+export function isBlockedResponseHeader(name: string): boolean {
+  return blockedResponseHeaders.has(name);
+}
+
 export function authorize(grant: Grant | null, operation: Operation): Access {
   if (operation === "public.read") {
     return "anonymous";

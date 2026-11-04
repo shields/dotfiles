@@ -5,6 +5,8 @@ import {
   classify,
   denial,
   graphqlRepository,
+  isBlockedResponseHeader,
+  isHealthCheck,
   isValidRefName,
   parseGrant,
   parseGrants,
@@ -991,6 +993,52 @@ test("the health path is the only public read without a repository, however the 
       "shields/dotfiles",
       target,
     );
+  }
+});
+
+test("only the health path classifies as a health check", () => {
+  assert.equal(
+    isHealthCheck(
+      classify(
+        {
+          host: "api.github.com",
+          method: "GET",
+          target: "/__vm_access__/health",
+        },
+        id,
+      ),
+    ),
+    true,
+  );
+  for (const [host, method, target] of [
+    ["github.com", "GET", "/shields/dotfiles"],
+    ["api.github.com", "GET", "/repos/shields/dotfiles"],
+    ["api.github.com", "GET", "/user"],
+  ] as const) {
+    assert.equal(
+      isHealthCheck(classify({ host, method, target }, id)),
+      false,
+      target,
+    );
+  }
+});
+
+test("hop-by-hop response headers and cookies are blocked, and the rest are relayed", () => {
+  for (const name of [
+    "connection",
+    "keep-alive",
+    "proxy-authenticate",
+    "proxy-authorization",
+    "te",
+    "trailer",
+    "transfer-encoding",
+    "upgrade",
+    "set-cookie",
+  ]) {
+    assert.equal(isBlockedResponseHeader(name), true, name);
+  }
+  for (const name of ["content-length", "content-type", "etag", "link"]) {
+    assert.equal(isBlockedResponseHeader(name), false, name);
   }
 });
 

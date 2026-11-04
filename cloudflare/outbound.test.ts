@@ -106,6 +106,27 @@ test("GitHub reads inject a token without forwarding guest credentials", async (
   assert.deepEqual(events, ["allow:api.read", "finish:completed:200"]);
 });
 
+test("a response header that names trailers is not relayed", async () => {
+  const response = await handleOutbound(
+    new Request("https://api.github.com/repos/shields/dotfiles/pulls"),
+    instanceId,
+    authority([]),
+    () =>
+      Promise.resolve(
+        new Response("[]", {
+          headers: { trailer: "x-checksum", "x-ratelimit-limit": "5000" },
+        }),
+      ),
+  );
+  assert.deepEqual(
+    [
+      response.headers.get("trailer"),
+      response.headers.get("x-ratelimit-limit"),
+    ],
+    [null, "5000"],
+  );
+});
+
 test("task pushes and push probes are forwarded with the repository token", async () => {
   for (const body of [
     push(`refs/heads/task/${instanceId}/check`),
@@ -560,13 +581,15 @@ test("an inspected body is read only up to the inspection limit", async () => {
   assert.ok(pulled > 16 && pulled < 25, String(pulled));
 });
 
-test("audit failure stops forwarding", async () => {
+test("audit failure stops forwarding, is logged, and the client sees only that the audit is unavailable", async () => {
+  const logged = spyOn(console, "error").mockReturnValue();
+  let forwarded = false;
   const unavailable: OutboundAuthority = {
     allow() {
       return Promise.reject(new Error("audit unavailable"));
     },
     deny() {
-      return Promise.reject(new Error("audit unavailable"));
+      return Promise.reject(new Error("deny unavailable"));
     },
     finish() {
       return Promise.reject(new Error("audit unavailable"));
@@ -577,10 +600,18 @@ test("audit failure stops forwarding", async () => {
     instanceId,
     unavailable,
     () => {
-      throw new Error("audit failure reached GitHub");
+      forwarded = true;
+      return Promise.resolve(new Response("[]"));
     },
   );
+  assert.equal(forwarded, false);
   assert.equal(response.status, 503);
+  assert.deepEqual(await response.json(), {
+    message: "gateway audit unavailable",
+  });
+  assert.deepEqual(logged.mock.calls, [
+    ["vm-access audit failure", new Error("deny unavailable")],
+  ]);
 });
 
 test("a missing repository token stops forwarding", async () => {

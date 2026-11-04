@@ -35,7 +35,10 @@ import {
   spyOn,
   test,
 } from "bun:test";
-import { setImmediate as nextTurn } from "node:timers/promises";
+import {
+  setImmediate as nextTurn,
+  setTimeout as delay,
+} from "node:timers/promises";
 import { promisify } from "node:util";
 import { gzipSync } from "node:zlib";
 import { AppAuth } from "./auth.ts";
@@ -1069,7 +1072,8 @@ test("a state failure that also stops the audit write is reported on stderr and 
 });
 
 test("the health path is answered locally however the target spells it", async () => {
-  const { socket, incoming } = await startGateway();
+  const { socket, state, incoming } = await startGateway();
+  const audit = recordFinishes(state, 3);
   for (const target of [
     "/__vm_access__/health",
     "/x/../__vm_access__/health",
@@ -1085,6 +1089,11 @@ test("the health path is answered locally however the target spells it", async (
     assert.equal(response.status, 200, target);
     assert.equal(response.body, "vm-access ready\n", target);
   }
+  await within("the audit rows", audit.all);
+  assert.deepEqual(
+    audit.calls,
+    Array.from({ length: 3 }, () => ({ status: 200, outcome: "completed" })),
+  );
   assert.equal(incoming.length, 0);
   const page = await send(socket, "GET", "/shields/dotfiles");
   assert.equal(page.body, "ok");
@@ -1202,12 +1211,17 @@ function open(
   return { request, firstData: firstData.promise, response };
 }
 
-function recordFinishes(state: State): {
+function recordFinishes(
+  state: State,
+  expected = 1,
+): {
   calls: { status: number | null; outcome: string }[];
   first: Promise<void>;
+  all: Promise<void>;
 } {
   const calls: { status: number | null; outcome: string }[] = [];
   const first = signal();
+  const all = signal();
   const finish = state.finish.bind(state);
   spyOn(state, "finish").mockImplementation(
     (
@@ -1219,9 +1233,12 @@ function recordFinishes(state: State): {
       finish(id, status, durationMs, outcome);
       calls.push({ status, outcome });
       first.resolve();
+      if (calls.length === expected) {
+        all.resolve();
+      }
     },
   );
-  return { calls, first: first.promise };
+  return { calls, first: first.promise, all: all.promise };
 }
 
 function auditRows(
@@ -1407,6 +1424,158 @@ for (const [name, respond] of [
     assert.deepEqual(audit.calls, [{ status: null, outcome: "gateway-error" }]);
   });
 }
+
+test("an upstream status that cannot be relayed is a gateway error with a 503 and a closed upstream connection, and the gateway keeps serving", async () => {
+  let answers = 0;
+  const upstreamClosed = signal();
+  const { socket, instance, state, closed } = await startGateway({
+    handler: (request, response) => {
+      answers += 1;
+      if (answers === 1) {
+        request.socket.once("close", upstreamClosed.resolve);
+        request.socket.write(
+          "HTTP/1.1 099 Weird\r\ncontent-length: 100000\r\n\r\npartial",
+        );
+      } else {
+        response.writeHead(200, { "content-length": 2 }).end("ok");
+      }
+    },
+    tls: false,
+  });
+  const stderr = spyOn(process.stderr, "write").mockImplementation(() => true);
+  const audit = recordFinishes(state);
+  const target = "/shields/dotfiles.git/info/refs?service=git-upload-pack";
+  const broken = await within("the response", send(socket, "GET", target));
+  await within("the audit row", audit.first);
+  await within("the upstream connection to close", upstreamClosed.promise);
+  assert.equal(broken.status, 503);
+  assert.deepEqual(audit.calls, [{ status: null, outcome: "gateway-error" }]);
+  assert.match(
+    stderr.mock.calls.map((call) => String(call[0])).join(""),
+    /vm-access: upstream response could not be relayed: .*\b99\b/,
+  );
+  const next = await within("the response", send(socket, "GET", target));
+  await within("the gateway's responses to close", closed());
+  assert.equal(next.status, 200);
+  assert.equal(next.body, "ok");
+  assert.deepEqual(auditRows(state, instance), [
+    { outcome: "completed", upstreamStatus: 200 },
+    { outcome: "gateway-error", upstreamStatus: null },
+  ]);
+});
+
+test("a Content-Length response that names a Trailer header is delivered without it", async () => {
+  const { socket, instance, state, closed } = await startGateway({
+    handler: (request) => {
+      request.socket.end(
+        "HTTP/1.1 200 OK\r\ncontent-length: 2\r\ntrailer: x-checksum\r\nconnection: close\r\n\r\nok",
+      );
+    },
+    tls: false,
+  });
+  const audit = recordFinishes(state);
+  const fetched = await within(
+    "the response",
+    send(
+      socket,
+      "GET",
+      "/shields/dotfiles.git/info/refs?service=git-upload-pack",
+    ),
+  );
+  await within("the audit row", audit.first);
+  await within("the gateway's response to close", closed());
+  assert.equal(fetched.status, 200);
+  assert.equal(fetched.body, "ok");
+  assert.equal(fetched.headers.trailer, undefined);
+  assert.deepEqual(auditRows(state, instance), [
+    { outcome: "completed", upstreamStatus: 200 },
+  ]);
+});
+
+test("a response that writeHead rejects after storing a header is answered with a well-formed 503", async () => {
+  const { socket, instance, state, listener, closed } = await startGateway({
+    handler: (_request, response) => {
+      response.writeHead(200, { "content-length": 2 }).end("ok");
+    },
+    tls: false,
+  });
+  spyOn(process.stderr, "write").mockImplementation(() => true);
+  listener.on("request", (_request, reply) => {
+    spyOn(reply, "writeHead").mockImplementationOnce(() => {
+      reply.setHeader("content-length", "2");
+      throw new Error("a header that writeHead rejects");
+    });
+  });
+  const audit = recordFinishes(state);
+  const broken = await within(
+    "the response",
+    send(
+      socket,
+      "GET",
+      "/shields/dotfiles.git/info/refs?service=git-upload-pack",
+    ),
+  );
+  await within("the audit row", audit.first);
+  await within("the gateway's response to close", closed());
+  assert.equal(broken.status, 503);
+  assert.match(broken.body, /gateway request failed/);
+  assert.deepEqual(auditRows(state, instance), [
+    { outcome: "gateway-error", upstreamStatus: null },
+  ]);
+});
+
+test("a request that fails after its headers were sent ends the connection, so the requests pipelined around it are not answered", async () => {
+  const clientGone = signal();
+  const allArrived = signal();
+  const relayed = signal();
+  let arrivals = 0;
+  const { socket, instance, state, listener, closed } = await startGateway({
+    handler: (request, response) => {
+      arrivals += 1;
+      if (arrivals === 3) {
+        allArrived.resolve();
+      }
+      if (request.headers["user-agent"] === "fails") {
+        response.writeHead(200, { "content-length": 100_000 });
+        response.write("partial");
+        void Promise.all([allArrived.promise, relayed.promise]).then(() => {
+          request.socket.destroy();
+        });
+      } else {
+        // The timeout bounds the wait when the gateway leaves the connection
+        // open.
+        void Promise.race([clientGone.promise, delay(1000)]).then(() => {
+          response.writeHead(200, { "content-length": 2 }).end("ok");
+        });
+      }
+    },
+    tls: false,
+  });
+  listener.on("request", (request, reply) => {
+    if (request.headers["user-agent"] === "fails") {
+      reply.once("pipe", relayed.resolve);
+    }
+  });
+  const audit = recordFinishes(state, 3);
+  const get = (agent: string): string =>
+    `GET /shields/dotfiles.git/info/refs?service=git-upload-pack HTTP/1.1\r\nhost: github.com\r\nuser-agent: ${agent}\r\n\r\n`;
+  const received = await exchange(
+    socket,
+    "github.com",
+    get("before") + get("fails") + get("after"),
+  );
+  clientGone.resolve();
+  await within("the gateway's responses to close", closed());
+  await within("the audit rows", audit.all);
+  assert.equal(arrivals, 3);
+  assert.equal(received, "");
+  assert.deepEqual(
+    auditRows(state, instance)
+      .map(({ outcome }) => outcome)
+      .toSorted((a, b) => a.localeCompare(b)),
+    ["gateway-error", "interrupted", "interrupted"],
+  );
+});
 
 test("a client that leaves mid-body is audited as interrupted and the upstream request is aborted", async () => {
   const upstreamClosed = signal();
@@ -1697,6 +1866,34 @@ test("an upstream that answers before the upload ends has its request aborted wh
   assert.deepEqual(audit.calls, [{ status: 403, outcome: "completed" }]);
 });
 
+test("an upstream that answers before the upload ends keeps receiving the rest of the upload", async () => {
+  const uploaded = signal();
+  let received = 0;
+  const { socket, state, closed } = await startGateway({
+    handler: (request, response) => {
+      request.on("data", (chunk: Buffer) => {
+        received += chunk.length;
+      });
+      request.once("end", uploaded.resolve);
+      response.writeHead(200, { "content-length": 2 }).end("ok");
+    },
+    tls: false,
+  });
+  const audit = recordFinishes(state);
+  const agent = new https.Agent({ keepAlive: true });
+  defer(() => {
+    agent.destroy();
+  });
+  const { request, response } = open(socket, "upload", agent);
+  await within("the client's response to close", response);
+  await within("the audit row", audit.first);
+  await within("the gateway's response to close", closed());
+  const rest = Buffer.alloc(8192, "a");
+  request.end(rest);
+  await within("the upstream to receive the whole upload", uploaded.promise);
+  assert.equal(received, "0000".length + rest.length);
+});
+
 function watchCloseListeners(listener: https.Server): {
   connections: Set<Socket>;
   counts: number[];
@@ -1921,22 +2118,49 @@ test("every one of several concurrent stop() calls waits for the in-flight reque
   );
 });
 
-test("a request that fails while stop() waits for it is still reported as an unhandled rejection, once", () => {
-  const result = spawnSync(
-    process.execPath,
-    [
-      path.join(import.meta.dirname, "stop-rejection.fixture.ts"),
-      certificate,
-      key,
-    ],
-    { encoding: "utf8", timeout: 30_000 },
-  );
-  assert.equal(result.status, 0, result.stderr);
-  assert.deepEqual(JSON.parse(result.stdout), {
+for (const { name, scenario, events, finishes } of [
+  {
+    name: "a request that fails while stop() waits for it is still reported as an unhandled rejection, once",
+    scenario: "interrupted",
     events: ["token", "stopped"],
-    rejections: ["audit write failed"],
-  });
-}, 60_000);
+    finishes: ["interrupted"],
+  },
+  {
+    name: "a failed audit write for a relayed response is reported as an unhandled rejection, once, and is not retried as a gateway error",
+    scenario: "completed",
+    events: ["token", "stopped"],
+    finishes: ["completed"],
+  },
+  {
+    name: "a failed audit write for the health check is reported as an unhandled rejection, once, and is not retried as a gateway error",
+    scenario: "health",
+    events: ["stopped"],
+    finishes: ["completed"],
+  },
+]) {
+  test(
+    name,
+    () => {
+      const result = spawnSync(
+        process.execPath,
+        [
+          path.join(import.meta.dirname, "stop-rejection.fixture.ts"),
+          certificate,
+          key,
+          scenario,
+        ],
+        { encoding: "utf8", timeout: 30_000 },
+      );
+      assert.equal(result.status, 0, result.stderr);
+      assert.deepEqual(JSON.parse(result.stdout), {
+        events,
+        rejections: ["audit write failed"],
+        finishes,
+      });
+    },
+    60_000,
+  );
+}
 
 function holdNextServer(created: Mock<typeof https.createServer>): {
   starting: Promise<undefined>;

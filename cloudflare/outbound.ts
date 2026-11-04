@@ -2,6 +2,8 @@ import {
   authorize,
   classify,
   denial,
+  isBlockedResponseHeader,
+  isHealthCheck,
   PolicyError,
   requireIdentityEncoding,
   rewriteLinks,
@@ -38,17 +40,6 @@ const forwardedHeaders = [
   "range",
   "x-github-api-version",
 ] as const;
-const blockedResponseHeaders = new Set([
-  "connection",
-  "keep-alive",
-  "proxy-authenticate",
-  "proxy-authorization",
-  "te",
-  "trailers",
-  "transfer-encoding",
-  "upgrade",
-  "set-cookie",
-]);
 
 async function bodyForPolicy(
   request: Request,
@@ -161,7 +152,7 @@ function downstreamResponse(
 ): Response {
   const headers = new Headers();
   for (const [name, value] of response.headers) {
-    if (!blockedResponseHeaders.has(name)) {
+    if (!isBlockedResponseHeader(name)) {
       headers.set(
         name,
         name === "link" ? rewriteLinks(value, classification) : value,
@@ -222,11 +213,7 @@ export async function handleOutbound(
     } else if (!allowed.token) {
       throw new Error("repository authorization is unavailable");
     }
-    // The health path is the only public read with no repository.
-    if (
-      classification.operation === "public.read" &&
-      classification.repository === null
-    ) {
+    if (isHealthCheck(classification)) {
       await authority.finish(requestId, 200, Date.now() - started, "completed");
       return new Response("vm-access ready\n", { status: 200 });
     }
@@ -278,7 +265,8 @@ export async function handleOutbound(
           "gateway-error",
         );
       }
-    } catch {
+    } catch (auditError) {
+      console.error("vm-access audit failure", auditError);
       return respond(503, "gateway audit unavailable", null);
     }
     if (

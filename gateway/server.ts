@@ -12,6 +12,8 @@ import {
   authorize,
   classify,
   denial,
+  isBlockedResponseHeader,
+  isHealthCheck,
   PolicyError,
   requireIdentityEncoding,
   rewriteLinks,
@@ -24,6 +26,11 @@ import { State } from "./state.ts";
 interface RequestBody {
   buffered: Buffer;
   remaining: AsyncIterator<Buffer>;
+}
+
+interface Settlement {
+  upstreamStatus: number | null;
+  outcome: "completed" | "interrupted";
 }
 
 export interface GatewayOptions {
@@ -44,17 +51,6 @@ const forwardedHeaders = [
   "x-github-api-version",
   "content-length",
 ] as const;
-const responseBlocked = new Set([
-  "connection",
-  "keep-alive",
-  "proxy-authenticate",
-  "proxy-authorization",
-  "te",
-  "trailers",
-  "transfer-encoding",
-  "upgrade",
-  "set-cookie",
-]);
 
 function bodyIterator(request: IncomingMessage): AsyncIterator<Buffer> {
   return request[Symbol.asyncIterator]() as AsyncIterator<Buffer>;
@@ -177,7 +173,7 @@ function copyResponseHeaders(
 ): http.OutgoingHttpHeaders {
   const outgoing: http.OutgoingHttpHeaders = {};
   for (const [name, value] of Object.entries(headers)) {
-    if (!responseBlocked.has(name) && value !== undefined) {
+    if (!isBlockedResponseHeader(name) && value !== undefined) {
       outgoing[name] =
         name === "link" && typeof value === "string"
           ? rewriteLinks(value, classification)
@@ -428,6 +424,7 @@ export class Gateway {
     let classification: Classification | null = null;
     let revision = 0;
     let logged = false;
+    let settlement: Settlement;
     const remaining = bodyIterator(request);
     try {
       revision = this.state.byId(instanceId)?.revision ?? 0;
@@ -519,33 +516,27 @@ export class Gateway {
         revision,
       });
       logged = true;
-      // The health path is the only public read with no repository.
-      if (
-        classification.operation === "public.read" &&
-        classification.repository === null
-      ) {
+      if (isHealthCheck(classification)) {
         response
           .writeHead(200, { "content-type": "text/plain" })
           .end("vm-access ready\n");
-        this.state.finish(requestId, 200, Date.now() - started, "completed");
-        return;
-      }
-      await this.forward(
-        request,
-        response,
-        host,
-        target,
-        requestHeaders(
-          request.headers,
-          token,
+        settlement = { upstreamStatus: 200, outcome: "completed" };
+      } else {
+        settlement = await this.forward(
+          request,
+          response,
           host,
-          classification.operation === "git.read" && method === "POST",
-        ),
-        classification,
-        body,
-        requestId,
-        started,
-      );
+          target,
+          requestHeaders(
+            request.headers,
+            token,
+            host,
+            classification.operation === "git.read" && method === "POST",
+          ),
+          classification,
+          body,
+        );
+      }
     } catch (error) {
       const reason =
         error instanceof PolicyError ? error.message : "gateway request failed";
@@ -590,16 +581,15 @@ export class Gateway {
           process.stderr.write(
             `vm-access audit failure: ${String(auditError)}\n`,
           );
-          if (response.headersSent) {
-            response.destroy();
-          } else {
-            respond(503, "gateway audit unavailable");
-          }
+          respond(503, "gateway audit unavailable");
           return;
         }
       }
+      // Destroying only the response can leave the connection open, and the
+      // requests pipelined around this one would then be answered out of
+      // order.
       if (response.headersSent) {
-        response.destroy();
+        request.socket.destroy();
         return;
       }
       if (
@@ -625,7 +615,14 @@ export class Gateway {
         }
       }
       respond(error instanceof PolicyError ? 403 : 503, reason);
+      return;
     }
+    this.state.finish(
+      requestId,
+      settlement.upstreamStatus,
+      Date.now() - started,
+      settlement.outcome,
+    );
   }
 
   private async forward(
@@ -636,9 +633,7 @@ export class Gateway {
     headers: http.OutgoingHttpHeaders,
     classification: Classification,
     body: RequestBody,
-    requestId: string,
-    started: number,
-  ): Promise<void> {
+  ): Promise<Settlement> {
     const base = new URL(
       host === "github.com"
         ? (this.options.webUpstream ?? "https://github.com")
@@ -664,8 +659,7 @@ export class Gateway {
     // response counts as destroyed only once it emits "close", which can trail
     // the destruction of its socket, so both are checked.
     if (response.destroyed || incoming.socket.destroyed) {
-      this.state.finish(requestId, null, Date.now() - started, "interrupted");
-      return;
+      return { upstreamStatus: null, outcome: "interrupted" };
     }
     const transport = upstreamUrl.protocol === "https:" ? https : http;
     const upstream = transport.request(upstreamUrl, {
@@ -673,49 +667,58 @@ export class Gateway {
       headers,
       timeout: 60_000,
     });
-    let settled = false;
-    let upstreamStatus: number | null = null;
-    const finish = (status: number | null, outcome: string): void => {
-      if (settled) {
-        return;
-      }
-      settled = true;
-      this.state.finish(requestId, status, Date.now() - started, outcome);
-    };
-    const result = new Promise<void>((resolve, reject) => {
-      // handle() records a rejection as a gateway error, and the response it
-      // destroys then emits "close", which must not record an interruption.
-      const fail = (error: Error): void => {
+    const result = new Promise<Settlement>((resolve, reject) => {
+      let settled = false;
+      let upstreamStatus: number | null = null;
+      const settle = (outcome: Settlement["outcome"]): void => {
         settled = true;
-        reject(error);
+        resolve({ upstreamStatus, outcome });
       };
       response.once("close", () => {
-        // Bun reports writableFinished for a response that was ended after its
-        // socket was destroyed, and never emits "finish" for it, so only
-        // settled shows that the response completed.
+        // A response that already completed leaves the upstream request alone,
+        // so an upstream that answered before the upload ended stays open until
+        // abandon() ends it when the client's connection closes. Bun reports
+        // writableFinished for a response that was ended after its socket was
+        // destroyed, and never emits "finish" for it, so only settled shows
+        // that the response completed.
         if (settled) {
           return;
         }
-        finish(upstreamStatus, "interrupted");
+        settle("interrupted");
         upstream.destroy();
-        resolve();
       });
       upstream.once("response", (upstreamResponse) => {
         upstreamStatus = upstreamResponse.statusCode ?? 502;
-        response.writeHead(
-          upstreamStatus,
-          copyResponseHeaders(upstreamResponse.headers, classification),
+        const relayed = copyResponseHeaders(
+          upstreamResponse.headers,
+          classification,
         );
+        // The parser accepts a status line such as "099", which writeHead
+        // rejects by throwing, and nothing catches a throw from this listener.
+        try {
+          response.writeHead(upstreamStatus, relayed);
+        } catch (error) {
+          // writeHead can throw after it stored some of the headers, and the
+          // 503 that handle() sends would carry them.
+          for (const name of Object.keys(relayed)) {
+            response.removeHeader(name);
+          }
+          process.stderr.write(
+            `vm-access: upstream response could not be relayed: ${String(error)}\n`,
+          );
+          reject(error instanceof Error ? error : new Error("response failed"));
+          upstream.destroy();
+          return;
+        }
         upstreamResponse.pipe(response);
         // An upstream that closes mid-body never ends the pipe, and Node
         // reports that on the response only while an "error" listener exists.
-        upstreamResponse.once("error", fail);
+        upstreamResponse.once("error", reject);
         response.once("finish", () => {
-          finish(upstreamStatus, "completed");
-          resolve();
+          settle("completed");
         });
       });
-      upstream.once("error", fail);
+      upstream.once("error", reject);
       upstream.once("timeout", () => {
         upstream.destroy(new Error("upstream timed out"));
       });
@@ -738,6 +741,6 @@ export class Gateway {
         error instanceof Error ? error : new Error("request body failed"),
       );
     });
-    await result;
+    return result;
   }
 }
