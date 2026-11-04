@@ -398,6 +398,52 @@ test("a fresh directory whose path contains a dot keeps the serial file inside i
   });
 });
 
+// The launchd service resolves LibreSSL, which leaves a key at the umask's
+// mode and names a default serial file by cutting the CA path at its first
+// dot, but other openssl builds do neither.
+const libreSslDefaults = (real: string): string => `#!${process.execPath}
+import { spawnSync } from "node:child_process";
+import { chmodSync } from "node:fs";
+
+const args = process.argv.slice(2);
+if (args.includes("-req") && !args.includes("-CAserial")) {
+  args.push("-CAserial", args[args.indexOf("-CA") + 1].split(".")[0] + ".srl");
+}
+const { status, error } = spawnSync(${JSON.stringify(real)}, args, { stdio: "inherit" });
+if (error) throw error;
+if (status === 0 && args.includes("-keyout")) {
+  chmodSync(args[args.indexOf("-keyout") + 1], 0o644);
+}
+process.exit(status ?? 1);
+`;
+
+test("private keys and an in-directory serial file do not depend on openssl's defaults", () => {
+  const shims = mkdtempSync(path.join(tmpdir(), "vm-access-cert-libressl-"));
+  const originalPath = process.env.PATH;
+  writeFileSync(path.join(shims, "openssl"), libreSslDefaults(realOpenssl()), {
+    mode: 0o755,
+  });
+  process.env.PATH = `${shims}${path.delimiter}${originalPath ?? ""}`;
+  try {
+    withDirectory((parent) => {
+      const original = process.cwd();
+      process.chdir(parent);
+      try {
+        const directory = path.join(".config", "vm-access");
+        assertConsistent(ensureCertificates(directory));
+        assertKeysPrivate(directory);
+        assert.ok(existsSync(path.join(directory, "ca.srl")));
+        assert.deepEqual(readdirSync(parent), [".config"]);
+      } finally {
+        process.chdir(original);
+      }
+    });
+  } finally {
+    process.env.PATH = originalPath;
+    rmSync(shims, { recursive: true, force: true });
+  }
+});
+
 test("a lock left by a crashed run is an error that names the lock, and nothing is rewritten", () => {
   withIssued((directory) => {
     issueLeaf(directory, 1);
