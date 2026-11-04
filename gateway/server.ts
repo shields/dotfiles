@@ -627,7 +627,10 @@ export class Gateway {
         reject(error);
       };
       response.once("close", () => {
-        if (response.writableFinished) {
+        // Bun reports writableFinished for a response that was ended after its
+        // socket was destroyed, and never emits "finish" for it, so only
+        // settled shows that the response completed.
+        if (settled) {
           return;
         }
         finish(upstreamStatus, "interrupted");

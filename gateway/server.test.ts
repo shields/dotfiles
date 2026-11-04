@@ -1530,6 +1530,25 @@ for (const [name, mode] of [
   });
 }
 
+test("a client whose socket is destroyed as the answer is relayed to it is audited as interrupted", async () => {
+  const { socket, instance, state, listener, closed } = await startGateway();
+  const audit = recordFinishes(state);
+  listener.prependOnceListener("request", (request, reply) => {
+    reply.once("pipe", () => {
+      request.socket.destroy();
+    });
+  });
+  const { response } = open(socket);
+  const hungUp = assert.rejects(response, { message: "socket hang up" });
+  await within("the client's request to fail", hungUp);
+  await within("the audit row", audit.first);
+  await within("the gateway's response to close", closed());
+  assert.deepEqual(auditRows(state, instance), [
+    { outcome: "interrupted", upstreamStatus: 200 },
+  ]);
+  assert.deepEqual(audit.calls, [{ status: 200, outcome: "interrupted" }]);
+});
+
 test("a client that leaves while uploading is audited as interrupted and the upstream request is aborted", async () => {
   const asked = signal();
   const upstreamClosed = signal();
