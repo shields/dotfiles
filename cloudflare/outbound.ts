@@ -222,7 +222,11 @@ export async function handleOutbound(
     } else if (!allowed.token) {
       throw new Error("repository authorization is unavailable");
     }
-    if (url.pathname === "/__vm_access__/health") {
+    // The health path is the only public read with no repository.
+    if (
+      classification.operation === "public.read" &&
+      classification.repository === null
+    ) {
       await authority.finish(requestId, 200, Date.now() - started, "completed");
       return new Response("vm-access ready\n", { status: 200 });
     }

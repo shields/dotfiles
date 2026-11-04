@@ -792,3 +792,37 @@ test("pagination links name the repository so later pages are checked like the f
   );
   assert.equal(followed.status, 403);
 });
+
+test("the health path is answered locally on api.github.com and forwarded on github.com", async () => {
+  const events: string[] = [];
+  const health = await handleOutbound(
+    new Request("https://api.github.com/__vm_access__/health"),
+    instanceId,
+    authority(events),
+    () => {
+      throw new Error("the health check reached GitHub");
+    },
+  );
+  assert.equal(health.status, 200);
+  assert.equal(await health.text(), "vm-access ready\n");
+  assert.deepEqual(events, ["allow:public.read", "finish:completed:200"]);
+
+  for (const method of ["GET", "HEAD"]) {
+    const forwarded: string[] = [];
+    const page = await handleOutbound(
+      new Request("https://github.com/__vm_access__/health", { method }),
+      instanceId,
+      authority([]),
+      (request) => {
+        forwarded.push(request.url);
+        return Promise.resolve(new Response(null, { status: 404 }));
+      },
+    );
+    assert.equal(page.status, 404, method);
+    assert.deepEqual(
+      forwarded,
+      ["https://github.com/__vm_access__/health"],
+      method,
+    );
+  }
+});
