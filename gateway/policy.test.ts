@@ -7,6 +7,7 @@ import {
   graphqlRepository,
   isValidRefName,
   parseGrant,
+  parseGrants,
   parsePushCommands,
   rewriteLinks,
   type Classification,
@@ -1129,6 +1130,25 @@ test("inherited and special keys do not make a grant", () => {
   );
 });
 
+test("one key that joins both field names does not make a grant", () => {
+  const joined = "pushTaskBranches,read";
+  const inherited = { read: true, pushTaskBranches: true };
+  assert.equal(parseGrant({ [joined]: true }), null);
+  assert.equal(
+    parseGrant(Object.assign(Object.create(inherited), { [joined]: true })),
+    null,
+  );
+  assert.equal(
+    parseGrant(
+      Object.defineProperties(
+        { [joined]: true },
+        { read: { value: true }, pushTaskBranches: { value: true } },
+      ),
+    ),
+    null,
+  );
+});
+
 test("each field of a grant is read once", () => {
   const reads: string[] = [];
   const input = {
@@ -1143,4 +1163,50 @@ test("each field of a grant is read once", () => {
   };
   assert.deepEqual(parseGrant(input), { read: true, pushTaskBranches: false });
   assert.deepEqual(reads, ["read", "pushTaskBranches"]);
+});
+
+test("repositories are a plain mapping of valid grants", () => {
+  const grant = { read: true, pushTaskBranches: false };
+  assert.deepEqual(parseGrants({}), {});
+  assert.deepEqual(parseGrants(Object.create(null)), {});
+  assert.deepEqual(parseGrants({ "Shields/Dotfiles": grant }), {
+    "shields/dotfiles": grant,
+  });
+  const reordered = { pushTaskBranches: false, read: true };
+  const parsed = parseGrants({ "shields/dotfiles": reordered });
+  assert.notEqual(parsed["shields/dotfiles"], reordered);
+  assert.equal(
+    JSON.stringify(parsed),
+    '{"shields/dotfiles":{"read":true,"pushTaskBranches":false}}',
+  );
+  assert.deepEqual(
+    parseGrants(
+      JSON.parse('{"shields/dotfiles":{"read":true,"pushTaskBranches":false}}'),
+    ),
+    { "shields/dotfiles": grant },
+  );
+  assert.throws(
+    () =>
+      parseGrants(
+        JSON.parse('{"__proto__":{"read":true,"pushTaskBranches":false}}'),
+      ),
+    { name: "PolicyError", message: "repository must be OWNER/REPO" },
+  );
+  for (const input of [
+    undefined,
+    null,
+    5,
+    "",
+    [],
+    new Set(["shields/dotfiles"]),
+    new Map([["shields/dotfiles", grant]]),
+    new Date(0),
+    new Uint8Array(),
+    Object.create({ "shields/dotfiles": grant }),
+  ]) {
+    assert.throws(() => parseGrants(input), {
+      name: "PolicyError",
+      message: "repositories must be a mapping",
+    });
+  }
 });

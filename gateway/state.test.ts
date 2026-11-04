@@ -259,3 +259,25 @@ test("opening a database that lacks the time index adds it and keeps its rows", 
     rmSync(directory, { recursive: true, force: true });
   }
 });
+
+test("a policy that is not a mapping is rejected and leaves the grants in place", () => {
+  withState((state) => {
+    const instance = state.register("lima:work", "work.sock", "tester");
+    const read = { read: true, pushTaskBranches: false };
+    state.update("lima:work", 0, { "shields/dotfiles": read }, "tester");
+    for (const grants of [5, true, "", [], null, undefined]) {
+      assert.throws(
+        () =>
+          state.update(
+            "lima:work",
+            1,
+            grants as unknown as Record<string, typeof read>,
+            "tester",
+          ),
+        { name: "PolicyError", message: "repositories must be a mapping" },
+      );
+    }
+    assert.equal(state.byName("lima:work")?.revision, 1);
+    assert.deepEqual(state.grants(instance.id), { "shields/dotfiles": read });
+  });
+});

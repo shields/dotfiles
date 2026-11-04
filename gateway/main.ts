@@ -12,6 +12,7 @@ import {
   compareCodeUnits,
   normalizeRepository,
   parseGrant,
+  parseGrants,
   taskPrefix,
   type Grant,
 } from "./policy.ts";
@@ -122,16 +123,13 @@ function parseEdit(
     data.id !== instance.id ||
     data.branchPrefix !==
       taskPrefix(instance.id).replace(/^refs\/heads\//, "") ||
-    !Number.isSafeInteger(data.revision) ||
-    !data.repositories ||
-    typeof data.repositories !== "object" ||
-    Array.isArray(data.repositories)
+    !Number.isSafeInteger(data.revision)
   ) {
     throw new Error("policy identity, revision, or repositories are invalid");
   }
   return {
     revision: data.revision as number,
-    repositories: data.repositories as Record<string, Grant>,
+    repositories: parseGrants(data.repositories),
   };
 }
 
@@ -303,7 +301,10 @@ async function command(arguments_: string[]): Promise<void> {
         const repository = normalizeRepository(required(args[1], "repository"));
         const instance = active(state, name);
         const profileName = required(args[3], "profile");
-        const grant = parseProfiles(location.profiles)[profileName];
+        const profiles = parseProfiles(location.profiles);
+        const grant = Object.hasOwn(profiles, profileName)
+          ? profiles[profileName]
+          : undefined;
         if (!grant) {
           throw new Error(`unknown profile ${profileName}`);
         }
@@ -374,8 +375,7 @@ async function command(arguments_: string[]): Promise<void> {
           const policy = parseEdit(readFileSync(file, "utf8"), instance);
           const existing = state.grants(instance.id);
           for (const repository of Object.keys(policy.repositories)) {
-            const key = normalizeRepository(repository);
-            if (Object.hasOwn(existing, key)) {
+            if (Object.hasOwn(existing, repository)) {
               continue;
             }
             if (!auth.has(repository)) {

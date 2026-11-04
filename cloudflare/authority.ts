@@ -2,7 +2,7 @@ import {
   authorize,
   compareCodeUnits,
   normalizeRepository,
-  parseGrant,
+  parseGrants,
   PolicyError,
   type Access,
   type Classification,
@@ -62,27 +62,6 @@ const tokenPattern = /^[A-Za-z0-9_.~+/=-]+$/;
 const namePattern = /^[A-Za-z0-9]+(?:[._-][A-Za-z0-9]+)*$/;
 const clientIdPattern = /^[A-Za-z0-9._-]+$/;
 const day = 86_400_000;
-
-function grantsFrom(raw: unknown): Record<string, Grant> {
-  if (!raw || typeof raw !== "object" || Array.isArray(raw)) {
-    throw new PolicyError("repositories must be a mapping");
-  }
-  const normalized: Record<string, Grant> = {};
-  for (const [repository, input] of Object.entries(
-    raw as Record<string, unknown>,
-  )) {
-    const grant = parseGrant(input);
-    if (!grant) {
-      throw new PolicyError(`invalid grant for ${repository}`);
-    }
-    const key = normalizeRepository(repository);
-    if (Object.hasOwn(normalized, key)) {
-      throw new PolicyError(`duplicate repository ${repository}`);
-    }
-    normalized[key] = grant;
-  }
-  return normalized;
-}
 
 function validAuthorization(input: unknown): CloudAuthorization {
   if (!input || typeof input !== "object" || Array.isArray(input)) {
@@ -189,7 +168,7 @@ export class CloudAuthority {
     rawGrants: unknown,
     actor: string,
   ): Promise<CloudInstance> {
-    const grants = grantsFrom(rawGrants);
+    const grants = parseGrants(rawGrants);
     for (const repository of Object.keys(grants)) {
       if (!(await this.storage.get(`auth:${repository}`))) {
         throw new PolicyError(

@@ -168,9 +168,11 @@ export function parseGrant(input: unknown): Grant | null {
   if (!input || typeof input !== "object" || Array.isArray(input)) {
     return null;
   }
+  const keys = Object.keys(input);
   if (
-    Object.keys(input).toSorted(compareCodeUnits).join(",") !==
-    "pushTaskBranches,read"
+    keys.length !== 2 ||
+    !keys.includes("read") ||
+    !keys.includes("pushTaskBranches")
   ) {
     return null;
   }
@@ -178,6 +180,35 @@ export function parseGrant(input: unknown): Grant | null {
   return read === true && typeof pushTaskBranches === "boolean"
     ? { read, pushTaskBranches }
     : null;
+}
+
+// YAML's !!set, !!omap and !!timestamp tags give a Set, a Map and a Date, which
+// have no own entries and would read as an empty mapping.
+function isMapping(value: unknown): value is Record<string, unknown> {
+  if (typeof value !== "object" || value === null) {
+    return false;
+  }
+  const prototype: unknown = Object.getPrototypeOf(value);
+  return prototype === Object.prototype || prototype === null;
+}
+
+export function parseGrants(input: unknown): Record<string, Grant> {
+  if (!isMapping(input)) {
+    throw new PolicyError("repositories must be a mapping");
+  }
+  const grants: Record<string, Grant> = {};
+  for (const [repository, rawGrant] of Object.entries(input)) {
+    const grant = parseGrant(rawGrant);
+    if (!grant) {
+      throw new PolicyError(`invalid grant for ${repository}`);
+    }
+    const key = normalizeRepository(repository);
+    if (Object.hasOwn(grants, key)) {
+      throw new PolicyError(`duplicate repository ${repository}`);
+    }
+    grants[key] = grant;
+  }
+  return grants;
 }
 
 export function taskPrefix(instanceId: string): string {

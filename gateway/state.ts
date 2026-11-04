@@ -4,7 +4,7 @@ import path from "node:path";
 import { DatabaseSync } from "node:sqlite";
 import {
   normalizeRepository,
-  parseGrant,
+  parseGrants,
   type Grant,
   type Operation,
 } from "./policy.ts";
@@ -257,20 +257,7 @@ export class State {
           `policy changed while editing: expected revision ${String(expectedRevision)}, now ${String(instance.revision)}`,
         );
       }
-      const normalized: Record<string, Grant> = {};
-      for (const [repository, rawGrant] of Object.entries(
-        nextGrants as Record<string, unknown>,
-      )) {
-        const grant = parseGrant(rawGrant);
-        if (!grant) {
-          throw new Error(`invalid grant for ${repository}`);
-        }
-        const key = normalizeRepository(repository);
-        if (Object.hasOwn(normalized, key)) {
-          throw new Error(`duplicate repository ${repository}`);
-        }
-        normalized[key] = grant;
-      }
+      const normalized = parseGrants(nextGrants);
       const old = this.grants(instance.id);
       const added = Object.fromEntries(
         Object.entries(normalized).filter(

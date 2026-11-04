@@ -6,6 +6,7 @@ import {
   existsSync,
   mkdirSync,
   mkdtempSync,
+  readFileSync,
   rmSync,
   writeFileSync,
 } from "node:fs";
@@ -210,6 +211,16 @@ function sandbox(): Sandbox {
   };
 }
 
+function repositoriesEditor(root: string): string {
+  const editor = path.join(root, "editor");
+  writeFileSync(
+    editor,
+    '#!/bin/sh\nset -eu\nsed "/^repositories:/,\\$d" "$1" > "$1.tmp"\nprintf "repositories: %s\\n" "$REPOSITORIES" >> "$1.tmp"\nmv "$1.tmp" "$1"\n',
+    { mode: 0o700 },
+  );
+  return editor;
+}
+
 test("grant rejects an invalid profile definition before it authorizes anything", () => {
   const { root, ghCalls, run } = sandbox();
   const read = { read: true, pushTaskBranches: false };
@@ -228,4 +239,108 @@ test("grant rejects an invalid profile definition before it authorizes anything"
     assert.equal(result.stderr, `vm-access: invalid profile ${name}\n`);
   }
   assert.equal(existsSync(ghCalls), false);
+});
+
+test("grant rejects a profile name inherited from Object.prototype before it authorizes anything", () => {
+  const { root, ghCalls, run } = sandbox();
+  const grant = { read: true, pushTaskBranches: false };
+  const profiles = path.join(root, "profiles.yaml");
+  writeFileSync(profiles, YAML.stringify({ read: grant, task: grant }));
+  for (const name of [
+    "constructor",
+    "toString",
+    "__proto__",
+    "hasOwnProperty",
+  ]) {
+    const result = run(
+      ["grant", "lima:trial", "shields/dotfiles", "--profile", name],
+      { VM_ACCESS_PROFILES: profiles },
+    );
+    assert.equal(result.status, 1, result.stdout);
+    assert.equal(result.stderr, `vm-access: unknown profile ${name}\n`);
+  }
+  assert.equal(existsSync(ghCalls), false);
+});
+
+test("edit rejects an invalid policy before it authorizes anything", () => {
+  const { root, ghCalls, run } = sandbox();
+  const editor = repositoriesEditor(root);
+  const valid = "{read: true, pushTaskBranches: false}";
+  for (const [repositories, message] of [
+    [
+      "{shields/new: {read: true, pushTaskBranches: maybe}}",
+      "invalid grant for shields/new",
+    ],
+    [
+      `{shields/new: ${valid}, Shields/New: ${valid}}`,
+      "duplicate repository Shields/New",
+    ],
+    [`{"not a repository": ${valid}}`, "repository must be OWNER/REPO"],
+    ["null", "repositories must be a mapping"],
+    ["5", "repositories must be a mapping"],
+    ["[]", "repositories must be a mapping"],
+  ] as const) {
+    const result = run(["edit", "lima:trial"], {
+      EDITOR: editor,
+      VISUAL: editor,
+      REPOSITORIES: repositories,
+    });
+    assert.equal(result.status, 1, result.stdout);
+    assert.equal(result.stderr, `vm-access: ${message}\n`);
+  }
+  assert.equal(existsSync(ghCalls), false);
+});
+
+test("edit keeps the grants when repositories is a set, an ordered map, or a timestamp", () => {
+  const { root, ghCalls, run } = sandbox();
+  const read = { read: true, pushTaskBranches: false };
+  const seeded = new State(path.join(root, "state"));
+  try {
+    seeded.update("lima:trial", 0, { "shields/dotfiles": read }, "tester");
+  } finally {
+    seeded.close();
+  }
+  const editor = repositoriesEditor(root);
+  for (const repositories of [
+    "!!set {shields/dotfiles}",
+    "!!omap [{shields/dotfiles: {read: true, pushTaskBranches: false}}]",
+    "!!timestamp 2001-12-14",
+  ]) {
+    const result = run(["edit", "lima:trial"], {
+      EDITOR: editor,
+      VISUAL: editor,
+      REPOSITORIES: repositories,
+    });
+    assert.equal(result.status, 1, result.stdout);
+    assert.equal(result.stderr, "vm-access: repositories must be a mapping\n");
+  }
+  const state = new State(path.join(root, "state"));
+  try {
+    const instance = state.byName("lima:trial");
+    assert.ok(instance);
+    assert.equal(instance.revision, 1);
+    assert.deepEqual(state.grants(instance.id), { "shields/dotfiles": read });
+  } finally {
+    state.close();
+  }
+  assert.equal(existsSync(ghCalls), false);
+});
+
+test("edit authorizes a repository it adds", () => {
+  const { root, ghCalls, run } = sandbox();
+  const editor = repositoriesEditor(root);
+  const result = run(["edit", "lima:trial"], {
+    EDITOR: editor,
+    VISUAL: editor,
+    REPOSITORIES: "{shields/new: {read: true, pushTaskBranches: false}}",
+  });
+  assert.equal(result.status, 1, result.stdout);
+  assert.equal(
+    result.stderr,
+    "vm-access: gh cannot read shields/new; check the repository and your Mac gh login\n",
+  );
+  assert.equal(
+    readFileSync(ghCalls, "utf8"),
+    "api repos/shields/new --jq .id\n",
+  );
 });
