@@ -412,7 +412,7 @@ async function command(arguments_: string[]): Promise<void> {
         if (!instance) {
           throw new Error(`${selector} is not a known VM`);
         }
-        const seen = new Set<string>();
+        let seen = new Set<string>();
         const limit = args[1] === "--all" ? -1 : 100;
         for (;;) {
           const logs = [
@@ -434,9 +434,7 @@ async function command(arguments_: string[]): Promise<void> {
           if (args[1] !== "--follow") {
             break;
           }
-          if (seen.size > 2000) {
-            seen.clear();
-          }
+          seen = new Set(logs.map((entry) => entry.id));
           await delay(1000);
         }
         return;
