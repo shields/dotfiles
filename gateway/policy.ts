@@ -64,6 +64,7 @@ const originForm = /^\/(?![/\\\t\n\r])/;
 const gitRoute =
   /^\/([A-Za-z0-9_.-]+)\/([A-Za-z0-9_.-]+?)(?:\.git)?\/(info\/refs|git-upload-pack|git-receive-pack)$/;
 const gitEndpoint = /\/(?:info\/refs|git-upload-pack|git-receive-pack)$/;
+const webHost = /^github\.com\.*$/;
 const webRoute = /^\/([A-Za-z0-9_.-]+)\/([A-Za-z0-9_.-]+)(?:\/|$)/;
 const restRoute = /^\/repos\/([A-Za-z0-9_.-]+)\/([A-Za-z0-9_.-]+)(?:\/|$)/;
 const repositoryIdLink =
@@ -77,10 +78,7 @@ export function denial(
   message: string,
   requestId: string | null,
 ): { contentType: string; body: string } {
-  if (
-    host === "github.com" &&
-    gitEndpoint.test(target.split("?", 1)[0] ?? "")
-  ) {
+  if (webHost.test(host) && gitEndpoint.test(target.split("?", 1)[0] ?? "")) {
     return {
       contentType: "text/plain; charset=utf-8",
       body:
@@ -154,11 +152,15 @@ export function compareCodeUnits(left: string, right: string): number {
   return left > right ? 1 : 0;
 }
 
+function isRepository(repository: string): boolean {
+  return (
+    repositoryName.test(repository) &&
+    repository.split("/").every((part) => part !== "." && part !== "..")
+  );
+}
+
 export function normalizeRepository(repository: string): string {
-  if (
-    !repositoryName.test(repository) ||
-    repository.split("/").some((part) => part === "." || part === "..")
-  ) {
+  if (!isRepository(repository)) {
     throw new PolicyError("repository must be OWNER/REPO");
   }
   return repository.toLowerCase();
@@ -499,6 +501,45 @@ export function graphqlRepository(body: Uint8Array): string {
     throw new PolicyError("GraphQL query must name exactly one repository");
   }
   return [...repositories][0] ?? "";
+}
+
+export function namesGitHubHost(hostname: string): boolean {
+  return /^(?:api\.)?github\.com\.*$/i.test(hostname);
+}
+
+export type InspectedBody = "push" | "graphql";
+
+// The gateway and the Worker both ask this which body to buffer, so they cannot
+// disagree on what to inspect.
+export function inspectedBody(
+  host: string,
+  method: string,
+  target: string,
+): InspectedBody | null {
+  const lowered = host.toLowerCase();
+  if (
+    method.toUpperCase() !== "POST" ||
+    (lowered !== "github.com" && lowered !== "api.github.com")
+  ) {
+    return null;
+  }
+  let url: URL;
+  try {
+    url = new URL(target, `https://${lowered}`);
+  } catch {
+    return null;
+  }
+  if (url.host !== lowered || !originForm.test(target) || url.search) {
+    return null;
+  }
+  if (lowered === "github.com") {
+    const match = gitRoute.exec(url.pathname);
+    return match?.[3] === "git-receive-pack" &&
+      isRepository(`${match[1] ?? ""}/${match[2] ?? ""}`)
+      ? "push"
+      : null;
+  }
+  return url.pathname === "/graphql" ? "graphql" : null;
 }
 
 export function classify(

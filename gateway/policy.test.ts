@@ -5,14 +5,18 @@ import {
   classify,
   denial,
   graphqlRepository,
+  inspectedBody,
   isBlockedResponseHeader,
   isHealthCheck,
   isValidRefName,
+  namesGitHubHost,
   parseGrant,
   parseGrants,
   parsePushCommands,
+  PolicyError,
   rewriteLinks,
   type Classification,
+  type InspectedBody,
   PushDenied,
   PushParser,
 } from "./policy.ts";
@@ -184,10 +188,12 @@ test("denials reach git as text and gh as a JSON message", () => {
     "/shields/dotfiles.git/git-upload-pack",
     "/shields/dotfiles.git/git-receive-pack",
   ]) {
-    assert.deepEqual(denial("github.com", target, "no", "request-1"), {
-      contentType: "text/plain; charset=utf-8",
-      body: "no\nrequest ID: request-1\n",
-    });
+    for (const host of ["github.com", "github.com."]) {
+      assert.deepEqual(denial(host, target, "no", "request-1"), {
+        contentType: "text/plain; charset=utf-8",
+        body: "no\nrequest ID: request-1\n",
+      });
+    }
   }
   assert.deepEqual(
     denial("github.com", "/shields/dotfiles.git/git-receive-pack", "no", null),
@@ -198,6 +204,7 @@ test("denials reach git as text and gh as a JSON message", () => {
     ["api.github.com", "/repos/shields/dotfiles/info/refs"],
     ["github.com", "/shields/dotfiles/pulls"],
     ["github.com", "/shields/dotfiles/pulls?next=/info/refs"],
+    ["api.github.com.", "/repos/shields/dotfiles/info/refs"],
   ] as const) {
     const response = denial(host, target, "no", "request-1");
     assert.equal(response.contentType, "application/json");
@@ -1257,4 +1264,125 @@ test("repositories are a plain mapping of valid grants", () => {
       message: "repositories must be a mapping",
     });
   }
+});
+
+test("a trailing dot still names a GitHub host", () => {
+  for (const host of [
+    "github.com",
+    "api.github.com",
+    "github.com.",
+    "API.GITHUB.COM.",
+    "api.github.com..",
+  ]) {
+    assert.equal(namesGitHubHost(host), true, host);
+  }
+  for (const host of [
+    "uploads.github.com",
+    "evilgithub.com",
+    "github.com.evil.example",
+    "xgithub.com",
+    "github.com.example.",
+    "api.api.github.com",
+    "githubxcom",
+    "apixgithub.com",
+    "",
+  ]) {
+    assert.equal(namesGitHubHost(host), false, host);
+  }
+});
+
+test("a body is inspected exactly when classify reads it", () => {
+  const receivePackPath = "/shields/dotfiles.git/git-receive-pack";
+  const cases: [string, string, string, InspectedBody | null][] = [
+    ["github.com", "POST", receivePackPath, "push"],
+    ["GitHub.com", "post", receivePackPath, "push"],
+    ["github.com", "POST", `${receivePackPath}?`, "push"],
+    ["github.com", "POST", `${receivePackPath}#x`, "push"],
+    ["github.com", "POST", `${receivePackPath}?x=1`, null],
+    ["github.com", "POST", `//github.com${receivePackPath}`, null],
+    ["github.com", "POST", `/\\github.com${receivePackPath}`, null],
+    ["github.com", "POST", "/shields/..git/git-receive-pack", null],
+    ["github.com", "POST", "/shields/dotfiles.git\\git-receive-pack", "push"],
+    [
+      "github.com",
+      "POST",
+      "/x/../shields/dotfiles.git/git-receive-pack",
+      "push",
+    ],
+    ["github.com", "GET", receivePackPath, null],
+    ["github.com", "POST", "/shields/dotfiles.git/git-upload-pack", null],
+    ["github.com", "POST", `${receivePackPath}/.`, null],
+    ["github.com", "POST", "//shields/dotfiles.git/git-receive-pack", null],
+    ["github.com", "POST", "/git-receive-pack", null],
+    [
+      "github.com",
+      "POST",
+      "//evil.example/shields/dotfiles.git/git-receive-pack",
+      null,
+    ],
+    [
+      "github.com",
+      "POST",
+      "/\\evil.example/shields/dotfiles.git/git-receive-pack",
+      null,
+    ],
+    ["api.github.com", "POST", "//evil.example/graphql", null],
+    ["api.github.com", "POST", "/\\evil.example/graphql", null],
+    ["github.com", "POST", "/graphql", null],
+    ["api.github.com", "POST", "/graphql", "graphql"],
+    ["api.github.com", "POST", "/graphql?", "graphql"],
+    ["api.github.com", "POST", "/graphql#x", "graphql"],
+    ["api.github.com", "POST", "/graphql?x=1", null],
+    ["api.github.com", "POST", "//api.github.com/graphql", null],
+    ["api.github.com", "POST", "/x/../graphql", "graphql"],
+    ["api.github.com", "POST", "/./graphql", "graphql"],
+    ["api.github.com", "POST", "/%2e/graphql", "graphql"],
+    ["api.github.com", "GET", "/graphql", null],
+    ["api.github.com", "POST", "/graphql/", null],
+    ["api.github.com", "POST", "/graphql/.", null],
+    ["api.github.com", "POST", "/GraphQL", null],
+    ["api.github.com", "POST", receivePackPath, null],
+    ["github.com.", "POST", receivePackPath, null],
+    ["uploads.github.com", "POST", "/graphql", null],
+    ["github.com", "POST", "http://[", null],
+  ];
+  for (const [host, method, target, expected] of cases) {
+    assert.equal(inspectedBody(host, method, target), expected, target);
+    let read = false;
+    try {
+      classify(
+        {
+          host,
+          method,
+          target,
+          get body() {
+            read = true;
+            return new Uint8Array();
+          },
+        },
+        id,
+      );
+    } catch (error) {
+      assert.ok(error instanceof PolicyError, target);
+    }
+    assert.equal(read, expected !== null, target);
+  }
+});
+
+test("a push without an inspected body is denied", () => {
+  assert.throws(
+    () =>
+      classify(
+        {
+          host: "github.com",
+          method: "POST",
+          target: "/shields/dotfiles.git/git-receive-pack",
+        },
+        id,
+      ),
+    {
+      name: "PolicyError",
+      message: "Git push commands were not inspected",
+    },
+  );
 });

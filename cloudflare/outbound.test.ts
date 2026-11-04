@@ -520,6 +520,98 @@ test("GraphQL reads retain their body and mutations are denied", async () => {
   assert.equal(denied.status, 403);
 });
 
+test("a trailing dot on a GitHub host is denied, not forwarded", async () => {
+  for (const url of [
+    "https://github.com./shields/dotfiles.git/info/refs?service=git-upload-pack",
+    "https://GITHUB.COM./x",
+    "https://api.github.com./user",
+    "https://github.com%2e/x",
+  ]) {
+    const events: string[] = [];
+    const response = await handleOutbound(
+      new Request(url, { headers: { authorization: "Bearer guest-secret" } }),
+      instanceId,
+      authority(events),
+      () => {
+        throw new Error(`${url} was forwarded`);
+      },
+    );
+    assert.equal(response.status, 403, url);
+    assert.equal(
+      response.headers.get("content-type"),
+      url.includes("/info/refs")
+        ? "text/plain; charset=utf-8"
+        : "application/json",
+      url,
+    );
+    assert.deepEqual(
+      events,
+      ["deny:unsupported GitHub host", "finish:denied:null"],
+      url,
+    );
+  }
+  const insecure: string[] = [];
+  const refused = await handleOutbound(
+    new Request("http://github.com./x"),
+    instanceId,
+    authority(insecure),
+    () => {
+      throw new Error("an HTTP request to a dotted host was forwarded");
+    },
+  );
+  assert.equal(refused.status, 403);
+  assert.deepEqual(insecure, [
+    "deny:GitHub requests must use HTTPS",
+    "finish:denied:null",
+  ]);
+});
+
+test("a host that is not github.com or api.github.com is forwarded without the policy", async () => {
+  for (const url of [
+    "https://some-other-host.example/x",
+    "https://github.com.evil.example/x",
+    "https://uploads.github.com/x",
+  ]) {
+    const events: string[] = [];
+    const response = await handleOutbound(
+      new Request(url),
+      instanceId,
+      authority(events),
+      () => Promise.resolve(new Response("ok")),
+    );
+    assert.equal(response.status, 200, url);
+    assert.deepEqual(events, [], url);
+  }
+});
+
+test("the Worker buffers a body only for a route the policy reads", async () => {
+  const oversized = new Uint8Array(1_048_577);
+  for (const [url, reason] of [
+    ["https://github.com/git-receive-pack", "unsupported GitHub web operation"],
+    [
+      "https://github.com/shields/git-receive-pack",
+      "unsupported GitHub web operation",
+    ],
+    [
+      "https://github.com/shields/dotfiles.git/git-receive-pack?x=1",
+      "unsupported GitHub Git operation",
+    ],
+    ["https://api.github.com/graphql?x=1", "unsupported GitHub API operation"],
+  ] as const) {
+    const events: string[] = [];
+    const response = await handleOutbound(
+      new Request(url, { method: "POST", body: oversized }),
+      instanceId,
+      authority(events),
+      () => {
+        throw new Error(`${url} reached GitHub`);
+      },
+    );
+    assert.equal(response.status, 403, url);
+    assert.deepEqual(events, [`deny:${reason}`, "finish:denied:null"], url);
+  }
+});
+
 test("GitHub over HTTP is denied", async () => {
   const response = await handleOutbound(
     new Request(

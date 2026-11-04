@@ -12,6 +12,7 @@ import {
   authorize,
   classify,
   denial,
+  inspectedBody,
   isBlockedResponseHeader,
   isHealthCheck,
   PolicyError,
@@ -434,33 +435,23 @@ export class Gateway {
       }
       const target = request.url ?? "";
       const method = request.method ?? "";
-      let body: RequestBody;
-      if (
-        host === "github.com" &&
-        method === "POST" &&
-        target.endsWith("/git-receive-pack")
-      ) {
-        body = await readBody(
-          remaining,
-          request.headers["content-encoding"],
-          1_048_576,
-          instanceId,
-        );
-      } else if (
-        host === "api.github.com" &&
-        method === "POST" &&
-        target === "/graphql"
-      ) {
-        body = await readBody(
-          remaining,
-          request.headers["content-encoding"],
-          1_048_576,
-        );
-      } else {
-        body = { buffered: Buffer.alloc(0), remaining };
-      }
+      const inspected = inspectedBody(host, method, target);
+      const body: RequestBody =
+        inspected === null
+          ? { buffered: Buffer.alloc(0), remaining }
+          : await readBody(
+              remaining,
+              request.headers["content-encoding"],
+              1_048_576,
+              inspected === "push" ? instanceId : undefined,
+            );
       classification = classify(
-        { host, method, target, body: body.buffered },
+        {
+          host,
+          method,
+          target,
+          ...(inspected === null ? {} : { body: body.buffered }),
+        },
         instanceId,
       );
       // Node writes the body of a GET or HEAD upstream without framing unless

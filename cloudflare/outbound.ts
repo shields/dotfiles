@@ -3,7 +3,9 @@ import {
   classify,
   denial,
   isBlockedResponseHeader,
+  inspectedBody,
   isHealthCheck,
+  namesGitHubHost,
   PolicyError,
   requireIdentityEncoding,
   rewriteLinks,
@@ -173,7 +175,7 @@ export async function handleOutbound(
   forward: (request: Request) => Promise<Response> = fetch,
 ): Promise<Response> {
   const url = new URL(request.url);
-  if (url.hostname !== "github.com" && url.hostname !== "api.github.com") {
+  if (!namesGitHubHost(url.hostname)) {
     return forward(request);
   }
   const started = Date.now();
@@ -183,25 +185,21 @@ export async function handleOutbound(
     if (url.protocol !== "https:" || url.port || url.username || url.password) {
       throw new PolicyError("GitHub requests must use HTTPS");
     }
-    let body: Uint8Array | undefined;
-    if (
-      url.hostname === "github.com" &&
-      request.method === "POST" &&
-      url.pathname.endsWith("/git-receive-pack")
-    ) {
-      body = await bodyForPolicy(request, 1_048_576, instanceId);
-    } else if (
-      url.hostname === "api.github.com" &&
-      request.method === "POST" &&
-      url.pathname === "/graphql"
-    ) {
-      body = await bodyForPolicy(request, 1_048_576);
-    }
+    const target = `${url.pathname}${url.search}`;
+    const inspected = inspectedBody(url.hostname, request.method, target);
+    const body =
+      inspected === null
+        ? undefined
+        : await bodyForPolicy(
+            request,
+            1_048_576,
+            inspected === "push" ? instanceId : undefined,
+          );
     classification = classify(
       {
         host: url.hostname,
         method: request.method,
-        target: `${url.pathname}${url.search}`,
+        target,
         ...(body ? { body } : {}),
       },
       instanceId,

@@ -679,6 +679,105 @@ test("the HTTPS socket injects a repo token only after checking the full push an
   assert.equal(incoming.length, forwarded);
 });
 
+test("the gateway inspects a body whenever the policy would route the request, however the target is spelled", async () => {
+  const { socket, instance, incoming } = await startGateway();
+  const repository = "/shields/dotfiles.git";
+  const pushBody = (ref: string, capabilities: string): Buffer =>
+    Buffer.concat([
+      packet(`${"0".repeat(40)} ${"1".repeat(40)} ${ref}\0${capabilities}\n`),
+      Buffer.from("0000PACK"),
+    ]);
+  const queryBody = (name: string): Buffer =>
+    Buffer.from(
+      JSON.stringify({
+        query: `{ repo_000: repository(owner: "shields", name: "${name}") { name } }`,
+        variables: null,
+      }),
+    );
+  const good = pushBody(idRef(instance.id), "report-status");
+  const bad = pushBody("refs/heads/main", "quiet");
+  for (const [host, target, allowedBody, deniedBody] of [
+    ["github.com", `${repository}/git-receive-pack?`, good, bad],
+    ["github.com", `${repository}/git-receive-pack#x`, good, bad],
+    ["github.com", "/shields/dotfiles.git\\git-receive-pack", good, bad],
+    ["api.github.com", "/graphql?", queryBody("dotfiles"), queryBody("other")],
+    ["api.github.com", "/graphql#x", queryBody("dotfiles"), queryBody("other")],
+    [
+      "api.github.com",
+      "/x/../graphql",
+      queryBody("dotfiles"),
+      queryBody("other"),
+    ],
+    [
+      "api.github.com",
+      "/%2e/graphql",
+      queryBody("dotfiles"),
+      queryBody("other"),
+    ],
+  ] as const) {
+    const before = incoming.length;
+    const refused = await send(socket, "POST", target, deniedBody, host);
+    assert.equal(refused.status, 403, target);
+    assert.equal(incoming.length, before, target);
+    const accepted = await send(socket, "POST", target, allowedBody, host);
+    assert.equal(accepted.status, 200, target);
+    assert.equal(incoming.length, before + 1, target);
+    assert.equal(
+      incoming[before]?.target,
+      host === "github.com" ? `${repository}/git-receive-pack` : "/graphql",
+      target,
+    );
+    assert.deepEqual(incoming[before].body, allowedBody, target);
+  }
+});
+
+test("a POST with a query string that the policy refuses is denied without its body being read", async () => {
+  const { socket, instance, incoming, state } = await startGateway();
+  for (const [host, target, body, headers, reason] of [
+    [
+      "github.com",
+      "/shields/dotfiles.git/git-receive-pack?x=1",
+      Buffer.concat([
+        packet(
+          `${"0".repeat(40)} ${"1".repeat(40)} refs/heads/main\0report-status\n`,
+        ),
+        Buffer.from("0000PACK"),
+      ]),
+      {},
+      "unsupported GitHub Git operation",
+    ],
+    [
+      "api.github.com",
+      "/graphql?x=1",
+      Buffer.from("{}"),
+      { "content-encoding": "gzip" },
+      "unsupported GitHub API operation",
+    ],
+  ] as const) {
+    const refused = await send(socket, "POST", target, body, host, headers);
+    assert.equal(refused.status, 403, target);
+    assert.equal(state.logs(instance.id)[0]?.reason, reason, target);
+  }
+  assert.equal(incoming.length, 0);
+});
+
+test("a GraphQL body past the inspection limit is denied while it is being read", async () => {
+  const { socket, instance, incoming, state } = await startGateway();
+  const refused = await send(
+    socket,
+    "POST",
+    "/graphql",
+    Buffer.alloc(1_048_577),
+    "api.github.com",
+  );
+  assert.equal(refused.status, 403);
+  assert.equal(
+    state.logs(instance.id)[0]?.reason,
+    "request prefix is too large",
+  );
+  assert.equal(incoming.length, 0);
+});
+
 test("a push to a task branch name that Git would refuse is denied before anything reaches the upstream", async () => {
   const { socket, instance, incoming, state } = await startGateway();
   const reply = await send(
