@@ -1,11 +1,51 @@
 import assert from "node:assert/strict";
-import { afterEach, mock, spyOn, test } from "bun:test";
+import { afterEach, beforeEach, mock, spyOn, test } from "bun:test";
 import { gzipSync } from "node:zlib";
 import { authorize, type Classification } from "../gateway/policy.ts";
 import { handleOutbound, type OutboundAuthority } from "./outbound.ts";
 
+const NativeRequest = Request;
+
+// In workerd a request that arrives over HTTP keeps the client's spelling in
+// request.url, copies of it keep that too, and a RequestInit cannot give a GET
+// or HEAD a body. Bun does none of these, so these classes supply them.
+class RawRequest extends NativeRequest {
+  readonly #raw: string;
+  constructor(raw: string, init?: RequestInit) {
+    super("https://placeholder.invalid/", init);
+    this.#raw = raw;
+  }
+  override get url(): string {
+    return this.#raw;
+  }
+}
+
+class CopyingRequest extends NativeRequest {
+  readonly #raw: string | null;
+  constructor(input: RequestInfo | URL, init?: RequestInit) {
+    if (
+      (init?.method === "GET" || init?.method === "HEAD") &&
+      (init.body ?? null) !== null
+    ) {
+      throw new TypeError(
+        "Request with a GET or HEAD method cannot have a body.",
+      );
+    }
+    super(input, init);
+    this.#raw = input instanceof NativeRequest ? input.url : null;
+  }
+  override get url(): string {
+    return this.#raw ?? super.url;
+  }
+}
+
+beforeEach(() => {
+  Object.defineProperty(globalThis, "Request", { value: CopyingRequest });
+});
+
 afterEach(() => {
   mock.restore();
+  Object.defineProperty(globalThis, "Request", { value: NativeRequest });
 });
 
 const instanceId = "01234567-89ab-4cde-8fab-0123456789ab";
@@ -702,11 +742,13 @@ test("audit failure stops forwarding, is logged, and the client sees only that t
     message: "gateway audit unavailable",
   });
   assert.deepEqual(logged.mock.calls, [
+    ["vm-access: gateway request failed", new Error("audit unavailable")],
     ["vm-access audit failure", new Error("deny unavailable")],
   ]);
 });
 
-test("a missing repository token stops forwarding", async () => {
+test("a missing repository token stops forwarding and is logged", async () => {
+  const logged = spyOn(console, "error").mockReturnValue();
   const events: string[] = [];
   const missing = authority(events);
   missing.allow = () =>
@@ -725,6 +767,12 @@ test("a missing repository token stops forwarding", async () => {
   );
   assert.equal(response.status, 503);
   assert.deepEqual(events, ["finish:gateway-error:null"]);
+  assert.deepEqual(logged.mock.calls, [
+    [
+      "vm-access: gateway request failed",
+      new Error("repository authorization is unavailable"),
+    ],
+  ]);
 });
 
 test("public release downloads receive no repository token", async () => {
@@ -938,6 +986,7 @@ test("the health path is answered locally on api.github.com and forwarded on git
       authority([]),
       (request) => {
         forwarded.push(request.url);
+        assert.equal(request.method, method);
         return Promise.resolve(new Response(null, { status: 404 }));
       },
     );
@@ -947,5 +996,213 @@ test("the health path is answered locally on api.github.com and forwarded on git
       ["https://github.com/__vm_access__/health"],
       method,
     );
+  }
+});
+
+test("a GitHub request is forwarded to the URL the policy classified", async () => {
+  for (const raw of [
+    "https://github.com/shields/dotfiles.git/git-receive-pack/%2e%2e/git-upload-pack",
+    "https://github.com/shields/dotfiles.git/git-receive-pack/.%2E/git-upload-pack",
+    "https://github.com/shields/dotfiles.git/git-receive-pack\\..\\git-upload-pack",
+    "https://GITHUB.com:443/shields/dotfiles.git/git-receive-pack/%2e%2e/git-upload-pack",
+  ]) {
+    const events: string[] = [];
+    const forwarded: string[] = [];
+    let authorization: string | null = null;
+    const response = await handleOutbound(
+      new RawRequest(raw, {
+        method: "POST",
+        headers: { authorization: "Bearer guest-secret" },
+        body: push("refs/heads/main"),
+      }),
+      instanceId,
+      authority(events),
+      (request) => {
+        forwarded.push(request.url);
+        authorization = request.headers.get("authorization");
+        return Promise.resolve(new Response("ok"));
+      },
+    );
+    assert.equal(response.status, 200, raw);
+    assert.deepEqual(
+      forwarded,
+      ["https://github.com/shields/dotfiles.git/git-upload-pack"],
+      raw,
+    );
+    assert.deepEqual(events, ["allow:git.read", "finish:completed:200"], raw);
+    assert.equal(
+      authorization,
+      `Basic ${btoa("x-access-token:upstream-secret")}`,
+      raw,
+    );
+  }
+});
+
+test("a GitHub GET or HEAD that arrives with a body is forwarded without one", async () => {
+  for (const [method, url] of [
+    [
+      "GET",
+      "https://github.com/shields/dotfiles.git/info/refs?service=git-upload-pack",
+    ],
+    ["GET", "https://api.github.com/repos/shields/dotfiles/pulls"],
+    ["HEAD", "https://api.github.com/repos/shields/dotfiles"],
+  ] as const) {
+    const bodies: (ReadableStream<Uint8Array> | null)[] = [];
+    const response = await handleOutbound(
+      new NativeRequest(url, { method, body: "" }),
+      instanceId,
+      authority([]),
+      (request) => {
+        bodies.push(request.body);
+        return Promise.resolve(new Response("ok"));
+      },
+    );
+    assert.equal(response.status, 200, `${method} ${url}`);
+    assert.deepEqual(bodies, [null], `${method} ${url}`);
+  }
+});
+
+test("a URL that WHATWG and RFC 3986 read differently is forwarded only to the host the Worker parsed", async () => {
+  for (const [raw, expected] of [
+    [
+      "https://evil.example\\@github.com/shields/dotfiles.git/info/refs?service=git-upload-pack",
+      "https://evil.example/@github.com/shields/dotfiles.git/info/refs?service=git-upload-pack",
+    ],
+    [
+      "https://evil.example\\@api.github.com/user",
+      "https://evil.example/@api.github.com/user",
+    ],
+    ["https://example.com/a/%2e%2e/b", "https://example.com/b"],
+  ] as const) {
+    const events: string[] = [];
+    const forwarded: string[] = [];
+    let authorization: string | null = null;
+    const response = await handleOutbound(
+      new RawRequest(raw),
+      instanceId,
+      authority(events),
+      (request) => {
+        forwarded.push(request.url);
+        authorization = request.headers.get("authorization");
+        return Promise.resolve(new Response("ok"));
+      },
+    );
+    assert.equal(response.status, 200, raw);
+    assert.deepEqual(forwarded, [expected], raw);
+    assert.equal(authorization, null, raw);
+    assert.deepEqual(events, [], raw);
+  }
+});
+
+test("a pass-through request whose URL is already canonical is forwarded as it arrived", async () => {
+  for (const init of [
+    { method: "GET" },
+    { method: "GET", body: "" },
+    { method: "GET", body: "query" },
+    { method: "PUT", body: "payload" },
+  ]) {
+    const request = new NativeRequest("https://example.com/search?q=1", init);
+    const forwarded: Request[] = [];
+    await handleOutbound(request, instanceId, authority([]), (seen) => {
+      forwarded.push(seen);
+      return Promise.resolve(new Response("ok"));
+    });
+    assert.equal(forwarded.length, 1, init.method);
+    assert.equal(forwarded[0], request, init.method);
+  }
+});
+
+test("a pass-through request keeps its method, headers, body, and redirect mode when its URL is rebuilt", async () => {
+  let seen: {
+    url: string;
+    method: string;
+    type: string | null;
+    authorization: string | null;
+    redirect: string;
+    body: string;
+  } | null = null;
+  await handleOutbound(
+    new RawRequest("https://example.com/a/%2e%2e/upload?x=1", {
+      method: "PUT",
+      headers: { "content-type": "text/plain", authorization: "Bearer guest" },
+      body: "payload",
+      redirect: "manual",
+    }),
+    instanceId,
+    authority([]),
+    async (request) => {
+      seen = {
+        url: request.url,
+        method: request.method,
+        type: request.headers.get("content-type"),
+        authorization: request.headers.get("authorization"),
+        redirect: request.redirect,
+        body: await request.text(),
+      };
+      return new Response("ok");
+    },
+  );
+  assert.deepEqual(seen, {
+    url: "https://example.com/upload?x=1",
+    method: "PUT",
+    type: "text/plain",
+    authorization: "Bearer guest",
+    redirect: "manual",
+    body: "payload",
+  });
+});
+
+test("a pass-through GET or HEAD with a body is forwarded without one when its URL is rebuilt", async () => {
+  for (const method of ["GET", "HEAD"]) {
+    const forwarded: { url: string; body: ReadableStream | null }[] = [];
+    const response = await handleOutbound(
+      new RawRequest("https://example.com/a/%2e%2e/b", { method, body: "" }),
+      instanceId,
+      authority([]),
+      (request) => {
+        forwarded.push({ url: request.url, body: request.body });
+        return Promise.resolve(new Response("ok"));
+      },
+    );
+    assert.equal(response.status, 200, method);
+    assert.deepEqual(
+      forwarded,
+      [{ url: "https://example.com/b", body: null }],
+      method,
+    );
+  }
+});
+
+test("URLs that a backslash, userinfo, or a port make look like GitHub stay denied", async () => {
+  for (const [raw, reason] of [
+    [
+      "https://github.com\\@evil.example/shields/dotfiles.git/info/refs?service=git-upload-pack",
+      "unsupported GitHub web operation",
+    ],
+    [
+      "https://evil.example@github.com/shields/dotfiles.git/info/refs?service=git-upload-pack",
+      "GitHub requests must use HTTPS",
+    ],
+    [
+      "https://:secret@github.com/shields/dotfiles.git/info/refs?service=git-upload-pack",
+      "GitHub requests must use HTTPS",
+    ],
+    [
+      "https://github.com:8443/shields/dotfiles.git/info/refs?service=git-upload-pack",
+      "GitHub requests must use HTTPS",
+    ],
+    ["https://evil.example@github.com", "GitHub requests must use HTTPS"],
+  ] as const) {
+    const events: string[] = [];
+    const response = await handleOutbound(
+      new RawRequest(raw),
+      instanceId,
+      authority(events),
+      () => {
+        throw new Error(`${raw} was forwarded`);
+      },
+    );
+    assert.equal(response.status, 403, raw);
+    assert.deepEqual(events, [`deny:${reason}`, "finish:denied:null"], raw);
   }
 });

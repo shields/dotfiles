@@ -111,12 +111,19 @@ async function drained(request: Request, limit: number): Promise<boolean> {
   }
 }
 
+// A RequestInit cannot give a GET or HEAD a body, even the empty one that an
+// incoming Content-Length: 0 produces.
+function initBody(request: Request): ReadableStream<Uint8Array> | null {
+  const method = request.method.toUpperCase();
+  return method === "GET" || method === "HEAD" ? null : request.body;
+}
+
 function upstreamRequest(
   request: Request,
+  url: URL,
   token: string | null,
   forwardEncoding: boolean,
 ): Request {
-  const url = new URL(request.url);
   const headers = new Headers();
   for (const name of forwardedHeaders) {
     const value = request.headers.get(name);
@@ -136,16 +143,12 @@ function upstreamRequest(
         : `Bearer ${token}`,
     );
   }
-  const upstream = new Request(request, { redirect: "manual" });
-  // An empty headers override can retain guest credentials in Bun's Request copy.
-  const inheritedHeaders = [...upstream.headers.keys()];
-  for (const name of inheritedHeaders) {
-    upstream.headers.delete(name);
-  }
-  for (const [name, value] of headers) {
-    upstream.headers.set(name, value);
-  }
-  return upstream;
+  return new Request(url.href, {
+    method: request.method,
+    headers,
+    body: initBody(request),
+    redirect: "manual",
+  });
 }
 
 function downstreamResponse(
@@ -174,9 +177,23 @@ export async function handleOutbound(
   authority: OutboundAuthority,
   forward: (request: Request) => Promise<Response> = fetch,
 ): Promise<Response> {
+  // In workerd, request.url and copies made from the request keep the client's
+  // spelling, and fetch can resolve that spelling to a different host than URL
+  // does. Forward only url.href: the request itself when its URL is already
+  // that string, otherwise a request built from it.
   const url = new URL(request.url);
   if (!namesGitHubHost(url.hostname)) {
-    return forward(request);
+    if (request.url === url.href) {
+      return forward(request);
+    }
+    return forward(
+      new Request(url.href, {
+        method: request.method,
+        headers: request.headers,
+        body: initBody(request),
+        redirect: request.redirect,
+      }),
+    );
   }
   const started = Date.now();
   let classification: Classification | null = null;
@@ -218,6 +235,7 @@ export async function handleOutbound(
     const response = await forward(
       upstreamRequest(
         request,
+        url,
         allowed.access === "anonymous" ||
           classification.operation === "public.read"
           ? null
@@ -233,6 +251,9 @@ export async function handleOutbound(
     );
     return downstreamResponse(response, classification);
   } catch (error) {
+    if (!(error instanceof PolicyError)) {
+      console.error("vm-access: gateway request failed", error);
+    }
     const reason =
       error instanceof PolicyError ? error.message : "gateway request failed";
     const respond = (
