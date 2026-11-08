@@ -493,6 +493,7 @@ _startup_overrides() {
     }
 
     r() {
+        setopt localoptions pipefail
         rg --pretty --line-buffered "$@" | less -R -E --redraw-on-quit
     }
 

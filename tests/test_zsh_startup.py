@@ -628,6 +628,19 @@ def test_emacs_aliases_open_terminal_frames_on_linux(
     assert values.split("|") == [e, emacs]
 
 
+@pytest.mark.parametrize(
+    ("rg", "less", "expected"), [(0, 0, 0), (1, 0, 1), (2, 0, 2), (0, 3, 3)]
+)
+def test_r_returns_the_search_status_through_the_pager(
+    shell: Shell, rg: int, less: int, expected: int
+) -> None:
+    (shell.home / "bin").mkdir()
+    executable(shell.home / "bin/rg", f"#!/bin/sh\necho match\nexit {rg}\n")
+    executable(shell.home / "bin/less", f"#!/bin/sh\ncat\nexit {less}\n")
+    result = shell.run_command('r x; print -r -- "status=$? $options[pipefail]"')
+    assert result.splitlines() == ["match", f"status={expected} off"]
+
+
 def test_pc_copies_through_tmux_or_osc52_on_linux(shell: Shell) -> None:
     shell.set_ostype(LINUX)
     (shell.home / "bin").mkdir()
