@@ -14,6 +14,11 @@
 ;; See the License for the specific language governing permissions and
 ;; limitations under the License.
 
+;; The installer for bootstrap version 7 clones master unless told otherwise,
+;; but straight.el's default branch is main; on master `straight-pull-all'
+;; stops to ask, which fails in batch mode.
+(setq straight-repository-branch "main")
+
 ;; Straight bootstrap, pasted from its README.md.
 (defvar bootstrap-version)
 (let ((bootstrap-file

@@ -23,6 +23,14 @@
 (add-to-list 'custom-theme-load-path (expand-file-name ".emacs.d"))
 (load-file ".emacs.d/init.el")
 
+;; A checkout that the installer left on master has to move to main before
+;; `straight-pull-all', which would otherwise stop to ask.  straight.el clones
+;; with --no-single-branch, so the fetch also updates origin/main.
+(let ((default-directory (straight--repos-dir "straight.el")))
+  (unless (equal (process-lines "git" "branch" "--show-current")
+                 (list straight-repository-branch))
+    (process-lines "git" "fetch" "origin" straight-repository-branch)
+    (process-lines "git" "checkout" straight-repository-branch)))
 (straight-pull-all)
 (straight-check-all)
 (straight-remove-unused-repos t)
