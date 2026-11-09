@@ -323,6 +323,7 @@ FAKE_CLAUDE='sk-ant-oat01-FAKEclaudeToken-7f3c9a'
 FAKE_LGTMCP='FAKE-LGTMCP-KEY-55'
 LGTMCP_YAML="gemini_api_key: $FAKE_LGTMCP"$'\n'
 FAKE_CODEX='FAKE-codex-access-token-4c8e'
+FAKE_FIREWORKS='fw_FAKEfireworksKey0123'
 CODEX_JSON=$'{\n  "OPENAI_API_KEY": null,\n  "tokens": {\n    "access_token": "'"$FAKE_CODEX"$'",\n    "refresh_token": "FAKE-codex-refresh-9d1a"\n  }\n}\n'
 # What the fake GitHub hands out, and the device code it expects back.
 GITHUB_SECRETS=(-e ghu_fake-access -e ghr_fake-refresh -e fake-device-code)
@@ -483,10 +484,10 @@ assert_no_secret_leak() {
     local desc="$1" leaks
     leaks="$(cat "$STATE"/calls/*.argv(N) "$STATE"/calls/*.env(N) "$STATE/limactl.log" "$STATE/vm-access.log" \
         "$STATE"/gh.log "$STATE"/open.log "$STATE"/sleep.log 2>/dev/null |
-        grep -c -e "$FAKE_CLAUDE" -e "$FAKE_LGTMCP" -e "$FAKE_CODEX" "${GITHUB_SECRETS[@]}" || true)"
+        grep -c -e "$FAKE_CLAUDE" -e "$FAKE_LGTMCP" -e "$FAKE_CODEX" -e "$FAKE_FIREWORKS" "${GITHUB_SECRETS[@]}" || true)"
     assert_eq "$desc: no secret in any recorded argv, environment or log" 0 "$leaks"
     assert_eq "$desc: no secret in limavm's output" 0 \
-        "$(printf '%s' "$OUT" | grep -c -e "$FAKE_CLAUDE" -e "$FAKE_LGTMCP" -e "$FAKE_CODEX" "${GITHUB_SECRETS[@]}" || true)"
+        "$(printf '%s' "$OUT" | grep -c -e "$FAKE_CLAUDE" -e "$FAKE_LGTMCP" -e "$FAKE_CODEX" -e "$FAKE_FIREWORKS" "${GITHUB_SECRETS[@]}" || true)"
 }
 
 # --- 1. Static checks ---
@@ -510,6 +511,7 @@ assert_contains "help names --no-claude-token" "--no-claude-token" "$OUT"
 assert_contains "help names --no-codex-auth" "--no-codex-auth" "$OUT"
 assert_contains "help says where Codex keeps its login" 'cli_auth_credentials_store = "file"' "$OUT"
 assert_contains "help lists claude-token" "limavm claude-token" "$OUT"
+assert_contains "help names the Fireworks key file" ".config/secrets/FIREWORKS_API_KEY" "$OUT"
 assert_contains "help describes the Mac gateway" "Credentials" "$OUT"
 run_limavm
 assert_eq "no command fails" 2 "$RC"
@@ -812,6 +814,50 @@ assert_eq "new without a repository still installs the gateway" 1 "$(count_in_lo
 assert_eq "new without a repository sends no GitHub secret" 0 "$(count_in_log GITHUB_APP_AUTH)"
 assert_eq "--no-claude-token skips the Claude secret" 0 "$(count_in_log CLAUDE_CODE_OAUTH_TOKEN)"
 assert_eq "--no-codex-auth skips the Codex login" 0 "$(count_in_log CODEX_AUTH)"
+assert_eq "no Fireworks key file means no Fireworks secret" 0 "$(count_in_log FIREWORKS_API_KEY)"
+
+new_case test-base
+mkdir -p "$HOME_DIR/.config/secrets"
+print -r -- "  $FAKE_FIREWORKS  " > "$HOME_DIR/.config/secrets/FIREWORKS_API_KEY"
+run_limavm new t1 --no-repo --no-claude-token --no-codex-auth
+assert_eq "new installs the saved Fireworks key" 0 "$RC"
+fireworks_call=$(grep -n 'FIREWORKS_API_KEY' "$STATE/limactl.log" | head -1 | cut -d: -f1)
+assert_eq "the Fireworks key reaches only setup-secrets stdin, trimmed" "$FAKE_FIREWORKS" "$(stdin_of "$fireworks_call")"
+assert_no_secret_leak "new with a Fireworks key"
+
+new_case test-base
+mkdir -p "$HOME_DIR/.config/secrets"
+print -r -- "$FAKE_FIREWORKS other" > "$HOME_DIR/.config/secrets/FIREWORKS_API_KEY"
+run_limavm new t1 --no-repo --no-claude-token --no-codex-auth
+assert_eq "a Fireworks key file with two words fails" 1 "$RC"
+assert_contains "a Fireworks key file with two words says so" "more than one word" "$OUT"
+assert_eq "a Fireworks key file with two words creates no VM" 0 "$(count_in_log clone)"
+assert_no_secret_leak "a Fireworks key file with two words"
+
+new_case test-base
+mkdir -p "$HOME_DIR/.config/secrets"
+: > "$HOME_DIR/.config/secrets/FIREWORKS_API_KEY"
+run_limavm new t1 --no-repo --no-claude-token --no-codex-auth
+assert_eq "an empty Fireworks key file fails" 1 "$RC"
+assert_eq "an empty Fireworks key file creates no VM" 0 "$(count_in_log clone)"
+
+new_case test-base
+mkdir -p "$HOME_DIR/.config/secrets"
+ln -s "$HOME_DIR/.config/secrets/missing" "$HOME_DIR/.config/secrets/FIREWORKS_API_KEY"
+run_limavm new t1 --no-repo --no-claude-token --no-codex-auth
+assert_eq "a dangling Fireworks key link fails" 1 "$RC"
+assert_contains "a dangling Fireworks key link says it is not a regular file" "is not a regular file" "$OUT"
+assert_eq "a dangling Fireworks key link creates no VM" 0 "$(count_in_log clone)"
+
+new_case test-base
+mkdir -p "$HOME_DIR/.config/secrets"
+print -r -- "$FAKE_FIREWORKS other" > "$HOME_DIR/.config/secrets/FIREWORKS_API_KEY"
+run_limavm new t1 --no-repo --no-codex-auth
+assert_eq "a bad Fireworks key file fails with the Claude token still to ask for" 1 "$RC"
+assert_contains "a bad Fireworks key file is reported" "more than one word" "$OUT"
+assert_eq "a bad Fireworks key file is reported before the Claude token is asked for" 0 \
+    "$([[ $OUT == *'keeps the token for next time'* ]] && echo 1 || echo 0)"
+assert_no_secret_leak "a bad Fireworks key file before the Claude prompt"
 
 new_case test-base
 mkdir -p "$HOME_DIR/.config/secrets"

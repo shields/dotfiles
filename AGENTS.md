@@ -135,7 +135,20 @@ Throwaway Lima VMs (the README describes them for users):
   `cli_auth_credentials_store = "file"`; the Keychain holds the login otherwise)
   to `setup-secrets CODEX_AUTH`, which requires a JSON object and writes the
   same path in the guest; `--no-codex-auth` leaves Codex to
-  `codex login --device-auth` in the VM.
+  `codex login --device-auth` in the VM. `~/.config/secrets/FIREWORKS_API_KEY`,
+  which `.zshrc`'s `cg` reads at launch and exports only into that `claude`'s
+  environment (its sandbox hides the variable from the commands it runs, but
+  its hooks and MCP servers inherit it), is installed the same way when it
+  exists, and never prompted for. `limavm new` runs the base's own
+  `setup-secrets`, so a base built before it knew this name must be rebuilt.
+- `provision/claude-model-pricing.json` holds the `modelPricing` rates for the
+  models `cg` uses, which Claude Code reads only from managed settings.
+  `provision/linux-system.sh` installs it in
+  `/etc/claude-code/managed-settings.d/` beside `throwaway.sh`'s
+  `managed-settings.json`, and `macos.sh`'s `macos_claude_model_pricing` in
+  `/Library/Application Support/ClaudeCode/`. A model ID change in `cg` needs
+  the same change there, without the `[1m]` suffix that Claude Code ignores when
+  it matches prices; `tests/test_zsh_startup.py` checks that they agree.
 - `cloudflare/wrangler.jsonc` deploys `cloudflare/worker.ts` and the agent
   image through `cloudflare/deploy.sh`, which stages and scans the tree, adds
   this Mac's SSH public key, and installs an admin secret through Wrangler.
@@ -150,11 +163,11 @@ Throwaway Lima VMs (the README describes them for users):
   machine a throwaway environment: `/etc/dotfiles-throwaway`, Claude Code's
   managed settings (generated with jq from the deny rules, the `git_guard.py`
   hook and the status line in `.claude/settings.json`, so add to that file, not
-  the output), and Codex's system config and rules. `.zshrc`'s `c` tests the
-  marker, which `DOTFILES_THROWAWAY_MARKER` can point elsewhere in a test, and
-  must stay a builtin-only test. `provision/reset-identity.sh` removes the
-  agents' installation identifiers before a base is cloned; add a key there when
-  an agent stores another.
+  the output), and Codex's system config and rules. `.zshrc`'s `_claude_start`,
+  which `c` and `cg` share, tests the marker, which `DOTFILES_THROWAWAY_MARKER`
+  can point elsewhere in a test, and must stay a builtin-only test.
+  `provision/reset-identity.sh` removes the agents' installation identifiers
+  before a base is cloned; add a key there when an agent stores another.
 - Per-OS copy excludes: macOS leaves out `bin/setup-secrets`,
   `bin/github_app_token.py`, `bin/setup-github-gateway` and
   `bin/github-gateway-credential`; Linux leaves out `bin/limavm` and

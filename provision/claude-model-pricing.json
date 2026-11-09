@@ -1,0 +1,12 @@
+{
+  "modelPricing": {
+    "overrides": {
+      "accounts/fireworks/models/glm-5p3": {
+        "input": 1.4,
+        "output": 4.4,
+        "cacheRead": 0.26,
+        "cacheWrite": 1.4
+      }
+    }
+  }
+}

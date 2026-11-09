@@ -34,6 +34,7 @@ die() {
 
 [[ -n ${HOME:-} ]] || die "HOME is not set"
 claude_token_file=$HOME/.config/secrets/CLAUDE_CODE_OAUTH_TOKEN
+fireworks_key_file=$HOME/.config/secrets/FIREWORKS_API_KEY
 codex_auth_file=$HOME/.codex/auth.json
 
 usage() {
@@ -71,6 +72,9 @@ fails when there is none: run codex login here first, with
 cli_auth_credentials_store = "file" in ~/.codex/config.toml, since with keyring
 or auto the login is in the OS credential store and no file exists.
 --no-codex-auth skips it, for a VM that will use codex login --device-auth.
+
+new also installs the Fireworks API key that cg uses from
+$fireworks_key_file when that file exists, and never asks for it.
 EOF
 }
 
@@ -258,16 +262,17 @@ cmd_base() {
     printf 'limavm: %s is ready; make a VM with: limavm new [NAME]\n' "$base"
 }
 
-claude_token=
-set_claude_token() {
-    local line=$1 empty=$2 spaces=$3
+set_one_word() {
+    local name=$1 line=$2 empty=$3 spaces=$4
     line=${line//$'\r'/}
     line=${line#"${line%%[![:space:]]*}"}
     line=${line%"${line##*[![:space:]]}"}
     [[ -n $line ]] || die "$empty"
     [[ $line != *[[:space:]]* ]] || die "$spaces"
-    claude_token=$line
+    printf -v "$name" '%s' "$line"
 }
+
+claude_token=
 
 # LIMAVM_PROMPT_INPUT names a file to read instead of the terminal, for tests.
 prompt_claude_token() {
@@ -282,7 +287,7 @@ prompt_claude_token() {
         IFS= read -rs line </dev/tty || [[ -n $line ]] || true
         printf '\n' >/dev/tty
     fi
-    set_claude_token "$line" \
+    set_one_word claude_token "$line" \
         "the Claude token is empty; run claude setup-token in another terminal and paste its output$or_else" \
         "the Claude token has spaces in it; paste only the token"
 }
@@ -292,9 +297,20 @@ read_claude_token_file() {
     [[ -f $claude_token_file ]] || die "$claude_token_file is not a regular file; remove it, or pass --no-claude-token"
     [[ -r $claude_token_file ]] || die "cannot read $claude_token_file; run limavm claude-token to replace it, or pass --no-claude-token"
     content=$(<"$claude_token_file")
-    set_claude_token "$content" \
+    set_one_word claude_token "$content" \
         "$claude_token_file is empty; run limavm claude-token to replace it, or pass --no-claude-token" \
         "$claude_token_file holds more than one token; run limavm claude-token to replace it"
+}
+
+fireworks_key=
+read_fireworks_key_file() {
+    local content
+    [[ -f $fireworks_key_file ]] || die "$fireworks_key_file is not a regular file; remove it"
+    [[ -r $fireworks_key_file ]] || die "cannot read $fireworks_key_file"
+    content=$(<"$fireworks_key_file")
+    set_one_word fireworks_key "$content" \
+        "$fireworks_key_file is empty; put the key in it, or remove it" \
+        "$fireworks_key_file holds more than one word; put only the key in it"
 }
 
 cmd_claude_token() {
@@ -403,6 +419,7 @@ cmd_new() {
         jq -es 'length == 1 and (.[0] | type) == "object"' "$codex_auth_file" >/dev/null 2>&1 ||
             die "$codex_auth_file is not a JSON object; run codex login on this Mac again, or pass --no-codex-auth"
     fi
+    [[ ! -e $fireworks_key_file && ! -L $fireworks_key_file ]] || read_fireworks_key_file
 
     # What needs the person comes before the clone, so that waiting for them
     # leaves no VM running.
@@ -467,6 +484,9 @@ cmd_new() {
         install_secret "$name" CODEX_AUTH <"$codex_auth_file"
     fi
     install_secret "$name" LGTMCP_CONFIG <"$lgtmcp_config"
+    if [[ -n $fireworks_key ]]; then
+        printf '%s\n' "$fireworks_key" | install_secret "$name" FIREWORKS_API_KEY
+    fi
 
     printf 'limavm: %s is ready.\n' "$name"
     if ((cloned)); then

@@ -330,6 +330,21 @@ Nothing secret is in the repository, so log in once on each machine:
   zsh shells on Linux export it from there.
 - Codex: `codex login --device-auth`
 
+`cg` starts Claude Code like `c`, but on GLM-5.3 through Fireworks'
+Anthropic-compatible API, and `cgw` is `cg --worktree`. It needs a Fireworks API
+key in `~/.config/secrets/FIREWORKS_API_KEY` (mode 0600), which it reads at
+launch and passes only to that `claude`, in place of the Claude login. Outside a
+throwaway VM the sandbox hides the key from the commands that `claude` runs, but
+its hooks and MCP servers inherit it. Every model alias maps to
+`accounts/fireworks/models/glm-5p3`, and so does every subagent, whatever model
+it names. The status line's cost is at Fireworks' rates, because provisioning
+installs `provision/claude-model-pricing.json` as a managed-settings drop-in
+(`managed-settings.d/50-model-pricing.json` in
+`/Library/Application Support/ClaudeCode/` on a Mac, which takes `sudo` once,
+and in `/etc/claude-code/` on Linux); Claude Code reads `modelPricing` from
+managed settings only. On GLM, Claude Code's WebSearch, image input and fast
+mode do not work.
+
 Login shells set `LANG` to `en_US.UTF-8` when the SSH client did not send one,
 but a non-interactive `ssh box command` runs without a `LANG` unless the client
 sends it (`SendEnv LANG`). The system `ssh_config` of Debian and of macOS's own
@@ -481,6 +496,13 @@ VM where you will run `claude auth login`.
 ### The rest
 
 - `~/.config/lgtmcp/config.yaml` on the Mac is copied to the same place in the VM.
+- `~/.config/secrets/FIREWORKS_API_KEY`, the key `cg` uses, goes to the same
+  path in the VM when the file exists on the Mac. `limavm new` never asks for
+  it, and fails before it makes the VM when the file is not a regular file,
+  empty, unreadable or holds more than one word. It installs the key with the
+  base's own `setup-secrets`, so a base built before that script knew the name
+  makes `limavm new` fail after the other secrets and delete the VM, until
+  `limavm base` rebuilds the base.
 - Codex's login on the Mac, `~/.codex/auth.json` (the file OpenAI documents
   copying to a headless machine), goes to `setup-secrets CODEX_AUTH` on stdin,
   which checks that it is a JSON object and writes it to the same path in the VM
@@ -523,9 +545,9 @@ Not isolated:
   every possible GitHub connection through itself. It does keep its app tokens
   off the VM; the policy is a boundary around those tokens, not around arbitrary
   network traffic or credentials acquired by the guest.
-- The Claude token, Codex login and LGTMCP key in the VM. Agents can read and
-  send those to public addresses. The VM has no GitHub App token or refresh
-  token.
+- The Claude token, Codex login, LGTMCP key and Fireworks key in the VM. Agents
+  can read and send those to public addresses. The VM has no GitHub App token or
+  refresh token.
 - The Mac's own public address, if it has one. Only the private ranges are
   rejected.
 
@@ -589,6 +611,10 @@ OWNER/REPO`, which shows a device code and authorization URL on the Mac:
   the `limavm new` prompt), and so does `codex` (with the Mac's `codex login`;
   `codex login status` says so).
 - An LGTMCP `review_only` call works, and `emacs -nw` starts and exits.
+- With a Fireworks key, `cg -p hi` answers on the Mac and in the VM, `/status`
+  in `cg` names the Fireworks URL and the drop-in among the setting sources,
+  and the status line's cost after a few requests matches the Fireworks
+  dashboard.
 - From the VM, `curl -m3 host.lima.internal:PORT` fails at once for a server on
   the Mac, and `lsof -nP -iTCP -sTCP:LISTEN` on the Mac shows only Lima's
   `127.0.0.1` ports.

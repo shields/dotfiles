@@ -52,6 +52,7 @@ MACOS_FUNCTIONS = (
     "macos_vm_access_install",
     "macos_xcode",
     "macos_login_shell",
+    "macos_claude_model_pricing",
     "macos_defaults",
     "macos_emacs_app",
     "macos_finish",
@@ -350,6 +351,7 @@ def test_macos_functions_are_called_in_the_original_order() -> None:
         install,
         xcode,
         login_shell,
+        model_pricing,
         defaults,
         emacs_app,
         finish,
@@ -361,6 +363,7 @@ def test_macos_functions_are_called_in_the_original_order() -> None:
     assert find(r"^\s+bin/docker-prune$") < xcode
     assert login_shell == xcode + 1
     assert find(r"^\s+macos_emudhra_workaround$", emudhra + 1) == login_shell + 1
+    assert model_pricing == login_shell + 2
     assert find(r"gcloud --quiet components update") < defaults
     emacs = find(r"^emacs --batch --script \.emacs\.d/provision\.el")
     assert defaults < emacs < emacs_app
@@ -1665,3 +1668,59 @@ def test_provision_chezmoi_apply_reports_failures(
         assert result.returncode == 0, result.stderr
         assert "finished" in result.stdout
         assert target.exists()
+
+
+MODEL_PRICING_HARNESS = r"""
+set -euo pipefail
+umask 077
+source "$1"
+sudo() {
+    printf '%s\n' "$*" >>"$SUDO_LOG"
+    "$@"
+}
+macos_claude_model_pricing
+"""
+
+
+def run_model_pricing(tmp_path: Path) -> tuple[Path, list[str]]:
+    managed = tmp_path / "ClaudeCode" / "managed-settings.d"
+    script = tmp_path / "macos.sh"
+    _ = script.write_text(
+        MACOS.read_text().replace(
+            "/Library/Application Support/ClaudeCode/managed-settings.d",
+            str(managed),
+        )
+    )
+    log = tmp_path / "sudo.log"
+    _ = subprocess.run(
+        ["/bin/bash", "-c", MODEL_PRICING_HARNESS, "bash", str(script)],
+        cwd=REPO,
+        env={"PATH": "/usr/bin:/bin", "SUDO_LOG": str(log)},
+        capture_output=True,
+        text=True,
+        check=True,
+        timeout=15,
+    )
+    calls = log.read_text().splitlines() if log.exists() else []
+    _ = log.unlink(missing_ok=True)
+    return managed / "50-model-pricing.json", calls
+
+
+def test_model_pricing_is_installed_once_with_sudo(tmp_path: Path) -> None:
+    installed, calls = run_model_pricing(tmp_path)
+    source = REPO / "provision" / "claude-model-pricing.json"
+    assert installed.read_bytes() == source.read_bytes()
+    assert installed.stat().st_mode & 0o777 == 0o644
+    assert [call.split()[:2] for call in calls] == [
+        ["install", "-d"],
+        ["install", "-m"],
+    ]
+    assert calls[0] == f"install -d -m 755 {installed.parent.parent} {installed.parent}"
+    assert installed.parent.stat().st_mode & 0o777 == 0o755
+    assert installed.parent.parent.stat().st_mode & 0o777 == 0o755
+    _, calls = run_model_pricing(tmp_path)
+    assert calls == []
+    _ = installed.write_text("{}\n")
+    _, calls = run_model_pricing(tmp_path)
+    assert len(calls) == 2
+    assert installed.read_bytes() == source.read_bytes()

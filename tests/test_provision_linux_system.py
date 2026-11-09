@@ -204,8 +204,10 @@ def test_a_regular_user_is_provisioned_to_the_end(tmp_path: Path) -> None:
         "chsh",
         "install",
         "install",
+        "install",
+        "install",
     ]
-    assert calls[-1] == "install -d -m 755 -o alice -g alice /home/linuxbrew/.linuxbrew"
+    assert calls[-3] == "install -d -m 755 -o alice -g alice /home/linuxbrew/.linuxbrew"
 
 
 def test_apt_runs_noninteractively_and_waits_for_the_dpkg_lock() -> None:
@@ -278,6 +280,51 @@ def test_locale_is_generated_only_when_missing() -> None:
     generate = line_index(r"^\s+locale-gen")
     assert check < generate
     assert "en_US" in LINES[line_index(r"grep -qix")]
+
+
+def test_claude_model_pricing_is_a_managed_drop_in(tmp_path: Path) -> None:
+    _, calls = run_script(tmp_path, "alice")
+    assert calls[-2] == (
+        "install -d -m 755 /etc/claude-code /etc/claude-code/managed-settings.d"
+    )
+    assert calls[-1].endswith(
+        " /etc/claude-code/managed-settings.d/50-model-pricing.json"
+    )
+    assert (REPO / "provision" / "claude-model-pricing.json").is_file()
+
+
+def test_claude_model_pricing_is_read_from_the_scripts_own_directory(
+    tmp_path: Path,
+) -> None:
+    provision = tmp_path / "provision"
+    stubs = tmp_path / "bin"
+    provision.mkdir()
+    stubs.mkdir()
+    install = stubs / "install"
+    _ = install.write_text('#!/bin/sh\nprintf \'%s\\n\' "$*" >>"$LOG"\n')
+    install.chmod(0o755)
+    script = provision / "linux-system.sh"
+    _ = script.write_text(
+        "set -euo pipefail\n" + TEXT[TEXT.index("# Claude Code honors modelPricing") :]
+    )
+    log = tmp_path / "log"
+    result = subprocess.run(
+        ["/bin/bash", str(script)],
+        env={"PATH": f"{stubs}:/usr/bin:/bin", "LOG": str(log)},
+        stdin=subprocess.DEVNULL,
+        capture_output=True,
+        text=True,
+        timeout=15,
+        check=False,
+    )
+    assert (result.returncode, result.stderr) == (0, "")
+    assert log.read_text().splitlines() == [
+        "-d -m 755 /etc/claude-code /etc/claude-code/managed-settings.d",
+        (
+            f"-m 644 {provision}/claude-model-pricing.json "
+            "/etc/claude-code/managed-settings.d/50-model-pricing.json"
+        ),
+    ]
 
 
 def test_script_never_calls_sudo() -> None:

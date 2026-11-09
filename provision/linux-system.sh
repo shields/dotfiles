@@ -82,3 +82,9 @@ fi
 # Homebrew's installer needs no sudo when its prefix already belongs to the user.
 install -d -m 755 /home/linuxbrew
 install -d -m 755 -o "$user" -g "$group" /home/linuxbrew/.linuxbrew
+
+# Claude Code honors modelPricing only in managed settings. A drop-in leaves
+# managed-settings.json to provision/throwaway.sh.
+install -d -m 755 /etc/claude-code /etc/claude-code/managed-settings.d
+install -m 644 "$(dirname "${BASH_SOURCE[0]}")/claude-model-pricing.json" \
+    /etc/claude-code/managed-settings.d/50-model-pricing.json

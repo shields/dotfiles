@@ -427,22 +427,57 @@ unset _startup_file
 _startup_overrides() {
     unalias gcl md 2>/dev/null || true
     # Start Claude with a per-session tmpdir and sandbox write permit for it.
-    c() {
-        local tmpdir
+    # $1 is more settings JSON, starting with a comma.
+    _claude_start() {
+        local extra=$1 tmpdir
+        shift
         tmpdir=$(mktemp -d "${${TMPDIR:-/tmp}%/}/claude.XXXXXX") || return 1
         # A throwaway environment's managed settings choose the permission mode
         # and turn the sandbox off, and the flags below would override them.
         if [[ "$OSTYPE" == linux* && -e "${DOTFILES_THROWAWAY_MARKER:-/etc/dotfiles-throwaway}" ]]; then
-            TMPDIR="$tmpdir" claude --model=opus --effort high --settings '{"ultracode":true}' "$@"
+            TMPDIR="$tmpdir" claude --model=opus --effort high --settings "{\"ultracode\":true$extra}" "$@"
             return
         fi
         # Permit sandbox writes to this session's tmpdir; scoped to this run only.
+        # cg's key is in claude's environment, which sandboxed commands inherit
+        # unless the sandbox unsets it.
+        local sandbox="\"filesystem\":{\"allowWrite\":[\"$tmpdir\"]},\"credentials\":{\"envVars\":[{\"name\":\"ANTHROPIC_AUTH_TOKEN\",\"mode\":\"deny\"}]}"
         TMPDIR="$tmpdir" claude \
             --model=opus --effort high \
             --permission-mode=auto \
-            --settings "{\"ultracode\":true,\"sandbox\":{\"filesystem\":{\"allowWrite\":[\"$tmpdir\"]}}}" "$@"
+            --settings "{\"ultracode\":true$extra,\"sandbox\":{$sandbox}}" "$@"
     }
+    c() { _claude_start '' "$@" }
     alias cw='c --worktree'
+
+    # The variables go in --settings, where they outrank the env in
+    # ~/.claude/settings.json; exports would not.
+    cg() {
+        setopt localoptions extendedglob
+        local key_file=$HOME/.config/secrets/FIREWORKS_API_KEY key
+        key=$(<"$key_file") || return 1
+        # The trimming of limavm's set_one_word, so that a key file which limavm
+        # installs in a VM works here too.
+        key=${${key//$'\r'/}##[[:space:]]##}
+        key=${key%%[[:space:]]##}
+        if [[ -z $key || $key == *[[:space:]]* ]]; then
+            print -ru2 -- "cg: $key_file must hold only the Fireworks API key"
+            return 1
+        fi
+        local model='accounts/fireworks/models/glm-5p3[1m]' slot
+        local settings_env="\"ANTHROPIC_BASE_URL\":\"https://api.fireworks.ai/inference\",\"CLAUDE_CODE_SUBAGENT_MODEL\":\"$model\",\"CLAUDE_CODE_SUBAGENT_MODEL_FORCE\":\"1\""
+        for slot in OPUS SONNET HAIKU FABLE; do
+            settings_env+=",\"ANTHROPIC_DEFAULT_${slot}_MODEL\":\"$model\",\"ANTHROPIC_DEFAULT_${slot}_MODEL_NAME\":\"GLM-5.3\""
+        done
+        (
+            # Claude Code would send these to Fireworks, or choose another provider.
+            unset CLAUDE_CODE_OAUTH_TOKEN ANTHROPIC_API_KEY ANTHROPIC_CUSTOM_HEADERS \
+                CLAUDE_CODE_USE_{BEDROCK,VERTEX,FOUNDRY,ANTHROPIC_AWS,ANTHROPIC_GOOGLE_CLOUD,MANTLE}
+            export ANTHROPIC_AUTH_TOKEN=$key
+            _claude_start ",\"env\":{$settings_env}" "$@"
+        )
+    }
+    alias cgw='cg --worktree'
 
     alias cx='codex'
     alias cxw='cx --worktree'

@@ -114,6 +114,18 @@ macos_login_shell() {
     fi
 }
 
+# Claude Code honors modelPricing only in managed settings.
+macos_claude_model_pricing() {
+    local source=provision/claude-model-pricing.json
+    local dir="/Library/Application Support/ClaudeCode/managed-settings.d"
+    if ! cmp -s "$source" "$dir/50-model-pricing.json"; then
+        # BSD install gives only the last directory its -m; a parent that it
+        # creates takes the umask, and Claude Code must be able to read both.
+        sudo install -d -m 755 "${dir%/*}" "$dir"
+        sudo install -m 644 "$source" "$dir/50-model-pricing.json"
+    fi
+}
+
 macos_defaults() {
     # Make sure System Preferences isn't open, since it interferes with other
     # processes writing to defaults.

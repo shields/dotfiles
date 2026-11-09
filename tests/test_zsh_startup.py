@@ -12,6 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import json
 import os
 import pty
 import select
@@ -23,7 +24,7 @@ import sys
 import time
 from contextlib import suppress
 from pathlib import Path
-from typing import TYPE_CHECKING, final
+from typing import TYPE_CHECKING, cast, final
 
 import pytest
 
@@ -156,6 +157,8 @@ class Shell:
         # A git hook exports GIT_DIR and GIT_INDEX_FILE, which would aim this
         # fixture's git commands at the repository that the hook belongs to.
         for name in [name for name in self.env if name.startswith("GIT_")]:
+            del self.env[name]
+        for name in [name for name in self.env if name.startswith("ANTHROPIC_")]:
             del self.env[name]
         self.set_ostype(None)
         (home / ".zsh.d").symlink_to(REPO / ".zsh.d", target_is_directory=True)
@@ -690,9 +693,24 @@ def test_gpg_tty_is_the_terminal(shell: Shell) -> None:
     assert gpg == tty
 
 
-CLAUDE_STUB = """#!/bin/sh
+CREDENTIAL_NAMES = (
+    "ANTHROPIC_AUTH_TOKEN",
+    "ANTHROPIC_API_KEY",
+    "ANTHROPIC_CUSTOM_HEADERS",
+    "CLAUDE_CODE_OAUTH_TOKEN",
+    "CLAUDE_CODE_USE_BEDROCK",
+    "CLAUDE_CODE_USE_VERTEX",
+    "CLAUDE_CODE_USE_FOUNDRY",
+    "CLAUDE_CODE_USE_ANTHROPIC_AWS",
+    "CLAUDE_CODE_USE_ANTHROPIC_GOOGLE_CLOUD",
+    "CLAUDE_CODE_USE_MANTLE",
+)
+CLAUDE_STUB = f"""#!/bin/sh
 printf '%s\\n' "$@" > "$HOME/claude-args"
 printf '%s' "$TMPDIR" > "$HOME/claude-tmpdir"
+for name in {" ".join(CREDENTIAL_NAMES)}; do
+    eval "printf '%s=%s\\n' $name \\"\\${{$name-unset}}\\""
+done > "$HOME/claude-env"
 """
 SANDBOXED_CLAUDE = [
     "--model=opus",
@@ -719,10 +737,22 @@ def stub_claude(shell: Shell, ostype: str, *, marker: bool) -> None:
     shell.env["DOTFILES_THROWAWAY_MARKER"] = str(marker_file)
 
 
+def sandbox_of(tmpdir: str) -> dict[str, object]:
+    return {
+        "filesystem": {"allowWrite": [tmpdir]},
+        "credentials": {"envVars": [{"name": "ANTHROPIC_AUTH_TOKEN", "mode": "deny"}]},
+    }
+
+
 def sandbox_settings(tmpdir: str) -> str:
-    return (
-        f'{{"ultracode":true,"sandbox":{{"filesystem":{{"allowWrite":["{tmpdir}"]}}}}}}'
+    return json.dumps(
+        {"ultracode": True, "sandbox": sandbox_of(tmpdir)}, separators=(",", ":")
     )
+
+
+def credentials_seen_by_claude(shell: Shell) -> dict[str, str]:
+    lines = (shell.home / "claude-env").read_text().splitlines()
+    return dict(line.split("=", 1) for line in lines)
 
 
 @pytest.mark.parametrize(
@@ -766,11 +796,15 @@ def test_cx_is_plain_codex_in_a_throwaway_too(shell: Shell, ostype: str) -> None
     )
 
 
+@pytest.mark.parametrize("launcher", ["c", "cg"])
 @pytest.mark.parametrize("marker", [True, False])
-def test_the_throwaway_check_forks_nothing(shell: Shell, *, marker: bool) -> None:
+def test_the_throwaway_check_forks_nothing(
+    shell: Shell, launcher: str, *, marker: bool
+) -> None:
     stub_claude(shell, LINUX, marker=marker)
+    shell.write(".config/secrets/FIREWORKS_API_KEY", f"{FIREWORKS_KEY}\n")
     result = subprocess.run(
-        [ZSH, "-ic", "setopt xtrace; c; unsetopt xtrace"],
+        [ZSH, "-ic", f"setopt xtrace; {launcher}; unsetopt xtrace"],
         env=shell.env,
         cwd=shell.home,
         capture_output=True,
@@ -779,8 +813,139 @@ def test_the_throwaway_check_forks_nothing(shell: Shell, *, marker: bool) -> Non
         check=False,
     )
     assert result.returncode == 0, result.stderr
-    trace = [line for line in result.stderr.splitlines() if line.startswith("+c:")]
+    trace = [
+        line
+        for line in result.stderr.splitlines()
+        if line.startswith(("+_claude_start:", f"+{launcher}:"))
+    ]
     checks = [line for line in trace if "[[" in line and "-e" in line]
     assert len(checks) == 1, trace
     commands = {line.split("> ", 1)[1].split(" ", 1)[0] for line in trace}
     assert not commands & {"test", "[", "stat", "ls", "cat"}, trace
+
+
+FIREWORKS_KEY = "fw_FAKEfireworksKey0123"
+CLAUDE_TOKEN = "sk-ant-oat01-anthropic"  # noqa: S105 -- a fake that cg must drop
+GLM = "accounts/fireworks/models/glm-5p3[1m]"
+SHOW_AUTH_ENV = (
+    'print -r -- "${ANTHROPIC_AUTH_TOKEN-unset} ${CLAUDE_CODE_OAUTH_TOKEN-unset}"'
+)
+
+
+def parse_settings(settings: str) -> dict[str, object]:
+    return cast("dict[str, object]", json.loads(settings))
+
+
+def cg_env(settings: str) -> dict[str, str]:
+    return cast("dict[str, str]", parse_settings(settings)["env"])
+
+
+def cg_settings_of_a_run(shell: Shell) -> str:
+    stub_claude(shell, DARWIN, marker=False)
+    shell.write(".config/secrets/FIREWORKS_API_KEY", f"{FIREWORKS_KEY}\n")
+    _ = shell.run_command("cg")
+    argv = (shell.home / "claude-args").read_text().splitlines()
+    return argv[argv.index("--settings") + 1]
+
+
+def test_cg_env_points_every_model_slot_at_glm_on_fireworks(shell: Shell) -> None:
+    env = cg_env(cg_settings_of_a_run(shell))
+    assert env.pop("ANTHROPIC_BASE_URL") == "https://api.fireworks.ai/inference"
+    assert env.pop("CLAUDE_CODE_SUBAGENT_MODEL") == GLM
+    assert env.pop("CLAUDE_CODE_SUBAGENT_MODEL_FORCE") == "1"
+    for slot in ("OPUS", "SONNET", "HAIKU", "FABLE"):
+        assert env.pop(f"ANTHROPIC_DEFAULT_{slot}_MODEL") == GLM
+        assert env.pop(f"ANTHROPIC_DEFAULT_{slot}_MODEL_NAME") == "GLM-5.3"
+    assert env == {}
+
+
+def test_cg_models_have_managed_prices(shell: Shell) -> None:
+    pricing = parse_settings((REPO / "provision/claude-model-pricing.json").read_text())
+    model_pricing = cast(
+        "dict[str, dict[str, dict[str, float]]]", pricing["modelPricing"]
+    )
+    overrides = model_pricing["overrides"]
+    model = cg_env(cg_settings_of_a_run(shell))["ANTHROPIC_DEFAULT_OPUS_MODEL"]
+    assert set(overrides) == {model.removesuffix("[1m]")}
+    for rates in overrides.values():
+        assert set(rates) == {"input", "output", "cacheRead", "cacheWrite"}
+
+
+@pytest.mark.parametrize(
+    ("ostype", "marker"), [(LINUX, False), (DARWIN, False), (DARWIN, True)]
+)
+def test_cg_starts_claude_like_c_with_the_key_in_its_environment(
+    shell: Shell, ostype: str, *, marker: bool
+) -> None:
+    stub_claude(shell, ostype, marker=marker)
+    shell.write(".config/secrets/FIREWORKS_API_KEY", f"{FIREWORKS_KEY}\n")
+    shell.env["CLAUDE_CODE_OAUTH_TOKEN"] = CLAUDE_TOKEN
+    _ = shell.run_command("cg -p 'two words'")
+    argv = (shell.home / "claude-args").read_text().splitlines()
+    tmpdir = (shell.home / "claude-tmpdir").read_text()
+    settings = parse_settings(argv[5])
+    assert argv[:5] == SANDBOXED_CLAUDE
+    assert argv[6:] == ["-p", "two words"]
+    assert settings["ultracode"] is True
+    assert settings["sandbox"] == sandbox_of(tmpdir)
+    assert cg_env(argv[5])["ANTHROPIC_DEFAULT_OPUS_MODEL"] == GLM
+    assert FIREWORKS_KEY not in "".join(argv)
+    seen = credentials_seen_by_claude(shell)
+    assert seen.pop("ANTHROPIC_AUTH_TOKEN") == FIREWORKS_KEY
+    assert set(seen.values()) == {"unset"}
+
+
+def test_cg_keeps_the_key_out_of_the_interactive_shell(shell: Shell) -> None:
+    stub_claude(shell, DARWIN, marker=False)
+    shell.write(".config/secrets/FIREWORKS_API_KEY", f"{FIREWORKS_KEY}\n")
+    shell.env["CLAUDE_CODE_OAUTH_TOKEN"] = CLAUDE_TOKEN
+    after = shell.run_command(f"cg -p hi; {SHOW_AUTH_ENV}")
+    assert after == f"unset {CLAUDE_TOKEN}"
+
+
+def test_cg_drops_every_other_credential_and_provider_switch(shell: Shell) -> None:
+    stub_claude(shell, DARWIN, marker=False)
+    shell.write(".config/secrets/FIREWORKS_API_KEY", f"{FIREWORKS_KEY}\n")
+    for name in CREDENTIAL_NAMES:
+        shell.env[name] = f"inherited-{name}"
+    _ = shell.run_command("cg -p hi")
+    seen = credentials_seen_by_claude(shell)
+    assert seen.pop("ANTHROPIC_AUTH_TOKEN") == FIREWORKS_KEY
+    assert set(seen.values()) == {"unset"}
+
+
+@pytest.mark.parametrize(
+    "content",
+    [f"  {FIREWORKS_KEY}  \n", f"{FIREWORKS_KEY}\r\n", f"\n\t{FIREWORKS_KEY}\t\n\n"],
+    ids=["padded", "crlf", "blank-lines"],
+)
+def test_cg_trims_the_key_file_like_limavm(shell: Shell, content: str) -> None:
+    stub_claude(shell, DARWIN, marker=False)
+    shell.write(".config/secrets/FIREWORKS_API_KEY", content)
+    _ = shell.run_command("cg -p hi")
+    assert credentials_seen_by_claude(shell)["ANTHROPIC_AUTH_TOKEN"] == FIREWORKS_KEY
+
+
+def test_cg_leaves_the_mode_and_the_sandbox_to_managed_settings_in_a_throwaway(
+    shell: Shell,
+) -> None:
+    stub_claude(shell, LINUX, marker=True)
+    shell.write(".config/secrets/FIREWORKS_API_KEY", f"{FIREWORKS_KEY}\n")
+    _ = shell.run_command("cgw -p 'two words'")
+    argv = (shell.home / "claude-args").read_text().splitlines()
+    assert argv[:4] == ["--model=opus", "--effort", "high", "--settings"]
+    assert set(parse_settings(argv[4])) == {"ultracode", "env"}
+    assert argv[5:] == ["--worktree", "-p", "two words"]
+
+
+@pytest.mark.parametrize("content", [None, "", "\n", "fw_one fw_two\n"])
+def test_cg_refuses_a_missing_or_malformed_key(
+    shell: Shell, content: str | None
+) -> None:
+    stub_claude(shell, DARWIN, marker=False)
+    if content is not None:
+        shell.write(".config/secrets/FIREWORKS_API_KEY", content)
+    result = shell.run("cg -p hi")
+    assert result.returncode == 1
+    assert "FIREWORKS_API_KEY" in result.stderr
+    assert not (shell.home / "claude-args").exists()

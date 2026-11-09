@@ -245,6 +245,7 @@ if [[ $os == macos ]]; then
     macos_xcode
     macos_login_shell
     macos_emudhra_workaround
+    macos_claude_model_pricing
 fi
 
 # Plugins!

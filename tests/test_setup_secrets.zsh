@@ -99,6 +99,7 @@ assert_eq "--help succeeds" 0 "$RC"
 assert_eq "--help names the secrets" 1 "$([[ "$OUT" == *CLAUDE_CODE_OAUTH_TOKEN* ]] && echo 1 || echo 0)"
 assert_eq "--help names the GitHub App authorization" 1 "$([[ "$OUT" == *GITHUB_APP_AUTH* ]] && echo 1 || echo 0)"
 assert_eq "--help names the Codex login" 1 "$([[ "$OUT" == *CODEX_AUTH* ]] && echo 1 || echo 0)"
+assert_eq "--help names the Fireworks key" 1 "$([[ "$OUT" == *FIREWORKS_API_KEY* ]] && echo 1 || echo 0)"
 
 # --- 2. Unknown names ---
 new_home unknown
@@ -112,7 +113,7 @@ assert_eq "unknown names write nothing" "" "$(ls -A "$HOME_DIR")"
 
 # --- 3. Empty input ---
 new_home empty
-for name in GH_TOKEN GITHUB_APP_AUTH CLAUDE_CODE_OAUTH_TOKEN CODEX_AUTH LGTMCP_CONFIG; do
+for name in GH_TOKEN GITHUB_APP_AUTH CLAUDE_CODE_OAUTH_TOKEN CODEX_AUTH LGTMCP_CONFIG FIREWORKS_API_KEY; do
     for input in '' $'\n' $'  \n\t\n'; do
         run "$name" "$input"
         assert_eq "$name with empty input fails" 1 "$RC"
@@ -215,6 +216,27 @@ assert_eq "lgtmcp config content is verbatim" same \
     "$(printf '%s' "$config" | cmp -s - "$file" && echo same || echo different)"
 assert_eq "lgtmcp config file mode" 600 "$(mode_of "$file")"
 assert_eq "lgtmcp config directory mode" 700 "$(mode_of "$HOME_DIR/.config/lgtmcp")"
+
+# --- 6a. FIREWORKS_API_KEY ---
+FIREWORKS_KEY='fw_FAKEfireworksKey0123'
+new_home fireworks
+run FIREWORKS_API_KEY "$FIREWORKS_KEY"$'\n'
+file="$HOME_DIR/.config/secrets/FIREWORKS_API_KEY"
+assert_eq "fireworks key succeeds" 0 "$RC"
+assert_eq "fireworks key prints nothing" "" "$OUT"
+assert_eq "fireworks key content" "$FIREWORKS_KEY" "$(<"$file")"
+assert_eq "fireworks key file mode" 600 "$(mode_of "$file")"
+assert_eq "fireworks key directory mode" 700 "$(mode_of "$HOME_DIR/.config/secrets")"
+assert_eq "fireworks key leaves no temporary file" FIREWORKS_API_KEY "$(ls -A "$HOME_DIR/.config/secrets")"
+assert_eq "fireworks key never runs gh" 0 "$([[ -e "$GH_STUB_DIR/argv" ]] && echo 1 || echo 0)"
+
+chmod 755 "$HOME_DIR/.config/secrets"
+chmod 644 "$file"
+run FIREWORKS_API_KEY "fw_second"
+assert_eq "fireworks key replacement succeeds" 0 "$RC"
+assert_eq "fireworks key replacement content" "fw_second" "$(<"$file")"
+assert_eq "fireworks key replacement file mode" 600 "$(mode_of "$file")"
+assert_eq "fireworks key replacement directory mode" 700 "$(mode_of "$HOME_DIR/.config/secrets")"
 
 # --- 7. GH_TOKEN ---
 new_home gh
@@ -330,6 +352,8 @@ assert_eq "no secret is stored where it should not be" 0 \
     "$(grep -rl --exclude=CLAUDE_CODE_OAUTH_TOKEN "$SECRET" "$TMPBASE"/home-* 2>/dev/null | wc -l | tr -d ' ')"
 assert_eq "only the Codex record holds the Codex token" "$TMPBASE/home-codex/.codex/auth.json" \
     "$(grep -rl "$CODEX_ACCESS" "$TMPBASE"/home-* 2>/dev/null)"
+assert_eq "the replaced Fireworks key is left nowhere" 0 \
+    "$(grep -rl "$FIREWORKS_KEY" "$TMPBASE"/home-* 2>/dev/null | wc -l | tr -d ' ')"
 
 echo ""
 echo "Results: $pass passed, $fail failed"

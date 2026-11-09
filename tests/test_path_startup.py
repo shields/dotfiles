@@ -273,14 +273,19 @@ def test_zshenv_exports_no_secrets(
     tmp_path: Path, ostype: str, environment: dict[str, str]
 ) -> None:
     canary = "sk-ant-oat01-never-in-zshenv"
-    token = tmp_path / ".config/secrets/CLAUDE_CODE_OAUTH_TOKEN"
-    token.parent.mkdir(parents=True)
-    _ = token.write_text(canary + "\n")
+    fireworks_canary = "fw_never-in-zshenv"
+    secrets = tmp_path / ".config/secrets"
+    secrets.mkdir(parents=True)
+    _ = (secrets / "CLAUDE_CODE_OAUTH_TOKEN").write_text(canary + "\n")
+    _ = (secrets / "FIREWORKS_API_KEY").write_text(fireworks_canary + "\n")
     write_zshenv(tmp_path, ostype)
     exported = run_zsh(tmp_path, "env", environment=environment)
     assert "CLAUDE_CODE_OAUTH_TOKEN" not in exported
     assert canary not in exported
+    assert fireworks_canary not in exported
+    assert "ANTHROPIC_AUTH_TOKEN" not in exported
     assert "TOKEN" not in ZSHENV.read_text()
+    assert "API_KEY" not in ZSHENV.read_text()
 
 
 def test_zshenv_puts_the_uv_cache_on_the_data_volume(tmp_path: Path) -> None:
