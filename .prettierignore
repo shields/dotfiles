@@ -1,5 +1,8 @@
 .config/karabiner/karabiner.json
 
+# Kept byte for byte as moby/profiles releases it.
+tools/moby-seccomp-default.json
+
 # deploy.sh pipes this file through jq, which rejects the trailing commas that
 # Prettier adds to .jsonc.
 cloudflare/wrangler.jsonc

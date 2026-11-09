@@ -84,14 +84,20 @@ test-python:
 MODULES ?= dev
 LINUX_IMAGE ?= dotfiles-linux-test
 
+# The Codex tests start Codex's bubblewrap sandbox. It needs these system calls,
+# which Docker's default seccomp profile allows only with CAP_SYS_ADMIN, or for
+# pivot_root not at all, and an unmasked /proc to mount its own.
 test-linux:
 	@set -eu; \
 	stage=$$(mktemp -d "$${TMPDIR:-/tmp}/dotfiles-test-linux.XXXXXX"); \
 	trap 'rm -rf "$$stage"' EXIT; \
 	trap 'exit 1' HUP INT TERM; \
 	tools/stage_tree.sh "$$stage/tree"; \
+	jq '.syscalls += [{"names": ["clone", "mount", "pivot_root", "umount2", "unshare"], "action": "SCMP_ACT_ALLOW"}]' \
+	    tools/moby-seccomp-default.json >"$$stage/seccomp.json"; \
 	docker build --build-arg "MODULES=$(MODULES)" -t "$(LINUX_IMAGE)" -f cloudflare/Dockerfile "$$stage/tree"; \
-	docker run --rm "$(LINUX_IMAGE)" zsh -c 'bun install --frozen-lockfile && make test lint'
+	docker run --rm --security-opt "seccomp=$$stage/seccomp.json" --security-opt systempaths=unconfined \
+	    "$(LINUX_IMAGE)" zsh -c 'bun install --frozen-lockfile && make test lint'
 
 lint: fmt-check lint-ts lint-python lint-shell
 

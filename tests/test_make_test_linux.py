@@ -17,6 +17,7 @@
 # that records its arguments.
 
 import hashlib
+import json
 import os
 import select
 import shutil
@@ -25,11 +26,17 @@ import stat
 import subprocess
 from dataclasses import dataclass
 from pathlib import Path
+from typing import cast
 
 import pytest
 
 REPO = Path(__file__).resolve().parents[1]
-STAGED = ["Makefile", "tools/stage_tree.sh", "cloudflare/Dockerfile"]
+STAGED = [
+    "Makefile",
+    "tools/stage_tree.sh",
+    "tools/moby-seccomp-default.json",
+    "cloudflare/Dockerfile",
+]
 TEST_COMMAND = "bun install --frozen-lockfile && make test lint"
 TIMEOUT = 120
 
@@ -49,6 +56,11 @@ if [ "$sub" = build ]; then
         echo "$PPID" >"$STUB/ready"
         read -r _ <"$STUB/release"
     fi
+fi
+if [ "$sub" = run ]; then
+    for arg; do
+        case $arg in seccomp=*) cp "${arg#seccomp=}" "$STUB/seccomp.json" ;; esac
+    done
 fi
 if [ -e "$STUB/$sub.status" ]; then
     exit "$(cat "$STUB/$sub.status")"
@@ -180,6 +192,10 @@ def test_the_staged_tree_is_built_and_tested_in_the_image(layout: Layout) -> Non
     assert layout.args("run") == [
         "run",
         "--rm",
+        "--security-opt",
+        f"seccomp={context.parent}/seccomp.json",
+        "--security-opt",
+        "systempaths=unconfined",
         "dotfiles-linux-test",
         "zsh",
         "-c",
@@ -269,3 +285,32 @@ def test_a_terminated_target_removes_the_stage_directory(layout: Layout) -> None
             _ = process.wait()
     assert layout.calls() == ["build"]
     assert layout.stage_directories() == []
+
+
+def test_the_seccomp_profile_is_dockers_default_and_the_sandbox_calls(
+    layout: Layout,
+) -> None:
+    result = layout.make()
+    assert result.returncode == 0, result.stderr
+    profile = cast(
+        "dict[str, list[object]]",
+        json.loads((layout.stub / "seccomp.json").read_text()),
+    )
+    default = cast(
+        "dict[str, list[object]]",
+        json.loads((REPO / "tools/moby-seccomp-default.json").read_text()),
+    )
+    *syscalls, added = profile.pop("syscalls")
+    assert syscalls == default.pop("syscalls")
+    assert profile == default
+    assert added == {
+        "names": ["clone", "mount", "pivot_root", "umount2", "unshare"],
+        "action": "SCMP_ACT_ALLOW",
+    }
+
+
+def test_the_default_profile_is_moby_profiles_seccomp_v0_2_3() -> None:
+    digest = hashlib.sha256((REPO / "tools/moby-seccomp-default.json").read_bytes())
+    assert digest.hexdigest() == (
+        "536529b665dd0972c37bfb569f5d4ac8a53592e7b00752bc39ff063ca9864c74"
+    )

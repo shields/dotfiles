@@ -674,6 +674,15 @@ as the context, which runs `./provision.sh` just as on a Linux box, and finally
 runs `bun install --frozen-lockfile` and `make test lint` in the image as an
 unprivileged user. It fails if any step fails.
 
+The Codex tests start Codex's bubblewrap sandbox, which Docker's defaults
+prevent, so the container runs with `/proc` unmasked (`systempaths=unconfined`)
+and a seccomp profile that is Docker's default plus `clone`, `mount`,
+`pivot_root`, `umount2` and `unshare` for every process.
+`tools/moby-seccomp-default.json` is that default, unchanged from
+[moby/profiles](https://github.com/moby/profiles) `seccomp/v0.2.3`, the version
+Docker 29.8 builds in; `make test-linux` needs `jq` to add the rule. It needs
+no AppArmor option because OrbStack's Docker runs without AppArmor.
+
 `make test-linux MODULES="dev cloud"` provisions other modules (the default is
 `dev`, whose tools `make test lint` needs, so keep it in the list), and
 `LINUX_IMAGE` names the image (the default is `dotfiles-linux-test`).
