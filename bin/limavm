@@ -408,8 +408,6 @@ cmd_new() {
     set_size_args
     instance_exists "$base" || die "$base does not exist; run limavm base in a dotfiles checkout first"
     ! instance_exists "$name" || die "$name already exists"
-    local lgtmcp_config=$HOME/.config/lgtmcp/config.yaml
-    [[ -f $lgtmcp_config && -r $lgtmcp_config ]] || die "cannot read $lgtmcp_config; LGTMCP needs it in the VM"
     if ((! no_codex_auth)); then
         need jq
         [[ -e $codex_auth_file ]] || die "$codex_auth_file does not exist; Codex keeps its login in the OS credential store when cli_auth_credentials_store in ~/.codex/config.toml is keyring or auto: set it to \"file\" and run codex login on this Mac, or pass --no-codex-auth"
@@ -483,7 +481,6 @@ cmd_new() {
     if ((! no_codex_auth)); then
         install_secret "$name" CODEX_AUTH <"$codex_auth_file"
     fi
-    install_secret "$name" LGTMCP_CONFIG <"$lgtmcp_config"
     if [[ -n $fireworks_key ]]; then
         printf '%s\n' "$fireworks_key" | install_secret "$name" FIREWORKS_API_KEY
     fi

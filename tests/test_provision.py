@@ -854,22 +854,6 @@ def test_emacs_is_provisioned_on_both_systems() -> None:
     assert not openers(emacs)
 
 
-def test_lgtmcp_is_found_in_home_bin_then_gobin() -> None:
-    assert "lgtmcp=$HOME/bin/lgtmcp" in LINES
-    home_bin = find(r"^lgtmcp=\$HOME/bin/lgtmcp$")
-    body = "\n".join(LINES[home_bin : find(r"^add_user_mcp_server lgtmcp ")])
-    assert body.index("go env GOBIN") < body.index("go env GOPATH")
-    homebrew_env = "GOBIN=${HOMEBREW_GOBIN-} GOPATH=${HOMEBREW_GOPATH-}"
-    assert f"gobin=$({homebrew_env} go env GOBIN)" in body
-    assert f"gopath=$({homebrew_env} go env GOPATH)" in body
-    assert "gobin=${gopath%%:*}/bin" in body
-    assert "exit 1" in body
-    assert 'add_user_mcp_server lgtmcp "$lgtmcp" -tools review_and_commit' in LINES
-    assert '$HOME/bin/lgtmcp"' not in "\n".join(
-        LINES[find(r"^add_user_mcp_server lgtmcp ") :]
-    )
-
-
 ROOT_PATH = (
     "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:$HOMEBREW_PREFIX/bin"
 )
@@ -903,7 +887,7 @@ def test_configure_codex_runs_after_registration() -> None:
         '"$dotfiles_root/tools/configure_codex.py" "$HOME/.codex/config.toml"'
     )
     assert command in LINES
-    assert find(r"^add_user_mcp_server lgtmcp") < find(r"configure_codex\.py")
+    assert find(r"add_user_mcp_server playwright") < find(r"configure_codex\.py")
 
 
 def test_codex_instructions_are_generated_into_an_existing_directory() -> None:
@@ -1057,7 +1041,6 @@ MACOS_SPINE = (
     "jq -r '.ssh_keys[]' |",
     f"sed -e 's/^/github.com /' >>{KNOWN_HOSTS}",
     "go telemetry on",
-    'add_user_mcp_server lgtmcp "$lgtmcp" -tools review_and_commit',
     "add_user_mcp_server playwright npx @playwright/mcp@latest --headless",
     (
         'uv run --project "$dotfiles_root" --no-dev python '

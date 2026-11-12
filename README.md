@@ -262,7 +262,7 @@ that are selected.
 
 | Module  | Contents                                                                                                       |
 | ------- | -------------------------------------------------------------------------------------------------------------- |
-| `base`  | Always installed: git, gh, shell tools, Python, Node, Go, uv, the Claude Code and Codex casks, and lgtmcp.     |
+| `base`  | Always installed: git, gh, shell tools, Python, Node, Go, uv, and the Claude Code and Codex casks.             |
 | `dev`   | Linters, formatters, language servers, compilers and other development tools, and the cargo, go and npm tools. |
 | `cloud` | Cloud and Kubernetes command-line tools, including the Google Cloud CLI.                                       |
 | `data`  | Databases, notebooks, mail and sync tools.                                                                     |
@@ -495,7 +495,6 @@ VM where you will run `claude auth login`.
 
 ### The rest
 
-- `~/.config/lgtmcp/config.yaml` on the Mac is copied to the same place in the VM.
 - `~/.config/secrets/FIREWORKS_API_KEY`, the key `cg` uses, goes to the same
   path in the VM when the file exists on the Mac. `limavm new` never asks for
   it, and fails before it makes the VM when the file is not a regular file,
@@ -545,7 +544,7 @@ Not isolated:
   every possible GitHub connection through itself. It does keep its app tokens
   off the VM; the policy is a boundary around those tokens, not around arbitrary
   network traffic or credentials acquired by the guest.
-- The Claude token, Codex login, LGTMCP key and Fireworks key in the VM. Agents
+- The Claude token, Codex login and Fireworks key in the VM. Agents
   can read and send those to public addresses. The VM has no GitHub App token or
   refresh token.
 - The Mac's own public address, if it has one. Only the private ranges are
@@ -610,7 +609,7 @@ OWNER/REPO`, which shows a device code and authorization URL on the Mac:
 - `claude` runs without a login (with the token from `limavm claude-token` or
   the `limavm new` prompt), and so does `codex` (with the Mac's `codex login`;
   `codex login status` says so).
-- An LGTMCP `review_only` call works, and `emacs -nw` starts and exits.
+- `emacs -nw` starts and exits.
 - With a Fireworks key, `cg -p hi` answers on the Mac and in the VM, `/status`
   in `cg` names the Fireworks URL and the drop-in among the setting sources,
   and the status line's cost after a few requests matches the Fireworks

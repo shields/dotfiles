@@ -41,7 +41,7 @@ CLAUDE_JSON: Json = {
     "userID": "a7d29981084fb094ca580d38f3a4e09b605e468c2e4e323983b88c25d92c44c9",
     "hasCompletedOnboarding": True,
     "migrationVersion": 14,
-    "mcpServers": {"lgtmcp": {"command": "/home/user/go/bin/lgtmcp"}},
+    "mcpServers": {"playwright": {"command": "npx"}},
     "projects": {"/home/user/src/dotfiles": {"hasTrustDialogAccepted": True}},
 }
 IDENTITY = {"firstStartTime", "firstStartVersion", "machineID", "userID"}

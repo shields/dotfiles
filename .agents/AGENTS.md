@@ -99,10 +99,6 @@ and travel with the code.
   above: out of context they show what reads as reasonable inline. Do this
   yourself on a subagent's work; its comments are written for the diff's
   reviewer.
-- LGTMCP: if you disagree with review feedback, don't bypass and commit—add a
-  code comment explaining why, then resubmit.
-- Commit a merge of already-reviewed branches directly with `git commit`, not
-  through LGTMCP.
 
 ## Web access
 

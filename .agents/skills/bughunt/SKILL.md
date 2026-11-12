@@ -1,6 +1,6 @@
 ---
 name: bughunt
-description: Fan out parallel subagents across a codebase to find and fix bugs — security first, then correctness, then anything else (broken docs, dead code, simplifications). Each slice runs in its own git worktree/branch via the Workflow tool; every fix is reviewed with /code-review max --fix and committed with lgtmcp. Bugs that reach outside a slice are surfaced to the parent to coordinate; design/behavior changes and unclear items are surfaced to the user, never applied. When done, cherry-pick every branch's commits back onto the original branch so each fix stays a distinct commit, then test the whole stack and fix-forward any breakage. Trigger when the user asks to hunt, sweep, or audit a codebase for bugs, or runs /bughunt.
+description: Fan out parallel subagents across a codebase to find and fix bugs — security first, then correctness, then anything else (broken docs, dead code, simplifications). Each slice runs in its own git worktree/branch via the Workflow tool; every fix is reviewed with /code-review max --fix and committed with git. Bugs that reach outside a slice are surfaced to the parent to coordinate; design/behavior changes and unclear items are surfaced to the user, never applied. When done, cherry-pick every branch's commits back onto the original branch so each fix stays a distinct commit, then test the whole stack and fix-forward any breakage. Trigger when the user asks to hunt, sweep, or audit a codebase for bugs, or runs /bughunt.
 ---
 
 <!--
@@ -54,7 +54,7 @@ behavior changes, and do not touch anything ambiguous — **surface those instea
 Run the script below **inline** via the Workflow tool (`script: …`), passing
 `args: { direction: <$ARGUMENTS, verbatim>, prefix: <the unique run prefix from Preconditions> }`.
 It scouts the repo into disjoint slices and runs one worktree-isolated agent per slice:
-find → fix → `/code-review max --fix` → lgtmcp commit. It returns the per-slice branches (all
+find → fix → `/code-review max --fix` → `git commit`. It returns the per-slice branches (all
 under your unique prefix) plus everything surfaced (cross-cutting bugs, design changes,
 unclear items).
 
@@ -68,7 +68,7 @@ export const meta = {
     {
       title: "Hunt",
       detail:
-        "one worktree agent per slice: find -> fix -> /code-review max --fix -> lgtmcp commit",
+        "one worktree agent per slice: find -> fix -> /code-review max --fix -> git commit",
     },
   ],
 };
@@ -167,7 +167,7 @@ function huntPrompt(s, direction, prefix) {
     `1. Read your slice's files and find real bugs. Be skeptical: skip nitpicks and false positives, only fix what you can justify.`,
     `2. Create your branch: run "git switch -c ${prefix}/${s.id}"; if that name already exists (git exits 128), use a unique variant like "${prefix}/${s.id}-$RANDOM". Fix the clear bugs and safe simplifications in place, within your owned paths only.`,
     `3. Review your own diff before committing: invoke "/code-review max --fix" to apply its findings. If you cannot invoke that skill from here, instead re-read your full diff critically for security, correctness, and over-complication, and fix what you find.`,
-    `4. Commit with the lgtmcp tool "mcp__lgtmcp__review_and_commit" (load its schema via ToolSearch first if needed): directory = your worktree root (run "git rev-parse --show-toplevel"), with a clear commit_message. If it is not approved, address the feedback — or, if you genuinely disagree, add a brief code comment explaining why the code is correct — then resubmit. Never bypass the review. Several focused commits are fine.`,
+    `4. Stage the fix and commit with "git commit" from your worktree root (run "git rev-parse --show-toplevel"), with a clear commit message. Respect the repository's commit hooks. Several focused commits are fine.`,
     `5. After committing, set branch to the actual branch name you used and headSha to "git rev-parse HEAD".`,
     ``,
     `**Surface these instead of fixing them yourself:**`,
@@ -265,7 +265,7 @@ surface it in the report instead of guessing.
 
 On the integrated tree, work `crossCutting` (deduped, **security → correctness → other**). These
 are the "larger bugs" the parent owns. For each that is a genuine **bug**, fix it (spawn a
-focused Agent for big ones), then `/code-review max --fix` and commit via lgtmcp — this is new
+focused Agent for big ones), then `/code-review max --fix` and `git commit` — this is new
 code, so it does get reviewed. Anything that is really a **design/behavior change** or is
 unclear goes to the surfaced list instead; do not apply it.
 
@@ -277,7 +277,7 @@ test`), then `package.json` scripts, then language defaults (`cargo test`, `go t
 `uv run pytest`, etc.).
 
 If it **fails**, fix-forward: dispatch fixer Agent(s) to repair the breakage (they may edit
-anywhere; each runs `/code-review max --fix` + lgtmcp), then re-run the full check. Repeat up to
+anywhere; each runs `/code-review max --fix` + `git commit`), then re-run the full check. Repeat up to
 **3 rounds**. If it still fails, stop and report the failing output — do not keep grinding.
 
 ## Step 5 — Clean up and report
@@ -304,10 +304,8 @@ Then tell the user, concisely:
 ## Gotchas (the non-obvious bits)
 
 - **Worktree isolation is mandatory.** `isolation: 'worktree'` is what lets slices edit files in parallel without clobbering each other; disjoint slice paths are a second safety layer. Don't drop it.
-- **lgtmcp `directory` must be the worktree root** (`git rev-parse --show-toplevel`, not a bare `pwd`), never the main repo — otherwise it reviews and commits the wrong tree.
 - **Branches outlive worktrees.** Worktrees share one `.git`, so a run-prefixed (`<prefix>/*`) branch is visible to the main tree whether or not its worktree still exists — you can even cherry-pick from a branch that's still checked out in a worktree. Reference it by the branch name the agent returned (it disambiguates on collision); fall back to `headSha`.
 - **Cherry-pick rewrites SHAs.** The commits that land on the original branch are new commits, not the slice branches' originals — so the recorded `headSha` is provenance only (that's why Step 2 uses `-x`), and Step 5 must clean up with `git branch -D`, not `-d` (the ancestor-based "is it merged?" check no longer recognizes them).
 - **No per-slice full test — only the final stack test.** Slices may individually break the build; that is expected and is what Step 4's fix-forward catches.
 - **Agents fix, they don't redesign.** Bugs + safe simplifications + doc fixes only. Design/behavior changes and unclear items are surfaced, never applied.
-- **Only new code gets reviewed at the end.** The cherry-picks (Step 2) replay already-reviewed commits, so they need no review; the cross-cutting (Step 3) and fix-forward (Step 4) changes are new, so they go through `/code-review max --fix` + lgtmcp.
-- **Never bypass lgtmcp.** On rejection, address the feedback or add a clarifying comment explaining why the code is correct, then resubmit.
+- **Only new code gets reviewed at the end.** The cherry-picks (Step 2) replay already-reviewed commits, so they need no review; the cross-cutting (Step 3) and fix-forward (Step 4) changes are new, so they go through `/code-review max --fix` + `git commit`.

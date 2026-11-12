@@ -113,7 +113,7 @@ assert_eq "unknown names write nothing" "" "$(ls -A "$HOME_DIR")"
 
 # --- 3. Empty input ---
 new_home empty
-for name in GH_TOKEN GITHUB_APP_AUTH CLAUDE_CODE_OAUTH_TOKEN CODEX_AUTH LGTMCP_CONFIG FIREWORKS_API_KEY; do
+for name in GH_TOKEN GITHUB_APP_AUTH CLAUDE_CODE_OAUTH_TOKEN CODEX_AUTH FIREWORKS_API_KEY; do
     for input in '' $'\n' $'  \n\t\n'; do
         run "$name" "$input"
         assert_eq "$name with empty input fails" 1 "$RC"
@@ -204,18 +204,6 @@ for input in "\"$CODEX_ACCESS\"" '[]' "[\"$CODEX_ACCESS\"]" 'null' '42' 'not jso
     assert_absent "a Codex value that is not an object is not echoed: $input" "$CODEX_ACCESS" "$OUT"
     assert_eq "a Codex value that is not an object writes nothing: $input" "" "$(ls -A "$HOME_DIR")"
 done
-
-# --- 6. LGTMCP_CONFIG ---
-new_home lgtmcp
-config=$'gemini_api_key: FAKE-KEY-123\nreview:\n  model: x\n'
-run LGTMCP_CONFIG "$config"
-file="$HOME_DIR/.config/lgtmcp/config.yaml"
-assert_eq "lgtmcp config succeeds" 0 "$RC"
-assert_eq "lgtmcp config prints nothing" "" "$OUT"
-assert_eq "lgtmcp config content is verbatim" same \
-    "$(printf '%s' "$config" | cmp -s - "$file" && echo same || echo different)"
-assert_eq "lgtmcp config file mode" 600 "$(mode_of "$file")"
-assert_eq "lgtmcp config directory mode" 700 "$(mode_of "$HOME_DIR/.config/lgtmcp")"
 
 # --- 6a. FIREWORKS_API_KEY ---
 FIREWORKS_KEY='fw_FAKEfireworksKey0123'

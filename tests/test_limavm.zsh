@@ -320,8 +320,6 @@ GUEST_DIR=/home/guest/src/github.com/shields/dotfiles
 OTHER_DIR=/home/guest/src/github.com/shields/other
 CLIENT_ID=Iv23lim5x4MdkNNgv28z
 FAKE_CLAUDE='sk-ant-oat01-FAKEclaudeToken-7f3c9a'
-FAKE_LGTMCP='FAKE-LGTMCP-KEY-55'
-LGTMCP_YAML="gemini_api_key: $FAKE_LGTMCP"$'\n'
 FAKE_CODEX='FAKE-codex-access-token-4c8e'
 FAKE_FIREWORKS='fw_FAKEfireworksKey0123'
 CODEX_JSON=$'{\n  "OPENAI_API_KEY": null,\n  "tokens": {\n    "access_token": "'"$FAKE_CODEX"$'",\n    "refresh_token": "FAKE-codex-refresh-9d1a"\n  }\n}\n'
@@ -340,8 +338,7 @@ new_case() {
     (( ++CASE_N ))
     STATE="$TMPBASE/state-$CASE_N"
     HOME_DIR="$TMPBASE/home-$CASE_N"
-    mkdir -p "$STATE/calls" "$HOME_DIR/.config/lgtmcp" "$HOME_DIR/.codex"
-    print -rn -- "$LGTMCP_YAML" > "$HOME_DIR/.config/lgtmcp/config.yaml"
+    mkdir -p "$STATE/calls" "$HOME_DIR/.codex"
     print -rn -- "$CODEX_JSON" > "$HOME_DIR/.codex/auth.json"
     : > "$STATE/instances"
     (( $# == 0 )) || printf '%s\n' "$@" >> "$STATE/instances"
@@ -484,10 +481,10 @@ assert_no_secret_leak() {
     local desc="$1" leaks
     leaks="$(cat "$STATE"/calls/*.argv(N) "$STATE"/calls/*.env(N) "$STATE/limactl.log" "$STATE/vm-access.log" \
         "$STATE"/gh.log "$STATE"/open.log "$STATE"/sleep.log 2>/dev/null |
-        grep -c -e "$FAKE_CLAUDE" -e "$FAKE_LGTMCP" -e "$FAKE_CODEX" -e "$FAKE_FIREWORKS" "${GITHUB_SECRETS[@]}" || true)"
+        grep -c -e "$FAKE_CLAUDE" -e "$FAKE_CODEX" -e "$FAKE_FIREWORKS" "${GITHUB_SECRETS[@]}" || true)"
     assert_eq "$desc: no secret in any recorded argv, environment or log" 0 "$leaks"
     assert_eq "$desc: no secret in limavm's output" 0 \
-        "$(printf '%s' "$OUT" | grep -c -e "$FAKE_CLAUDE" -e "$FAKE_LGTMCP" -e "$FAKE_CODEX" -e "$FAKE_FIREWORKS" "${GITHUB_SECRETS[@]}" || true)"
+        "$(printf '%s' "$OUT" | grep -c -e "$FAKE_CLAUDE" -e "$FAKE_CODEX" -e "$FAKE_FIREWORKS" "${GITHUB_SECRETS[@]}" || true)"
 }
 
 # --- 1. Static checks ---
@@ -800,10 +797,8 @@ gateway_call=$(grep -n 'setup-github-gateway' "$STATE/limactl.log" | head -1 | c
 assert_eq "the guest receives only the gateway CA" TEST-GATEWAY-CA "$(stdin_of "$gateway_call")"
 claude_call=$(grep -n 'CLAUDE_CODE_OAUTH_TOKEN' "$STATE/limactl.log" | head -1 | cut -d: -f1)
 codex_call=$(grep -n 'CODEX_AUTH' "$STATE/limactl.log" | head -1 | cut -d: -f1)
-lgtmcp_call=$(grep -n 'LGTMCP_CONFIG' "$STATE/limactl.log" | head -1 | cut -d: -f1)
 assert_eq "the Claude token reaches only setup-secrets stdin" "$FAKE_CLAUDE" "$(stdin_of "$claude_call")"
 assert_eq "the Codex login reaches only setup-secrets stdin" "${CODEX_JSON%$'\n'}" "$(stdin_of "$codex_call")"
-assert_eq "the LGTMCP config reaches only setup-secrets stdin" "${LGTMCP_YAML%$'\n'}" "$(stdin_of "$lgtmcp_call")"
 assert_no_secret_leak "new with a repository"
 
 new_case test-base
@@ -872,12 +867,6 @@ print -r -- '[]' > "$HOME_DIR/.codex/auth.json"
 run_limavm new t1 --no-repo
 assert_eq "invalid Codex login fails before cloning" 1 "$RC"
 assert_eq "invalid Codex login creates no VM" 0 "$(count_in_log clone)"
-
-new_case test-base
-rm -f "$HOME_DIR/.config/lgtmcp/config.yaml"
-run_limavm new t1 --no-repo
-assert_eq "missing LGTMCP config fails before cloning" 1 "$RC"
-assert_eq "missing LGTMCP config creates no VM" 0 "$(count_in_log clone)"
 
 new_case test-base
 EXTRA_ENV+=(LIMAVM_GITHUB_WEB_URL=https://github.com)

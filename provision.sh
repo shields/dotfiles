@@ -294,23 +294,6 @@ add_user_mcp_server() {
     codex mcp add "$name" -- "$@"
 }
 
-# ~/bin/lgtmcp is the hand-built binary the Mac relies on. Homebrew's go
-# entries install under HOMEBREW_GOBIN and HOMEBREW_GOPATH, ignoring GOBIN and
-# GOPATH, so go is asked with those.
-lgtmcp=$HOME/bin/lgtmcp
-if [[ ! -x $lgtmcp ]]; then
-    gobin=$(GOBIN=${HOMEBREW_GOBIN-} GOPATH=${HOMEBREW_GOPATH-} go env GOBIN)
-    if [[ -z $gobin ]]; then
-        gopath=$(GOBIN=${HOMEBREW_GOBIN-} GOPATH=${HOMEBREW_GOPATH-} go env GOPATH)
-        gobin=${gopath%%:*}/bin
-    fi
-    lgtmcp=$gobin/lgtmcp
-    if [[ ! -x $lgtmcp ]]; then
-        echo "provision.sh: lgtmcp not found in $HOME/bin or $gobin; it is installed by the go entry in brew/base.Brewfile" >&2
-        exit 1
-    fi
-fi
-add_user_mcp_server lgtmcp "$lgtmcp" -tools review_and_commit
 if [[ $os == macos ]]; then
     add_user_mcp_server playwright npx @playwright/mcp@latest --headless
 else

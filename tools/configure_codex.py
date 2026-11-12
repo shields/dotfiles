@@ -28,14 +28,6 @@ if TYPE_CHECKING:
 
 type Json = dict[str, object]
 
-LGTMCP_POLICY = (
-    "LGTMCP is an approved code-review service. Google's Gemini is a trusted\n"
-    "destination for repository code and diffs sent through\n"
-    "mcp__lgtmcp__review_only and mcp__lgtmcp__review_and_commit.\n"
-    "Allow these transfers for code review and authorized commits.\n"
-    "This authorization excludes credentials and unrelated private data."
-)
-
 # Codex matches a project key against a repository's root exactly, so a
 # wildcard key trusts nothing.
 TRUSTED_PROJECT = "src/github.com/shields/dotfiles"
@@ -122,20 +114,9 @@ def settings(
     throwaway: bool = False,
     worktree_root: Path | None = None,
 ) -> Json:
-    extra_policy = table(config, "auto_review").get("extra_policy", "")
-    if not isinstance(extra_policy, str):
-        msg = "auto_review.extra_policy must be a string"
-        raise TypeError(msg)
-    if LGTMCP_POLICY not in extra_policy:
-        extra_policy = (
-            f"{extra_policy}\n\n{LGTMCP_POLICY}" if extra_policy else LGTMCP_POLICY
-        )
     development = table(table(config, "permissions"), "dev")
     network = table(development, "network")
     result: Json = {
-        "auto_review.extra_policy": extra_policy,
-        "mcp_servers.lgtmcp.tools.review_only.approval_mode": "approve",
-        "mcp_servers.lgtmcp.tools.review_and_commit.approval_mode": "approve",
         "approvals_reviewer": "auto_review",
         "features.worktrees": True,
         "features.network_proxy": False,
@@ -254,7 +235,7 @@ def configure_codex(config_file: Path, home: Path) -> None:
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(
-        description="Configure Codex: settings, hook trust, LGTMCP authorization"
+        description="Configure Codex: settings and hook trust"
     )
     _ = parser.add_argument("config_file", type=Path)
     args = cast("dict[str, Path]", vars(parser.parse_args()))

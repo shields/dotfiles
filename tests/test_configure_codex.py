@@ -85,7 +85,6 @@ class Server(Protocol):
 
 
 class Tool(Protocol):
-    LGTMCP_POLICY: str
     THROWAWAY_MARKER: Path
     DATA_VOLUME: Path
 
@@ -147,7 +146,6 @@ async def effective_sandbox(codex_home: Path) -> Json:
             {
                 "cwd": str(codex_home.parent),
                 "ephemeral": True,
-                "config": {"mcp_servers.lgtmcp.enabled": False},
             },
         )
     return cast("Json", result["sandbox"])
@@ -183,9 +181,6 @@ def listing(
 
 def test_settings_for_an_empty_config() -> None:
     assert tool.settings({}, HOME) == {
-        "auto_review.extra_policy": tool.LGTMCP_POLICY,
-        "mcp_servers.lgtmcp.tools.review_only.approval_mode": "approve",
-        "mcp_servers.lgtmcp.tools.review_and_commit.approval_mode": "approve",
         "approvals_reviewer": "auto_review",
         "features.worktrees": True,
         "features.network_proxy": False,
@@ -197,17 +192,9 @@ def test_settings_for_an_empty_config() -> None:
     }
 
 
-def test_settings_append_to_an_existing_policy() -> None:
+def test_settings_leave_an_existing_policy_alone() -> None:
     config: Json = {"auto_review": {"extra_policy": "Keep this."}}
-    policy = tool.settings(config, HOME)["auto_review.extra_policy"]
-    assert policy == f"Keep this.\n\n{tool.LGTMCP_POLICY}"
-
-
-def test_settings_do_not_repeat_the_policy() -> None:
-    policy_text = f"A\n\n{tool.LGTMCP_POLICY}\n\nB"
-    config: Json = {"auto_review": {"extra_policy": policy_text}}
-    policy = tool.settings(config, HOME)["auto_review.extra_policy"]
-    assert policy == policy_text
+    assert "auto_review.extra_policy" not in tool.settings(config, HOME)
 
 
 @pytest.mark.parametrize("trust_level", ["trusted", "untrusted"])
@@ -266,8 +253,6 @@ def test_settings_keep_existing_permission_rules() -> None:
 @pytest.mark.parametrize(
     "config",
     [
-        {"auto_review": "text"},
-        {"auto_review": {"extra_policy": ["a"]}},
         {"projects": "text"},
         {"permissions": "text"},
         {"permissions": {"dev": "text"}},
@@ -444,9 +429,6 @@ def test_configure_trusts_the_installed_hooks(
     assert codex.batch_write() == {
         "filePath": str(config_file),
         "edits": [
-            edit("auto_review.extra_policy", f"Keep this.\n\n{tool.LGTMCP_POLICY}"),
-            edit("mcp_servers.lgtmcp.tools.review_only.approval_mode", "approve"),
-            edit("mcp_servers.lgtmcp.tools.review_and_commit.approval_mode", "approve"),
             edit("approvals_reviewer", "auto_review"),
             edit("features.worktrees", True),  # noqa: FBT003
             edit("features.network_proxy", False),  # noqa: FBT003
@@ -475,7 +457,7 @@ def test_configure_status_line_with_the_real_cli(codex_home: Path, tui: str) -> 
     if shutil.which("codex") is None:
         pytest.skip("Codex CLI is not installed")
     config_file = codex_home / "config.toml"
-    _ = config_file.write_text(f'[mcp_servers.lgtmcp]\ncommand = "lgtmcp"\n\n{tui}')
+    _ = config_file.write_text(f'[auto_review]\nextra_policy = "Keep this."\n\n{tui}')
 
     tool.configure_codex(config_file, HOME)
 
@@ -485,7 +467,7 @@ def test_configure_status_line_with_the_real_cli(codex_home: Path, tui: str) -> 
     if tui:
         assert config["tui"]["whimsy"] is False
     assert config["approvals_reviewer"] == "auto_review"
-    assert config["auto_review"]["extra_policy"] == tool.LGTMCP_POLICY
+    assert config["auto_review"]["extra_policy"] == "Keep this."
     first = config_file.read_bytes()
     tool.configure_codex(config_file, HOME)
     assert config_file.read_bytes() == first
@@ -505,7 +487,6 @@ def test_configure_permissions_with_the_real_cli(
     config_file = codex_home / "config.toml"
     config_text = (
         'default_permissions = "audit"\n'
-        '[mcp_servers.lgtmcp]\ncommand = "lgtmcp"\n'
         "[features]\nhooks = false\nnetwork_proxy = true\n"
         '[permissions.dev]\ndescription = "Keep this"\n'
         '[permissions.dev.filesystem]\n"~/.ssh" = "deny"\n'
@@ -558,7 +539,6 @@ def test_configure_worktree_root_with_the_real_cli(
     if shutil.which("codex") is None:
         pytest.skip("Codex CLI is not installed")
     config_file = codex_home / "config.toml"
-    _ = config_file.write_text('[mcp_servers.lgtmcp]\ncommand = "lgtmcp"\n')
 
     tool.configure_codex(config_file, home_on_data_volume)
 
@@ -576,7 +556,6 @@ def test_configure_after_becoming_throwaway(
     if shutil.which("codex") is None:
         pytest.skip("Codex CLI is not installed")
     config_file = codex_home / "config.toml"
-    _ = config_file.write_text('[mcp_servers.lgtmcp]\ncommand = "lgtmcp"\n')
     tool.configure_codex(config_file, HOME)
     before = tomllib.loads(config_file.read_text())
     assert before["features"]["network_proxy"] is False
