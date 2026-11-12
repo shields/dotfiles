@@ -1,16 +1,8 @@
 {
   $schema: "https://docs.renovatebot.com/renovate-schema.json",
-  extends: ["config:best-practices", ":semanticCommitsDisabled"],
-  // Automerge waits for passing checks; Renovate counts a branch with none as
-  // not green.
-  platformAutomerge: true,
+  extends: ["github>shields/right-answers//renovate/base.json5"],
   lockFileMaintenance: { automerge: true },
   packageRules: [
-    {
-      description: "Automerge non-major updates",
-      matchUpdateTypes: ["minor", "patch", "pin", "digest"],
-      automerge: true,
-    },
     {
       description: "Automerge dev dependencies",
       // Rules apply independently, so this one also merges major updates: dev

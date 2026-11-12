@@ -97,9 +97,9 @@ test-linux:
 	    tools/moby-seccomp-default.json >"$$stage/seccomp.json"; \
 	docker build --build-arg "MODULES=$(MODULES)" -t "$(LINUX_IMAGE)" -f cloudflare/Dockerfile "$$stage/tree"; \
 	docker run --rm --security-opt "seccomp=$$stage/seccomp.json" --security-opt systempaths=unconfined \
-	    "$(LINUX_IMAGE)" zsh -c 'bun install --frozen-lockfile && make test lint'
+	    "$(LINUX_IMAGE)" zsh -c 'bun install --frozen-lockfile && make actions-lock-install test lint'
 
-lint: fmt-check lint-ts lint-python lint-shell
+lint: actions-lock-verify-local fmt-check lint-ts lint-python lint-shell
 
 lint-ts:
 	bun run eslint .
@@ -130,3 +130,17 @@ bench:
 
 bench-startup:
 	zsh tools/bench_startup.zsh -p
+
+.PHONY: actions-lock-install actions-lock actions-lock-verify-local actions-lock-verify
+
+actions-lock-install:
+	gh extension install github/gh-actions-lock --pin v0.4.1 --force
+
+actions-lock:
+	gh actions-lock --no-interactive
+
+actions-lock-verify-local:
+	gh actions-lock --verify-local
+
+actions-lock-verify:
+	gh actions-lock --verify

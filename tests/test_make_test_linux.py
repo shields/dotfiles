@@ -37,7 +37,7 @@ STAGED = [
     "tools/moby-seccomp-default.json",
     "cloudflare/Dockerfile",
 ]
-TEST_COMMAND = "bun install --frozen-lockfile && make test lint"
+TEST_COMMAND = "bun install --frozen-lockfile && make actions-lock-install test lint"
 TIMEOUT = 120
 
 # One argument per line is enough: none of the arguments contains a newline.
