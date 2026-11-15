@@ -696,24 +696,16 @@ test("the gateway inspects a body whenever the policy would route the request, h
     );
   const good = pushBody(idRef(instance.id), "report-status");
   const bad = pushBody("refs/heads/main", "quiet");
+  const goodQuery = queryBody("dotfiles");
+  const badQuery = queryBody("other");
   for (const [host, target, allowedBody, deniedBody] of [
     ["github.com", `${repository}/git-receive-pack?`, good, bad],
     ["github.com", `${repository}/git-receive-pack#x`, good, bad],
     ["github.com", "/shields/dotfiles.git\\git-receive-pack", good, bad],
-    ["api.github.com", "/graphql?", queryBody("dotfiles"), queryBody("other")],
-    ["api.github.com", "/graphql#x", queryBody("dotfiles"), queryBody("other")],
-    [
-      "api.github.com",
-      "/x/../graphql",
-      queryBody("dotfiles"),
-      queryBody("other"),
-    ],
-    [
-      "api.github.com",
-      "/%2e/graphql",
-      queryBody("dotfiles"),
-      queryBody("other"),
-    ],
+    ["api.github.com", "/graphql?", goodQuery, badQuery],
+    ["api.github.com", "/graphql#x", goodQuery, badQuery],
+    ["api.github.com", "/x/../graphql", goodQuery, badQuery],
+    ["api.github.com", "/%2e/graphql", goodQuery, badQuery],
   ] as const) {
     const before = incoming.length;
     const refused = await send(socket, "POST", target, deniedBody, host);
@@ -985,6 +977,17 @@ test("a GET or HEAD with a chunked body is denied and none of it reaches the ups
       outcome: "denied",
     })),
   );
+  assert.deepEqual(
+    state
+      .logs(instance.id)
+      .map(({ operation, repository }) => `${operation} ${String(repository)}`)
+      .toSorted((a, b) => a.localeCompare(b)),
+    [
+      "api.read shields/dotfiles",
+      "api.read shields/dotfiles",
+      "git.read shields/dotfiles",
+    ],
+  );
 });
 
 test("ambiguous request framing never reaches the upstream, and a GET with an empty body does", async () => {
@@ -1027,6 +1030,7 @@ test("ambiguous request framing never reaches the upstream, and a GET with an em
     ["GET", "transfer-encoding: gzip, chunked", chunkedBody, 403],
     ["GET", "transfer-encoding: gzip", chunkedBody, 403],
     ["GET", "transfer-encoding: identity", "", 403],
+    ["GET", "transfer-encoding:", "", 403],
     ["GET", "transfer-encoding:\tchunked", chunkedBody, 403],
     ["GET", "content-length: 0", "", 200],
   ];
@@ -1137,6 +1141,7 @@ test("a request target that names an authority is denied and sends no credential
 
 test("a state failure as a request starts is a 503 with an audit row and does not crash the gateway", async () => {
   const { socket, instance, state } = await startGateway();
+  const stderr = captureStderr();
   spyOn(state, "byId").mockImplementationOnce((): never => {
     throw new Error("database is locked");
   });
@@ -1149,11 +1154,74 @@ test("a state failure as a request starts is a 503 with an audit row and does no
       .map(({ allowed, reason, outcome }) => ({ allowed, reason, outcome })),
     [{ allowed: false, reason: "gateway request failed", outcome: "denied" }],
   );
+  assert.deepEqual(stderr, [
+    "vm-access: gateway request failed: Error: database is locked\n",
+  ]);
+});
+
+test("a failure that is not a policy denial is reported on stderr, audited and answered with a 503", async () => {
+  const { socket, instance, state, auth } = await startGateway();
+  const stderr = captureStderr();
+  const denied = await send(
+    socket,
+    "POST",
+    "/graphql?x=1",
+    Buffer.from("{}"),
+    "api.github.com",
+  );
+  assert.equal(denied.status, 403);
+  assert.deepEqual(stderr, []);
+  spyOn(auth, "token").mockRejectedValueOnce(
+    new Error("GitHub refused refresh for shields/dotfiles"),
+  );
+  const failed = await send(
+    socket,
+    "GET",
+    "/shields/dotfiles.git/info/refs?service=git-upload-pack",
+  );
+  assert.equal(failed.status, 503);
+  assert.match(failed.body, /gateway request failed/);
+  assert.deepEqual(stderr, [
+    "vm-access: gateway request failed: Error: GitHub refused refresh for shields/dotfiles\n",
+  ]);
+  assert.deepEqual(
+    state
+      .logs(instance.id)
+      .map(({ reason, outcome }) => ({ reason, outcome }))
+      .toSorted((a, b) => a.reason.localeCompare(b.reason)),
+    [
+      { reason: "gateway request failed", outcome: "denied" },
+      { reason: "unsupported GitHub API operation", outcome: "denied" },
+    ],
+  );
+});
+
+test("an upstream that failed on every address is reported with each of its failures", async () => {
+  const { socket, auth } = await startGateway();
+  const stderr = captureStderr();
+  spyOn(auth, "token").mockRejectedValueOnce(
+    new AggregateError(
+      [
+        new Error("connect ECONNREFUSED ::1:443"),
+        new Error("connect ECONNREFUSED 127.0.0.1:443"),
+      ],
+      "all attempts failed",
+    ),
+  );
+  const failed = await send(
+    socket,
+    "GET",
+    "/shields/dotfiles.git/info/refs?service=git-upload-pack",
+  );
+  assert.equal(failed.status, 503);
+  assert.deepEqual(stderr, [
+    "vm-access: gateway request failed: AggregateError: all attempts failed: Error: connect ECONNREFUSED ::1:443; Error: connect ECONNREFUSED 127.0.0.1:443\n",
+  ]);
 });
 
 test("a state failure that also stops the audit write is reported on stderr and answered with a 503", async () => {
   const { socket, state } = await startGateway();
-  const stderr = spyOn(process.stderr, "write").mockImplementation(() => true);
+  const stderr = captureStderr();
   const failure = (): never => {
     throw new Error("database is locked");
   };
@@ -1164,10 +1232,10 @@ test("a state failure that also stops the audit write is reported on stderr and 
   await nextTurn();
   assert.equal(reply.status, 503);
   assert.match(reply.body, /gateway audit unavailable/);
-  assert.deepEqual(
-    stderr.mock.calls.map((call) => String(call[0])),
-    ["vm-access audit failure: Error: database is locked\n"],
-  );
+  assert.deepEqual(stderr, [
+    "vm-access: gateway request failed: Error: database is locked\n",
+    "vm-access audit failure: Error: database is locked\n",
+  ]);
 });
 
 test("the health path is answered locally however the target spells it", async () => {
@@ -1340,6 +1408,15 @@ function recordFinishes(
   return { calls, first: first.promise, all: all.promise };
 }
 
+function captureStderr(): string[] {
+  const writes: string[] = [];
+  spyOn(process.stderr, "write").mockImplementation((chunk) => {
+    writes.push(String(chunk));
+    return true;
+  });
+  return writes;
+}
+
 function auditRows(
   state: State,
   instance: Instance,
@@ -1436,6 +1513,7 @@ for (const { name, tls, begin, end } of endsEarly) {
       },
       tls,
     });
+    const stderr = captureStderr();
     const audit = recordFinishes(state);
     const { firstData, response } = open(socket);
     void firstData.then(clientHasData.resolve);
@@ -1448,6 +1526,7 @@ for (const { name, tls, begin, end } of endsEarly) {
       { outcome: "gateway-error", upstreamStatus: null },
     ]);
     assert.deepEqual(audit.calls, [{ status: null, outcome: "gateway-error" }]);
+    assert.match(stderr.join(""), /^vm-access: gateway request failed: .+\n$/);
   });
 }
 
@@ -1510,6 +1589,7 @@ for (const [name, respond] of [
       handler: respond,
       tls: false,
     });
+    const stderr = captureStderr();
     const audit = recordFinishes(state);
     const { response } = open(socket);
     const fetched = await within("the client's response to close", response);
@@ -1521,6 +1601,7 @@ for (const [name, respond] of [
       { outcome: "gateway-error", upstreamStatus: null },
     ]);
     assert.deepEqual(audit.calls, [{ status: null, outcome: "gateway-error" }]);
+    assert.match(stderr.join(""), /^vm-access: gateway request failed: .+\n$/);
   });
 }
 
@@ -1541,7 +1622,7 @@ test("an upstream status that cannot be relayed is a gateway error with a 503 an
     },
     tls: false,
   });
-  const stderr = spyOn(process.stderr, "write").mockImplementation(() => true);
+  const stderr = captureStderr();
   const audit = recordFinishes(state);
   const target = "/shields/dotfiles.git/info/refs?service=git-upload-pack";
   const broken = await within("the response", send(socket, "GET", target));
@@ -1550,8 +1631,8 @@ test("an upstream status that cannot be relayed is a gateway error with a 503 an
   assert.equal(broken.status, 503);
   assert.deepEqual(audit.calls, [{ status: null, outcome: "gateway-error" }]);
   assert.match(
-    stderr.mock.calls.map((call) => String(call[0])).join(""),
-    /vm-access: upstream response could not be relayed: .*\b99\b/,
+    stderr.join(""),
+    /^vm-access: gateway request failed: .*\b99\b.*\n$/,
   );
   const next = await within("the response", send(socket, "GET", target));
   await within("the gateway's responses to close", closed());
@@ -1598,7 +1679,7 @@ test("a response that writeHead rejects after storing a header is answered with 
     },
     tls: false,
   });
-  spyOn(process.stderr, "write").mockImplementation(() => true);
+  captureStderr();
   listener.on("request", (_request, reply) => {
     spyOn(reply, "writeHead").mockImplementationOnce(() => {
       reply.setHeader("content-length", "2");
@@ -1655,6 +1736,7 @@ test("a request that fails after its headers were sent ends the connection, so t
       reply.once("pipe", relayed.resolve);
     }
   });
+  captureStderr();
   const audit = recordFinishes(state, 3);
   const get = (agent: string): string =>
     `GET /shields/dotfiles.git/info/refs?service=git-upload-pack HTTP/1.1\r\nhost: github.com\r\nuser-agent: ${agent}\r\n\r\n`;
@@ -1848,6 +1930,7 @@ test("a client that leaves while uploading is audited as interrupted and the ups
 test("a client that leaves while its push commands are being read is audited as interrupted, not denied", async () => {
   const { socket, instance, state, listener, incoming, closed } =
     await startGateway();
+  const stderr = captureStderr();
   const audit = recordFinishes(state);
   const requested = signal();
   listener.on("request", requested.resolve);
@@ -1876,6 +1959,7 @@ test("a client that leaves while its push commands are being read is audited as 
   );
   assert.deepEqual(audit.calls, [{ status: null, outcome: "interrupted" }]);
   assert.deepEqual(incoming, []);
+  assert.deepEqual(stderr, []);
 });
 
 test("a client that leaves while the rest of a denied push is being read does not crash the gateway", async () => {
@@ -2087,6 +2171,7 @@ test("uploads that fail in sequence on one connection leave no listeners behind 
     },
     tls: false,
   });
+  captureStderr();
   const watched = watchCloseListeners(listener);
   const agent = new https.Agent({ keepAlive: true, maxSockets: 1 });
   defer(() => {

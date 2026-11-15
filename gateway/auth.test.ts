@@ -1,8 +1,15 @@
 import assert from "node:assert/strict";
 import { createServer } from "node:http";
-import { chmodSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import {
+  chmodSync,
+  mkdirSync,
+  mkdtempSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
+import { inspect } from "node:util";
 import { afterEach, mock, spyOn, test } from "bun:test";
 import { AppAuth } from "./auth.ts";
 
@@ -161,6 +168,49 @@ test("concurrent callers spend one refresh token and persist its replacement", a
         resolve();
       });
     });
+    rmSync(directory, { recursive: true, force: true });
+  }
+});
+
+test("a record that is not JSON is reported without quoting it", () => {
+  const directory = mkdtempSync(path.join(tmpdir(), "vm-access-corrupt-"));
+  try {
+    const auth = new AppAuth(directory);
+    for (const contents of ["ghr_leaked", '{"refresh_token":"ghr_leaked"']) {
+      writeFileSync(
+        path.join(
+          directory,
+          `${Buffer.from("shields/dotfiles").toString("base64url")}.json`,
+        ),
+        contents,
+      );
+      assert.throws(
+        () => auth.load("shields/dotfiles"),
+        (error: unknown) =>
+          error instanceof Error &&
+          String(error) ===
+            "Error: invalid authorization record for shields/dotfiles" &&
+          !inspect(error).includes("ghr_leaked"),
+        contents,
+      );
+    }
+  } finally {
+    rmSync(directory, { recursive: true, force: true });
+  }
+});
+
+test("a record that cannot be read reports the read error, not an invalid record", () => {
+  const directory = mkdtempSync(path.join(tmpdir(), "vm-access-unreadable-"));
+  try {
+    const auth = new AppAuth(directory);
+    mkdirSync(
+      path.join(
+        directory,
+        `${Buffer.from("shields/dotfiles").toString("base64url")}.json`,
+      ),
+    );
+    assert.throws(() => auth.load("shields/dotfiles"), { code: "EISDIR" });
+  } finally {
     rmSync(directory, { recursive: true, force: true });
   }
 });

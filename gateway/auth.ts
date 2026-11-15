@@ -167,7 +167,16 @@ export class AppAuth {
         `GitHub authorization for ${key} is missing; run vm-access grant again`,
       );
     }
-    return recordFrom(JSON.parse(readFileSync(file, "utf8")) as unknown, key);
+    const contents = readFileSync(file, "utf8");
+    let payload: unknown;
+    try {
+      payload = JSON.parse(contents);
+    } catch {
+      // A JSON syntax error can quote the file, which holds the tokens, so it
+      // is not attached as the cause.
+      throw new Error(`invalid authorization record for ${key}`);
+    }
+    return recordFrom(payload, key);
   }
 
   private save(record: AuthRecord): void {

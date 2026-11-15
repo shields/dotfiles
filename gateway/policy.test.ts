@@ -189,7 +189,12 @@ test("denials reach git as text and gh as a JSON message", () => {
     "/shields/dotfiles.git/git-upload-pack",
     "/shields/dotfiles.git/git-receive-pack",
   ]) {
-    for (const host of ["github.com", "github.com."]) {
+    for (const host of [
+      "github.com",
+      "github.com.",
+      "github.com..",
+      "GitHub.com",
+    ]) {
       assert.deepEqual(denial(host, target, "no", "request-1"), {
         contentType: "text/plain; charset=utf-8",
         body: "no\nrequest ID: request-1\n",
@@ -1008,6 +1013,7 @@ test("only a GET or HEAD that announces a body is refused", () => {
   for (const [method, transferEncoding, contentLength, refused] of [
     ["GET", undefined, undefined, false],
     ["GET", null, null, false],
+    ["GET", undefined, "", false],
     ["GET", undefined, "0", false],
     ["GET", undefined, "00", false],
     ["GET", undefined, "5", true],
@@ -1020,6 +1026,8 @@ test("only a GET or HEAD that announces a body is refused", () => {
     ["GET", undefined, "5e-999", true],
     ["GET", "chunked", undefined, true],
     ["HEAD", "chunked", null, true],
+    ["GET", "", undefined, true],
+    ["HEAD", "", null, true],
     ["POST", "chunked", "5", false],
     ["PUT", undefined, "5", false],
   ] as const) {

@@ -58,6 +58,14 @@ function bodyIterator(request: IncomingMessage): AsyncIterator<Buffer> {
   return request[Symbol.asyncIterator]() as AsyncIterator<Buffer>;
 }
 
+// A connection that failed on every address of a host is an AggregateError
+// whose message is empty, so the failures it holds are listed.
+function describeFailure(error: unknown): string {
+  return error instanceof AggregateError
+    ? `${String(error)}: ${error.errors.map(String).join("; ")}`
+    : String(error);
+}
+
 export async function readBody(
   remaining: AsyncIterator<Buffer>,
   contentEncoding: string | undefined,
@@ -524,6 +532,14 @@ export class Gateway {
         );
       }
     } catch (error) {
+      // Reading the body fails with the request's own error when the
+      // connection closes before the body ends.
+      const aborted = error === request.errored;
+      if (!aborted && !(error instanceof PolicyError)) {
+        process.stderr.write(
+          `vm-access: gateway request failed: ${describeFailure(error)}\n`,
+        );
+      }
       const reason =
         error instanceof PolicyError ? error.message : "gateway request failed";
       const respond = (status: number, message: string): void => {
@@ -543,9 +559,6 @@ export class Gateway {
           "gateway-error",
         );
       } else {
-        // Reading the body fails with the request's own error when the
-        // connection closes before the body ends.
-        const aborted = error === request.errored;
         try {
           this.state.logDecision({
             id: requestId,
@@ -689,9 +702,6 @@ export class Gateway {
           for (const name of Object.keys(relayed)) {
             response.removeHeader(name);
           }
-          process.stderr.write(
-            `vm-access: upstream response could not be relayed: ${String(error)}\n`,
-          );
           reject(error instanceof Error ? error : new Error("response failed"));
           upstream.destroy();
           return;
