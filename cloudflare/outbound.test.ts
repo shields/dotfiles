@@ -522,6 +522,68 @@ test("a denied push whose body fails while it is being read out gets a plain den
   assert.match(await response.text(), /^push destination is outside/);
 });
 
+test("a guest that disconnects while its body is being inspected is not reported as a gateway failure", async () => {
+  const logged = spyOn(console, "error").mockReturnValue();
+  for (const [url, first] of [
+    ["https://github.com/shields/dotfiles.git/git-receive-pack", "0050"],
+    ["https://api.github.com/graphql", '{"query":'],
+  ] as const) {
+    let pulled = 0;
+    const events: string[] = [];
+    const response = await handleOutbound(
+      new Request(url, {
+        method: "POST",
+        body: new ReadableStream<Uint8Array>({
+          pull(controller) {
+            if (pulled === 0) {
+              controller.enqueue(new TextEncoder().encode(first));
+            } else {
+              controller.error(new Error("Network connection lost."));
+            }
+            pulled += 1;
+          },
+        }),
+        duplex: "half",
+      } as RequestInit),
+      instanceId,
+      authority(events),
+      () => {
+        throw new Error(`${url} was forwarded`);
+      },
+    );
+    assert.equal(response.status, 503, url);
+    assert.deepEqual(
+      events,
+      ["deny:gateway request failed", "finish:denied:null"],
+      url,
+    );
+  }
+  assert.deepEqual(logged.mock.calls, []);
+});
+
+test("a failure after an inspected body arrived intact is still reported", async () => {
+  const logged = spyOn(console, "error").mockReturnValue();
+  const failing = authority([]);
+  failing.allow = () => Promise.reject(new Error("authority unavailable"));
+  const response = await handleOutbound(
+    new Request("https://api.github.com/graphql", {
+      method: "POST",
+      body: JSON.stringify({
+        query: '{ repository(owner: "shields", name: "dotfiles") { name } }',
+      }),
+    }),
+    instanceId,
+    failing,
+    () => {
+      throw new Error("request reached GitHub");
+    },
+  );
+  assert.equal(response.status, 503);
+  assert.deepEqual(logged.mock.calls, [
+    ["vm-access: gateway request failed", new Error("authority unavailable")],
+  ]);
+});
+
 test("GraphQL reads retain their body and mutations are denied", async () => {
   const events: string[] = [];
   const query = JSON.stringify({

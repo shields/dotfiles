@@ -44,6 +44,25 @@ const forwardedHeaders = [
   "x-github-api-version",
 ] as const;
 
+// A read of the guest's own request body failed, as it does when the guest
+// disconnects before the body ends. That is not a failure of the gateway.
+class RequestBodyError extends Error {
+  constructor(cause: unknown) {
+    super("request body failed", { cause });
+    this.name = "RequestBodyError";
+  }
+}
+
+async function nextChunk(
+  reader: ReadableStreamDefaultReader<Uint8Array>,
+): ReturnType<ReadableStreamDefaultReader<Uint8Array>["read"]> {
+  try {
+    return await reader.read();
+  } catch (error) {
+    throw new RequestBodyError(error);
+  }
+}
+
 async function bodyForPolicy(
   request: Request,
   limit: number,
@@ -62,9 +81,10 @@ async function bodyForPolicy(
   const buffered = new Uint8Array(limit + 1);
   const parser = instanceId === undefined ? null : new PushParser(instanceId);
   let length = 0;
+  let failed = false;
   try {
     for (;;) {
-      const { done, value } = await reader.read();
+      const { done, value } = await nextChunk(reader);
       if (done) {
         return buffered.slice(0, length);
       }
@@ -81,10 +101,19 @@ async function bodyForPolicy(
         throw new PolicyError("request prefix is too large");
       }
     }
+  } catch (error) {
+    failed = error instanceof RequestBodyError;
+    throw error;
   } finally {
-    void reader.cancel().catch((error: unknown) => {
-      console.error("vm-access: inspection stream cancellation failed", error);
-    });
+    // Cancelling a stream that has failed rejects with that failure.
+    if (!failed) {
+      void reader.cancel().catch((error: unknown) => {
+        console.error(
+          "vm-access: inspection stream cancellation failed",
+          error,
+        );
+      });
+    }
   }
 }
 
@@ -255,7 +284,7 @@ export async function handleOutbound(
     );
     return downstreamResponse(response, classification);
   } catch (error) {
-    if (!(error instanceof PolicyError)) {
+    if (!(error instanceof PolicyError || error instanceof RequestBodyError)) {
       console.error("vm-access: gateway request failed", error);
     }
     const reason =
