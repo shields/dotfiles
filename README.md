@@ -656,7 +656,10 @@ The VM receives only a dummy GitHub credential. Its outbound HTTP and HTTPS
 requests pass through the Worker, which checks GitHub operations against the
 current VM grants and supplies the repository's short-lived token. The Worker
 forwards each request to the URL as it parsed it, so a GitHub request goes to
-exactly the URL that was checked. The refresh token stays in Durable Object
+exactly the URL that was checked. A request to any other host is forwarded as
+it arrived when its URL is already canonical; otherwise it is re-serialized from
+the parsed URL, which percent-encodes a `'` in a query, folds `%2e%2e`, and
+turns a backslash into a slash. The refresh token stays in Durable Object
 storage. GitHub access logs record the VM, repository, operation, refs,
 decision, policy revision, upstream status, and duration without credentials;
 policy events record before and after grants. Access logs are retained for 30

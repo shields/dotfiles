@@ -111,8 +111,8 @@ async function drained(request: Request, limit: number): Promise<boolean> {
   }
 }
 
-// A RequestInit cannot give a GET or HEAD a body, even the empty one that an
-// incoming Content-Length: 0 produces.
+// A RequestInit dictionary cannot give a GET or HEAD a body, even the empty one
+// that an incoming Content-Length: 0 produces.
 function initBody(request: Request): ReadableStream<Uint8Array> | null {
   const method = request.method.toUpperCase();
   return method === "GET" || method === "HEAD" ? null : request.body;
@@ -179,20 +179,11 @@ export async function handleOutbound(
 ): Promise<Response> {
   // In workerd, request.url and copies made from the request keep the client's
   // spelling, and fetch can resolve that spelling to a different host than URL
-  // does. Forward only url.href: the request itself when its URL is already
-  // that string, otherwise a request built from it.
+  // does, so only url.href is ever forwarded.
   const url = new URL(request.url);
   if (!namesGitHubHost(url.hostname)) {
-    if (request.url === url.href) {
-      return forward(request);
-    }
     return forward(
-      new Request(url.href, {
-        method: request.method,
-        headers: request.headers,
-        body: initBody(request),
-        redirect: request.redirect,
-      }),
+      request.url === url.href ? request : new Request(url.href, request),
     );
   }
   const started = Date.now();

@@ -7,8 +7,9 @@ import { handleOutbound, type OutboundAuthority } from "./outbound.ts";
 const NativeRequest = Request;
 
 // In workerd a request that arrives over HTTP keeps the client's spelling in
-// request.url, copies of it keep that too, and a RequestInit cannot give a GET
-// or HEAD a body. Bun does none of these, so these classes supply them.
+// request.url, copies of it keep that too, and a RequestInit dictionary cannot
+// give a GET or HEAD a body. Bun does none of these, so these classes supply
+// them.
 class RawRequest extends NativeRequest {
   readonly #raw: string;
   constructor(raw: string, init?: RequestInit) {
@@ -24,6 +25,7 @@ class CopyingRequest extends NativeRequest {
   readonly #raw: string | null;
   constructor(input: RequestInfo | URL, init?: RequestInit) {
     if (
+      !(init instanceof NativeRequest) &&
       (init?.method === "GET" || init?.method === "HEAD") &&
       (init.body ?? null) !== null
     ) {
@@ -1152,23 +1154,29 @@ test("a pass-through request keeps its method, headers, body, and redirect mode 
   });
 });
 
-test("a pass-through GET or HEAD with a body is forwarded without one when its URL is rebuilt", async () => {
-  for (const method of ["GET", "HEAD"]) {
-    const forwarded: { url: string; body: ReadableStream | null }[] = [];
+test("a pass-through GET or HEAD keeps its body when its URL is rebuilt", async () => {
+  for (const [method, body] of [
+    ["GET", ""],
+    ["GET", "query"],
+    ["HEAD", ""],
+    ["HEAD", "query"],
+  ] as const) {
+    const forwarded: { url: string; body: string }[] = [];
     const response = await handleOutbound(
-      new RawRequest("https://example.com/a/%2e%2e/b", { method, body: "" }),
+      new RawRequest("https://example.com/a/%2e%2e/b", { method, body }),
       instanceId,
       authority([]),
-      (request) => {
-        forwarded.push({ url: request.url, body: request.body });
-        return Promise.resolve(new Response("ok"));
+      async (request) => {
+        forwarded.push({ url: request.url, body: await request.text() });
+        return new Response("ok");
       },
     );
-    assert.equal(response.status, 200, method);
+    const label = `${method} ${JSON.stringify(body)}`;
+    assert.equal(response.status, 200, label);
     assert.deepEqual(
       forwarded,
-      [{ url: "https://example.com/b", body: null }],
-      method,
+      [{ url: "https://example.com/b", body }],
+      label,
     );
   }
 });
