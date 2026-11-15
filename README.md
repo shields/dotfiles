@@ -659,13 +659,14 @@ forwards each request to the URL as it parsed it, so a GitHub request goes to
 exactly the URL that was checked. A request to any other host is forwarded as
 it arrived when its URL is already canonical; otherwise it is re-serialized from
 the parsed URL, which percent-encodes a `'` in a query, folds `%2e%2e`, and
-turns a backslash into a slash. The refresh token stays in Durable Object
-storage. GitHub access logs record the VM, repository, operation, refs,
-decision, policy revision, upstream status, and duration without credentials;
-policy events record before and after grants. Access logs are retained for 30
-days and policy events for 365 days. The container's filesystem is disposable.
-The current image uses a 1-vCPU, 4-GiB, 20-GB instance to leave workspace room
-around the installed toolchain; its inactivity timeout is six hours.
+turns a backslash into a slash. A request whose URL does not parse is denied and
+logged. The refresh token stays in Durable Object storage. GitHub access logs
+record the VM, repository, operation, refs, decision, policy revision, upstream
+status, and duration without credentials; policy events record before and after
+grants. Access logs are retained for 30 days and policy events for 365 days. The
+container's filesystem is disposable. The current image uses a 1-vCPU, 4-GiB,
+20-GB instance to leave workspace room around the installed toolchain; its
+inactivity timeout is six hours.
 
 # Testing on Linux
 

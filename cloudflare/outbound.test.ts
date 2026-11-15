@@ -7,9 +7,9 @@ import { handleOutbound, type OutboundAuthority } from "./outbound.ts";
 const NativeRequest = Request;
 
 // In workerd a request that arrives over HTTP keeps the client's spelling in
-// request.url, copies of it keep that too, and a RequestInit dictionary cannot
-// give a GET or HEAD a body. Bun does none of these, so these classes supply
-// them.
+// request.url, as does a copy made with new Request(request), and a RequestInit
+// dictionary cannot give a GET or HEAD a body. Bun does none of these, so these
+// classes supply them.
 class RawRequest extends NativeRequest {
   readonly #raw: string;
   constructor(raw: string, init?: RequestInit) {
@@ -623,6 +623,35 @@ test("a host that is not github.com or api.github.com is forwarded without the p
     );
     assert.equal(response.status, 200, url);
     assert.deepEqual(events, [], url);
+  }
+});
+
+test("a URL that does not parse is denied and audited, not forwarded", async () => {
+  for (const raw of [
+    "https://api.github.com:99999/user",
+    "https://github.com%/x",
+    "https://example.com:99999/x",
+  ]) {
+    const events: string[] = [];
+    const response = await handleOutbound(
+      new RawRequest(raw),
+      instanceId,
+      authority(events),
+      () => {
+        throw new Error(`${raw} was forwarded`);
+      },
+    );
+    assert.equal(response.status, 403, raw);
+    assert.equal(
+      await response.text(),
+      '{"message":"invalid request URL","request_id":"request-1"}',
+      raw,
+    );
+    assert.deepEqual(
+      events,
+      ["deny:invalid request URL", "finish:denied:null"],
+      raw,
+    );
   }
 });
 

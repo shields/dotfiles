@@ -181,8 +181,10 @@ export async function handleOutbound(
   // In workerd, request.url and copies made from the request keep the client's
   // spelling, and fetch can resolve that spelling to a different host than URL
   // does, so only url.href is ever forwarded.
-  const url = new URL(request.url);
-  if (!namesGitHubHost(url.hostname)) {
+  const url = URL.parse(request.url);
+  // A URL that does not parse cannot be shown to name another host, so it goes
+  // on to the denial below.
+  if (url !== null && !namesGitHubHost(url.hostname)) {
     return forward(
       request.url === url.href ? request : new Request(url.href, request),
     );
@@ -191,6 +193,9 @@ export async function handleOutbound(
   let classification: Classification | null = null;
   let requestId: string | null = null;
   try {
+    if (url === null) {
+      throw new PolicyError("invalid request URL");
+    }
     if (url.protocol !== "https:" || url.port || url.username || url.password) {
       throw new PolicyError("GitHub requests must use HTTPS");
     }
@@ -261,8 +266,8 @@ export async function handleOutbound(
       id: string | null,
     ): Response => {
       const { contentType, body } = denial(
-        url.hostname,
-        url.pathname,
+        url?.hostname ?? "",
+        url?.pathname ?? "",
         message,
         id,
       );
