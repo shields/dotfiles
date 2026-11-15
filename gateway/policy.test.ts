@@ -14,6 +14,7 @@ import {
   parseGrants,
   parsePushCommands,
   PolicyError,
+  requireNoGetOrHeadBody,
   rewriteLinks,
   type Classification,
   type InspectedBody,
@@ -1003,6 +1004,45 @@ test("the health path is the only public read without a repository, however the 
   }
 });
 
+test("only a GET or HEAD that announces a body is refused", () => {
+  for (const [method, transferEncoding, contentLength, refused] of [
+    ["GET", undefined, undefined, false],
+    ["GET", null, null, false],
+    ["GET", undefined, "0", false],
+    ["GET", undefined, "00", false],
+    ["GET", undefined, "5", true],
+    ["get", undefined, "5", true],
+    ["HEAD", null, "1", true],
+    ["GET", undefined, "5, 5", true],
+    ["HEAD", null, "0, 5", true],
+    ["GET", undefined, "abc", true],
+    ["GET", undefined, "-1", true],
+    ["GET", undefined, "5e-999", true],
+    ["GET", "chunked", undefined, true],
+    ["HEAD", "chunked", null, true],
+    ["POST", "chunked", "5", false],
+    ["PUT", undefined, "5", false],
+  ] as const) {
+    const label = `${method} ${String(transferEncoding)} ${String(contentLength)}`;
+    if (refused) {
+      assert.throws(
+        () => {
+          requireNoGetOrHeadBody(method, transferEncoding, contentLength);
+        },
+        {
+          name: "PolicyError",
+          message: "GET and HEAD requests must not have a body",
+        },
+        label,
+      );
+    } else {
+      assert.doesNotThrow(() => {
+        requireNoGetOrHeadBody(method, transferEncoding, contentLength);
+      }, label);
+    }
+  }
+});
+
 test("only the health path classifies as a health check", () => {
   assert.equal(
     isHealthCheck(
@@ -1291,6 +1331,30 @@ test("a trailing dot still names a GitHub host", () => {
   }
 });
 
+test("every host that classify accepts is one the Worker sends to the policy", () => {
+  for (const host of [
+    "github.com",
+    "api.github.com",
+    "GitHub.com",
+    "API.GITHUB.COM",
+    "github.com.",
+    "uploads.github.com",
+    "gist.github.com",
+    "www.github.com",
+    "raw.githubusercontent.com",
+    "github.com:443",
+  ]) {
+    let accepted = true;
+    try {
+      classify({ host, method: "GET", target: "/" }, id);
+    } catch (error) {
+      assert.ok(error instanceof PolicyError, host);
+      accepted = error.message !== "unsupported GitHub host";
+    }
+    assert.ok(!accepted || namesGitHubHost(host), host);
+  }
+});
+
 test("a body is inspected exactly when classify reads it", () => {
   const receivePackPath = "/shields/dotfiles.git/git-receive-pack";
   const cases: [string, string, string, InspectedBody | null][] = [
@@ -1341,6 +1405,10 @@ test("a body is inspected exactly when classify reads it", () => {
     ["api.github.com", "POST", "/graphql/", null],
     ["api.github.com", "POST", "/graphql/.", null],
     ["api.github.com", "POST", "/GraphQL", null],
+    ["api.github.com", "POST", "/x/graphql", null],
+    ["api.github.com", "POST", "/api/graphql", null],
+    ["api.github.com", "POST", "/graphql.json", null],
+    ["api.github.com", "POST", "/graphqlx", null],
     ["api.github.com", "POST", receivePackPath, null],
     ["github.com.", "POST", receivePackPath, null],
     ["uploads.github.com", "POST", "/graphql", null],

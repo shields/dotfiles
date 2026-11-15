@@ -1040,7 +1040,7 @@ test("a GitHub request is forwarded to the URL the policy classified", async () 
   }
 });
 
-test("a GitHub GET or HEAD that arrives with a body is forwarded without one", async () => {
+test("a GitHub GET or HEAD whose body is empty is forwarded without one", async () => {
   for (const [method, url] of [
     [
       "GET",
@@ -1051,7 +1051,11 @@ test("a GitHub GET or HEAD that arrives with a body is forwarded without one", a
   ] as const) {
     const bodies: (ReadableStream<Uint8Array> | null)[] = [];
     const response = await handleOutbound(
-      new NativeRequest(url, { method, body: "" }),
+      new NativeRequest(url, {
+        method,
+        headers: { "content-length": "0" },
+        body: "",
+      }),
       instanceId,
       authority([]),
       (request) => {
@@ -1062,6 +1066,51 @@ test("a GitHub GET or HEAD that arrives with a body is forwarded without one", a
     assert.equal(response.status, 200, `${method} ${url}`);
     assert.deepEqual(bodies, [null], `${method} ${url}`);
   }
+});
+
+test("a GitHub GET or HEAD that announces a body is denied, as the gateway denies it", async () => {
+  const logged = spyOn(console, "error").mockReturnValue();
+  for (const [method, headers] of [
+    ["GET", { "content-length": "5" }],
+    ["HEAD", { "content-length": "5" }],
+    ["GET", { "transfer-encoding": "chunked" }],
+  ] as const) {
+    const events: string[] = [];
+    const classified: (Classification | null)[] = [];
+    const inner = authority(events);
+    const recording: OutboundAuthority = {
+      ...inner,
+      deny(id, classification, reason) {
+        classified.push(classification);
+        return inner.deny(id, classification, reason);
+      },
+    };
+    const response = await handleOutbound(
+      new NativeRequest("https://api.github.com/repos/shields/dotfiles/pulls", {
+        method,
+        headers,
+        body: "hello",
+      }),
+      instanceId,
+      recording,
+      () => {
+        throw new Error("a GET body reached GitHub");
+      },
+    );
+    const label = `${method} ${JSON.stringify(headers)}`;
+    assert.equal(response.status, 403, label);
+    assert.deepEqual(
+      events,
+      ["deny:GET and HEAD requests must not have a body", "finish:denied:null"],
+      label,
+    );
+    assert.deepEqual(
+      classified,
+      [{ repository: "shields/dotfiles", operation: "api.read", refs: [] }],
+      label,
+    );
+  }
+  assert.deepEqual(logged.mock.calls, []);
 });
 
 test("a URL that WHATWG and RFC 3986 read differently is forwarded only to the host the Worker parsed", async () => {

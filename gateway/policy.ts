@@ -64,7 +64,8 @@ const originForm = /^\/(?![/\\\t\n\r])/;
 const gitRoute =
   /^\/([A-Za-z0-9_.-]+)\/([A-Za-z0-9_.-]+?)(?:\.git)?\/(info\/refs|git-upload-pack|git-receive-pack)$/;
 const gitEndpoint = /\/(?:info\/refs|git-upload-pack|git-receive-pack)$/;
-const webHost = /^github\.com\.*$/;
+const webHost = /^github\.com\.*$/i;
+const githubHost = /^(?:api\.)?github\.com\.*$/i;
 const webRoute = /^\/([A-Za-z0-9_.-]+)\/([A-Za-z0-9_.-]+)(?:\/|$)/;
 const restRoute = /^\/repos\/([A-Za-z0-9_.-]+)\/([A-Za-z0-9_.-]+)(?:\/|$)/;
 const repositoryIdLink =
@@ -504,13 +505,31 @@ export function graphqlRepository(body: Uint8Array): string {
 }
 
 export function namesGitHubHost(hostname: string): boolean {
-  return /^(?:api\.)?github\.com\.*$/i.test(hostname);
+  return githubHost.test(hostname);
+}
+
+export function requireNoGetOrHeadBody(
+  method: string,
+  transferEncoding: string | null | undefined,
+  contentLength: string | null | undefined,
+): void {
+  const verb = method.toUpperCase();
+  // Content-Length is tested as text: Number() maps a value such as the "5, 5"
+  // that Headers.get() returns for duplicate headers to NaN, which reads as no
+  // body.
+  if (
+    (verb === "GET" || verb === "HEAD") &&
+    ((transferEncoding !== undefined && transferEncoding !== null) ||
+      !/^0*$/.test(contentLength ?? ""))
+  ) {
+    throw new PolicyError("GET and HEAD requests must not have a body");
+  }
 }
 
 export type InspectedBody = "push" | "graphql";
 
-// The gateway and the Worker both ask this which body to buffer, so they cannot
-// disagree on what to inspect.
+// The gateway and the Worker both ask this which body to buffer for a target,
+// so each buffers a body exactly when classify() reads it.
 export function inspectedBody(
   host: string,
   method: string,

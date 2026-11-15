@@ -8,6 +8,7 @@ import {
   namesGitHubHost,
   PolicyError,
   requireIdentityEncoding,
+  requireNoGetOrHeadBody,
   rewriteLinks,
   PushDenied,
   PushParser,
@@ -211,6 +212,13 @@ export async function handleOutbound(
         ...(body ? { body } : {}),
       },
       instanceId,
+    );
+    // The gateway denies these too, so the two transports agree on what a VM
+    // may send.
+    requireNoGetOrHeadBody(
+      request.method,
+      request.headers.get("transfer-encoding"),
+      request.headers.get("content-length"),
     );
     const allowed = await authority.allow(instanceId, classification);
     requestId = allowed.requestId;
