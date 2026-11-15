@@ -537,7 +537,7 @@ export class Gateway {
       const aborted = error === request.errored;
       if (!aborted && !(error instanceof PolicyError)) {
         process.stderr.write(
-          `vm-access: gateway request failed: ${describeFailure(error)}\n`,
+          `vm-access: gateway request failed (request ${requestId}, VM ${instanceId}): ${describeFailure(error)}\n`,
         );
       }
       const reason =

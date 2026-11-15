@@ -1146,16 +1146,28 @@ test("a state failure as a request starts is a 503 with an audit row and does no
     throw new Error("database is locked");
   });
   const { response } = open(socket);
-  assert.equal((await within("the gateway to answer", response)).status, 503);
+  const reply = await within("the gateway to answer", response);
+  assert.equal(reply.status, 503);
   await nextTurn();
+  const requestId = requestIdIn(reply.body);
   assert.deepEqual(
-    state
-      .logs(instance.id)
-      .map(({ allowed, reason, outcome }) => ({ allowed, reason, outcome })),
-    [{ allowed: false, reason: "gateway request failed", outcome: "denied" }],
+    state.logs(instance.id).map(({ id, allowed, reason, outcome }) => ({
+      id,
+      allowed,
+      reason,
+      outcome,
+    })),
+    [
+      {
+        id: requestId,
+        allowed: false,
+        reason: "gateway request failed",
+        outcome: "denied",
+      },
+    ],
   );
   assert.deepEqual(stderr, [
-    "vm-access: gateway request failed: Error: database is locked\n",
+    failureLine(requestId, instance, "Error: database is locked"),
   ]);
 });
 
@@ -1182,7 +1194,11 @@ test("a failure that is not a policy denial is reported on stderr, audited and a
   assert.equal(failed.status, 503);
   assert.match(failed.body, /gateway request failed/);
   assert.deepEqual(stderr, [
-    "vm-access: gateway request failed: Error: GitHub refused refresh for shields/dotfiles\n",
+    failureLine(
+      requestIdIn(failed.body),
+      instance,
+      "Error: GitHub refused refresh for shields/dotfiles",
+    ),
   ]);
   assert.deepEqual(
     state
@@ -1197,7 +1213,7 @@ test("a failure that is not a policy denial is reported on stderr, audited and a
 });
 
 test("an upstream that failed on every address is reported with each of its failures", async () => {
-  const { socket, auth } = await startGateway();
+  const { socket, instance, auth } = await startGateway();
   const stderr = captureStderr();
   spyOn(auth, "token").mockRejectedValueOnce(
     new AggregateError(
@@ -1215,12 +1231,16 @@ test("an upstream that failed on every address is reported with each of its fail
   );
   assert.equal(failed.status, 503);
   assert.deepEqual(stderr, [
-    "vm-access: gateway request failed: AggregateError: all attempts failed: Error: connect ECONNREFUSED ::1:443; Error: connect ECONNREFUSED 127.0.0.1:443\n",
+    failureLine(
+      requestIdIn(failed.body),
+      instance,
+      "AggregateError: all attempts failed: Error: connect ECONNREFUSED ::1:443; Error: connect ECONNREFUSED 127.0.0.1:443",
+    ),
   ]);
 });
 
 test("a state failure that also stops the audit write is reported on stderr and answered with a 503", async () => {
-  const { socket, state } = await startGateway();
+  const { socket, instance, state } = await startGateway();
   const stderr = captureStderr();
   const failure = (): never => {
     throw new Error("database is locked");
@@ -1233,7 +1253,7 @@ test("a state failure that also stops the audit write is reported on stderr and 
   assert.equal(reply.status, 503);
   assert.match(reply.body, /gateway audit unavailable/);
   assert.deepEqual(stderr, [
-    "vm-access: gateway request failed: Error: database is locked\n",
+    failureLine(requestIdIn(reply.body), instance, "Error: database is locked"),
     "vm-access audit failure: Error: database is locked\n",
   ]);
 });
@@ -1417,6 +1437,33 @@ function captureStderr(): string[] {
   return writes;
 }
 
+function requestIdIn(body: string): string {
+  const id = /^request ID: ([0-9a-f-]{36})$/m.exec(body)?.[1];
+  assert.ok(id, body);
+  return id;
+}
+
+function failureLine(
+  requestId: string,
+  instance: Instance,
+  cause: string,
+): string {
+  return `vm-access: gateway request failed (request ${requestId}, VM ${instance.id}): ${cause}\n`;
+}
+
+function failureLinePattern(
+  state: State,
+  instance: Instance,
+  cause: string,
+): RegExp {
+  const [row, ...others] = state.logs(instance.id);
+  assert.ok(row);
+  assert.deepEqual(others, []);
+  return new RegExp(
+    String.raw`^vm-access: gateway request failed \(request ${row.id}, VM ${instance.id}\): ${cause}\n$`,
+  );
+}
+
 function auditRows(
   state: State,
   instance: Instance,
@@ -1526,7 +1573,7 @@ for (const { name, tls, begin, end } of endsEarly) {
       { outcome: "gateway-error", upstreamStatus: null },
     ]);
     assert.deepEqual(audit.calls, [{ status: null, outcome: "gateway-error" }]);
-    assert.match(stderr.join(""), /^vm-access: gateway request failed: .+\n$/);
+    assert.match(stderr.join(""), failureLinePattern(state, instance, ".+"));
   });
 }
 
@@ -1601,7 +1648,7 @@ for (const [name, respond] of [
       { outcome: "gateway-error", upstreamStatus: null },
     ]);
     assert.deepEqual(audit.calls, [{ status: null, outcome: "gateway-error" }]);
-    assert.match(stderr.join(""), /^vm-access: gateway request failed: .+\n$/);
+    assert.match(stderr.join(""), failureLinePattern(state, instance, ".+"));
   });
 }
 
@@ -1632,7 +1679,7 @@ test("an upstream status that cannot be relayed is a gateway error with a 503 an
   assert.deepEqual(audit.calls, [{ status: null, outcome: "gateway-error" }]);
   assert.match(
     stderr.join(""),
-    /^vm-access: gateway request failed: .*\b99\b.*\n$/,
+    failureLinePattern(state, instance, String.raw`.*\b99\b.*`),
   );
   const next = await within("the response", send(socket, "GET", target));
   await within("the gateway's responses to close", closed());
