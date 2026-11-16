@@ -486,6 +486,7 @@ class Installer(NamedTuple):
     adds: frozenset[str] = frozenset()
     manifest_env: tuple[re.Pattern[str], ...] = ()
     bare: bool = False
+    code_flags: frozenset[str] = frozenset()
 
     @property
     def value_names(self) -> frozenset[str]:
@@ -503,6 +504,8 @@ class Installer(NamedTuple):
 # `pnpm --filter web add zod`. `manifest_env` matches the variables that select a
 # different manifest or package source, as `--file`, `--gemfile` and `--registry`
 # do. `bare` marks a manager whose command with no subcommand installs.
+# `code_flags` are the flags that make the manager run the next word as code, so
+# that no later word is a subcommand.
 _HELP = frozenset({"--help", "-h", "--version", "-v"})
 
 # Every `npm_config_` variable is the flag of the same name, and npm reads the
@@ -516,6 +519,7 @@ _PNPM = Installer(
         "--dry-run",
         "--frozen-lockfile",
         "--ignore-scripts",
+        "--lockfile-only",
         "--no-progress",
         "--offline",
         "--prefer-frozen-lockfile",
@@ -551,6 +555,7 @@ INSTALLERS = {
             "--dry-run",
             "--frozen-lockfile",
             "--ignore-scripts",
+            "--lockfile-only",
             "--no-progress",
             "--no-summary",
             "--production",
@@ -561,6 +566,9 @@ INSTALLERS = {
         value_flags=("--cwd=", "--filter=", "--omit="),
         adds=frozenset({"add", "a"}),
         manifest_env=_JS_ENV,
+        # Only this spelling: bun skips `-p`, `--eval` and `--print` as flags and
+        # still runs a subcommand that follows them.
+        code_flags=frozenset({"-e"}),
     ),
     # npm resolves any unambiguous prefix of "install" and its misspellings.
     "npm": Installer(
@@ -728,6 +736,8 @@ def _classify(
                 return None
             maybe_value = False
             continue
+        if word in installer.code_flags and not maybe_value:
+            return None
         if word in installer.flags or (
             word.startswith(installer.value_flags) and not _SHELL_META.intersection(raw)
         ):
