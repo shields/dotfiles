@@ -410,6 +410,7 @@ ALLOW_WRITE = [
     "~/Library/Caches/go-build",
     "~/Library/Caches/golangci-lint",
     "~/go/pkg/mod",
+    "~/go/pkg/sumdb",
     "/Volumes/Cache",
     "/Volumes/Data/uv-cache.noindex",
 ]
@@ -423,6 +424,11 @@ def test_claude_sandbox_is_enforced_and_narrow() -> None:
     # .zshrc evals files from ~/.cache/zsh, so ~/.cache must not be writable.
     assert sorted(filesystem["allowWrite"]) == sorted(ALLOW_WRITE)
     assert filesystem["denyRead"] == ["~/.config/secrets", "~/.config/lgtmcp"]
+    network = cast("dict[str, object]", sandbox["network"])
+    assert network == {
+        "allowLocalBinding": True,
+        "allowMachLookup": ["org.chromium.Chromium.MachPortRendezvousServer.*"],
+    }
 
 
 def test_claude_subprocess_env_is_not_scrubbed() -> None:

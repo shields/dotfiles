@@ -189,7 +189,8 @@
     "failIfUnavailable": true,
     "autoAllowBashIfSandboxed": true,
     "network": {
-      "allowLocalBinding": true
+      "allowLocalBinding": true,
+      "allowMachLookup": ["org.chromium.Chromium.MachPortRendezvousServer.*"]
     },
     "filesystem": {
       "allowWrite": [
@@ -198,6 +199,7 @@
         "~/.cache/go-build",
         "~/.cache/golangci-lint",
         "~/go/pkg/mod",
+        "~/go/pkg/sumdb",
         "~/.cache/pre-commit",
         "~/.cache/uv",
         "/Volumes/Data/uv-cache.noindex",
