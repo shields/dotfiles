@@ -562,7 +562,7 @@ sandboxed, prompting behavior.
   sandbox. In that mode ask rules and a hook's ask still prompt, so managed
   settings are the only source of permission rules and hooks, and carry the
   `permissions.deny` rules, the `git_guard.py` hook and the status line from
-  `.claude/settings.json`. The ask rules (package installs, `git commit`) and
+  `.claude/settings.json`. The ask rules (package installs) and
   `dependency_guard.py` therefore do not apply, and neither do hooks from a
   project's own `.claude/settings.json`. In `c`, the usual `--permission-mode=auto`
   and sandbox settings are left out, because they would override managed
@@ -577,9 +577,12 @@ sandboxed, prompting behavior.
 - In a gateway VM, `git_guard.py` and the installed deny rules allow `git push`;
   the gateway checks the destinations against `task/VM-ID/*`. The hook still
   stops `git commit --no-verify`, and the agent policies still refuse the
-  listed `gh` write commands. The gateway is the final check for API calls,
-  including POST requests formed by `gh api -f`, `-F` or `--input` without
-  `-X`. In a Lima VM, `setup-github-gateway` tells the agents about
+  listed `gh` write commands. The hook also refuses `gh api` with a method
+  other than GET or HEAD, and with `-f`, `-F` or `--input` unless it names GET
+  or HEAD; a GraphQL query is exempt. The deny rules refuse `gh api` write
+  methods as well, and Claude Code's matcher also looks inside a quoted
+  `$(...)`, which the hook does not. The gateway is the final check for API
+  calls. In a Lima VM, `setup-github-gateway` tells the agents about
   `task/VM-ID/*` in system-wide instructions that re-provisioning leaves in
   place: Claude Code's `/etc/claude-code/CLAUDE.md` and Codex's
   `/etc/codex/requirements.toml` (`additional_developer_instructions`). A

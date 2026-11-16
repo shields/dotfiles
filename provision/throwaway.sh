@@ -108,19 +108,30 @@ network_proxy = false
 EOF
 
 # Codex parses a rules file as Starlark, so every prose line in this one
-# starts with #; the first three lines are one comment, wrapped.
+# starts with #; the first four lines are one comment, wrapped.
 cat >"$work/throwaway.rules" <<'EOF'
-# Written by provision/throwaway.sh. Claude Code denies every gh api request
-# that names a method, wherever the flag stands; a Codex rule matches only the
-# words that start a command, so it stops the commands that put the flag first.
+# Written by provision/throwaway.sh. The git_guard.py hook refuses a gh api
+# request that names a write method wherever the flag stands; a Codex rule
+# matches only the words that start a command, so it stops those that put the
+# flag first.
 GH = ["gh", "/usr/bin/gh", "/home/linuxbrew/.linuxbrew/bin/gh"]
 
+# gh upper-cases the method it sends, so every case spelling of a write method
+# is a write.
+def spellings(word):
+    out = [""]
+    for c in word.elems():
+        out = [p + x for p in out for x in [c.lower(), c.upper()]]
+    return out
+
+WRITE_METHODS = spellings("post") + spellings("put") + spellings("patch") + spellings("delete")
+
 prefix_rule(
-    pattern = [GH, "api", ["-X", "--method"]],
+    pattern = [GH, "api", ["-X", "--method"], WRITE_METHODS],
     decision = "forbidden",
     justification = "The user performs all GitHub writes. Use gh api for reads only.",
-    match = ["gh api -X POST repos/example/repo/issues", "gh api --method DELETE repos/example/repo/git/refs/heads/x", "/usr/bin/gh api -X PUT repos/example/repo/contents/file"],
-    not_match = ["gh api repos/example/repo/issues", "gh pr list"],
+    match = ["gh api -X POST repos/example/repo/issues", "gh api --method DELETE repos/example/repo/git/refs/heads/x", "/usr/bin/gh api -X PUT repos/example/repo/contents/file", "gh api -X post repos/example/repo/issues", "gh api --method Delete repos/example/repo/issues/1"],
+    not_match = ["gh api repos/example/repo/issues", "gh api -X GET repos/example/repo/issues", "gh api -X get repos/example/repo/issues", "gh pr list"],
 )
 EOF
 

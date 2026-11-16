@@ -151,7 +151,7 @@ def test_managed_settings_keep_every_deny_rule(etc: Path) -> None:
     deny = cast("list[str]", cast("Json", managed(etc)["permissions"])["deny"])
     assert deny == DENY
     assert "Bash(git push*)" in deny
-    assert "Bash(gh api --method*)" in deny
+    assert "Bash(git commit --no-verify *)" in deny
     assert "Bash(gh repo delete*)" in deny
 
 
@@ -206,12 +206,21 @@ def test_codex_runs_without_approvals_or_a_sandbox(etc: Path) -> None:
             ["/home/linuxbrew/.linuxbrew/bin/gh", "api", "--method", "PATCH", "x"],
             "forbidden",
         ),
+        (["gh", "api", "-X", "post", "repos/o/r/issues"], "forbidden"),
+        (["gh", "api", "--method", "Delete", "repos/o/r/issues/1"], "forbidden"),
+        (["gh", "api", "-X", "pAtCh", "repos/o/r/issues/1"], "forbidden"),
+        (["gh", "api", "-X", "put", "repos/o/r/contents/f"], "forbidden"),
+        (["gh", "api", "-X", "GET", "repos/o/r/issues"], None),
+        (["gh", "api", "--method", "GET", "repos/o/r/issues"], None),
+        (["gh", "api", "-X", "HEAD", "repos/o/r/issues"], None),
+        (["gh", "api", "-X", "get", "repos/o/r/issues"], None),
+        (["gh", "api", "--method", "head", "repos/o/r/issues"], None),
         (["gh", "api", "repos/o/r/issues"], None),
         (["gh", "api", "repos/o/r/issues", "-X", "POST"], None),
         (["gh", "pr", "list"], None),
     ],
 )
-def test_codex_forbids_gh_api_requests_that_name_a_method_first(
+def test_codex_forbids_gh_api_requests_that_name_a_write_method_first(
     etc: Path, command: list[str], decision: str | None
 ) -> None:
     codex = shutil.which("codex")
@@ -241,7 +250,7 @@ def test_the_codex_rule_file_is_one_forbidding_prefix_rule(etc: Path) -> None:
     rules = (etc / "codex/rules/throwaway.rules").read_text()
     assert rules.count("prefix_rule(") == 1
     assert 'decision = "forbidden"' in rules
-    assert 'pattern = [GH, "api", ["-X", "--method"]]' in rules
+    assert 'pattern = [GH, "api", ["-X", "--method"], WRITE_METHODS]' in rules
 
 
 def test_running_again_changes_nothing(etc: Path) -> None:

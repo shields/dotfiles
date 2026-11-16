@@ -3,13 +3,25 @@
 The rules prohibit pushes, GitHub repository mutations, removing Lefthook, and
 committing with leading hook-bypass flags. The Git hook also checks literal shell
 commands for pushes with global Git options (including `-C`, `-c`, `--git-dir`,
-and `--work-tree`) and commit bypass flags in other positions. Like the Claude
-permissions, it rejects commits with Git configuration overrides. It also rejects
-`gh api` with `-X` or `--method` anywhere in the command, in any spelling
-(`-XPOST`, `--method=PUT`, a cluster such as `-iX`), which the prefix rules can
-match only at the start of a command. A POST that `gh api` sends by default
-because of `-f`, `-F` or `--input` is not rejected, since GraphQL queries need
-that.
+and `--work-tree`) and commit bypass flags in other positions, including the
+prefixes of `--no-verify` that Git accepts. It reads redirections, line
+continuations, unquoted `$(...)` and `<(...)`, and a zsh `=git` as the shell
+does, and looks through the wrappers in `WRAPPERS` (`env`, `nice`, `nohup`,
+`sudo`, `timeout`, `xargs` and others). It rejects commits with Git configuration
+overrides other than `-c` with `user.name`, `user.email`, `commit.gpgsign` or
+`tag.gpgsign`, and any `alias.*` override, which can make another word run a
+commit. With those four settings it rejects a commit unless every word is a
+literal, except that the value of an option may be a double-quoted string that
+expands only `$name` or `${name}`; a command substitution or backticks count as
+unreadable even inside double quotes. It treats `gh api` as a read only
+when every `-X` or `--method`, in any spelling (`-XGET`, `--method=GET`, a
+cluster such as `-iX`), names GET or HEAD, and rejects any other method wherever
+it stands, which the prefix rules can match only at the start of a command.
+Without a method, `-f`, `-F` or `--input` make `gh api` send a POST, so the hook
+rejects them too. A GraphQL query is exempt when the command names no method or
+names GET or HEAD: `gh api graphql` with a `query` field that is a literal, or a
+double-quoted string that starts with `query` or `{`, and that neither reads a
+file nor contains `mutation`.
 
 `provision.sh` copies tracked files into `~/.codex/` and then trusts the hook
 definitions it installed, so `/hooks` shows `git_guard.py` as trusted after a
@@ -35,7 +47,12 @@ Claude Code runs the same hook. `.claude/settings.json` registers
 `~/.codex/hooks/git_guard.py` as a `PreToolUse` hook for Bash and Monitor (which
 runs commands under the Bash permission rules) with the same interpreter lookup,
 which also catches the spellings its string-matched deny rules miss, such as
-`/usr/bin/git push` and `env git push`.
+`/usr/bin/git push` and `env git push`. Its registration sets `onFailure` to
+`block`, so a crash or a timeout stops the command. Codex has no such option, so
+the hook also denies on its own when it runs for 5 seconds. The deny rules for
+`gh api` write methods and for `git -c core.hooksPath` stay, because Claude
+Code's matcher also looks inside a double-quoted `$(...)` and backticks, which
+the hook does not.
 
 Provisioning runs `tools/configure_codex.py` to set `approvals_reviewer = "auto_review"` and
 `features.worktrees = true`, and trusts `~/src/github.com/shields/dotfiles` as a
@@ -90,8 +107,11 @@ compatibility aliases. Restart Codex after applying these settings.
 
 Prefix rules match literal argument prefixes. The hook supplements those rules
 for ordinary shell invocations, command chains, and `sh`/`bash`/`zsh -c` wrappers.
-It does not evaluate aliases, dynamically constructed commands, substitutions
-inside quoted arguments, or code executed by scripts and interpreters. It skips
+It does not evaluate aliases (`home/dot_gitconfig.tmpl` defines `c`, `ca` and
+`por`), dynamically constructed commands (an option that an unquoted expansion or
+`$'...'` supplies goes unseen when the command names no method or field), Git
+configuration from `GIT_CONFIG_*` variables or `git config`, substitutions inside
+quoted arguments, or code executed by scripts and interpreters. It skips
 here-document bodies. These checks are guardrails, not a complete boundary against
 arbitrary code, and do not govern GitHub connector tools.
 

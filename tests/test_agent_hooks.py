@@ -438,6 +438,68 @@ def test_claude_subprocess_env_is_not_scrubbed() -> None:
     assert "CLAUDE_CODE_SUBPROCESS_ENV_SCRUB" not in env
 
 
+def deny_matches(command: str) -> bool:
+    """Whether a deny rule of settings.json matches, with * as any text."""
+    deny = cast("list[str]", claude_settings()["permissions"]["deny"])
+    return any(
+        re.fullmatch(
+            ".*".join(map(re.escape, rule[len("Bash(") : -1].split("*"))), command
+        )
+        for rule in deny
+        if rule.startswith("Bash(")
+    )
+
+
+@pytest.mark.parametrize("method", ["POST", "PUT", "PATCH", "DELETE"])
+@pytest.mark.parametrize(
+    "command",
+    [
+        "gh api -X {} repos/o/r",
+        "gh api repos/o/r -X {}",
+        "gh api repos/o/r -X{}",
+        "gh api --method {} repos/o/r",
+        "gh api repos/o/r --method={}",
+        "gh api repos/o/r -f a=b --method {} --jq .id",
+    ],
+)
+def test_claude_denies_gh_api_writes(command: str, method: str) -> None:
+    assert deny_matches(command.format(method))
+
+
+@pytest.mark.parametrize(
+    "command",
+    [
+        "gh api repos/o/r",
+        "gh api -X GET repos/o/r -f q=x",
+        "gh api repos/o/r --method HEAD",
+        "gh api graphql -f query='{ viewer { login } }'",
+        "git -c user.name=T -c user.email=t@example.com commit -m message",
+        "git -c core.commitGraph=false rev-list HEAD",
+    ],
+)
+def test_claude_allows_gh_api_reads_and_identity_commits(command: str) -> None:
+    assert not deny_matches(command)
+
+
+def test_claude_denies_a_hooks_path_override() -> None:
+    assert deny_matches("git -c core.hooksPath=/dev/null commit -m message")
+    assert deny_matches("git -C /tmp/repo -c core.hooksPath=/dev/null commit")
+
+
+def test_claude_blocks_when_the_git_guard_fails() -> None:
+    groups = cast(
+        "list[dict[str, list[dict[str, object]]]]",
+        claude_settings()["hooks"]["PreToolUse"],
+    )
+    handlers = [
+        handler
+        for group in groups
+        for handler in group["hooks"]
+        if GIT_GUARD in cast("str", handler["command"])
+    ]
+    assert [handler["onFailure"] for handler in handlers] == ["block"]
+
+
 INSTALL_ASK = {
     "Edit(//**/*.Brewfile)",
     "Edit(//**/Gemfile)",
