@@ -18,7 +18,6 @@ tap "snyk/tap"
 tap "twilio/brew"
 brew "aws-shell"
 brew "awscli"
-brew "azure-cli"
 brew "cloudflare-wrangler"
 brew "crane"
 brew "dive"
@@ -34,4 +33,5 @@ brew "fluxcd/tap/flux", trusted: true
 brew "gabrie30/utils/ghorg", trusted: true
 brew "snyk/tap/snyk", trusted: true
 brew "twilio/brew/twilio", trusted: true
+cask "azure-cli"
 cask "gcloud-cli"
