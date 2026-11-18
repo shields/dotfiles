@@ -256,7 +256,6 @@ fi
 # Plugins!
 export PIP_DISABLE_PIP_VERSION_CHECK=1
 if modules_has "$modules_selection" data; then
-    datasette install --upgrade datasette-cluster-map | (grep -v '^Requirement already satisfied:' || true)
     llm install --upgrade llm-{gemini,anthropic,perplexity,cmd,openai-plugin} | (grep -v '^Requirement already satisfied:' || true)
 fi
 if modules_has "$modules_selection" cloud; then

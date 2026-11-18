@@ -837,14 +837,13 @@ def test_cloudflare_reconfigures_codex_after_installing_the_throwaway_policy() -
 
 def test_the_plugin_tools_come_from_the_modules_that_update_them() -> None:
     data = (REPO / "brew" / "data.Brewfile").read_text()
-    assert 'brew "datasette"' in data
     assert 'brew "llm"' in data
     assert 'cask "gcloud-cli"' in (REPO / "brew" / "cloud.Brewfile").read_text()
 
 
 def test_plugins_update_only_for_the_modules_that_install_them() -> None:
     data = find(r'^if modules_has "\$modules_selection" data; then')
-    assert [line.split()[0] for line in block(data)] == ["datasette", "llm"]
+    assert [line.split()[0] for line in block(data)] == ["llm"]
     cloud = find(r'^if modules_has "\$modules_selection" cloud; then')
     assert block(cloud) == ["gcloud --quiet components update"]
     assert data < cloud
@@ -1031,7 +1030,6 @@ MACOS_SPINE = (
     "macos_xcode",
     "macos_login_shell",
     "export PIP_DISABLE_PIP_VERSION_CHECK=1",
-    "datasette install --upgrade datasette-cluster-map" + QUIET_PIP,
     "llm install --upgrade llm-{gemini,anthropic,perplexity,cmd,openai-plugin}"
     + QUIET_PIP,
     "gcloud --quiet components update",

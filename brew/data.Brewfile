@@ -13,7 +13,6 @@
 # limitations under the License.
 
 brew "asdf"
-brew "datasette"
 brew "duckdb"
 brew "isync"
 brew "llm"
