@@ -61,6 +61,15 @@ and lessons go in the relevant `AGENTS.md`; the results of a literature search
 go in the project's `docs/`. Those files are version-controlled, reviewable,
 and travel with the code.
 
+## Secrets
+
+- Never let a secret reach your output: don't read credential files (`.envrc`,
+  `.env`, key files) or print the environments they load; list only variable
+  names.
+- Use a secret through a subprocess that passes it over stdin and redacts it
+  from its output. Repeat this in any sub-agent brief that may touch
+  credentials.
+
 ## Python
 
 - Use `uv`, never `pip` (even with no pyproject.toml: `uv venv`, `uv pip`).
