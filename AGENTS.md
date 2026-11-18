@@ -49,9 +49,9 @@ limitations under the License.
 ## Deployment
 
 `provision.sh` runs on macOS and on Debian Linux, which it tells apart with
-`uname -s`; any other OS is an error. Chezmoi installs `.gitconfig`,
-`.config/git/ignore`, `.config/bat/config` and `.config/yt-dlp/config` from
-`home/`, selected by `.chezmoiroot`, after Homebrew installs its base module.
+`uname -s`; any other OS is an error. After Homebrew installs its base module,
+chezmoi installs the files in `home/`, selected by `.chezmoiroot`. The README
+lists their source and destination paths.
 `make diff` previews these files and `make apply` installs them independently
 of provisioning. Both use this checkout explicitly. Existing conflicts fail,
 including on first adoption; the README describes interactive resolution.
@@ -63,9 +63,9 @@ It installs the remaining dotfiles by piping
 `git ls-files` through `tar` into `$HOME`: `bin/` and every git-tracked path
 starting with `.` (e.g. `.claude/`, `.zshrc`), except `.github/`, which holds
 GitHub-specific repository configuration. The copy excludes chezmoi metadata
-and its four managed paths, so each path has one installer. Untracked files
+and its managed paths, so each path has one installer. Untracked files
 are not copied by tar. Files are copied, not symlinked, so this repo is the
-source of truth; edits take effect after `make apply` for the pilot files or
+source of truth; edits take effect after `make apply` for the chezmoi files or
 `./provision.sh` for the rest.
 
 - macOS also copies `Library/`, and leaves out `bin/setup-secrets` and

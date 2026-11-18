@@ -17,7 +17,7 @@ from pathlib import Path
 
 REPO = Path(__file__).resolve().parents[1]
 GHOSTTY_CONFIG = REPO / ".config/ghostty/config"
-VIMRC = REPO / ".vimrc"
+VIMRC = REPO / "home/dot_vimrc"
 
 
 def _settings() -> dict[str, str]:

@@ -18,8 +18,8 @@ import tempfile
 from pathlib import Path
 
 REPO = Path(__file__).resolve().parents[1]
-INPUTRC = REPO / ".inputrc"
-TMUX_CONF = REPO / ".tmux.conf"
+INPUTRC = REPO / "home/dot_inputrc"
+TMUX_CONF = REPO / "home/dot_tmux.conf"
 SYSTEM_INPUTRC = "/etc/inputrc"
 SYSTEM_SETTINGS = """set bell-style visible
 set show-all-if-ambiguous off

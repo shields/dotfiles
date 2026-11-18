@@ -18,6 +18,7 @@ if TYPE_CHECKING:
     from collections.abc import Iterable
 
 REPO = Path(__file__).resolve().parents[1]
+VIMRC = REPO / "home/dot_vimrc"
 SAMPLE = "a b\tc \t \n" + "abcdefghij" * 10 + "\n" + "y" * 35 + "\t\tz\t\n"
 FILES = [
     "sample.txt",
@@ -496,7 +497,7 @@ def test_vim_whitespace_display(
             "-i",
             "NONE",
             "-u",
-            str(REPO / ".vimrc"),
+            str(VIMRC),
             "--not-a-term",
             "-S",
             str(script),
@@ -513,7 +514,7 @@ def test_vim_whitespace_display(
             "WHITESPACE_NBSP_FILES": json.dumps(NBSP_FILES),
             "WHITESPACE_REGEXPENGINE": str(regexpengine),
             "WHITESPACE_REPORT": str(report_path),
-            "WHITESPACE_VIMRC": str(REPO / ".vimrc"),
+            "WHITESPACE_VIMRC": str(VIMRC),
         },
         capture_output=True,
         check=False,
@@ -876,7 +877,7 @@ def test_vim_cursor_run(
                 "-i",
                 "NONE",
                 "-u",
-                str(REPO / ".vimrc"),
+                str(VIMRC),
                 "--not-a-term",
                 "-S",
                 str(script),
@@ -974,7 +975,7 @@ def test_vim_hides_trailing_spaces_in_terminal(
             "-i",
             "NONE",
             "-u",
-            str(REPO / ".vimrc"),
+            str(VIMRC),
             "--cmd",
             "set ttimeout ttimeoutlen=0",
             *([] if typeahead else ["+startinsert!"]),

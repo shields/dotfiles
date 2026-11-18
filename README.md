@@ -35,14 +35,19 @@ Many preferences can be translated to `defaults write` settings using
 
 # Dotfile preview and apply
 
-Chezmoi manages four files from `home/`, selected by `.chezmoiroot`:
+Chezmoi reads its source files from `home/`, selected by `.chezmoiroot`.
 
 | Source                          | Installed file            |
 | ------------------------------- | ------------------------- |
 | `home/dot_gitconfig.tmpl`       | `~/.gitconfig`            |
 | `home/dot_config/git/ignore`    | `~/.config/git/ignore`    |
 | `home/dot_config/bat/config`    | `~/.config/bat/config`    |
+| `home/dot_config/starship.toml` | `~/.config/starship.toml` |
 | `home/dot_config/yt-dlp/config` | `~/.config/yt-dlp/config` |
+| `home/dot_inputrc`              | `~/.inputrc`              |
+| `home/dot_ripgreprc`            | `~/.ripgreprc`            |
+| `home/dot_tmux.conf`            | `~/.tmux.conf`            |
+| `home/dot_vimrc`                | `~/.vimrc`                |
 
 Edit the source files and, from this checkout, run:
 
@@ -51,10 +56,10 @@ make diff
 make apply
 ```
 
-Applying updates only these four files. Both targets use this checkout
-explicitly, so they work from git worktrees too. Chezmoi reads the working files, including
-uncommitted and untracked files in `home/`. Keep only deployable configuration
-there. The other dotfiles still use `./provision.sh`.
+Both targets use this checkout explicitly, so they work from git worktrees too.
+Chezmoi reads the working files, including uncommitted and untracked files in
+`home/`. Keep only deployable configuration there. Use `./provision.sh` to
+install the other dotfiles.
 
 Chezmoi is in the base Brewfile module; on an existing machine, install it
 with `brew install chezmoi` before the first preview. `provision.sh` applies

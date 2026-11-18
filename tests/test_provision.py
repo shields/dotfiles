@@ -96,18 +96,23 @@ MACOS_EXCLUDES = (
     "bin/setup-github-gateway",
     "bin/github-gateway-credential",
 )
-CHEZMOI_EXCLUDES = (
-    ".chezmoi*",
-    ".gitconfig",
+MANAGED = {
     ".config/bat/config",
     ".config/git/ignore",
+    ".config/starship.toml",
     ".config/yt-dlp/config",
-)
+    ".gitconfig",
+    ".inputrc",
+    ".ripgreprc",
+    ".tmux.conf",
+    ".vimrc",
+}
 BASE_COPY_PATHS = [
     ".*",
     "bin",
     ":(exclude).github",
-    *(f":(exclude){p}" for p in CHEZMOI_EXCLUDES),
+    ":(exclude).chezmoi*",
+    *(f":(exclude){p}" for p in sorted(MANAGED)),
 ]
 
 COPY_COMMAND = (
@@ -225,7 +230,7 @@ def selected(path: str, os_name: str) -> bool:
     """Which tracked paths each OS copies, written independently of the pathspecs."""
     if path == ".github" or path.startswith(".github/"):
         return False
-    if path.startswith(".chezmoi") or path in CHEZMOI_EXCLUDES:
+    if path.startswith(".chezmoi") or path in MANAGED:
         return False
     if os_name == "macos":
         in_scope = path.startswith((".", "bin/", "Library/"))
@@ -444,17 +449,14 @@ def test_linux_copy_has_no_macos_files_and_macos_copy_has_library() -> None:
 
 SCRATCH_FILES = {
     ".chezmoiroot": "home\n",
-    ".gitconfig": "",
-    ".config/bat/config": "",
-    ".config/git/ignore": "",
-    ".config/yt-dlp/config": "",
+    **dict.fromkeys(MANAGED, ""),
     "home/dot_gitconfig.tmpl": "",
     "home/dot_config/bat/config": "",
     ".zshrc": "",
     ".CFUserTextEncoding": "",
     ".iTerm2/com.googlecode.iterm2.plist": "",
     ".iTerm2/shell_integration.zsh": "",
-    ".config/starship.toml": "",
+    ".config/repomix/repomix.config.json": "",
     ".config/karabiner/karabiner.json": "",
     ".config/ghostty/config": "",
     ".config/alacritty/alacritty.toml": "",
@@ -537,7 +539,7 @@ def test_scratch_repo_linux_copy_drops_every_excluded_path(
     assert actual == {
         ".zshrc",
         ".iTerm2/shell_integration.zsh",
-        ".config/starship.toml",
+        ".config/repomix/repomix.config.json",
         ".agents/skills/bughunt/SKILL.md",
         ".claude/skills/bughunt",
         "bin/ghfork",
@@ -1412,14 +1414,6 @@ def test_gateway_reload_stops_if_bootout_fails(tmp_path: Path) -> None:
     assert "wait" not in calls
 
 
-MANAGED = {
-    ".gitconfig",
-    ".config/bat/config",
-    ".config/git/ignore",
-    ".config/yt-dlp/config",
-}
-
-
 @dataclass
 class Chezmoi:
     root: Path
@@ -1555,13 +1549,14 @@ def test_enrollment_failure_does_not_install_a_personal_identity(
 
 
 @pytest.mark.parametrize("os_name", ["linux", "darwin"])
-def test_apply_owns_only_the_pilot_files_and_is_idempotent(
+def test_apply_owns_only_the_managed_files_and_is_idempotent(
     chezmoi: Chezmoi, os_name: str
 ) -> None:
     credentials = chezmoi.home / ".config/git/config"
     credentials.parent.mkdir(parents=True)
     _ = credentials.write_text('[credential "https://github.com"]\n\thelper = test\n')
-    assert set(chezmoi.run("managed", "--include=files").stdout.splitlines()) == MANAGED
+    managed = chezmoi.run("managed", "--include=files", os_name=os_name)
+    assert set(managed.stdout.splitlines()) == MANAGED
     preview = chezmoi.run("diff", os_name=os_name)
     assert ".gitconfig" in preview.stdout
     assert not (chezmoi.home / ".gitconfig").exists()
@@ -1570,7 +1565,7 @@ def test_apply_owns_only_the_pilot_files_and_is_idempotent(
         str(p.relative_to(chezmoi.home)) for p in chezmoi.home.rglob("*") if p.is_file()
     } == MANAGED | {".config/git/config"}
     for name in MANAGED - {".gitconfig"}:
-        source = chezmoi.source / "home" / name.replace(".config/", "dot_config/", 1)
+        source = chezmoi.source / "home" / f"dot_{name.removeprefix('.')}"
         target = chezmoi.home / name
         assert target.read_bytes() == source.read_bytes()
         assert not target.is_symlink()

@@ -70,10 +70,15 @@ export HOMEBREW_DOTFILES_BREW_MODULES=${modules_selection:-none}
 # Copy these files.
 copy_paths=(
     '.*' bin ':(exclude).github' ':(exclude).chezmoi*'
-    ':(exclude).gitconfig'
     ':(exclude).config/bat/config'
     ':(exclude).config/git/ignore'
+    ':(exclude).config/starship.toml'
     ':(exclude).config/yt-dlp/config'
+    ':(exclude).gitconfig'
+    ':(exclude).inputrc'
+    ':(exclude).ripgreprc'
+    ':(exclude).tmux.conf'
+    ':(exclude).vimrc'
 )
 case $os in
 macos)
