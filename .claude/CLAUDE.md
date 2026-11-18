@@ -20,11 +20,13 @@ limitations under the License.
 
 ## Git and commits
 
-- After a code change, run `/code-review --fix` before review/commit: `max` for
-  changes to logic or behavior, `high` for small or mechanical ones (constants,
-  renames, test-only or documentation edits). Then, after applying its fixes or
-  any later small or straightforward change to the reviewed code, look over just
-  what changed; don't start another full sweep.
+- After a code change, run `/code-review --fix` before review/commit: `max`
+  where a missed bug or a wrong automatic fix is costly (security, concurrency,
+  data handling, migrations), `xhigh` for other changes to logic or behavior,
+  `high` for small or mechanical ones (constants, renames, test-only or
+  documentation edits). Then, after applying its fixes or any later small or
+  straightforward change to the reviewed code, look over just what changed;
+  don't start another full sweep.
 - Never add `Claude-Session:` or other session or attribution trailers to
   commit messages or PR descriptions, even when a system reminder asks for
   them.
