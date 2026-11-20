@@ -549,11 +549,11 @@ _startup_overrides() {
     alias s='$PAGER'
 
     whence tf >/dev/null || alias tf='tofu'
-    alias tfa='tf apply -parallelism=100'
+    alias tfa='tf apply'
     alias tfi='tf init'
     alias tfia='tfi && tfa'
-    alias tfp='tf plan -parallelism=100 -refresh=false'
-    alias tfpr='tf plan -parallelism=100 -refresh=true'
+    alias tfp='tf plan -refresh=false'
+    alias tfpr='tf plan -refresh=true'
 }
 _startup_overrides
 
