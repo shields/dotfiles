@@ -502,7 +502,7 @@ def git_reason(args: list[Word]) -> str | None:
     if index >= len(args):
         return None
     subcommand = args[index]
-    if subcommand == "push" and not Path("/etc/dotfiles-github-gateway").is_file():
+    if subcommand == "push" and not Path("/etc/cog-github-gateway").is_file():
         return NO_PUSH
     # An alias override can make any word run a commit, and a subcommand that the
     # text does not settle may be one.

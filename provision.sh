@@ -104,7 +104,7 @@ linux)
 esac
 git ls-files -z -- "${copy_paths[@]}" | tar --null -cf - -T - | (cd "$HOME" && tar xvf -)
 
-if [[ $os == linux && -f /etc/dotfiles-github-gateway ]]; then
+if [[ $os == linux && -f /etc/cog-github-gateway ]]; then
     rm -f "$HOME/.codex/rules/no-push.rules"
 fi
 

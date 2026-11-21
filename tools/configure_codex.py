@@ -31,7 +31,7 @@ type Json = dict[str, object]
 # Codex matches a project key against a repository's root exactly, so a
 # wildcard key trusts nothing.
 TRUSTED_PROJECT = "src/github.com/shields/dotfiles"
-THROWAWAY_MARKER = Path("/etc/dotfiles-throwaway")
+THROWAWAY_MARKER = Path("/etc/cog-throwaway")
 DATA_VOLUME = Path("/Volumes/Data")
 # .zshenv points uv here when the checkouts are on DATA_VOLUME.
 UV_CACHE = str(DATA_VOLUME / "uv-cache.noindex")

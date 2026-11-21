@@ -232,8 +232,8 @@ if [[ "$OSTYPE" == linux* && -e "$HOME/.config/secrets/CLAUDE_CODE_OAUTH_TOKEN" 
     CLAUDE_CODE_OAUTH_TOKEN="$(<"$HOME/.config/secrets/CLAUDE_CODE_OAUTH_TOKEN")" &&
         export CLAUDE_CODE_OAUTH_TOKEN
 fi
-if [[ "$OSTYPE" == linux* && -f /etc/dotfiles-github-gateway ]]; then
-    export GH_TOKEN=vm-access
+if [[ "$OSTYPE" == linux* && -f /etc/cog-github-gateway ]]; then
+    export GH_TOKEN=cog
 fi
 
 if [ -d "$HOME/.cargo" ]; then
@@ -434,7 +434,7 @@ _startup_overrides() {
         tmpdir=$(mktemp -d "${${TMPDIR:-/tmp}%/}/claude.XXXXXX") || return 1
         # A throwaway environment's managed settings choose the permission mode
         # and turn the sandbox off, and the flags below would override them.
-        if [[ "$OSTYPE" == linux* && -e "${DOTFILES_THROWAWAY_MARKER:-/etc/dotfiles-throwaway}" ]]; then
+        if [[ "$OSTYPE" == linux* && -e "${DOTFILES_THROWAWAY_MARKER:-/etc/cog-throwaway}" ]]; then
             TMPDIR="$tmpdir" claude --model=opus --effort high --settings "{\"ultracode\":true$extra}" "$@"
             return
         fi
@@ -456,7 +456,7 @@ _startup_overrides() {
         setopt localoptions extendedglob
         local key_file=$HOME/.config/secrets/FIREWORKS_API_KEY key
         key=$(<"$key_file") || return 1
-        # The trimming of limavm's set_one_word, so that a key file which limavm
+        # The trimming of cog's secret installer, so that a key file which cog
         # installs in a VM works here too.
         key=${${key//$'\r'/}##[[:space:]]##}
         key=${key%%[[:space:]]##}

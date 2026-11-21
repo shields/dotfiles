@@ -486,6 +486,10 @@ def test_claude_denies_a_hooks_path_override() -> None:
     assert deny_matches("git -C /tmp/repo -c core.hooksPath=/dev/null commit")
 
 
+def test_claude_denies_deleting_a_repository() -> None:
+    assert deny_matches("gh repo delete o/r --yes")
+
+
 def test_claude_blocks_when_the_git_guard_fails() -> None:
     groups = cast(
         "list[dict[str, list[dict[str, object]]]]",

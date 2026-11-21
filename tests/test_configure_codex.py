@@ -118,7 +118,7 @@ tool = load_tool()
 
 @pytest.fixture(autouse=True)
 def throwaway_marker(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
-    marker = tmp_path / "dotfiles-throwaway"
+    marker = tmp_path / "cog-throwaway"
     monkeypatch.setattr(tool, "THROWAWAY_MARKER", marker)
     return marker
 

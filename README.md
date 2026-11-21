@@ -385,7 +385,9 @@ This repository reads two files that `cog` writes in the guest:
 `/etc/cog-throwaway`, whose presence makes the machine a throwaway VM, and
 `/etc/cog-github-gateway`, one line holding the VM's UUID, or `cloudflare`.
 `.zshrc`, `.zshenv`, `.zsh.d/wt.zsh`, `.codex/hooks/git_guard.py`,
-`tools/configure_codex.py` and `provision.sh` read them.
+`tools/configure_codex.py` and `provision.sh` read them, and
+`tests/test_cog_contract.py` checks that each names its marker and that
+`.claude/settings.json` satisfies the list above.
 
 # Testing on Linux
 

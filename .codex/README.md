@@ -54,6 +54,11 @@ the hook also denies on its own when it runs for 5 seconds. The deny rules for
 Code's matcher also looks inside a double-quoted `$(...)` and backticks, which
 the hook does not.
 
+Where `/etc/cog-github-gateway` exists, the machine is a guest of `cog`'s GitHub
+gateway: the hook lets `git push` through, provisioning removes
+`~/.codex/rules/no-push.rules`, and the gateway decides which branches a push
+may update.
+
 Provisioning runs `tools/configure_codex.py` to set `approvals_reviewer = "auto_review"` and
 `features.worktrees = true`, and trusts `~/src/github.com/shields/dotfiles` as a
 project unless the config already has an entry for that key. Codex matches a
@@ -71,9 +76,9 @@ with the Codex network proxy disabled.
 Commands can reach the network directly while filesystem writes remain
 sandboxed. Other filesystem and network settings in that profile are preserved;
 domain rules are inactive while the proxy is disabled. On machines marked by
-`/etc/dotfiles-throwaway`, it selects `:danger-full-access`. Lima and Cloudflare
-provisioning run the configuration step again after installing that marker, so
-the user-level `dev` selection cannot override the system's throwaway defaults.
+`/etc/cog-throwaway`, it selects `:danger-full-access`. `cog` runs the
+configuration step again after installing that marker, so the user-level `dev`
+selection cannot override the system's throwaway defaults.
 Subsequent provisioning keeps the proxy disabled.
 After converting an existing machine to a throwaway environment, rerun
 `tools/configure_codex.py` and restart Codex.

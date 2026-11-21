@@ -730,7 +730,7 @@ def stub_claude(shell: Shell, ostype: str, *, marker: bool) -> None:
     shell.env["PATH"] = f"{shell.home}/bin:{shell.env['PATH']}"
     # The marker is the file whose existence a throwaway environment's
     # provisioning creates; pointing at a missing file keeps a developer's own
-    # /etc/dotfiles-throwaway out of the test.
+    # /etc/cog-throwaway out of the test.
     marker_file = shell.home / "marker"
     if marker:
         _ = marker_file.write_text("throwaway\n")
@@ -919,7 +919,7 @@ def test_cg_drops_every_other_credential_and_provider_switch(shell: Shell) -> No
     [f"  {FIREWORKS_KEY}  \n", f"{FIREWORKS_KEY}\r\n", f"\n\t{FIREWORKS_KEY}\t\n\n"],
     ids=["padded", "crlf", "blank-lines"],
 )
-def test_cg_trims_the_key_file_like_limavm(shell: Shell, content: str) -> None:
+def test_cg_trims_the_key_file_like_cog(shell: Shell, content: str) -> None:
     stub_claude(shell, DARWIN, marker=False)
     shell.write(".config/secrets/FIREWORKS_API_KEY", content)
     _ = shell.run_command("cg -p hi")
