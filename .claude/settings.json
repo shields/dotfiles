@@ -300,7 +300,11 @@
         "~/.ruff_cache",
         "/Volumes/Cache"
       ],
-      "denyRead": ["~/.config/secrets", "~/.config/lgtmcp"]
+      "denyRead": [
+        "~/.config/secrets",
+        "~/.config/lgtmcp",
+        "~/.local/state/claude-dependency-guard"
+      ]
     }
   },
   "modelSettings": {

@@ -22,7 +22,10 @@
 # applies the pending edit in memory, compares the declared dependency set
 # before and after, and asks only when that set gains an entry or changes one.
 # Manifests where every edit is a dependency change (lockfiles, Brewfile,
-# requirements.txt) are covered by plain Edit(...) ask rules instead.
+# requirements.txt) are covered by plain Edit(...) ask rules instead. An edit to
+# a Go file asks as well when it imports a module that go.mod does not require.
+# Once the user approves that, the `go mod tidy` that adds the requirement is
+# not a change.
 #
 # Shell commands: a command's text cannot reliably say what it will change, so
 # the hook compares what it did change. PreToolUse snapshots the guarded files
@@ -60,6 +63,7 @@ import signal
 import stat
 import subprocess
 import sys
+import tempfile
 import time
 import tomllib
 from pathlib import Path, PurePosixPath
@@ -79,6 +83,8 @@ MAX_COPY_BYTES = 64_000_000
 
 # Cap on how many names a prompt lists before eliding.
 MAX_LISTED = 5
+
+MAX_NAME = 60
 
 # Seconds the hook may run before it gives up. settings.json gives it 10, and a
 # hook that outlasts that fails open.
@@ -319,7 +325,17 @@ def _go_entry(specs: Specs, directive: str, entry: str) -> None:
     specs[f"{directive}:{parts[0]}"] = " ".join(parts[1:])
 
 
-def _go_mod_specs(text: str) -> Specs:
+_GO_INDIRECT_RE = re.compile(r"//\s*indirect\b")
+
+
+def _go_mod_specs(text: str, *, with_resolved: bool = True) -> Specs:
+    """The directives of a go.mod.
+
+    `go mod tidy` rewrites indirect requirements and the toolchain line the way a
+    package manager rewrites its lockfile, so `with_resolved=False` leaves them
+    out. Only a requirement carries the `// indirect` marker, so it excuses
+    nothing else.
+    """
     specs: Specs = {}
     block: str | None = None
     for raw in text.splitlines():
@@ -328,10 +344,11 @@ def _go_mod_specs(text: str) -> Specs:
         line = raw.split("//", 1)[0].strip()
         if not line:
             continue
+        indirect = _GO_INDIRECT_RE.search(raw) is not None
         if block is not None:
             if line.startswith(")"):
                 block = None
-            else:
+            elif with_resolved or not (block == "require" and indirect):
                 _go_entry(specs, block, line)
             continue
         # split() over partition(" ") so a directive separated from its argument
@@ -344,6 +361,10 @@ def _go_mod_specs(text: str) -> Specs:
         if rest.startswith("("):
             block = directive
             _go_entry(specs, directive, rest[1:])
+            continue
+        if not with_resolved and (
+            directive == "toolchain" or (directive == "require" and indirect)
+        ):
             continue
         _go_entry(specs, directive, rest)
     return specs
@@ -394,11 +415,24 @@ _SECRET_RE = re.compile(
 )
 
 
+# C0 and C1 controls, zero-width and direction marks, and the Unicode line and
+# paragraph separators, which a terminal may draw as a line break or reorder.
+_CONTROL_RE = re.compile(
+    r"[\x00-\x1f\x7f-\x9f\u200b-\u200f\u2028-\u202e\u2066-\u2069\ufeff]+"
+)
+
+
+def _clean(text: str) -> str:
+    """Text an agent chose, made safe to show inside a prompt as one line."""
+    return _CONTROL_RE.sub(" ", text).strip()
+
+
 def _name(key: str, *, whole: bool) -> str:
     key = _SECRET_RE.sub(
         lambda match: f"{match['key']}=<redacted>" if match["key"] else "", key
     )
-    return key if whole else key.rpartition(":")[2] or key
+    name = _clean(key if whole else key.rpartition(":")[2] or key)
+    return name if len(name) <= MAX_NAME else f"{name[: MAX_NAME - 3]}..."
 
 
 def _names(keys: list[str], *, whole: bool = False) -> str:
@@ -460,6 +494,112 @@ def _edit_reason(tool: str, tool_input: dict[str, Any]) -> str | None:
     if not added and not changed:
         return None
     return _describe(path.name, added, changed)
+
+
+_GO_COMMENT_RE = re.compile(r"/\*.*?\*/|//[^\n]*", re.DOTALL)
+_GO_BODY_RE = re.compile(r"^(?:func|type|var|const)\b", re.MULTILINE)
+_GO_IMPORT_RE = re.compile(
+    r"^[ \t]*import\s*(?:\((?P<block>[^)]*)\)"
+    r"|(?:[\w.]+\s+)?(?P<one>\"[^\"\n]*\"|`[^`]*`))",
+    re.MULTILINE,
+)
+_GO_PATH_RE = re.compile(r"\"([^\"\n]*)\"|`([^`]*)`")
+_GO_MODULE_RE = re.compile(r"^\s*module\s+\"?([^\s\"]+)", re.MULTILINE)
+_GO_USE_RE = re.compile(r"^\s*use\s*(?:\(([^)]*)\)|(\S+))", re.MULTILINE)
+
+
+def _go_imports(text: str) -> set[str]:
+    code = _GO_COMMENT_RE.sub("", text)
+    # Imports precede every declaration, so what follows the first one is code,
+    # whose strings could look like an import.
+    body = _GO_BODY_RE.search(code)
+    if body is not None:
+        code = code[: body.start()]
+    paths: set[str] = set()
+    for match in _GO_IMPORT_RE.finditer(code):
+        quoted = match["block"] if match["block"] is not None else match["one"]
+        for path in _GO_PATH_RE.finditer(quoted):
+            paths.add(path[1] if path[1] is not None else path[2])
+    return paths
+
+
+def _go_module(directory: Path) -> Path | None:
+    for candidate in (directory, *directory.parents):
+        if (candidate / "go.mod").is_file():
+            return candidate / "go.mod"
+    return None
+
+
+def _go_provided(go_mod: Path) -> set[str] | None:
+    """The module paths an import may name without a new requirement."""
+    text = _read(go_mod)
+    if text is None:
+        return None
+    provided = {
+        key.removeprefix("require:")
+        for key in _go_mod_specs(text)
+        if key.startswith("require:")
+    }
+    provided.update(_GO_MODULE_RE.findall(text))
+    # The modules of a go.work workspace import each other without requiring
+    # each other.
+    for candidate in (go_mod.parent, *go_mod.parent.parents):
+        work = candidate / "go.work"
+        if not work.is_file():
+            continue
+        work_text = _read(work) or ""
+        for block, single in _GO_USE_RE.findall(_GO_COMMENT_RE.sub("", work_text)):
+            for use in block.split() if block else [single]:
+                module = _read(candidate / use.strip('"') / "go.mod")
+                if module:
+                    provided.update(_GO_MODULE_RE.findall(module))
+        break
+    return provided
+
+
+_MAJOR_RE = re.compile(r"v(?:[2-9]|[1-9]\d+)")
+
+
+def _covers(module: str, path: str) -> bool:
+    """Whether the package at an import path is in the module."""
+    if path == module:
+        return True
+    rest = path.removeprefix(f"{module}/")
+    # A major version suffix after the module's path names another module.
+    return rest != path and _MAJOR_RE.fullmatch(rest.split("/", 1)[0]) is None
+
+
+def _new_go_imports(tool: str, tool_input: dict[str, Any]) -> list[str]:
+    """Third-party imports an edit to a Go file adds that go.mod doesn't cover."""
+    file_path = tool_input.get("file_path")
+    if not isinstance(file_path, str) or not file_path.endswith(".go"):
+        return []
+    path = Path(file_path)
+    before = _read(path)
+    if before is None:
+        return []
+    after = (
+        tool_input.get("content")
+        if tool == "Write"
+        else _apply_edit(before, tool_input)
+    )
+    # An edit the tool cannot apply changes nothing.
+    if not isinstance(after, str):
+        return []
+    added = _go_imports(after) - _go_imports(before)
+    # A first path element without a dot is the standard library or cgo's "C".
+    external = sorted(imp for imp in added if "." in imp.split("/", 1)[0])
+    if not external:
+        return []
+    go_mod = _go_module(path.parent)
+    if go_mod is None:
+        return []
+    provided = _go_provided(go_mod)
+    if provided is None:
+        return external
+    return [
+        imp for imp in external if not any(_covers(module, imp) for module in provided)
+    ]
 
 
 # What a shell command may not change unasked. Parsed manifests compare their
@@ -527,11 +667,6 @@ def _kind(name: str) -> str | None:
     return None
 
 
-# `go mod tidy` rewrites indirect requirements and the toolchain line the way a
-# package manager rewrites its lockfile.
-_GO_RESOLVED_RE = re.compile(r"^\s*toolchain\b|//\s*indirect\b")
-
-
 def _line_specs(text: str, *, semicolon: bool) -> Specs:
     comment = re.compile(r"(?:^|\s)[#;].*" if semicolon else r"(?:^|\s)#.*")
     specs: Specs = {}
@@ -545,10 +680,7 @@ def _line_specs(text: str, *, semicolon: bool) -> Specs:
 def _shell_specs(name: str, text: str) -> Specs:
     match _kind(name):
         case "parsed" if name == "go.mod":
-            lines = text.splitlines()
-            return _go_mod_specs(
-                "\n".join(line for line in lines if not _GO_RESOLVED_RE.search(line))
-            )
+            return _go_mod_specs(text, with_resolved=False)
         case "parsed":
             return EXTRACTORS[name](text)
         case "lines":
@@ -622,10 +754,10 @@ def _safe(name: str) -> str:
 
 def _write_atomic(path: Path, data: bytes, mode: int = 0o600) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
-    temporary = path.with_name(f".{path.name}.{os.getpid()}.tmp")
-    # A sandboxed command can plant a link at this name in a repository.
-    temporary.unlink(missing_ok=True)
-    fd = os.open(temporary, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW, mode)
+    # A sandboxed command can plant a link at any name it can predict in a
+    # repository, so the name is random and the file is created exclusively.
+    fd, name = tempfile.mkstemp(dir=path.parent, prefix=f".{path.name}.", suffix=".tmp")
+    temporary = Path(name)
     try:
         with os.fdopen(fd, "wb") as handle:
             _ = handle.write(data)
@@ -694,7 +826,7 @@ def _describe_pairs(rel: str, pairs: list[Pair], before: Specs) -> str:
         parts.append(f"adds {_names(added, whole=whole)}")
     if changed:
         parts.append(f"changes {_names(changed, whole=whole)}")
-    return f"{rel} {' and '.join(parts)}"
+    return f"{_clean(rel)} {' and '.join(parts)}"
 
 
 class Root:
@@ -736,6 +868,7 @@ class Root:
             ("taint", {}),
             ("handled", {}),
             ("reverted", {}),
+            ("imports", {}),
         ):
             _ = self.state.setdefault(key, default)
         self.state["root"] = str(self.path)
@@ -758,6 +891,10 @@ class Root:
 
     def _blob(self, sha: str) -> Path:
         return self.dir / "blobs" / sha
+
+    def _inside(self, rel: str) -> bool:
+        directory = (self.path / rel).parent
+        return Path(os.path.realpath(directory)).is_relative_to(self.path)
 
     def _hash(self, rel: str) -> str | None:
         """The content hash of a guarded file, None if too large, MISSING or OUTSIDE."""
@@ -793,32 +930,37 @@ class Root:
         return sha
 
     def scan(self) -> Scan:
-        listing = _git(
-            self.path,
-            "ls-files",
-            "-z",
-            "-s",
-            "-o",
-            "--exclude-standard",
-            "--",
-            *PATHSPECS,
-        )
         index: dict[str, list[str]] = {}
         unmerged: set[str] = set()
         rels: set[str] = set()
-        for entry in listing.decode("utf-8", "surrogateescape").split("\0"):
+        # Separate listings, since a name may look like a staged entry.
+        tracked = _git(self.path, "ls-files", "-z", "-s", "--", *PATHSPECS)
+        for entry in tracked.decode("utf-8", "surrogateescape").split("\0"):
             if not entry:
                 continue
             staged = _STAGED_RE.match(entry)
             if staged is None:
-                # Untracked files are listed by path alone.
-                rels.add(entry)
-                continue
+                message = f"unexpected git ls-files entry {entry!r}"
+                raise RuntimeError(message)
             mode, blob, stage, rel = staged.groups()
             if stage != "0":
                 unmerged.add(rel)
             index[rel] = [mode, blob]
             rels.add(rel)
+        untracked = _git(
+            self.path,
+            "ls-files",
+            "-z",
+            "-o",
+            "--exclude-standard",
+            "--",
+            *PATHSPECS,
+        )
+        rels.update(
+            entry
+            for entry in untracked.decode("utf-8", "surrogateescape").split("\0")
+            if entry
+        )
         files: Snapshot = {}
         links: set[str] = set()
         for rel in sorted(rels):
@@ -943,6 +1085,50 @@ class Root:
             if specs is not None and specs.get(name) == value:
                 del taint[key]
 
+    def approve_imports(self, imports: list[str], when: float) -> None:
+        approved = cast("dict[str, float]", self.state["imports"])
+        for path in imports:
+            approved[path] = when
+
+    def _required(self, sha: str | None) -> Specs:
+        """The directives of a go.mod copy, indirect requirements included."""
+        if sha is None or sha in (MISSING, OUTSIDE) or not self._blob(sha).exists():
+            return {}
+        try:
+            return _go_mod_specs(self._blob(sha).read_text(encoding="utf-8"))
+        except UnicodeDecodeError, ValueError:
+            return {}
+
+    def _imported(self, change: Change, before: Snapshot) -> list[Pair]:
+        """A go.mod change's pairs, less those that are not new or are explained.
+
+        `go mod tidy` makes a requirement direct when a file imports it, so a
+        requirement the file already held at that version, indirect or not, is
+        no change. It also adds a requirement for each new import, and raises the
+        versions of existing requirements that the new modules need. So once
+        every added requirement is for an approved import, its requirement
+        changes are explained too.
+        """
+        if PurePosixPath(change.rel).name != "go.mod" or not change.parsed:
+            return change.pairs
+        held = self._required(before.get(change.rel, MISSING))
+        pairs = [
+            pair
+            for pair in change.pairs
+            if not pair[0].startswith("require:") or held.get(pair[0]) != pair[1]
+        ]
+        approved = cast("dict[str, float]", self.state["imports"])
+        added = [
+            key.removeprefix("require:")
+            for key, _ in pairs
+            if key.startswith("require:") and key not in held
+        ]
+        if not added or not all(
+            any(_covers(module, path) for path in approved) for module in added
+        ):
+            return pairs
+        return [pair for pair in pairs if not pair[0].startswith("require:")]
+
     def register(self, call_id: str, call: dict[str, Any]) -> None:
         self.state["calls"][call_id] = call
 
@@ -1022,7 +1208,7 @@ class Root:
                 continue
             pairs = [
                 pair
-                for pair in change.pairs
+                for pair in self._imported(change, before)
                 if handled.get(_pair_key(change.rel, pair), 0.0) < start
             ]
             if pairs and change.parsed:
@@ -1122,6 +1308,7 @@ class Root:
         linked = sorted(
             {rel for rel, sha in restore.items() if sha == OUTSIDE}
             | {rel for rel in restore if rel in current.links}
+            | {rel for rel in restore if not self._inside(rel)}
         )
         if linked:
             return self._report(
@@ -1212,6 +1399,12 @@ class Root:
         for rel, sha in cast(
             "list[list[str | None]]", json.loads(journal.read_bytes())
         ):
+            if not self._inside(cast("str", rel)):
+                message = (
+                    f"{journal} lists {rel}, which is behind a link that leaves "
+                    f"{self.path}"
+                )
+                raise RuntimeError(message)
             path = self.path / cast("str", rel)
             if sha == MISSING:
                 path.unlink(missing_ok=True)
@@ -1246,10 +1439,11 @@ class Root:
         for key, when in list(handled.items()):
             if now - when > KEEP_OPEN:
                 del handled[key]
-        taint = cast("dict[str, float]", self.state["taint"])
-        for key, when in list(taint.items()):
-            if now - when > KEEP_OPEN:
-                del taint[key]
+        for table in ("taint", "imports"):
+            entries = cast("dict[str, float]", self.state[table])
+            for key, when in list(entries.items()):
+                if now - when > KEEP_OPEN:
+                    del entries[key]
         live = {
             sha
             for call in calls.values()
@@ -1406,7 +1600,26 @@ def _pre_shell(payload: dict[str, Any]) -> dict[str, Any] | None:
 
 def _pre_edit(payload: dict[str, Any]) -> dict[str, Any] | None:
     tool_input = cast("dict[str, Any]", payload.get("tool_input") or {})
-    reason = _edit_reason(cast("str", payload.get("tool_name")), tool_input)
+    tool = cast("str", payload.get("tool_name"))
+    reason = _edit_reason(tool, tool_input)
+    imports = _new_go_imports(tool, tool_input)
+    if imports:
+        file_path = cast("str", tool_input["file_path"])
+        reason = (
+            f"This edit to {_clean(Path(file_path).name)} imports "
+            f"{_names(imports, whole=True)}, which go.mod does not require."
+        )
+        call_id = str(payload.get("tool_use_id"))
+        root = _toplevel(str(Path(file_path).parent))
+        if root is not None:
+            _remember(payload, call_id, [root])
+            with Root(root) as guard:
+                guard.register(
+                    call_id,
+                    _call_record(payload)
+                    | {"imports": imports, "asked": True, "timeout": 300.0},
+                )
+        return _ask(reason)
     file_path = tool_input.get("file_path")
     if isinstance(file_path, str) and _kind(Path(file_path).name) is not None:
         call_id = str(payload.get("tool_use_id"))
@@ -1445,6 +1658,8 @@ def _post(payload: dict[str, Any]) -> dict[str, Any] | None:
                 call["asked"] = True
             call["ran"] = True
             if call["tool"] in EDIT_TOOLS:
+                if call.get("imports") and event == "PostToolUse":
+                    guard.approve_imports(call["imports"], now)
                 _close(call, now)
                 continue
             if isinstance(background, str) and event == "PostToolUse":

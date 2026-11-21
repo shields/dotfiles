@@ -440,7 +440,13 @@ def test_claude_sandbox_is_enforced_and_narrow() -> None:
     filesystem = cast("dict[str, list[str]]", sandbox["filesystem"])
     # .zshrc evals files from ~/.cache/zsh, so ~/.cache must not be writable.
     assert sorted(filesystem["allowWrite"]) == sorted(ALLOW_WRITE)
-    assert filesystem["denyRead"] == ["~/.config/secrets", "~/.config/lgtmcp"]
+    # The dependency guard's lock lives in its state directory, and a sandboxed
+    # command that holds the lock keeps the guard from judging a call.
+    assert filesystem["denyRead"] == [
+        "~/.config/secrets",
+        "~/.config/lgtmcp",
+        "~/.local/state/claude-dependency-guard",
+    ]
     network = cast("dict[str, object]", sandbox["network"])
     assert network == {
         "allowLocalBinding": True,
