@@ -497,7 +497,8 @@ class Installer(NamedTuple):
 # manifest already declares, which the checks above vet. A permissions rule
 # cannot express that: `npm install:*` also matches `npm install left-pad`, and
 # an allow rule cannot carve `--no-audit` out of an ask rule. So only the listed
-# flags (`--name=` prefixes for those that take a value) and bare words may appear
+# flags (`--name=` prefixes for those that take a value, which may instead be the
+# next word) and bare words may appear
 # around the subcommand; anything else, a package name included, asks. The `adds`
 # subcommands always name a package. Ask rules cover them, but a rule matches from
 # the first word, so the hook asks for them behind a flag, as in
@@ -552,6 +553,7 @@ INSTALLERS = {
         subcommands=frozenset({"install", "i"}),
         flags=_HELP
         | {
+            "--bun",
             "--dry-run",
             "--frozen-lockfile",
             "--ignore-scripts",
@@ -563,7 +565,14 @@ INSTALLERS = {
             "--silent",
             "--verbose",
         },
-        value_flags=("--cwd=", "--filter=", "--omit="),
+        value_flags=(
+            "--cache-dir=",
+            "--cpu=",
+            "--cwd=",
+            "--filter=",
+            "--omit=",
+            "--os=",
+        ),
         adds=frozenset({"add", "a"}),
         manifest_env=_JS_ENV,
         # Only this spelling: bun skips `-p`, `--eval` and `--print` as flags and
@@ -596,6 +605,7 @@ INSTALLERS = {
             "--no-fund",
             "--no-progress",
             "--offline",
+            "--package-lock-only",
             "--prefer-offline",
             "--production",
             "--silent",
@@ -649,6 +659,10 @@ INSTALLERS = {
 # is text. rg is absent because `rg --pre COMMAND` runs COMMAND.
 TEXT_COMMANDS = frozenset({"echo", "printf", "grep", "egrep", "fgrep"})
 
+# A quoted pattern, unlike printed text, never reaches a shell through a pipe, so
+# a separator inside one, as in `grep "a\|bun add"`, does not end the command.
+PATTERN_COMMANDS = frozenset({"grep", "egrep", "fgrep"})
+
 # Commands that pass their standard input on as arguments.
 FEEDERS = frozenset({"xargs", "gxargs", "parallel"})
 
@@ -661,6 +675,7 @@ _ASSIGNMENT_RE = re.compile(r"[A-Za-z_][A-Za-z0-9_]*=")
 
 # A flag value containing one of these can expand to several words.
 _SHELL_META = frozenset("'\"$\\")
+_PATTERN_CHARS = frozenset("*?[]{}")
 
 # Words read after a manager's name before the scan gives up and asks, which keeps
 # a run of flags linear.
@@ -673,10 +688,356 @@ _REDIRECT_RE = re.compile(r"(?:\d*|&)(?:>[>|]?|<)&?")
 _COMMENT_RE = re.compile(r"(?:^|\s)#")
 _UNQUOTE = str.maketrans("", "", "'\"\\")
 
+type Quote = Literal["'", '"', "$'"] | None
 
-def _cut(raw: str) -> bool:
-    """Whether a separator inside quotes ended this word early."""
-    return raw[0] in "'\"" and raw.count(raw[0]) % 2 == 1
+_HEREDOC_RE = re.compile(
+    r"<<(-?)[ \t]*(?:'([^'\n]*)'|\"([^\"\n]*)\"|\\?([^\s;&|()<>'\"]+))"
+)
+
+
+class Segment(NamedTuple):
+    """The words of one command, up to any comment.
+
+    `nested` marks the words that begin inside a quote, as the words of
+    `sh -c '...'` do. `cut` is the index of the word that opens a quote still
+    open at the separator that ends the segment, so the rest of the word is out
+    of sight, or -1.
+    """
+
+    words: list[str]
+    nested: list[bool]
+    cut: int
+    trusted: frozenset[str]
+
+
+def _scan(raw: str, quote: Quote) -> tuple[Quote, bool]:
+    """The quote state after a word, and whether the word opened that quote."""
+    opened = False
+    index = 0
+    while index < len(raw):
+        char = raw[index]
+        if quote is None:
+            if char == "\\":
+                index += 1
+            elif char in {"'", '"'}:
+                quote, opened = char, True
+            elif char == "$" and raw.startswith("'", index + 1):
+                quote, opened = "$'", True
+                index += 1
+        elif quote == "'":
+            if char == "'":
+                quote, opened = None, False
+        elif char == "\\":
+            index += 1
+        elif char == quote[-1]:
+            quote, opened = None, False
+        index += 1
+    return quote, opened
+
+
+def _segment(
+    raw_words: list[str], quote: Quote, trusted: frozenset[str]
+) -> tuple[Segment, Quote]:
+    words: list[str] = []
+    nested: list[bool] = []
+    cut = -1
+    for raw in raw_words:
+        if quote is None and raw.startswith("#"):
+            break
+        words.append(raw)
+        nested.append(quote is not None)
+        quote, opened = _scan(raw, quote)
+        if opened:
+            cut = len(words) - 1
+        elif quote is None:
+            cut = -1
+    return Segment(words, nested, cut, trusted), quote
+
+
+# A variable expands to one word that cannot be a subcommand when this command
+# sets it to a literal without spaces or patterns, or when it is one of these,
+# which hold an absolute path or nothing. Only uppercase names count: zsh ties
+# lowercase arrays such as `path` to other variables. The shell itself sets the
+# excluded names, as `read` sets REPLY, so a literal assignment does not fix
+# their value.
+_ENV_PATHS = frozenset({"CLAUDE_PROJECT_DIR", "HOME", "OLDPWD", "PWD", "TMPDIR"})
+_SHELL_SET = frozenset(
+    {
+        "COPROC",
+        "IFS",
+        "MAPFILE",
+        "MATCH",
+        "MBEGIN",
+        "MEND",
+        "OPTARG",
+        "OPTIND",
+        "PIPESTATUS",
+        "REPLY",
+    }
+)
+_TRUSTABLE_RE = re.compile(r"[A-Z][A-Z0-9_]*")
+_IDENT_RE = re.compile(r"[A-Za-z_][A-Za-z0-9_]*")
+_REF_RE = re.compile(r"\$(?:\{([A-Za-z_][A-Za-z0-9_]*)\}|([A-Za-z_][A-Za-z0-9_]*))")
+# Builtins that can assign a variable without naming it in the command text, and
+# IFS, which splits even a literal without spaces.
+_DYNAMIC_RE = re.compile(
+    r"(?:^|(?<=[\s;&|({]))(?:declare|eval|local|readonly|source|typeset|\.)(?=\s|$)"
+    r"|IFS"
+)
+_LITERAL = frozenset(
+    "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789_./:@%+,=~-"
+)
+# Characters that can precede a word that names a variable to a builtin, as in
+# `read S`, `for S in` or `export S=...`.
+_WORD_START = frozenset(" \t\n;&|()'\"`{!")
+
+
+def _literal_value(command: str, index: int) -> set[str] | None:
+    """The names an assignment's value refers to, or None if it is not a literal.
+
+    Plain characters, names in `$NAME` or `${NAME}`, and quotes around them make
+    a literal. The value ends at a space, a separator or the end of the command.
+    A value that can start with `-` is not a literal, so that no trusted name
+    expands to a flag, and neither is an array, `S=(...)`, which zsh expands
+    to several words.
+    """
+    names: set[str] = set()
+    quote: str | None = None
+    leading = True
+    while index < len(command):
+        char = command[index]
+        if char == "$" and quote != "'":
+            match = _REF_RE.match(command, index)
+            if match is None:
+                return None
+            names.add(match.group(1) or match.group(2))
+            index = match.end()
+            continue
+        if char in {"'", '"'}:
+            if quote is None:
+                quote = char
+            elif quote == char:
+                quote = None
+            else:
+                return None
+        elif char not in _LITERAL:
+            if quote is not None or char not in " \t\n;&|)<>":
+                return None
+            break
+        elif leading:
+            if char == "-":
+                return None
+            leading = False
+        index += 1
+    return names if quote is None else None
+
+
+def _heredoc_bodies(command: str) -> list[tuple[int, int]]:
+    """The spans of heredoc bodies, each with its delimiter line."""
+    spans: list[tuple[int, int]] = []
+    pending: list[tuple[str, bool]] = []
+    quote: Quote = None
+    # A `$(` inside double quotes starts unquoted code up to its matching `)`, so
+    # a heredoc there has a body. Each entry is the quote to resume and the
+    # parentheses still open.
+    substitutions: list[tuple[Quote, int]] = []
+    arithmetic = 0
+    index = 0
+    while index < len(command):
+        char = command[index]
+        if quote is None:
+            if char == "\\":
+                index += 1
+            elif substitutions and char in "()":
+                resume, depth = substitutions.pop()
+                depth += 1 if char == "(" else -1
+                if depth:
+                    substitutions.append((resume, depth))
+                else:
+                    quote = resume
+            elif command.startswith("((", index):
+                arithmetic += 1
+                index += 2
+                continue
+            elif arithmetic and command.startswith("))", index):
+                arithmetic -= 1
+                index += 2
+                continue
+            elif char in {"'", '"'}:
+                quote = char
+            elif char == "$" and command.startswith("'", index + 1):
+                quote = "$'"
+                index += 1
+            elif char == "#" and (index == 0 or command[index - 1] in " \t\n;&|()"):
+                newline = command.find("\n", index)
+                index = len(command) if newline < 0 else newline
+                continue
+            elif command.startswith("<<<", index):
+                index += 3
+                continue
+            elif not arithmetic and (match := _HEREDOC_RE.match(command, index)):
+                delimiter = match.group(2) or match.group(3) or match.group(4) or ""
+                pending.append((delimiter, match.group(1) == "-"))
+                index = match.end()
+                continue
+            elif char == "\n" and pending:
+                index += 1
+                for delimiter, dash in pending:
+                    start = index
+                    while index < len(command):
+                        newline = command.find("\n", index)
+                        end = len(command) if newline < 0 else newline
+                        line = command[index:end]
+                        index = end + 1
+                        if (line.lstrip("\t") if dash else line) == delimiter:
+                            spans.append((start, min(index, len(command))))
+                            break
+                    else:
+                        # Without its delimiter line the text may not be a
+                        # heredoc at all, so it stays shell.
+                        return spans
+                pending = []
+                continue
+        elif quote == "'":
+            if char == "'":
+                quote = None
+        elif char == "\\":
+            index += 1
+        elif quote == '"' and char == "$" and command.startswith("(", index + 1):
+            substitutions.append((quote, 1))
+            quote = None
+            index += 1
+        elif char == quote[-1]:
+            quote = None
+        index += 1
+    return spans
+
+
+def _trusted_names(command: str) -> frozenset[str]:
+    """The variables that expand to one literal word wherever this command uses them.
+
+    The command must exclude heredoc bodies: they cannot assign the outer
+    shell's variables, and code in them would read as shell.
+    """
+    if _DYNAMIC_RE.search(command.translate(_UNQUOTE)):
+        return frozenset()
+    deps: dict[str, set[str] | None] = {}
+    for match in _IDENT_RE.finditer(command):
+        name = match.group()
+        start, end = match.span()
+        before = command[start - 1] if start else " "
+        after = command[end] if end < len(command) else " "
+        if before == "$":
+            continue
+        if before == "{" and command[start - 2 : start - 1] == "$":
+            if after != "}":
+                deps[name] = None
+            continue
+        if before in "-\\":
+            # A name glued to an option or escaped, as in `printf -vS` or
+            # `read \S`, still receives the value.
+            for offset, letter in enumerate(name):
+                if letter.isupper():
+                    deps[name[offset:]] = None
+            continue
+        if before not in _WORD_START:
+            continue
+        current = deps.get(name, set())
+        if current is None:
+            continue
+        value = _literal_value(command, end + 1) if after == "=" else None
+        deps[name] = None if value is None else current | value
+    trusted = {name for name in _ENV_PATHS if name not in deps}
+    candidates = {
+        name: names
+        for name, names in deps.items()
+        if names is not None
+        and _TRUSTABLE_RE.fullmatch(name)
+        and name not in _SHELL_SET
+        and not name.startswith(("BASH", "ZSH"))
+    }
+    waiting: dict[str, set[str]] = {}
+    dependents: dict[str, list[str]] = {}
+    ready: list[str] = []
+    for name, names in candidates.items():
+        waiting[name] = names - trusted - {name}
+        for dep in waiting[name]:
+            dependents.setdefault(dep, []).append(name)
+        if not waiting[name]:
+            ready.append(name)
+    while ready:
+        name = ready.pop()
+        trusted.add(name)
+        for dependent in dependents.get(name, ()):
+            waiting[dependent].discard(name)
+            if not waiting[dependent] and dependent not in trusted:
+                ready.append(dependent)
+    return frozenset(trusted)
+
+
+def _one_field(raw: str, *, nested: bool, trusted: frozenset[str]) -> bool:
+    """Whether the shell expands a word to exactly one field.
+
+    At the top level a double-quoted expansion stays one field. Inside a quote,
+    as in `sh -c '...'`, the inner shell splits the word again, so only trusted
+    names qualify.
+    """
+    quote: str | None = None
+    index = 0
+    while index < len(raw):
+        char = raw[index]
+        if quote == "'":
+            if char == "'":
+                quote = None
+        elif char == "\\" or char in _PATTERN_CHARS:
+            return False
+        elif char == "$":
+            match = _REF_RE.match(raw, index)
+            if match is None:
+                return False
+            name = match.group(1) or match.group(2)
+            if name not in trusted and (nested or quote != '"'):
+                return False
+            index = match.end()
+            continue
+        elif (char in {"'", '"'}) and not nested:
+            quote = None if quote == char else char
+        index += 1
+    return quote is None
+
+
+def _may_be_flag(raw: str, trusted: frozenset[str]) -> bool:
+    """Whether a one-field word can expand to a flag.
+
+    Trusted names never start with `-`, but they can be empty, so a word that
+    starts with them takes its first character from what follows.
+    """
+    text = raw.translate(_UNQUOTE)
+    index = 0
+    while match := _REF_RE.match(text, index):
+        if (match.group(1) or match.group(2)) not in trusted:
+            return True
+        index = match.end()
+    return text.startswith("-", index)
+
+
+def _literal_prefix(installer: Installer, raw: str) -> bool:
+    """Whether the literal text before a word's first expansion rules out a subcommand.
+
+    However the expansion splits, the first word it yields starts with that
+    text, so it is a positional argument unless the text begins a subcommand or
+    a flag.
+    """
+    prefix = raw[: raw.find("$")]
+    plain = prefix.translate(_UNQUOTE)
+    return (
+        bool(plain)
+        and _LITERAL.union("'\"").issuperset(prefix)
+        and not plain.startswith("-")
+        and not any(
+            name.startswith(plain) for name in installer.subcommands | installer.adds
+        )
+    )
 
 
 def _plain(raw: str) -> str:
@@ -695,7 +1056,7 @@ type Verdict = Literal["ask", "vetted", "open"]
 
 
 def _classify(
-    installer: Installer, words: list[str], start: int, *, fed: bool
+    installer: Installer, segment: Segment, start: int, *, fed: bool
 ) -> Verdict | None:
     """How the words after a package manager's name read.
 
@@ -705,22 +1066,21 @@ def _classify(
     values and redirections may appear. A flag the tables do not list taints the
     install, as does `fed`, input that arrives on standard input.
     """
+    words = segment.words
     names = installer.value_names
     taint = fed
     maybe_value = False
     target = False
     for index in range(start, len(words)):
         raw = words[index]
-        if raw.startswith("#"):
-            break
-        if index - start >= MAX_LOOKAHEAD or _cut(raw):
+        if index - start >= MAX_LOOKAHEAD or index == segment.cut:
             return "ask"
         if target:
             target = False
             continue
         word = _plain(raw)
         if word in installer.subcommands:
-            if taint or _has_unvetted_arg(installer, words, index + 1):
+            if taint or _has_unvetted_arg(installer, segment, index + 1):
                 return "ask"
             return "vetted"
         if word in installer.adds:
@@ -731,7 +1091,16 @@ def _classify(
             continue
         if not word.startswith("-"):
             if "$" in word:
-                return "ask"
+                nested = segment.nested[index]
+                if "/" in _REF_RE.sub("", word) and _one_field(
+                    raw, nested=nested, trusted=segment.trusted
+                ):
+                    if _may_be_flag(raw, segment.trusted):
+                        taint = taint or not maybe_value
+                        maybe_value = False
+                        continue
+                elif maybe_value or not _literal_prefix(installer, raw):
+                    return "ask"
             if not maybe_value:
                 return None
             maybe_value = False
@@ -750,33 +1119,48 @@ def _classify(
     return "ask" if taint else "vetted"
 
 
-def _has_unvetted_arg(installer: Installer, words: list[str], start: int) -> bool:
+def _has_unvetted_arg(installer: Installer, segment: Segment, start: int) -> bool:
+    words = segment.words
     skip = False
     for index in range(start, len(words)):
         raw = words[index]
         if skip:
             skip = False
             continue
-        if raw.startswith("#"):
-            break
         redirect = _REDIRECT_RE.match(raw)
         if redirect:
             # A bare operator such as `>` or `2>` takes the next word as its target.
             skip = redirect.end() == len(raw)
             continue
-        if _cut(raw):
+        if index == segment.cut:
             return True
         arg = _plain(raw)
         if arg in installer.flags:
             continue
         if arg.startswith(installer.value_flags) and not _SHELL_META.intersection(raw):
             continue
+        if arg in installer.value_names and _is_value(segment, index + 1):
+            skip = True
+            continue
         return True
     return False
 
 
-def _is_text(words: list[str]) -> bool:
-    """Whether the command only prints or searches its arguments."""
+def _is_value(segment: Segment, index: int) -> bool:
+    """Whether a word is a plain value for the flag before it."""
+    if index >= len(segment.words) or index == segment.cut:
+        return False
+    raw = segment.words[index]
+    return not (
+        raw.startswith("-")
+        or _REDIRECT_RE.match(raw)
+        or _SHELL_META.intersection(raw)
+        or _PATTERN_CHARS.intersection(raw)
+    )
+
+
+def _text_program(words: list[str]) -> str | None:
+    """The command, if it only prints or searches its arguments."""
     for index, raw in enumerate(words):
         word = raw.translate(_UNQUOTE)
         if word in _KEYWORDS or _ASSIGNMENT_RE.match(word):
@@ -784,10 +1168,11 @@ def _is_text(words: list[str]) -> bool:
         if word in _PREFIXES:
             # A flag can change what runs, as `env -S` does.
             if words[index + 1 : index + 2] and words[index + 1].startswith("-"):
-                return False
+                return None
             continue
-        return _program(word) in TEXT_COMMANDS
-    return False
+        program = _program(word)
+        return program if program in TEXT_COMMANDS else None
+    return None
 
 
 def _fold(command: str, *, comments: bool) -> str:
@@ -809,14 +1194,95 @@ def _fold(command: str, *, comments: bool) -> str:
     return "".join(parts)[:-1]
 
 
+def _enter(
+    delimiter: str,
+    part: str,
+    state: tuple[Quote, bool],
+    stack: list[tuple[Quote, bool, str]],
+) -> tuple[Quote, bool]:
+    """The quote state and pattern flag after a delimiter.
+
+    A substitution or subshell starts unquoted and ends where its context
+    resumes.
+    """
+    quote = state[0]
+    if quote in {"'", "$'"}:
+        return state
+    # An odd run of backslashes ends in one that escapes the delimiter.
+    if (len(part) - len(part.rstrip("\\"))) % 2:
+        return state
+    if delimiter == "(" and (quote is None or part.endswith("$")):
+        stack.append((*state, "("))
+        return None, False
+    if (
+        delimiter in {")", "`"}
+        and quote is None
+        and stack
+        and stack[-1][2] == delimiter.replace(")", "(")
+    ):
+        saved = stack.pop()
+        return saved[0], saved[1]
+    if delimiter == "`":
+        stack.append((*state, "`"))
+        return None, False
+    return state
+
+
 def _segments_add(command: str) -> bool:
     parts = _COMMAND_END_RE.split(command)
     plain = command.translate(_UNQUOTE)
+    bodies = _heredoc_bodies(command)
+    outer = command
+    for start, end in reversed(bodies):
+        outer = outer[:start] + outer[end:]
+    trusted = _trusted_names(outer)
     selects: dict[str, bool] = {}
     ticks = 0
+    quote: Quote = None
+    pattern_open = False
+    stack: list[tuple[Quote, bool, str]] = []
+    # Each heredoc line is lexed on its own, and the shell's state resumes
+    # after the body: quotes in a body are text to the outer shell.
+    outside: tuple[Quote, bool, list[tuple[Quote, bool, str]]] | None = None
+    line_start = True
+    commented = False
+    body = 0
+    offset = 0
     for index in range(0, len(parts), 2):
         delimiter = parts[index + 1] if index + 1 < len(parts) else ""
-        words = parts[index].split()
+        while body < len(bodies) and bodies[body][1] <= offset:
+            body += 1
+        in_body = body < len(bodies) and bodies[body][0] <= offset
+        offset += len(parts[index]) + len(delimiter)
+        if in_body and outside is None:
+            outside = (quote, pattern_open, stack)
+        elif not in_body and outside is not None:
+            quote, pattern_open, stack = outside
+            outside = None
+        if in_body and line_start:
+            quote, pattern_open, stack = None, False, []
+        line_start = delimiter == "\n"
+        in_pattern = pattern_open and quote is not None
+        raw_words = parts[index].split()
+        if commented:
+            segment, _ = _segment(raw_words, None, trusted)
+        else:
+            segment, quote = _segment(
+                raw_words, quote, frozenset() if in_body else trusted
+            )
+            commented = len(segment.words) < len(raw_words)
+        if line_start:
+            commented = False
+        words = segment.words
+        # A part that begins inside a quote continues the command that opened it,
+        # so its first word is not a command name.
+        text = _text_program(words) if words and not segment.nested[0] else None
+        pattern_open = (
+            in_pattern or (text in PATTERN_COMMANDS and segment.cut >= 0)
+        ) and quote is not None
+        quote, pattern_open = _enter(
+            delimiter, parts[index], (quote, pattern_open), stack
+        )
         # An opening backtick, `$(`, `<(` or `>(` can supply packages or the rest
         # of the command.
         substituted = (delimiter == "`" and ticks % 2 == 0) or (
@@ -824,12 +1290,10 @@ def _segments_add(command: str) -> bool:
         )
         if delimiter == "`":
             ticks += 1
-        if not words or words[0].startswith("#") or _is_text(words):
+        if not words or text is not None or in_pattern:
             continue
         fed = False
         for position, raw in enumerate(words):
-            if raw.startswith("#"):
-                break
             word = _plain(raw)
             if word.startswith("-"):
                 continue
@@ -838,7 +1302,7 @@ def _segments_add(command: str) -> bool:
             installer = INSTALLERS.get(program)
             if installer is None:
                 continue
-            verdict = _classify(installer, words, position + 1, fed=fed)
+            verdict = _classify(installer, segment, position + 1, fed=fed)
             if verdict is None:
                 continue
             if verdict == "ask" or substituted:

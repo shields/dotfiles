@@ -369,6 +369,8 @@ VETTED_INSTALLS = [
     "bundle install --quiet",
 ]
 
+QUOTED_HEREDOC = "echo \"$(cat <<'EOF'\nit's a fix\nEOF\n)\" && "
+
 BASH_CASES: tuple[BashCase, ...] = (
     BashCase(
         "append to requirements.txt", "echo 'requests' >> requirements.txt", ask=True
@@ -569,7 +571,7 @@ BASH_CASES: tuple[BashCase, ...] = (
     BashCase(
         "bun -e script that names a manager",
         """bun -e 'console.log("bun " + Bun.version)'""",
-        ask=True,
+        ask=False,
     ),
     BashCase("bun -e fed by xargs", "cat pkgs | xargs bun -e add", ask=False),
     BashCase("npm -e install", "npm -e install left-pad", ask=True),
@@ -596,8 +598,29 @@ BASH_CASES: tuple[BashCase, ...] = (
         ask=True,
     ),
     BashCase(
-        "bun install --cwd with a separate value", "bun install --cwd app", ask=True
+        "bun install --cwd with a separate value", "bun install --cwd app", ask=False
     ),
+    BashCase(
+        "bun install --cwd with a separate value and a package",
+        "bun install --cwd app left-pad",
+        ask=True,
+    ),
+    BashCase(
+        "bun install --cwd with a variable value",
+        "bun install --cwd $S/app",
+        ask=True,
+    ),
+    BashCase(
+        "bun install --cwd with a flag after it",
+        "bun install --cwd --frozen-lockfile left-pad",
+        ask=True,
+    ),
+    BashCase(
+        "bun install --cwd with a redirect after it",
+        "bun install --cwd > log left-pad",
+        ask=True,
+    ),
+    BashCase("bun install --cwd at the end", "bun install --cwd", ask=True),
     BashCase("bun install an unknown flag", "bun install --no-such-flag", ask=True),
     BashCase("bun install a variable", "bun install $PKG", ask=True),
     BashCase("bun install a quoted package", "bun install 'left-pad'", ask=True),
@@ -705,7 +728,20 @@ BASH_CASES: tuple[BashCase, ...] = (
         "npm install --no-audit left-pad",
         ask=True,
     ),
-    BashCase("npm install --omit with a separate value", "npm i --omit dev", ask=True),
+    BashCase("npm install --omit with a separate value", "npm i --omit dev", ask=False),
+    BashCase(
+        "npm install --prefix with a separate value",
+        "npm install --prefix /tmp/x --no-audit",
+        ask=False,
+    ),
+    BashCase(
+        "npm install --prefix with a separate value and a package",
+        "npm install --prefix /tmp/x left-pad",
+        ask=True,
+    ),
+    BashCase(
+        "npm install --package-lock-only", "npm install --package-lock-only", ask=False
+    ),
     BashCase("npm install package after cd", "cd app && npm i left-pad", ask=True),
     # pnpm
     BashCase("pnpm install without arguments", "pnpm install", ask=False),
@@ -1383,6 +1419,173 @@ BASH_CASES: tuple[BashCase, ...] = (
     BashCase(
         "continuation inside the subcommand",
         "bun inst\\\nall left-pad",
+        ask=True,
+    ),
+    # A variable in a script path asks only when it could supply a subcommand.
+    BashCase(
+        "script under an assigned variable",
+        "S=/tmp/scratch; bun $S/shoot.ts out",
+        ask=False,
+    ),
+    BashCase(
+        "script under a variable assigned from another",
+        "S=/tmp/s\nD=$S/design\nbun $D/build.mjs $D 1024",
+        ask=False,
+    ),
+    BashCase("script under TMPDIR", 'bun "$TMPDIR/probe.ts" $PORT', ask=False),
+    BashCase("script under a quoted variable", 'bun "$X/run.ts"', ask=False),
+    BashCase("script with a literal directory", "bun scripts/$f.ts", ask=False),
+    BashCase("script with a literal prefix", "bun render-$v.ts out", ask=False),
+    BashCase(
+        "script after a heredoc that looks like shell",
+        "S=/tmp/s\ncat > $S/x.ts <<'EOF'\nconst k = ['S']; x.source\nEOF\nbun $S/x.ts",
+        ask=False,
+    ),
+    BashCase("variable assigned a phrase", 'S="add left-pad"; bun $S/x', ask=True),
+    BashCase("variable assigned a flag", "S=--cwd=; bun $S/tmp add left-pad", ask=True),
+    BashCase("variable from read", "S=/t; read S; bun $S/x", ask=True),
+    BashCase(
+        "variable from a loop",
+        "S=/t; for S in add; do bun $S/x left-pad; done",
+        ask=True,
+    ),
+    BashCase("variable from eval", "S=/t; eval 'S=\"add x\"'; bun $S/x", ask=True),
+    BashCase(
+        "variable from a quoted eval", "S=/t; e''val 'S=\"add x\"'; bun $S/x", ask=True
+    ),
+    BashCase(
+        "variable the shell sets",
+        "REPLY=/t; read <<< 'add left-pad'; bun $REPLY/x",
+        ask=True,
+    ),
+    BashCase(
+        "variable set again inside a heredoc for bash",
+        "S=/t\nbash <<'EOF'\nS='add left-pad'\nbun $S/x\nEOF",
+        ask=True,
+    ),
+    BashCase(
+        "escaped variable for an inner shell", 'S=/t; sh -c "bun \\$S/x"', ask=True
+    ),
+    BashCase("unknown variable in a path", "bun $X/y left-pad", ask=True),
+    BashCase("unknown variable alone", "bun $X left-pad", ask=True),
+    BashCase("quoted variable then add", 'bun "$X/y" add left-pad', ask=True),
+    BashCase("quoted variable then install", 'bun "$X/y" install', ask=True),
+    BashCase("prefix of a subcommand", "bun a$X left-pad", ask=True),
+    BashCase(
+        "literal directory as a flag value", "bun --cwd dir/$X add left-pad", ask=True
+    ),
+    # Quotes that close within the command.
+    BashCase("manager in a quoted search", 'pgrep -fl "bun "', ask=False),
+    BashCase(
+        "manager as a repository name",
+        'gh search issues --repo oven-sh/bun "http client"',
+        ask=False,
+    ),
+    BashCase(
+        "manager in a grep alternation",
+        'grep -n "make\\|prettier\\|bun " Makefile',
+        ask=False,
+    ),
+    BashCase(
+        "manager after parentheses in a pattern",
+        "grep -E '^- (Node|Npm)|bun ' notes.md",
+        ask=False,
+    ),
+    BashCase(
+        "manager after a quoted substitution",
+        'pgrep -fl -u "$(id -u)" "node|bun test"',
+        ask=False,
+    ),
+    BashCase(
+        "install in a grep pattern", 'grep "a; npm install x" notes.md', ask=False
+    ),
+    BashCase(
+        "install substituted into a grep pattern",
+        'grep "x$(npm install y)z" notes.md',
+        ask=True,
+    ),
+    BashCase("install in echoed text", 'echo "a; npm install x" | sh', ask=True),
+    BashCase("bun --bun -e", "bun --bun -e 'console.log(1)'", ask=False),
+    BashCase("variable split by IFS", "D=add/left-pad; IFS=/; bun $D/", ask=True),
+    BashCase(
+        "grep after a multi-line quote",
+        "echo 'a\nb'; grep x f; bun add left-pad",
+        ask=True,
+    ),
+    BashCase(
+        "cut quote after a multi-line quote",
+        "echo 'a\nb'; npm install '--no-audit;' left-pad",
+        ask=True,
+    ),
+    BashCase(
+        "cut quote after a comment with an apostrophe",
+        "# don't\nbun install '--no-audit;' left-pad",
+        ask=True,
+    ),
+    BashCase(
+        "cut quote after a heredoc with an apostrophe",
+        "cat <<EOF\nit's\nEOF\nnpm install '--no-audit;' left-pad",
+        ask=True,
+    ),
+    BashCase(
+        "shift that looks like a heredoc",
+        'echo $((1<<EOF))\nHOME="add left-pad"\nEOF\nbun $HOME/x',
+        ask=True,
+    ),
+    BashCase(
+        "heredoc without its delimiter line",
+        "S=/t\ncat <<EOF\nS='add left-pad'\nbun $S/x",
+        ask=True,
+    ),
+    BashCase(
+        "brace expansion as a flag value", "bun install --cwd {.,left-pad}", ask=True
+    ),
+    BashCase("glob as a flag value", "bun install --cwd *", ask=True),
+    BashCase(
+        "script after a multi-line quote",
+        "python3 -c \"\nprint('it')\n\"\nS=/t; bun $S/x.ts",
+        ask=False,
+    ),
+    BashCase(
+        "long chain of assignments",
+        "".join(f"A{i}=$A{i + 1}; " for i in range(5_000)) + "A5000=/x; bun $A0/ add",
+        ask=False,
+    ),
+    BashCase("many heredocs", "cat <<A\nx\nA\n" * 8_000 + "bun $X/ add", ask=True),
+    BashCase("variable assigned an array", "S=(add left-pad); bun $S/x", ask=True),
+    BashCase(
+        "variable read through an escaped name",
+        "S=/t; read \\S <<< 'add left-pad'; bun $S/x",
+        ask=True,
+    ),
+    BashCase(
+        "variable set by printf -v glued to its option",
+        "S=/t; printf -vS 'add left-pad'; bun $S/x",
+        ask=True,
+    ),
+    BashCase(
+        "grep after a quoted separator in an assignment",
+        'FOO="a; grep" bun add left-pad',
+        ask=True,
+    ),
+    BashCase(
+        "echo after a quoted separator in an assignment",
+        'FOO="a; echo" npm install left-pad',
+        ask=True,
+    ),
+    BashCase(
+        "grep pattern after a heredoc inside a quoted substitution",
+        QUOTED_HEREDOC + "grep 'a' f; npm install left-pad",
+        ask=True,
+    ),
+    BashCase(
+        "cut quote after a heredoc inside a quoted substitution",
+        QUOTED_HEREDOC + "npm install '--no-audit;' left-pad",
+        ask=True,
+    ),
+    BashCase(
+        "grep pattern after an escaped backtick",
+        'echo "the \\` char" && grep "x" f; npm install left-pad',
         ask=True,
     ),
 )
