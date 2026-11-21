@@ -35,7 +35,7 @@ STAGED = [
     "Makefile",
     "tools/stage_tree.sh",
     "tools/moby-seccomp-default.json",
-    "cloudflare/Dockerfile",
+    "tools/linux-test.Dockerfile",
 ]
 TEST_COMMAND = "bun install --frozen-lockfile && make actions-lock-install test lint"
 TIMEOUT = 120
@@ -186,7 +186,7 @@ def test_the_staged_tree_is_built_and_tested_in_the_image(layout: Layout) -> Non
         "-t",
         "dotfiles-linux-test",
         "-f",
-        "cloudflare/Dockerfile",
+        "tools/linux-test.Dockerfile",
         str(context),
     ]
     assert layout.args("run") == [
@@ -204,9 +204,7 @@ def test_the_staged_tree_is_built_and_tested_in_the_image(layout: Layout) -> Non
     assert context.is_relative_to(layout.tmp)
     assert not context.is_relative_to(layout.repo)
     listing = (layout.stub / "context.ls").read_text().split()
-    assert {".git", "Makefile", "README.md", "cloudflare", "uncommitted.txt"} <= set(
-        listing
-    )
+    assert {".git", "Makefile", "README.md", "tools", "uncommitted.txt"} <= set(listing)
     assert "ignored.txt" not in listing
     assert layout.stage_directories() == []
     assert layout.snapshot() == before

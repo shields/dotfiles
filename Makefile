@@ -95,7 +95,7 @@ test-linux:
 	tools/stage_tree.sh "$$stage/tree"; \
 	jq '.syscalls += [{"names": ["clone", "mount", "pivot_root", "umount2", "unshare"], "action": "SCMP_ACT_ALLOW"}]' \
 	    tools/moby-seccomp-default.json >"$$stage/seccomp.json"; \
-	docker build --build-arg "MODULES=$(MODULES)" -t "$(LINUX_IMAGE)" -f cloudflare/Dockerfile "$$stage/tree"; \
+	docker build --build-arg "MODULES=$(MODULES)" -t "$(LINUX_IMAGE)" -f tools/linux-test.Dockerfile "$$stage/tree"; \
 	docker run --rm --security-opt "seccomp=$$stage/seccomp.json" --security-opt systempaths=unconfined \
 	    "$(LINUX_IMAGE)" zsh -c 'bun install --frozen-lockfile && make actions-lock-install test lint'
 

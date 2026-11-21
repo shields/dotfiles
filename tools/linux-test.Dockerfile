@@ -13,7 +13,7 @@
 # limitations under the License.
 
 # The build context is a staged tree (tools/stage_tree.sh DEST), so this builds
-# from any directory with: docker build -f DEST/cloudflare/Dockerfile DEST
+# from any directory with: docker build -f DEST/tools/linux-test.Dockerfile DEST
 
 FROM debian:trixie-slim@sha256:a72b4433de1cf7d6bae0c4cee74d0547f58601a643b3375f070c51600d63b6b2
 
@@ -34,7 +34,6 @@ COPY --chown=1000:1000 . /home/shields/src/github.com/shields/dotfiles
 WORKDIR /home/shields/src/github.com/shields/dotfiles
 
 ARG MODULES=dev
-ARG CLOUDFLARE_AGENT=0
 ARG TARGETARCH
 # Homebrew's cleanup deletes downloads that another build is still using, so
 # each architecture has its own cache and a build holds it exclusively. The
@@ -49,12 +48,5 @@ RUN --mount=type=cache,target=/home/shields/.cache/Homebrew,id=homebrew-${TARGET
 # The cache mount hides Homebrew's API data, which the oh-my-zsh aws plugin
 # (brew --prefix awscli) makes the first interactive shell fetch.
 RUN /home/linuxbrew/.linuxbrew/bin/brew --prefix awscli >/dev/null
-
-RUN if [ "$CLOUDFLARE_AGENT" = 1 ]; then \
-        sudo provision/throwaway.sh --user shields --no-github-timer \
-        && PATH="/home/linuxbrew/.linuxbrew/bin:$PATH" /home/linuxbrew/.linuxbrew/bin/uv run --no-dev python tools/configure_codex.py "$HOME/.codex/config.toml" \
-        && provision/reset-identity.sh \
-        && sudo provision/cloudflare-agent.sh; \
-    fi
 
 CMD ["sleep", "infinity"]

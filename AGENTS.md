@@ -101,7 +101,7 @@ it would overwrite the loader. The README describes the modules.
 
 `tools/stage_tree.sh DEST` copies the working tree (tracked files and untracked
 files that are not ignored) into a new git repository at `DEST` and fails if
-gitleaks finds a secret there. `make test-linux` builds `cloudflare/Dockerfile`
+gitleaks finds a secret there. `make test-linux` builds `tools/linux-test.Dockerfile`
 from such a copy, which runs `./provision.sh` in a Debian 13 image.
 
 Throwaway Lima VMs (the README describes them for users):

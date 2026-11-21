@@ -812,7 +812,7 @@ def test_the_image_build_keeps_homebrew_downloads_and_other_runs_prune_them() ->
     guard = find(r"^if \[\[ -n \$\{DOTFILES_KEEP_BREW_DOWNLOADS-\} \]\]; then$")
     assert guard < cleanup
     assert [line.strip() for line in LINES[guard + 1 : cleanup - 1]] == ["brew cleanup"]
-    dockerfile = (REPO / "cloudflare" / "Dockerfile").read_text()
+    dockerfile = (REPO / "tools" / "linux-test.Dockerfile").read_text()
     assert "DOTFILES_KEEP_BREW_DOWNLOADS=1 ./provision.sh $MODULES" in dockerfile
 
 
@@ -820,19 +820,6 @@ def test_docker_prune_runs_only_on_macos() -> None:
     prune = find(r"^\s+bin/docker-prune$")
     assert openers(prune)[:1] == [MACOS_GUARD]
     assert sum("bin/docker-prune" in line for _, line in code_lines()) == 1
-
-
-def test_cloudflare_reconfigures_codex_after_installing_the_throwaway_policy() -> None:
-    dockerfile = (REPO / "cloudflare/Dockerfile").read_text()
-    guard = dockerfile.index('RUN if [ "$CLOUDFLARE_AGENT" = 1 ]; then')
-    throwaway = dockerfile.index("sudo provision/throwaway.sh", guard)
-    configure = dockerfile.index("python tools/configure_codex.py", throwaway)
-    reset = dockerfile.index("provision/reset-identity.sh", configure)
-    end = dockerfile.index("\n    fi", guard)
-    assert guard < throwaway < configure < reset < end
-    assert (
-        'PATH="/home/linuxbrew/.linuxbrew/bin:$PATH"' in dockerfile[throwaway:configure]
-    )
 
 
 def test_the_plugin_tools_come_from_the_modules_that_update_them() -> None:

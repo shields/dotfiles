@@ -681,7 +681,7 @@ inactivity timeout is six hours.
 `make test-linux` needs Docker. It copies the checkout into a temporary
 directory outside the repository with `tools/stage_tree.sh`, which includes
 files that are not yet committed and scans them with gitleaks. It then builds
-`cloudflare/Dockerfile` for the machine's own architecture with that directory
+`tools/linux-test.Dockerfile` for the machine's own architecture with that directory
 as the context, which runs `./provision.sh` just as on a Linux box, and finally
 runs `bun install --frozen-lockfile` and `make test lint` in the image as an
 unprivileged user. It fails if any step fails.
