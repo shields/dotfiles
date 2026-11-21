@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-.PHONY: setup ci-tools build diff apply test test-bun test-zsh test-python test-linux lint lint-ts lint-python lint-shell fmt fmt-check run bench bench-startup
+.PHONY: setup ci-tools build diff apply test test-zsh test-python test-linux lint lint-ts lint-python lint-shell fmt fmt-check run bench bench-startup
 
 PRETTIER_SOURCES = .
 
@@ -28,11 +28,6 @@ SHELL_SOURCES = \
 	provision/linux-system.sh \
 	provision/macos.sh \
 	provision/modules.sh \
-	provision/reset-identity.sh \
-	provision/throwaway.sh \
-	provision/cloudflare-agent.sh \
-	cloudflare/deploy.sh \
-	cloudflare/entrypoint.sh \
 	tools/create_nerd_andale_mono.sh \
 	tools/create_nerd_commit_mono.sh \
 	tools/install_ci_tools.sh \
@@ -41,16 +36,10 @@ SHELL_SOURCES = \
 	bin/docker-prune \
 	bin/ghfork \
 	bin/git-add-upstream \
-	bin/limavm \
-	bin/vm-access \
-	bin/setup-github-gateway \
-	bin/github-gateway-credential \
-	bin/pager \
-	bin/setup-secrets
+	bin/pager
 
 build:
 	bun run tsc --noEmit
-	bun run tsc --noEmit -p cloudflare/tsconfig.json
 
 setup:
 	bun install --frozen-lockfile
@@ -65,17 +54,12 @@ diff:
 apply:
 	chezmoi --source "$(CURDIR)" --less-interactive --error-on-conflict apply
 
-test: test-bun test-zsh test-python
-
-test-bun:
-	bun test gateway/*.test.ts cloudflare/*.test.ts
+test: test-zsh test-python
 
 test-zsh:
 	zsh tests/test_gcl.zsh
 	zsh tests/test_git_add_upstream.zsh
 	zsh tests/test_ghfork.zsh
-	zsh tests/test_limavm.zsh
-	zsh tests/test_setup_secrets.zsh
 	zsh tests/test_wt.zsh
 
 test-python:

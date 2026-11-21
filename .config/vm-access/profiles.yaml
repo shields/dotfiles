@@ -1,6 +1,0 @@
-read:
-  read: true
-  pushTaskBranches: false
-task:
-  read: true
-  pushTaskBranches: true

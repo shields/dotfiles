@@ -46,10 +46,8 @@ LINES = TEXT.splitlines()
 MACOS_GUARD = "if [[ $os == macos ]]; then"
 LINUX_GUARD = "if [[ $os == linux ]]; then"
 MACOS_FUNCTIONS = (
-    "macos_vm_access_cleanup",
     "macos_emudhra_workaround",
     "macos_preflight",
-    "macos_vm_access_install",
     "macos_xcode",
     "macos_login_shell",
     "macos_claude_model_pricing",
@@ -85,16 +83,8 @@ LINUX_EXCLUDES = (
     ".gnupg/gpg-agent.conf",
     "bin/chrome-tabs-to-markdown",
     "bin/clean_downloads.py",
-    "bin/limavm",
-    "bin/vm-access",
     ".agents/skills/transcribe",
     ".claude/skills/transcribe",
-)
-MACOS_EXCLUDES = (
-    "bin/setup-secrets",
-    "bin/github_app_token.py",
-    "bin/setup-github-gateway",
-    "bin/github-gateway-credential",
 )
 MANAGED = {
     ".config/bat/config",
@@ -233,8 +223,7 @@ def selected(path: str, os_name: str) -> bool:
     if path.startswith(".chezmoi") or path in MANAGED:
         return False
     if os_name == "macos":
-        in_scope = path.startswith((".", "bin/", "Library/"))
-        return in_scope and path not in MACOS_EXCLUDES
+        return path.startswith((".", "bin/", "Library/"))
     if not path.startswith((".", "bin/")):
         return False
     excluded = (
@@ -254,8 +243,6 @@ def selected(path: str, os_name: str) -> bool:
         in {
             "bin/chrome-tabs-to-markdown",
             "bin/clean_downloads.py",
-            "bin/limavm",
-            "bin/vm-access",
             ".claude/skills/transcribe",
         }
     )
@@ -350,10 +337,8 @@ def test_macos_functions_are_called_in_the_original_order() -> None:
     calls = [find(rf"^\s+{name}$") for name in MACOS_FUNCTIONS]
     assert calls == sorted(calls)
     (
-        cleanup,
         emudhra,
         preflight,
-        install,
         xcode,
         login_shell,
         model_pricing,
@@ -363,8 +348,8 @@ def test_macos_functions_are_called_in_the_original_order() -> None:
     ) = calls
     analytics = find(r"^brew analytics off")
     oh_my_zsh = find(r"Oh My Zsh installation")
-    assert cleanup < emudhra < find(r"^# Install Homebrew") < analytics
-    assert analytics < preflight < oh_my_zsh < install < xcode
+    assert emudhra < find(r"^# Install Homebrew") < analytics
+    assert analytics < preflight < oh_my_zsh < xcode
     assert find(r"^\s+bin/docker-prune$") < xcode
     assert login_shell == xcode + 1
     assert find(r"^\s+macos_emudhra_workaround$", emudhra + 1) == login_shell + 1
@@ -403,7 +388,7 @@ def test_macos_sh_holds_the_macos_only_commands() -> None:
 def test_chezmoi_applies_after_its_package_is_installed() -> None:
     apply = find(r'^if ! chezmoi --source "\$dotfiles_root"')
     assert LINES[apply].endswith(" --less-interactive --error-on-conflict apply; then")
-    assert find(r"^brew autoremove$") < apply < find(r"^    macos_vm_access_install$")
+    assert find(r"^brew autoremove$") < apply
     assert "git config --global user.email" not in TEXT
     assert "git config --global github.user" not in TEXT
 
@@ -414,12 +399,8 @@ def test_copy_uses_git_ls_files_through_tar() -> None:
     assert "tar cf - -T - bin Library" not in TEXT
 
 
-def test_macos_copy_adds_library_and_leaves_out_the_guest_only_scripts() -> None:
-    assert copy_pathspecs("macos") == [
-        *BASE_COPY_PATHS,
-        "Library",
-        *(f":(exclude){p}" for p in MACOS_EXCLUDES),
-    ]
+def test_macos_copy_adds_library() -> None:
+    assert copy_pathspecs("macos") == [*BASE_COPY_PATHS, "Library"]
 
 
 def test_linux_copy_leaves_out_exactly_the_macos_only_files() -> None:
@@ -444,7 +425,7 @@ def test_linux_copy_has_no_macos_files_and_macos_copy_has_library() -> None:
     macos = git_ls_files(REPO, copy_pathspecs("macos"))
     assert not any(path.startswith("Library/") for path in linux)
     assert any(path.startswith("Library/Fonts/") for path in macos)
-    assert set(linux) - set(macos) <= set(MACOS_EXCLUDES)
+    assert set(linux) <= set(macos)
 
 
 SCRATCH_FILES = {
@@ -470,12 +451,6 @@ SCRATCH_FILES = {
     "bin/$": "",
     "bin/chrome-tabs-to-markdown": "",
     "bin/clean_downloads.py": "",
-    "bin/limavm": "",
-    "bin/vm-access": "",
-    "bin/setup-secrets": "",
-    "bin/github_app_token.py": "",
-    "bin/setup-github-gateway": "",
-    "bin/github-gateway-credential": "",
     "Library/Fonts/f.otf": "",
     "Library/Application Support/with space.txt": "",
     "README.md": "",
@@ -521,10 +496,6 @@ def test_scratch_repo_macos_copy_matches_the_independent_selection(
     tracked = git_ls_files(repo, [], env)
     actual = set(git_ls_files(repo, copy_pathspecs("macos"), env))
     assert actual == {path for path in tracked if selected(path, "macos")}
-    assert "bin/setup-secrets" not in actual
-    assert "bin/github_app_token.py" not in actual
-    assert "bin/setup-github-gateway" not in actual
-    assert "bin/github-gateway-credential" not in actual
     assert "bin/scratch-untracked" not in actual
     assert ".github/renovate.json5" not in actual
     assert {"bin/$", "Library/Application Support/with space.txt"} <= actual
@@ -544,10 +515,6 @@ def test_scratch_repo_linux_copy_drops_every_excluded_path(
         ".claude/skills/bughunt",
         "bin/ghfork",
         "bin/$",
-        "bin/setup-secrets",
-        "bin/github_app_token.py",
-        "bin/setup-github-gateway",
-        "bin/github-gateway-credential",
     }
 
 
@@ -1281,122 +1248,6 @@ def test_emudhra_refuses_an_empty_filtered_bundle(tmp_path: Path) -> None:
     assert "finished" not in result.stdout
     assert bundle.read_text() == original
     assert not list(tmp_path.glob("cert.pem.*"))
-
-
-GATEWAY_INSTALL_HARNESS = r"""
-set -euo pipefail
-source "$1"
-state=$2
-remaining=$3
-modules_selection=dev
-modules_has() { [[ $2 == dev ]]; }
-bun() { printf 'bun %s\n' "$*" >>"$LOG"; }
-sleep() {
-    printf 'wait\n' >>"$LOG"
-    remaining=$((remaining - 1))
-}
-launchctl() {
-    printf '%s\n' "$1" >>"$LOG"
-    case $1 in
-        print)
-            if [[ $state == unloading && $remaining -le 0 ]]; then
-                state=absent
-            fi
-            [[ $state != absent ]] || return 113
-            ;;
-        bootout)
-            [[ $BOOTOUT_STATUS -eq 0 ]] || return "$BOOTOUT_STATUS"
-            state=unloading
-            ;;
-        bootstrap)
-            if [[ $state != absent ]]; then
-                echo 'Bootstrap failed: 5: Input/output error' >&2
-                return 5
-            fi
-            state=loaded
-            ;;
-        *) return 64 ;;
-    esac
-}
-macos_vm_access_install
-echo finished
-"""
-
-
-def run_gateway_install(
-    tmp_path: Path,
-    *,
-    state: str = "loaded",
-    delay: int = 0,
-    bootout_status: int = 0,
-) -> tuple[subprocess.CompletedProcess[str], list[str]]:
-    home = tmp_path / "home"
-    (home / "bin").mkdir(parents=True)
-    command = home / "bin/vm-access"
-    _ = command.write_text('#!/bin/sh\nprintf "init\\n" >>"$LOG"\n')
-    command.chmod(0o755)
-    log = tmp_path / "calls"
-    result = subprocess.run(
-        [
-            "/bin/bash",
-            "-c",
-            GATEWAY_INSTALL_HARNESS,
-            "bash",
-            str(MACOS),
-            state,
-            str(delay),
-        ],
-        env={
-            "HOME": str(home),
-            "PATH": "/usr/bin:/bin",
-            "LOG": str(log),
-            "BOOTOUT_STATUS": str(bootout_status),
-        },
-        capture_output=True,
-        text=True,
-        check=False,
-        timeout=10,
-    )
-    return result, log.read_text().splitlines()
-
-
-@pytest.mark.parametrize("delay", [0, 3])
-def test_gateway_reload_waits_for_launchd_to_release_the_label(
-    tmp_path: Path, delay: int
-) -> None:
-    result, calls = run_gateway_install(tmp_path, delay=delay)
-    assert result.returncode == 0, result.stderr
-    assert result.stdout == "finished\n"
-    assert calls.count("bootstrap") == 1
-    assert calls.index("bootout") < calls.index("bootstrap")
-    if delay:
-        assert "wait" in calls
-
-
-def test_gateway_first_install_loads_without_waiting(tmp_path: Path) -> None:
-    result, calls = run_gateway_install(tmp_path, state="absent")
-    assert result.returncode == 0, result.stderr
-    assert calls.count("bootstrap") == 1
-    assert "bootout" not in calls
-    assert "wait" not in calls
-
-
-def test_gateway_reload_fails_if_launchd_does_not_release_the_label(
-    tmp_path: Path,
-) -> None:
-    result, calls = run_gateway_install(tmp_path, delay=1000)
-    assert result.returncode != 0
-    assert "timed out" in result.stderr
-    assert "finished" not in result.stdout
-    assert "bootstrap" not in calls
-
-
-def test_gateway_reload_stops_if_bootout_fails(tmp_path: Path) -> None:
-    result, calls = run_gateway_install(tmp_path, bootout_status=7)
-    assert result.returncode == 7
-    assert "finished" not in result.stdout
-    assert "bootstrap" not in calls
-    assert "wait" not in calls
 
 
 @dataclass

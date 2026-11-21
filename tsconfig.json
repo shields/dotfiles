@@ -16,5 +16,5 @@
     "types": ["bun"],
     "forceConsistentCasingInFileNames": true
   },
-  "include": ["tools/**/*.ts", "gateway/**/*.ts", "eslint.config.ts"]
+  "include": ["tools/**/*.ts", "eslint.config.ts"]
 }

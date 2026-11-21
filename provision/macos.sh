@@ -17,15 +17,6 @@
 # Call these as plain statements. Inside a function that is called as `fn &&`,
 # `fn ||` or `if fn`, errexit is off, so a failing command would not stop the run.
 
-macos_vm_access_cleanup() {
-    if ! modules_has "${modules_selection:-}" dev; then
-        if launchctl print "gui/$UID/com.msrl.dotfiles.vm-access" >/dev/null 2>&1; then
-            launchctl bootout "gui/$UID/com.msrl.dotfiles.vm-access"
-        fi
-        rm -f "$HOME/Library/LaunchAgents/com.msrl.dotfiles.vm-access.plist"
-    fi
-}
-
 macos_emudhra_workaround() {
     (
         bundle=/etc/ssl/cert.pem
@@ -68,29 +59,6 @@ macos_preflight() {
     # Install Rosetta if it's not already working.
     if ! arch -x86_64 /usr/bin/true 2>/dev/null; then
         softwareupdate --install-rosetta --agree-to-license
-    fi
-}
-
-macos_vm_access_install() {
-    if modules_has "${modules_selection:-}" dev; then
-        bun install --frozen-lockfile
-        mkdir -p "$HOME/.local/share/vm-access"
-        bun build gateway/main.ts --target=bun --outfile "$HOME/.local/share/vm-access/main.mjs"
-        "$HOME/bin/vm-access" init
-        if launchctl print "gui/$UID/com.msrl.dotfiles.vm-access" >/dev/null 2>&1; then
-            launchctl bootout "gui/$UID/com.msrl.dotfiles.vm-access"
-            # bootout returns before launchd releases the service label.
-            local attempts=0
-            while launchctl print "gui/$UID/com.msrl.dotfiles.vm-access" >/dev/null 2>&1; do
-                attempts=$((attempts + 1))
-                if [[ $attempts -ge 100 ]]; then
-                    echo "provision.sh: timed out waiting for the vm-access LaunchAgent to unload" >&2
-                    return 1
-                fi
-                sleep 0.1
-            done
-        fi
-        launchctl bootstrap "gui/$UID" "$HOME/Library/LaunchAgents/com.msrl.dotfiles.vm-access.plist"
     fi
 }
 

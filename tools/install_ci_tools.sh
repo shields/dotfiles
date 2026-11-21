@@ -6,18 +6,13 @@
 #
 # It changes the machine it runs on (sudo apt-get, Homebrew, ~/.local), so it
 # refuses to run anywhere but a runner. Every test must run: tests skip when
-# codex, limactl, zsh-defer or zsh is missing, and DOTFILES_FAIL_ON_SKIP turns
+# codex, zsh-defer or zsh is missing, and DOTFILES_FAIL_ON_SKIP turns
 # any skip into a failure.
 #
-# Lima is not from Homebrew because its formula pulls in qemu; it is pinned with
-# a checksum and bumped by hand. Everything else floats: the Homebrew formulae
-# and cask, zsh-defer's head, and basedpyright from PyPI. shfmt must be 3.14 or
-# newer for `make lint`.
+# Everything floats: the Homebrew formulae and cask, zsh-defer's head, and
+# basedpyright from PyPI. shfmt must be 3.14 or newer for `make lint`.
 
 set -euo pipefail
-
-lima_version=2.2.1
-lima_sha256=b391ac7fcac2b2a5a1628107756463188ded4d18d3104a40a66a8bb6fec01bcb
 
 brew_prefix=/home/linuxbrew/.linuxbrew
 local_prefix=$HOME/.local
@@ -31,9 +26,6 @@ die() {
 [[ -n ${GITHUB_PATH:-} ]] || die "GITHUB_PATH is not set"
 [[ $(uname -s) == Linux && $(uname -m) == x86_64 ]] || die "only x86_64 Linux runners are supported"
 
-work_dir=$(mktemp -d)
-trap 'rm -rf "$work_dir"' EXIT
-
 retry() {
     local attempt
     for attempt in 1 2 3; do
@@ -43,15 +35,6 @@ retry() {
         fi
     done
     die "failed after 3 attempts: $*"
-}
-
-download() {
-    local url=$1 sha256=$2 dest=$3
-    curl --fail --silent --show-error --location --retry 3 --retry-all-errors \
-        --connect-timeout 20 --max-time 600 --speed-limit 102400 --speed-time 30 \
-        --output "$dest" "$url"
-    printf '%s  %s\n' "$sha256" "$dest" | sha256sum --check --strict --status ||
-        die "checksum mismatch for $url"
 }
 
 # bsdtar is what tests/test_stage_tree.py runs an extra variant against when it
@@ -68,21 +51,14 @@ zsh -fc 'autoload -Uz compaudit; compaudit' || die "zsh completion directories a
 
 # Homebrew is on the image but not on PATH. Emacs 31, Node 26 and shfmt 3.14 are
 # newer than Ubuntu's or the image's, python@3.15 is where .codex/hooks.json
-# looks for Python, and gitleaks must have `gitleaks dir`. python@3.13 is what
-# tests/test_github_app_token.py parses the token tool under when python3.13 is
-# on PATH, again without a skip when it is not.
+# looks for Python, and gitleaks must have `gitleaks dir`.
 export HOMEBREW_NO_AUTO_UPDATE=1 HOMEBREW_NO_ANALYTICS=1 HOMEBREW_NO_ENV_HINTS=1
-retry "$brew_prefix/bin/brew" install chezmoi emacs gitleaks node python@3.13 python@3.15 shfmt
+retry "$brew_prefix/bin/brew" install chezmoi emacs gitleaks node python@3.15 shfmt
 retry "$brew_prefix/bin/brew" install --cask codex
 export PATH="$brew_prefix/bin:$local_prefix/bin:$PATH"
 printf '%s\n' "$brew_prefix/bin" "$local_prefix/bin" >>"$GITHUB_PATH"
 
 retry uv tool install basedpyright
-
-mkdir -p "$local_prefix/bin"
-download "https://github.com/lima-vm/lima/releases/download/v$lima_version/lima-$lima_version-Linux-x86_64.tar.gz" \
-    "$lima_sha256" "$work_dir/lima.tar.gz"
-tar -xzf "$work_dir/lima.tar.gz" -C "$local_prefix"
 
 clone_zsh_defer() {
     rm -rf "$local_prefix/share/zsh-defer"
@@ -98,9 +74,7 @@ if ! bwrap --unshare-user --ro-bind / / true 2>/dev/null; then
 fi
 
 codex --version
-limactl --version
-# Tests drop their bsdtar and python3.13 variants when these are missing, which
-# the skip gate cannot see.
+# Tests drop their bsdtar variant when it is missing, which the skip gate
+# cannot see.
 bsdtar --version
-python3.13 --version
 [[ -f $local_prefix/share/zsh-defer/zsh-defer.plugin.zsh ]] || die "zsh-defer is missing"

@@ -84,14 +84,7 @@ case $os in
 macos)
     copy_paths+=(
         Library
-        ':(exclude)bin/setup-secrets'
-        ':(exclude)bin/github_app_token.py'
-        ':(exclude)bin/setup-github-gateway'
-        ':(exclude)bin/github-gateway-credential'
     )
-    if ! modules_has "$modules_selection" dev; then
-        copy_paths+=(':(exclude)bin/vm-access' ':(exclude)Library/LaunchAgents/com.msrl.dotfiles.vm-access.plist')
-    fi
     ;;
 linux)
     copy_paths+=(
@@ -104,8 +97,6 @@ linux)
         ':(exclude).gnupg/gpg-agent.conf'
         ':(exclude)bin/chrome-tabs-to-markdown'
         ':(exclude)bin/clean_downloads.py'
-        ':(exclude)bin/limavm'
-        ':(exclude)bin/vm-access'
         ':(exclude).agents/skills/transcribe'
         ':(exclude).claude/skills/transcribe'
     )
@@ -115,9 +106,6 @@ git ls-files -z -- "${copy_paths[@]}" | tar --null -cf - -T - | (cd "$HOME" && t
 
 if [[ $os == linux && -f /etc/dotfiles-github-gateway ]]; then
     rm -f "$HOME/.codex/rules/no-push.rules"
-fi
-if [[ $os == macos ]]; then
-    macos_vm_access_cleanup
 fi
 
 mkdir -p "$HOME/.codex"
@@ -224,9 +212,6 @@ if ! chezmoi --source "$dotfiles_root" --less-interactive --error-on-conflict ap
     exit 1
 fi
 
-if [[ $os == macos ]]; then
-    macos_vm_access_install
-fi
 # The image build mounts Homebrew's download cache to keep it for the next
 # build, which --prune=all would empty.
 if [[ -n ${DOTFILES_KEEP_BREW_DOWNLOADS-} ]]; then

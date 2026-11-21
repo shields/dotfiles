@@ -356,325 +356,36 @@ sends it (`SendEnv LANG`). The system `ssh_config` of Debian and of macOS's own
 `/usr/bin/ssh` does, but Homebrew's `ssh`, which `provision.sh` installs and
 `.zshrc` puts first in `PATH` on a Mac, does not.
 
-# Throwaway Lima VMs
+# Throwaway VMs
 
-A throwaway VM is a Debian 13 machine on this Mac (Lima 2.2.1 or later, vz, arm64)
-where Claude Code and Codex run with no sandbox and no permission prompts. The
-restrictions that remain are the ones on state outside the VM: the deny rules,
-the `git_guard.py` hook, the GitHub gateway and the network isolation below.
-A VM comes from a base image
-that has the same shell, git, Emacs and agent setup as the Mac, so making one
-takes about a minute, and `limavm rm` discards it.
+Throwaway VMs, on this Mac with Lima or in Cloudflare containers, where Claude
+Code and Codex run with no sandbox and no permission prompts, are made by the
+`cog` command from [shields/cog](https://github.com/shields/cog), which also
+runs the GitHub gateway that keeps a VM's GitHub access to the repositories it
+is granted. Its README describes installing and using it. A VM is a clone of a
+base that `cog base` provisions from a dotfiles checkout, so what follows is
+what `cog` needs from this repository and what this repository reads from a VM.
 
-```
-limavm base [MODULE...]   # once, and again to refresh the base: tens of minutes
-limavm new [NAME] [--repo OWNER/REPO | --no-repo] [--no-claude-token] [--no-codex-auth]
-                          # a clone of the base, with secrets, the repository, and a shell in it
-limavm github NAME [OWNER/REPO] # add a repository grant to an existing VM
-limavm claude-token       # once: keep the Claude token on the Mac for every later new
-limavm rm NAME
-limavm list
-```
+`cog` needs from a dotfiles checkout:
 
-`limavm base` must run in a dotfiles checkout, and builds `dotfiles-base` from
-`lima/dev.yaml` and that checkout, including files that are not committed
-(`tools/stage_tree.sh` copies them). The guest checkout retains the local
-branch, commit history and tags; local changes appear as unstaged or untracked
-files after provisioning. Gitleaks scans both the copy and its history. It runs
-`./provision.sh MODULE...` in the guest (`dev` by default), then
-`provision/throwaway.sh`, forgets the identifiers that the agents stored, stops
-the VM and protects it from deletion. `limavm new` clones the base (an APFS
-copy-on-write clone, so it needs little disk), upgrades the Claude Code and Codex
-casks before any secret is present, and then installs the secrets with
-`bin/setup-secrets`, which reads each value from stdin. `ssh lima-NAME` also
-works, through `~/.lima/*/ssh.config`. `LIMAVM_CPUS` and `LIMAVM_MEMORY` (in GiB)
-override the size in `lima/dev.yaml` (6 CPUs and 16 GiB), and `LIMAVM_BASE`
-replaces the name `dotfiles-base`.
+- a git work tree with an executable `./provision.sh [MODULE...]` that honours
+  `DOTFILES_KEEP_BREW_DOWNLOADS` and leaves Homebrew at
+  `/home/linuxbrew/.linuxbrew` with `uv`, `gh` and the `claude-code@latest` and
+  `codex` casks;
+- `.claude/settings.json` with a non-empty `permissions.deny` that includes the
+  five `git push` rules the gateway setup removes (`Bash(git push*)`,
+  `Bash(git -C * push*)`, `Bash(git -c * push*)`, `Bash(git --git-dir* push*)`
+  and `Bash(git --work-tree* push*)`), a `PreToolUse` hook whose command
+  contains `git_guard.py`, and optionally `statusLine`;
+- `tools/configure_codex.py`, which `cog` runs again after it writes the
+  throwaway marker;
+- `~/.codex/rules/no-push.rules`, which `cog` removes in a gateway guest.
 
-## GitHub access
-
-Run `./provision.sh dev` on the Mac to build and start the `vm-access` launchd
-service, which runs under Bun. It holds the GitHub App access and refresh tokens
-under `~/.config/secrets/vm-access/`. A Lima guest receives only a public CA
-certificate and an immutable VM ID, never a GitHub token. Its HTTPS requests
-for `github.com` and `api.github.com` go through a per-VM Unix socket to the
-Mac. The gateway chooses the repository's token after checking the current
-grant and request. It refreshes tokens on demand; a refresh failure denies the
-request. The VM's git credential helper and `GH_TOKEN` use a fixed dummy value
-that the gateway discards.
-
-`limavm new NAME --repo OWNER/REPO` grants repository reads, including pull
-request reads, and pushes to `task/VM-ID/*`. It then clones the repository over
-HTTPS into `~/src/github.com/OWNER/REPO` and opens a shell there. The base
-already holds `shields/dotfiles` with the checkout's local changes, so it
-reuses that checkout. With no explicit repository, `limavm new` infers one
-from a GitHub `origin`; `--no-repo` creates a VM with no grants. `limavm github
-NAME [OWNER/REPO]` adds another repository without stopping the VM or removing
-its existing grants. It infers the repository from the current checkout if the
-argument is omitted.
-
-Public repositories, including those under `github.com/shields`, are readable
-without a grant, even in a VM created with `--no-repo`. Git clone/fetch and
-repository REST GET/HEAD requests use anonymous access when the repository has
-no grant. Repository web pages and downloads always use anonymous access.
-The gateway strips guest credentials and cookies, and GitHub denies anonymous
-reads of private repositories. Anonymous API reads use GitHub's unauthenticated
-rate limits.
-
-Granted repositories use their token for Git and REST reads. The `task` profile
-also permits pushes to the VM's task branch namespace, including force pushes.
-The gateway checks every ref update before forwarding a push; deletions and
-push options are denied. GraphQL queries still require exactly one granted
-repository because GitHub requires authentication. The `/user` identity read
-uses a granted repository token. GitHub API writes, PR creation and
-updates, cross-repository GraphQL queries, search queries and other unlisted
-operations are denied. `gh pr list` with search filters may therefore fail;
-basic repository and PR reads work through the supported routes. GitHub's REST
-pagination links name the repository by numeric ID; the gateway rewrites them to
-`/repos/OWNER/REPO`, so each page is checked like the first. Other requests by
-repository ID are denied, including GitHub's redirect from a renamed or
-transferred repository's old name, so use its current name. There is no
-approval queue.
-
-The version-controlled profiles in `.config/vm-access/profiles.yaml` define
-capability templates. A grant stores a copy of its profile, so editing the
-profile changes future grants only. Use these commands on the Mac to change a
-running VM immediately:
-
-```
-vm-access show lima:NAME
-vm-access grant lima:NAME OWNER/REPO --profile read|task
-vm-access revoke lima:NAME OWNER/REPO
-vm-access edit lima:NAME
-vm-access logs lima:NAME [--follow|--all]
-```
-
-`edit` opens the full YAML policy in `$VISUAL`, `$EDITOR` or `vi`; it rejects a
-stale revision. Adding a repository runs the GitHub authorization on the Mac
-before applying the edit. `grant` also authorizes a repository if needed. The
-gateway reads grants for every request, so changes take effect without a VM
-restart. `limavm rm` disables access before deleting the VM. A new VM with the
-same display name receives a new ID and no old grants. `vm-access logs VM-ID`
-can inspect a deleted VM's retained history.
-
-The GitHub App uses device flow with expiring user tokens and no private key.
-For your own app, grant repository Contents read/write, and Pull requests,
-Actions, Checks and Commit statuses read; the gateway denies PR writes even if
-an app has broader permissions. The default public client ID is
-`Iv23lim5x4MdkNNgv28z`; set `LIMAVM_GITHUB_CLIENT_ID` for your own app. The
-Mac's `gh` login reads the repository ID; the device flow requests that
-`repository_id` to scope the app token, and the gateway verifies that token can
-read the intended repository. The device code and URL are printed on the Mac for
-you to complete. To replace an expired or revoked authorization, run
-`vm-access authorize OWNER/REPO` on the Mac; policy grants remain in place.
-Revoking the app authorization at GitHub invalidates all its tokens. The gateway
-keeps the rotating refresh tokens on the Mac and never sends them to a VM.
-
-Every request decision is logged with VM ID, repository, operation, permitted
-refs, policy revision, result, upstream status and duration. Headers, bodies
-and raw queries are not logged. Policy changes are separately audited with the
-actor and old/new revision. Request logs are kept for 30 days and policy
-events for one year; requests fail closed if the audit database cannot be
-written. The state and admin socket are under `~/.local/state/vm-access/` on
-the Mac. `vm-access logs lima:NAME --follow` streams recent entries, and
-`--all` prints the retained history.
-
-## Other secrets
-
-### Claude Code
-
-`limavm claude-token` asks, without echo, for the token that `claude setup-token`
-prints (run that in another terminal first and paste the result) and keeps it in
-`~/.config/secrets/CLAUDE_CODE_OAUTH_TOKEN` on the Mac (directory 0700, file
-0600, written atomically). That is the one secret `limavm` itself keeps on the
-Mac: the file is the same one the VM gets, `.zshrc` exports it only on Linux,
-and Claude's sandbox on the Mac denies reads under `~/.config/secrets`.
-`limavm new` installs the token from that file when it exists, and fails, naming
-the file, when it is not a regular file, empty, unreadable or holds more than
-one word; without the file it asks the same way `claude-token` does and reminds
-you of `claude-token`.
-In the VM the token goes to the same path, which `.zshrc` exports in interactive
-shells. It is never taken from the command line or the environment. An empty
-answer is an error; `--no-claude-token` skips the token, file or prompt, for a
-VM where you will run `claude auth login`.
-
-### The rest
-
-- `~/.config/secrets/FIREWORKS_API_KEY`, the key `cg` uses, goes to the same
-  path in the VM when the file exists on the Mac. `limavm new` never asks for
-  it, and fails before it makes the VM when the file is not a regular file,
-  empty, unreadable or holds more than one word. It installs the key with the
-  base's own `setup-secrets`, so a base built before that script knew the name
-  makes `limavm new` fail after the other secrets and delete the VM, until
-  `limavm base` rebuilds the base.
-- Codex's login on the Mac, `~/.codex/auth.json` (the file OpenAI documents
-  copying to a headless machine), goes to `setup-secrets CODEX_AUTH` on stdin,
-  which checks that it is a JSON object and writes it to the same path in the VM
-  (directory 0700, file 0600). `limavm new` fails before it makes the VM when the
-  file is missing, not a regular file, unreadable, empty or not a JSON object.
-  The file exists only when `cli_auth_credentials_store` in
-  `~/.codex/config.toml` is `file`: with `keyring` or `auto` Codex keeps the
-  login in the Keychain, and OpenAI says the copy does not apply then. So set
-  `cli_auth_credentials_store = "file"` and run `codex login` on the Mac first.
-  `--no-codex-auth` skips it, and then says to run `codex login --device-auth`
-  in the VM, after you turn on device code login in ChatGPT's security
-  settings.
-
-## What is isolated
-
-Isolated, with `lima/dev.yaml` as the source:
-
-- No host directory is mounted. `lima/dev.yaml` sets `mounts: []`, and
-  `limavm base` fails if `~/.lima/_config` has added any.
-- No guest port is forwarded to the Mac. Lima still opens `127.0.0.1` ports on the
-  Mac for SSH and for its DNS resolver, which other programs on the Mac can
-  reach. The GitHub gateway has one reverse Unix socket forward per VM.
-- The SSH agent is not forwarded, and the proxy environment is not propagated.
-- An nftables filter in the guest rejects connections to the Mac
-  (`192.168.5.2`, also `host.lima.internal`, whose other ports reach the Mac's
-  loopback), to the private ranges `10.0.0.0/8`, `172.16.0.0/12` and
-  `192.168.0.0/16`, to `100.64.0.0/10`, to `169.254.0.0/16` and to `fc00::/7`.
-  The VM may use only DNS and DHCP at `192.168.5.2`. The rules load before the
-  network comes up on every boot, and Lima rewrites them on every boot.
-
-Not isolated:
-
-- The internet. The agents need it, so HTTPS and every other public address work,
-  and so does DNS, through Lima's resolver on the Mac.
-- Anything with root in the VM. `sudo` needs no password, so a process there can
-  delete the filter or the GitHub hosts mapping. These controls stop ordinary
-  clients, not a determined attacker.
-- Direct connections to GitHub IPs, other GitHub hostnames or a new outbound
-  proxy. General internet access is unrestricted, so the gateway cannot force
-  every possible GitHub connection through itself. It does keep its app tokens
-  off the VM; the policy is a boundary around those tokens, not around arbitrary
-  network traffic or credentials acquired by the guest.
-- The Claude token, Codex login and Fireworks key in the VM. Agents
-  can read and send those to public addresses. The VM has no GitHub App token or
-  refresh token.
-- The Mac's own public address, if it has one. Only the private ranges are
-  rejected.
-
-## What the agents may do
-
-`provision/throwaway.sh` makes a machine a throwaway environment. It creates
-`/etc/dotfiles-throwaway`, which `.zshrc` tests (without a fork) and only on
-Linux; the Mac and a persistent Linux box have no such file and keep their
-sandboxed, prompting behavior.
-
-- Claude Code gets `/etc/claude-code/managed-settings.json`, which no other
-  settings file overrides. It starts in `bypassPermissions` mode and disables the
-  sandbox. In that mode ask rules and a hook's ask still prompt, so managed
-  settings are the only source of permission rules and hooks, and carry the
-  `permissions.deny` rules, the `git_guard.py` hook and the status line from
-  `.claude/settings.json`. The ask rules (package installs) and
-  `dependency_guard.py` therefore do not apply, and neither do hooks from a
-  project's own `.claude/settings.json`. In `c`, the usual `--permission-mode=auto`
-  and sandbox settings are left out, because they would override managed
-  settings.
-- Codex gets `/etc/codex/config.toml` with `approval_policy = "never"` and
-  `default_permissions = ":danger-full-access"`. `~/.codex/config.toml` overrides
-  any key it sets, so `tools/configure_codex.py` detects `/etc/dotfiles-throwaway`
-  and selects the same full-access profile there. The network proxy is disabled
-  in both configs. Lima bases and Cloudflare agent images run the configuration
-  script after installing the throwaway policy. Re-provisioning preserves these
-  settings. `cx` is plain `codex`.
-- In a gateway VM, `git_guard.py` and the installed deny rules allow `git push`;
-  the gateway checks the destinations against `task/VM-ID/*`. The hook still
-  stops `git commit --no-verify`, and the agent policies still refuse the
-  listed `gh` write commands. The hook also refuses `gh api` with a method
-  other than GET or HEAD, and with `-f`, `-F` or `--input` unless it names GET
-  or HEAD; a GraphQL query is exempt. The deny rules refuse `gh api` write
-  methods as well, and Claude Code's matcher also looks inside a quoted
-  `$(...)`, which the hook does not. The gateway is the final check for API
-  calls. In a Lima VM, `setup-github-gateway` tells the agents about
-  `task/VM-ID/*` in system-wide instructions that re-provisioning leaves in
-  place: Claude Code's `/etc/claude-code/CLAUDE.md` and Codex's
-  `/etc/codex/requirements.toml` (`additional_developer_instructions`). A
-  Cloudflare VM gets neither file, so its agents are not told the namespace.
-
-## Checks to run once with real credentials
-
-After `./provision.sh dev`, `limavm base` and `limavm new t1 --repo
-OWNER/REPO`, which shows a device code and authorization URL on the Mac:
-
-- `zsh -ic exit` prints nothing, `git --version` is 2.54 or later, and
-  `git hook list pre-commit` lists gitleaks.
-- In a fresh repository under `~/src`, `c` opens with no dialogs and shows
-  bypass-permissions mode, and `/sandbox` shows that the sandbox is off.
-- In the VM, `gh api repos/OWNER/REPO`, `gh run list`, `gh run view --log` and
-  `git pull` work, and `codex debug prompt-input hi` shows the `task/VM-ID/`
-  instructions. A push to `task/VM-ID/check` succeeds, including a forced
-  update, a push of more than 1 MiB and a push from a `--depth 1` clone. A push
-  to `main`, a branch deletion, a PR write, and a read of an ungranted private
-  repository fail.
-  `vm-access logs lima:t1` on the Mac records each decision.
-- `limavm github t1 OTHER/REPO` adds a grant while the VM runs; revoking it with
-  `vm-access revoke lima:t1 OTHER/REPO` takes effect on the next request.
-- Replacing an expiring access token happens on the Mac on demand. After a
-  revoked or expired refresh token, `vm-access authorize OWNER/REPO` restores
-  the authorization; the VM never receives it.
-- `claude` runs without a login (with the token from `limavm claude-token` or
-  the `limavm new` prompt), and so does `codex` (with the Mac's `codex login`;
-  `codex login status` says so).
-- `emacs -nw` starts and exits.
-- With a Fireworks key, `cg -p hi` answers on the Mac and in the VM, `/status`
-  in `cg` names the Fireworks URL and the drop-in among the setting sources,
-  and the status line's cost after a few requests matches the Fireworks
-  dashboard.
-- From the VM, `curl -m3 host.lima.internal:PORT` fails at once for a server on
-  the Mac, and `lsof -nP -iTCP -sTCP:LISTEN` on the Mac shows only Lima's
-  `127.0.0.1` ports.
-
-# Throwaway Cloudflare VMs
-
-`cloudflare/deploy.sh` stages the checkout, scans it for secrets, builds the
-agent image, deploys the Worker, and installs a randomly generated admin secret
-from `~/.config/secrets/vm-access/cloudflare-admin-token`. It adds this Mac's
-`~/.ssh/id_ed25519.pub` to the staged Wrangler configuration for SSH access.
-The Worker URL appears in Wrangler's deployment output. Save it once with
-`bun run cloudflare/admin.ts config https://NAME.SUBDOMAIN.workers.dev`.
-For Worker-only changes, `cloudflare/deploy.sh --worker-only` reuses the
-deployed image without building or rolling out containers.
-
-Use `bun run cloudflare/admin.ts` for management:
-
-```sh
-bun run cloudflare/admin.ts authorize OWNER/REPO
-bun run cloudflare/admin.ts new NAME
-bun run cloudflare/admin.ts grant VM-ID OWNER/REPO task
-bun run cloudflare/admin.ts start VM-ID
-bun run cloudflare/admin.ts show VM-ID
-bun run cloudflare/admin.ts logs VM-ID
-bun run cloudflare/admin.ts events VM-ID
-bun run cloudflare/admin.ts revoke VM-ID OWNER/REPO
-bun run cloudflare/admin.ts delete VM-ID
-```
-
-`authorize` starts a separate GitHub App device flow for the cloud authority;
-it does not save that authorization on the Mac. A grant uses the same `read`
-and `task` profiles as Lima, and a revision check prevents overwriting another
-policy edit. Grants and revocations take effect for the next GitHub request
-without restarting the VM. `list` shows registered VM IDs. `containers`,
-`instances APPLICATION-ID`, and `ssh CONTAINER-ID` wrap the corresponding
-Wrangler commands. After connecting, clone a granted repository with Git and
-log in to the agents in the disposable VM as needed.
-
-The VM receives only a dummy GitHub credential. Its outbound HTTP and HTTPS
-requests pass through the Worker, which checks GitHub operations against the
-current VM grants and supplies the repository's short-lived token. The Worker
-forwards each request to the URL as it parsed it, so a GitHub request goes to
-exactly the URL that was checked. A request to any other host is forwarded as
-it arrived when its URL is already canonical; otherwise it is re-serialized from
-the parsed URL, which percent-encodes a `'` in a query, folds `%2e%2e`, and
-turns a backslash into a slash. A request whose URL does not parse is denied and
-logged. The refresh token stays in Durable Object storage. GitHub access logs
-record the VM, repository, operation, refs, decision, policy revision, upstream
-status, and duration without credentials; policy events record before and after
-grants. Access logs are retained for 30 days and policy events for 365 days. The
-container's filesystem is disposable. The current image uses a 1-vCPU, 4-GiB,
-20-GB instance to leave workspace room around the installed toolchain; its
-inactivity timeout is six hours.
+This repository reads two files that `cog` writes in the guest:
+`/etc/cog-throwaway`, whose presence makes the machine a throwaway VM, and
+`/etc/cog-github-gateway`, one line holding the VM's UUID, or `cloudflare`.
+`.zshrc`, `.zshenv`, `.zsh.d/wt.zsh`, `.codex/hooks/git_guard.py`,
+`tools/configure_codex.py` and `provision.sh` read them.
 
 # Testing on Linux
 
