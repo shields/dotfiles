@@ -183,6 +183,86 @@
           }
         ]
       }
+    ],
+    "PermissionRequest": [
+      {
+        "matcher": "Bash|Monitor",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "for py in /opt/homebrew/bin/python3 /usr/local/bin/python3 /home/linuxbrew/.linuxbrew/bin/python3; do [ -x \"$py\" ] && \"$py\" -c 'import sys; sys.exit(sys.version_info < (3, 15))' && exec \"$py\" \"$HOME/.claude/hooks/dependency_guard.py\"; done; echo 'dependency_guard.py: Python 3.15+ not found in /opt/homebrew/bin, /usr/local/bin or /home/linuxbrew/.linuxbrew/bin; run provision.sh or brew install python@3.15' >&2; exit 1",
+            "timeout": 10
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "Bash|Edit|Write|Monitor",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "for py in /opt/homebrew/bin/python3 /usr/local/bin/python3 /home/linuxbrew/.linuxbrew/bin/python3; do [ -x \"$py\" ] && \"$py\" -c 'import sys; sys.exit(sys.version_info < (3, 15))' && exec \"$py\" \"$HOME/.claude/hooks/dependency_guard.py\"; done; echo 'dependency_guard.py: Python 3.15+ not found in /opt/homebrew/bin, /usr/local/bin or /home/linuxbrew/.linuxbrew/bin; run provision.sh or brew install python@3.15' >&2; exit 1",
+            "timeout": 10
+          }
+        ]
+      }
+    ],
+    "PostToolUseFailure": [
+      {
+        "matcher": "Bash|Edit|Write|Monitor",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "for py in /opt/homebrew/bin/python3 /usr/local/bin/python3 /home/linuxbrew/.linuxbrew/bin/python3; do [ -x \"$py\" ] && \"$py\" -c 'import sys; sys.exit(sys.version_info < (3, 15))' && exec \"$py\" \"$HOME/.claude/hooks/dependency_guard.py\"; done; echo 'dependency_guard.py: Python 3.15+ not found in /opt/homebrew/bin, /usr/local/bin or /home/linuxbrew/.linuxbrew/bin; run provision.sh or brew install python@3.15' >&2; exit 1",
+            "timeout": 10
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "for py in /opt/homebrew/bin/python3 /usr/local/bin/python3 /home/linuxbrew/.linuxbrew/bin/python3; do [ -x \"$py\" ] && \"$py\" -c 'import sys; sys.exit(sys.version_info < (3, 15))' && exec \"$py\" \"$HOME/.claude/hooks/dependency_guard.py\"; done; echo 'dependency_guard.py: Python 3.15+ not found in /opt/homebrew/bin, /usr/local/bin or /home/linuxbrew/.linuxbrew/bin; run provision.sh or brew install python@3.15' >&2; exit 1",
+            "timeout": 10
+          }
+        ]
+      }
+    ],
+    "SubagentStop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "for py in /opt/homebrew/bin/python3 /usr/local/bin/python3 /home/linuxbrew/.linuxbrew/bin/python3; do [ -x \"$py\" ] && \"$py\" -c 'import sys; sys.exit(sys.version_info < (3, 15))' && exec \"$py\" \"$HOME/.claude/hooks/dependency_guard.py\"; done; echo 'dependency_guard.py: Python 3.15+ not found in /opt/homebrew/bin, /usr/local/bin or /home/linuxbrew/.linuxbrew/bin; run provision.sh or brew install python@3.15' >&2; exit 1",
+            "timeout": 10
+          }
+        ]
+      }
+    ],
+    "PostToolBatch": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "for py in /opt/homebrew/bin/python3 /usr/local/bin/python3 /home/linuxbrew/.linuxbrew/bin/python3; do [ -x \"$py\" ] && \"$py\" -c 'import sys; sys.exit(sys.version_info < (3, 15))' && exec \"$py\" \"$HOME/.claude/hooks/dependency_guard.py\"; done; echo 'dependency_guard.py: Python 3.15+ not found in /opt/homebrew/bin, /usr/local/bin or /home/linuxbrew/.linuxbrew/bin; run provision.sh or brew install python@3.15' >&2; exit 1",
+            "timeout": 10
+          }
+        ]
+      }
+    ],
+    "SessionEnd": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "for py in /opt/homebrew/bin/python3 /usr/local/bin/python3 /home/linuxbrew/.linuxbrew/bin/python3; do [ -x \"$py\" ] && \"$py\" -c 'import sys; sys.exit(sys.version_info < (3, 15))' && exec \"$py\" \"$HOME/.claude/hooks/dependency_guard.py\"; done; echo 'dependency_guard.py: Python 3.15+ not found in /opt/homebrew/bin, /usr/local/bin or /home/linuxbrew/.linuxbrew/bin; run provision.sh or brew install python@3.15' >&2; exit 1",
+            "timeout": 10
+          }
+        ]
+      }
     ]
   },
   "statusLine": {

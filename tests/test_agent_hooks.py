@@ -87,7 +87,7 @@ def registered_hooks(agent: str, path: Path) -> list[Hook]:
         for group in groups:
             for handler in cast("list[dict[str, str]]", group["hooks"]):
                 assert handler["type"] == "command"
-                matcher = cast("str", group["matcher"])
+                matcher = cast("str", group.get("matcher", ""))
                 hooks.append(Hook(agent, event, matcher, handler["command"]))
     return hooks
 
@@ -227,17 +227,32 @@ def sandbox(tmp_path: Path) -> Sandbox:
 def test_registered_hooks() -> None:
     assert {(hook.agent, hook.event, hook.matcher, hook.script) for hook in HOOKS} == {
         ("claude", "PreToolUse", "Bash|Edit|Write|Monitor", DEPENDENCY_GUARD),
+        ("claude", "PermissionRequest", "Bash|Monitor", DEPENDENCY_GUARD),
+        ("claude", "PostToolUse", "Bash|Edit|Write|Monitor", DEPENDENCY_GUARD),
+        ("claude", "PostToolUseFailure", "Bash|Edit|Write|Monitor", DEPENDENCY_GUARD),
+        ("claude", "Stop", "", DEPENDENCY_GUARD),
+        ("claude", "SubagentStop", "", DEPENDENCY_GUARD),
+        ("claude", "PostToolBatch", "", DEPENDENCY_GUARD),
+        ("claude", "SessionEnd", "", DEPENDENCY_GUARD),
         ("claude", "PreToolUse", "Bash|Monitor", GIT_GUARD),
         ("codex", "PreToolUse", "^Bash$", GIT_GUARD),
     }
-    assert len(HOOKS) == 3
+    assert len(HOOKS) == 10
+
+
+def missing_interpreter_exit(hook: Hook) -> int:
+    # Exit 2 blocks the tool call on PreToolUse, which a missing interpreter must
+    # do. On the other events it would keep Claude from stopping, halt the
+    # agentic loop or hand stderr to Claude, so they exit 1, which reports the
+    # error to the user.
+    return 2 if hook.event == "PreToolUse" else 1
 
 
 @pytest.mark.parametrize("hook", HOOKS, ids=label)
 def test_command_lists_the_expected_interpreters(hook: Hook) -> None:
     candidates = re.findall(r"/[\w/.+-]*/python[\w.]*\b", hook.command)
     assert candidates == list(INTERPRETERS)
-    assert hook.command.rstrip().endswith("exit 2")
+    assert hook.command.rstrip().endswith(f"exit {missing_interpreter_exit(hook)}")
     for lookup in ("/usr/bin/env", "PATH", ".local"):
         assert lookup not in hook.command
 
@@ -269,7 +284,7 @@ def test_first_compatible_interpreter_runs(
     result = sandbox.run(shell, command, bash(hook, "git status"))
     assert result.stdout == ""
     if expected is None:
-        assert result.returncode == 2
+        assert result.returncode == missing_interpreter_exit(hook)
         assert sandbox.resolved() == []
         assert "Python 3.15+ not found" in result.stderr
         assert Path(hook.script).name in result.stderr
@@ -375,7 +390,9 @@ def test_dependency_guard_asks_about_a_new_dependency(
     (hook,) = [
         hook
         for hook in HOOKS
-        if hook.agent == "claude" and hook.script == DEPENDENCY_GUARD
+        if hook.agent == "claude"
+        and hook.script == DEPENDENCY_GUARD
+        and hook.event == "PreToolUse"
     ]
     manifest = tmp_path / "pyproject.toml"
     _ = manifest.write_text(PYPROJECT)
