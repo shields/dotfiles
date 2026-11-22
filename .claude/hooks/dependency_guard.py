@@ -499,7 +499,7 @@ def _edit_reason(tool: str, tool_input: dict[str, Any]) -> str | None:
 _GO_COMMENT_RE = re.compile(r"/\*.*?\*/|//[^\n]*", re.DOTALL)
 _GO_BODY_RE = re.compile(r"^(?:func|type|var|const)\b", re.MULTILINE)
 _GO_IMPORT_RE = re.compile(
-    r"^[ \t]*import\s*(?:\((?P<block>[^)]*)\)"
+    r"(?:^|;)[ \t]*import\s*(?:\((?P<block>[^)]*)\)"
     r"|(?:[\w.]+\s+)?(?P<one>\"[^\"\n]*\"|`[^`]*`))",
     re.MULTILINE,
 )
@@ -1652,7 +1652,9 @@ def _post(payload: dict[str, Any]) -> dict[str, Any] | None:
             continue
         with Root(root) as guard:
             call = guard.call(call_id)
-            if call is None:
+            # A call that was closed early has lost its snapshot, and judging it
+            # against an empty one would take every manifest for new.
+            if call is None or call["end"] is not None:
                 continue
             if asked:
                 call["asked"] = True
