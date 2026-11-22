@@ -859,6 +859,13 @@ def test_linux_gets_git_credential_helpers_and_claude_onboarding() -> None:
     assert "https://github.com https://gist.github.com" in body
     assert "'!gh auth git-credential'" in body
     assert "$HOME/.config/git/config" in body
+    gateway = re.escape("/etc/cog-github-gateway")
+    skip = find(
+        rf"if \[\[ \$credential_url == https://github\.com && -f {gateway} \]\]"
+    )
+    assert LINES[skip + 1].strip() == "continue"
+    assert openers(skip)[0].startswith("for credential_url in ")
+    assert skip < credential
     assert "hasCompletedOnboarding = true" in body
     assert ".projects[$root].hasTrustDialogAccepted = true" in body
     assert '--arg root "$dotfiles_root"' in body

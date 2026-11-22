@@ -302,6 +302,10 @@ uv run --project "$dotfiles_root" --no-dev python "$dotfiles_root/tools/configur
 if [[ $os == linux ]]; then
     mkdir -p "$HOME/.config/git"
     for credential_url in https://github.com https://gist.github.com; do
+        # A gateway guest keeps cog's helper for github.com in ~/.config/git/config.
+        if [[ $credential_url == https://github.com && -f /etc/cog-github-gateway ]]; then
+            continue
+        fi
         git config --file "$HOME/.config/git/config" "credential.$credential_url.helper" '!gh auth git-credential'
     done
 

@@ -389,7 +389,10 @@ This repository reads two marker files that `cog` writes in the guest:
 `tests/test_cog_contract.py` checks that each names its marker and that
 `.claude/settings.json` satisfies the list above. Where the second file holds
 a UUID, `wt` names a new worktree's branch `cog/UUID/worktree-NAME`, since the
-gateway accepts pushes only to `cog/UUID/*`.
+gateway accepts pushes only to `cog/UUID/*`. Where `/etc/cog-github-gateway`
+exists, `provision.sh` leaves the credential helper for `https://github.com` in
+`~/.config/git/config` alone, because `cog` puts the gateway's helper there
+(replacing the `gh` helper that an earlier run wrote).
 
 # Testing on Linux
 
