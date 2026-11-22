@@ -13,18 +13,16 @@
 # limitations under the License.
 
 # Clone a git repo into a <host>/<owner>/<repo> directory structure under $GCL_ROOT (default ~/src).
-# e.g. gcl https://github.com/octocat/Hello-World → ~/src/github.com/octocat/Hello-World
+# e.g. gcl octocat/Hello-World → ~/src/github.com/octocat/Hello-World
 # Supports nested paths (e.g. GitLab subgroups). Always clones via HTTPS;
 # private repo auth is handled by git credential helpers.
 unalias gcl 2>/dev/null || true
 gcl() {
     if [[ $# -lt 1 ]] || [[ -z "$1" ]]; then
-        echo "Usage: gcl <repo-url> [git-clone-options...]" >&2
+        echo "Usage: gcl <repo-url|owner/repo> [git-clone-options...]" >&2
         return 1
     fi
 
-    local url="$1"
-    shift
     local root="${GCL_ROOT:-$HOME/src}"
     # Strip any trailing slashes (but never reduce "/" to empty) so $root is a
     # clean prefix for path joins and for the boundary check in the failure
@@ -33,17 +31,20 @@ gcl() {
         root="${root%/}"
     done
 
-    # Normalize: strip scheme, trailing slash, and .git suffix
-    url="${url#https://}"
+    local url="${1#https://}"
     url="${url#http://}"
     url="${url%/}"
     url="${url%.git}"
 
     local parts=(${(s:/:)url})
     if [[ ${#parts[@]} -lt 2 ]]; then
-        echo "gcl: expected <host>/<path>" >&2
+        echo "gcl: expected <owner>/<repo> or <host>/<path>" >&2
         return 1
     fi
+    if [[ ${#parts[@]} -eq 2 && "$1" != *://* && "${parts[1]}" != *[^[:alnum:]_-]* ]]; then
+        parts=(github.com "${parts[@]}")
+    fi
+    shift
 
     local clean_url="${(j:/:)parts}"
     local target="$root/$clean_url"

@@ -98,16 +98,25 @@ out="$(gcl https://go.googlesource.com/net 2>&1)" && rc=$? || rc=$?
 assert_eq "2-component url clones successfully" 0 "$rc"
 assert_eq "2-component url creates .git dir" 1 "$([[ -d $GCL_ROOT/go.googlesource.com/net/.git ]] && echo 1 || echo 0)"
 
+out="$(gcl go.googlesource.com/net)"
+assert_eq "bare host/repo reuses the checkout" "gcl: already cloned at $GCL_ROOT/go.googlesource.com/net" "$out"
+
+out="$(gcl https://forge/net >/dev/null && pwd)"
+assert_eq "explicit URL accepts a single-label host" "$GCL_ROOT/forge/net" "$out"
+
 # --- clone with bare host/owner/repo ---
 out="$(gcl github.com/octocat/Hello-World 2>&1)" && rc=$? || rc=$?
 assert_eq "bare url clones successfully" 0 "$rc"
 assert_eq "bare url creates .git dir" 1 "$([[ -d $GCL_ROOT/github.com/octocat/Hello-World/.git ]] && echo 1 || echo 0)"
 
-out="$(gcl https://github.com/octocat/options.git --depth 1 --single-branch --branch=feature/test --config 'remote.origin.fetch=+refs/heads/*:refs/remotes/origin/*' --config 'core.sshCommand=ssh -v' 2>&1)" && rc=$? || rc=$?
+out="$(gcl octocat/options.git/ --depth 1 --single-branch --branch=feature/test --config 'remote.origin.fetch=+refs/heads/*:refs/remotes/origin/*' --config 'core.sshCommand=ssh -v' 2>&1)" && rc=$? || rc=$?
 assert_eq "url with clone options clones successfully" 0 "$rc"
 assert_eq "url with clone options creates .git dir" 1 "$([[ -d $GCL_ROOT/github.com/octocat/options/.git ]] && echo 1 || echo 0)"
 cmp <(printf '%s\0' clone --depth 1 --single-branch --branch=feature/test --config 'remote.origin.fetch=+refs/heads/*:refs/remotes/origin/*' --config 'core.sshCommand=ssh -v' https://github.com/octocat/options.git "$GCL_ROOT/github.com/octocat/options") "$GCL_CLONE_ARGS" && rc=$? || rc=$?
 assert_eq "clone options are forwarded unchanged" 0 "$rc"
+
+out="$(gcl octocat/Hello-World >/dev/null && pwd)"
+assert_eq "owner/repo enters the GitHub checkout" "$GCL_ROOT/github.com/octocat/Hello-World" "$out"
 
 # --- already cloned (https:// url) ---
 out="$(gcl https://github.com/octocat/Hello-World 2>&1)" && rc=$? || rc=$?
