@@ -381,23 +381,25 @@ what `cog` needs from this repository and what this repository reads from a VM.
   throwaway marker;
 - `~/.codex/rules/no-push.rules`, which `cog` removes in a gateway guest.
 
-This repository reads two files that `cog` writes in the guest:
+This repository reads two marker files that `cog` writes in the guest:
 `/etc/cog-throwaway`, whose presence makes the machine a throwaway VM, and
 `/etc/cog-github-gateway`, one line holding the VM's UUID, or `cloudflare`.
 `.zshrc`, `.zshenv`, `.zsh.d/wt.zsh`, `.codex/hooks/git_guard.py`,
 `tools/configure_codex.py` and `provision.sh` read them, and
 `tests/test_cog_contract.py` checks that each names its marker and that
-`.claude/settings.json` satisfies the list above.
+`.claude/settings.json` satisfies the list above. Where the second file holds
+a UUID, `wt` names a new worktree's branch `cog/UUID/worktree-NAME`, since the
+gateway accepts pushes only to `cog/UUID/*`.
 
 # Testing on Linux
 
 `make test-linux` needs Docker. It copies the checkout into a temporary
 directory outside the repository with `tools/stage_tree.sh`, which includes
 files that are not yet committed and scans them with gitleaks. It then builds
-`tools/linux-test.Dockerfile` for the machine's own architecture with that directory
-as the context, which runs `./provision.sh` just as on a Linux box, and finally
-runs `bun install --frozen-lockfile` and `make test lint` in the image as an
-unprivileged user. It fails if any step fails.
+`tools/linux-test.Dockerfile` for the machine's own architecture with that
+directory as the context, which runs `./provision.sh` just as on a Linux box,
+and finally runs `bun install --frozen-lockfile` and `make test lint` in the
+image as an unprivileged user. It fails if any step fails.
 
 The Codex tests start Codex's bubblewrap sandbox, which Docker's defaults
 prevent, so the container runs with `/proc` unmasked (`systempaths=unconfined`)

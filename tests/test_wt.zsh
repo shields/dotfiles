@@ -588,7 +588,7 @@ configure_sort "$TMPBASE/gateway-sort-count" $'6643\tyo-yo' $'1111\taardvark'
 run_wt
 assert_eq "gateway worktree creation succeeds" 0 "$LAST_RC"
 assert_eq "gateway worktree branch is in the VM namespace" \
-    "task/01234567-89ab-4cde-8fab-0123456789ab/worktree-yo-yo-aardvark" \
+    "cog/01234567-89ab-4cde-8fab-0123456789ab/worktree-yo-yo-aardvark" \
     "$(command git branch --show-current)"
 unset DOTFILES_GITHUB_GATEWAY_MARKER
 

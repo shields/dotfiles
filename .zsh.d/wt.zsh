@@ -286,7 +286,7 @@ wt() {
             print -u2 -r -- "wt: invalid GitHub gateway identity"
             return 1
         fi
-        branch_name="task/$gateway_id/$branch_name"
+        branch_name="cog/$gateway_id/$branch_name"
     fi
     local target="$main_worktree/.worktrees/$worktree_name"
 
