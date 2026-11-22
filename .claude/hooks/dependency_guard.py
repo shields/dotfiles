@@ -14,22 +14,34 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-# PreToolUse hook: prompt before a dependency is added to a manifest.
+# Claude Code hook: keep the agent from changing a project's declared
+# dependencies without the user's approval.
 #
-# The permissions.ask rules in settings.json match Bash command text, so they
-# cannot fire when a manifest is edited directly with Edit or Write. This hook
-# closes that gap for the manifests that are *also* edited for unrelated
-# reasons: it applies the pending edit in memory, compares the declared
-# dependency set before and after, and stays silent unless that set actually
-# gains an entry or changes one. Manifests where every edit is a dependency
-# change (lockfiles, Brewfile, requirements.txt) need no parsing and are
-# covered by plain Edit(...) ask rules instead.
+# Edit and Write: the permissions.ask rules in settings.json match Bash command
+# text, so they cannot fire when a manifest is edited directly. PreToolUse
+# applies the pending edit in memory, compares the declared dependency set
+# before and after, and asks only when that set gains an entry or changes one.
+# Manifests where every edit is a dependency change (lockfiles, Brewfile,
+# requirements.txt) are covered by plain Edit(...) ask rules instead. An edit to
+# a Go file asks as well when it imports a module that go.mod does not require.
+# Once the user approves that, the `go mod tidy` that adds the requirement is
+# not a change.
 #
-# Shell commands get two checks: a write to one of those manifests, and a package
-# manager's install, which an ask rule cannot split into a bare install and one
-# that names a package (see Installer).
+# Shell commands: a command's text cannot reliably say what it will change, so
+# the hook compares what it did change. PreToolUse snapshots the guarded files
+# of the git repository of the working directory, and PostToolUse compares. An
+# unapproved change to the declared dependencies is undone and reported to
+# Claude, and running the same command again asks first. A change is approved
+# when the user was asked about the call and it ran, or when git history before
+# the call already held it (checkout, rebase, pull). Background commands are
+# judged at Stop, once they have finished. When another command ran at the same
+# time, or git is mid-merge, the change cannot be pinned on one command and
+# undoing it could lose work, so it is reported but left in place. A call that
+# gets no PostToolUse, because its prompt was denied or another hook refused it,
+# ends with its PostToolBatch, and a session's open calls end with it.
 #
-# Silence is the "no opinion" pass-through; anything it cannot analyze asks.
+# Lockfiles are not compared: they resolve what the manifests declare. They are
+# restored together with a manifest that is undone.
 #
 # permissionDecisionReason is shown to the user, not to the model, so it is
 # phrased for a human. The rule against routing around a refusal lives in
@@ -41,29 +53,55 @@
 # version of Homebrew's absolute python3 paths and exits 2 if none meets the
 # project minimum; a PATH lookup could run an older or untrusted interpreter.
 
+import fcntl
+import hashlib
 import json
+import os
 import re
+import shutil
 import signal
+import stat
+import subprocess
 import sys
+import tempfile
+import time
 import tomllib
-from pathlib import Path
-from typing import TYPE_CHECKING, Any, Literal, NamedTuple, cast
+from pathlib import Path, PurePosixPath
+from typing import TYPE_CHECKING, Any, NamedTuple, Self, cast
 
 if TYPE_CHECKING:
     from collections.abc import Callable
-    from types import FrameType
+    from types import FrameType, TracebackType
 
 type Specs = dict[str, str]
 
 # Refuse to parse anything implausibly large rather than stalling a tool call.
 MAX_BYTES = 2_000_000
 
+# Lockfiles are only copied, never parsed, and a monorepo's outgrow MAX_BYTES.
+MAX_COPY_BYTES = 64_000_000
+
 # Cap on how many names a prompt lists before eliding.
 MAX_LISTED = 5
 
-# Seconds the hook may run before it gives up and asks. settings.json gives it
-# 10, and a hook that outlasts that fails open.
+MAX_NAME = 60
+
+# Seconds the hook may run before it gives up. settings.json gives it 10, and a
+# hook that outlasts that fails open.
 WALL_BUDGET = 5.0
+
+# Seconds a finished call stays on record, so that a call that overlapped it can
+# still see it, and a background call may stay open before it is dropped.
+KEEP_CLOSED = 3600
+KEEP_OPEN = 86400
+
+# The version of what state.json holds. A file written under another one is
+# discarded, since its specs were extracted by other code.
+STATE_VERSION = 1
+
+KEEP_SAVED = 30 * 86400
+
+MAX_SHOWN = 160
 
 EDIT_TOOLS = frozenset({"Edit", "Write"})
 
@@ -280,14 +318,24 @@ def _go_entry(specs: Specs, directive: str, entry: str) -> None:
         return
     if directive == "replace":
         left, sep, right = entry.partition("=>")
-        if sep:
+        if sep and left.strip():
             specs[f"replace:{left.split()[0]}"] = right.strip()
             return
     parts = entry.split()
     specs[f"{directive}:{parts[0]}"] = " ".join(parts[1:])
 
 
-def _go_mod_specs(text: str) -> Specs:
+_GO_INDIRECT_RE = re.compile(r"//\s*indirect\b")
+
+
+def _go_mod_specs(text: str, *, with_resolved: bool = True) -> Specs:
+    """The directives of a go.mod.
+
+    `go mod tidy` rewrites indirect requirements and the toolchain line the way a
+    package manager rewrites its lockfile, so `with_resolved=False` leaves them
+    out. Only a requirement carries the `// indirect` marker, so it excuses
+    nothing else.
+    """
     specs: Specs = {}
     block: str | None = None
     for raw in text.splitlines():
@@ -296,10 +344,11 @@ def _go_mod_specs(text: str) -> Specs:
         line = raw.split("//", 1)[0].strip()
         if not line:
             continue
+        indirect = _GO_INDIRECT_RE.search(raw) is not None
         if block is not None:
             if line.startswith(")"):
                 block = None
-            else:
+            elif with_resolved or not (block == "require" and indirect):
                 _go_entry(specs, block, line)
             continue
         # split() over partition(" ") so a directive separated from its argument
@@ -312,6 +361,10 @@ def _go_mod_specs(text: str) -> Specs:
         if rest.startswith("("):
             block = directive
             _go_entry(specs, directive, rest[1:])
+            continue
+        if not with_resolved and (
+            directive == "toolchain" or (directive == "require" and indirect)
+        ):
             continue
         _go_entry(specs, directive, rest)
     return specs
@@ -354,8 +407,36 @@ def _apply_edit(before: str, tool_input: dict[str, Any]) -> str | None:
     return before.replace(old, new, 1)
 
 
-def _names(keys: list[str]) -> str:
-    shown = sorted({key.rpartition(":")[2] or key for key in keys})
+# A line manifest such as .npmrc or a Gemfile can hold credentials, and the
+# messages quote its lines.
+_SECRET_RE = re.compile(
+    r"(?<=://)[^/\s@]+@|(?<![\w.-])(?P<key>[\w.-]*(?:_auth|_password|token|secret)[\w.-]*)=\S+",
+    re.IGNORECASE,
+)
+
+
+# C0 and C1 controls, zero-width and direction marks, and the Unicode line and
+# paragraph separators, which a terminal may draw as a line break or reorder.
+_CONTROL_RE = re.compile(
+    r"[\x00-\x1f\x7f-\x9f\u200b-\u200f\u2028-\u202e\u2066-\u2069\ufeff]+"
+)
+
+
+def _clean(text: str) -> str:
+    """Text an agent chose, made safe to show inside a prompt as one line."""
+    return _CONTROL_RE.sub(" ", text).strip()
+
+
+def _name(key: str, *, whole: bool) -> str:
+    key = _SECRET_RE.sub(
+        lambda match: f"{match['key']}=<redacted>" if match["key"] else "", key
+    )
+    name = _clean(key if whole else key.rpartition(":")[2] or key)
+    return name if len(name) <= MAX_NAME else f"{name[: MAX_NAME - 3]}..."
+
+
+def _names(keys: list[str], *, whole: bool = False) -> str:
+    shown = sorted({_name(key, whole=whole) for key in keys})
     if len(shown) > MAX_LISTED:
         return f"{', '.join(shown[:MAX_LISTED])} and {len(shown) - MAX_LISTED} more"
     return ", ".join(shown)
@@ -415,936 +496,1341 @@ def _edit_reason(tool: str, tool_input: dict[str, Any]) -> str | None:
     return _describe(path.name, added, changed)
 
 
-# Manifests worth guarding against a raw shell write. Unlike the Edit path this
-# cannot parse anything, so any write to one of these asks. Each is matched
-# after \S* or _SEG, which already cover a leading run of filename characters,
-# so no alternative may begin with a loop over those characters: the overlap
-# makes a long token cost quadratic time, and a hook that outlasts its timeout
-# fails open.
-BASH_GUARDED = (
-    r"pyproject\.toml",
-    r"package\.json",
-    r"Cargo\.toml",
-    r"go\.mod",
-    r"go\.sum",
-    r"Brewfile",
-    r"Gemfile",
-    r"gems\.rb",
-    r"\.gemspec",
-    r"\.npmrc",
-    r"bunfig\.toml",
-    r"\.pnpmfile\.cjs",
-    r"pnpm-workspace\.yaml",
-    r"Package\.swift",
-    r"\.pre-commit-config\.yaml",
-    r"requirements[\w.-]*\.txt",
-    r"constraints\.txt",
-    r"\.lockb?",
-    r"package-lock\.json",
-    r"npm-shrinkwrap\.json",
-    r"pnpm-lock\.yaml",
-    r"yarn\.lock",
-    r"Package\.resolved",
+_GO_COMMENT_RE = re.compile(r"/\*.*?\*/|//[^\n]*", re.DOTALL)
+_GO_BODY_RE = re.compile(r"^(?:func|type|var|const)\b", re.MULTILINE)
+_GO_IMPORT_RE = re.compile(
+    r"(?:^|;)[ \t]*import\s*(?:\((?P<block>[^)]*)\)"
+    r"|(?:[\w.]+\s+)?(?P<one>\"[^\"\n]*\"|`[^`]*`))",
+    re.MULTILINE,
 )
+_GO_PATH_RE = re.compile(r"\"([^\"\n]*)\"|`([^`]*)`")
+_GO_MODULE_RE = re.compile(r"^\s*module\s+\"?([^\s\"]+)", re.MULTILINE)
+_GO_USE_RE = re.compile(r"^\s*use\s*(?:\(([^)]*)\)|(\S+))", re.MULTILINE)
 
-_MANIFEST = f"(?:{'|'.join(BASH_GUARDED)})"
-# Stop each pattern at a shell separator so a write later in the line is not
-# attributed to a manifest merely read earlier in it. The split is not
-# quote-aware, so a ; | or & inside a quoted sed script also ends the segment.
-_SEG = r"[^|;&\n]*?"
-# The in-place flag of BSD (-i, -I) and GNU sed. It may end a cluster of
-# argument-less flags (-Ei, -ni), carry a suffix (-i.bak) or be spelled out; GNU
-# accepts any prefix of --in-place (--in-pl, --i) and, unlike BSD, the flag
-# after the file operands.
-_SED_IN_PLACE = r"(?:-[abEnrsuz]*[iI]|--i[a-z-]*)"
 
-BASH_WRITE_RES = tuple(
-    re.compile(pattern)
-    for pattern in (
-        rf">>?\s*[^\s>]*{_MANIFEST}\b",
-        rf"\btee\b{_SEG}\s\S*{_MANIFEST}\b",
-        # Two independent lookaheads, flag first, so that the flag may sit on
-        # either side of the file operands and each lookahead is one scan. gsed
-        # is Homebrew's GNU sed.
-        rf"\bg?sed\b(?={_SEG}\s{_SED_IN_PLACE})(?={_SEG}\s\S*{_MANIFEST}\b)",
-        rf"\bdd\b{_SEG}\bof=\S*{_MANIFEST}\b",
-        rf"\b(?:python3?|perl|ruby|node|bun)\b{_SEG}\s-[ce]\b{_SEG}{_MANIFEST}",
-        # The destination of a copy is its last operand, so copying a manifest
-        # elsewhere does not match.
-        rf"\b(?:cp|mv|rsync|ln)\b{_SEG}\s\S*{_MANIFEST}\b(?=\s*(?:[|;&\n]|$))",
-        rf"\b(?:curl|wget)\b{_SEG}\s(?:-[A-Za-z]*[oO]|--output(?:-document)?)[\s=]\s*\S*{_MANIFEST}\b",
-        rf"\b(?:patch|truncate)\b{_SEG}\s\S*{_MANIFEST}\b",
-        rf"\b(?:npm|pnpm|bun)\b{_SEG}\bpkg\s+(?:set|delete|fix)\b",
+def _go_imports(text: str) -> set[str]:
+    code = _GO_COMMENT_RE.sub("", text)
+    # Imports precede every declaration, so what follows the first one is code,
+    # whose strings could look like an import.
+    body = _GO_BODY_RE.search(code)
+    if body is not None:
+        code = code[: body.start()]
+    paths: set[str] = set()
+    for match in _GO_IMPORT_RE.finditer(code):
+        quoted = match["block"] if match["block"] is not None else match["one"]
+        for path in _GO_PATH_RE.finditer(quoted):
+            paths.add(path[1] if path[1] is not None else path[2])
+    return paths
+
+
+def _go_module(directory: Path) -> Path | None:
+    for candidate in (directory, *directory.parents):
+        if (candidate / "go.mod").is_file():
+            return candidate / "go.mod"
+    return None
+
+
+def _go_provided(go_mod: Path) -> set[str] | None:
+    """The module paths an import may name without a new requirement."""
+    text = _read(go_mod)
+    if text is None:
+        return None
+    provided = {
+        key.removeprefix("require:")
+        for key in _go_mod_specs(text)
+        if key.startswith("require:")
+    }
+    provided.update(_GO_MODULE_RE.findall(text))
+    # The modules of a go.work workspace import each other without requiring
+    # each other.
+    for candidate in (go_mod.parent, *go_mod.parent.parents):
+        work = candidate / "go.work"
+        if not work.is_file():
+            continue
+        work_text = _read(work) or ""
+        for block, single in _GO_USE_RE.findall(_GO_COMMENT_RE.sub("", work_text)):
+            for use in block.split() if block else [single]:
+                module = _read(candidate / use.strip('"') / "go.mod")
+                if module:
+                    provided.update(_GO_MODULE_RE.findall(module))
+        break
+    return provided
+
+
+_MAJOR_RE = re.compile(r"v(?:[2-9]|[1-9]\d+)")
+
+
+def _covers(module: str, path: str) -> bool:
+    """Whether the package at an import path is in the module."""
+    if path == module:
+        return True
+    rest = path.removeprefix(f"{module}/")
+    # A major version suffix after the module's path names another module.
+    return rest != path and _MAJOR_RE.fullmatch(rest.split("/", 1)[0]) is None
+
+
+def _new_go_imports(tool: str, tool_input: dict[str, Any]) -> list[str]:
+    """Third-party imports an edit to a Go file adds that go.mod doesn't cover."""
+    file_path = tool_input.get("file_path")
+    if not isinstance(file_path, str) or not file_path.endswith(".go"):
+        return []
+    path = Path(file_path)
+    before = _read(path)
+    if before is None:
+        return []
+    after = (
+        tool_input.get("content")
+        if tool == "Write"
+        else _apply_edit(before, tool_input)
+    )
+    # An edit the tool cannot apply changes nothing.
+    if not isinstance(after, str):
+        return []
+    added = _go_imports(after) - _go_imports(before)
+    # A first path element without a dot is the standard library or cgo's "C".
+    external = sorted(imp for imp in added if "." in imp.split("/", 1)[0])
+    if not external:
+        return []
+    go_mod = _go_module(path.parent)
+    if go_mod is None:
+        return []
+    provided = _go_provided(go_mod)
+    if provided is None:
+        return external
+    return [
+        imp for imp in external if not any(_covers(module, imp) for module in provided)
+    ]
+
+
+# What a shell command may not change unasked. Parsed manifests compare their
+# declared specs. Line manifests compare their set of non-comment lines, so that
+# reordering or reformatting one is not a change; the rest compare their text
+# without whitespace or quotes.
+LINE_MANIFEST_RE = re.compile(
+    r"Brewfile|.+\.Brewfile|requirements[\w.-]*\.txt|constraints\.txt"
+    r"|Gemfile|gems\.rb|\.npmrc"
+)
+TEXT_MANIFEST_RE = re.compile(
+    r"Package\.swift|.+\.gemspec|\.pre-commit-config\.yaml|bunfig\.toml"
+    r"|\.pnpmfile\.cjs|pnpm-workspace\.yaml"
+)
+LOCKFILES = frozenset(
+    {
+        "uv.lock",
+        "bun.lock",
+        "bun.lockb",
+        "Cargo.lock",
+        "go.sum",
+        "package-lock.json",
+        "npm-shrinkwrap.json",
+        "pnpm-lock.yaml",
+        "yarn.lock",
+        "Package.resolved",
+        "Gemfile.lock",
+        "poetry.lock",
+        "composer.lock",
+        "Pipfile.lock",
+        "flake.lock",
+    }
+)
+PATHSPECS = tuple(
+    f":(glob)**/{name}"
+    for name in (
+        *EXTRACTORS,
+        *sorted(LOCKFILES),
+        "Brewfile",
+        "*.Brewfile",
+        "requirements*.txt",
+        "constraints.txt",
+        "Gemfile",
+        "gems.rb",
+        ".npmrc",
+        "Package.swift",
+        "*.gemspec",
+        ".pre-commit-config.yaml",
+        "bunfig.toml",
+        ".pnpmfile.cjs",
+        "pnpm-workspace.yaml",
     )
 )
 
 
-class Installer(NamedTuple):
-    subcommands: frozenset[str]
-    flags: frozenset[str]
-    value_flags: tuple[str, ...] = ()
-    adds: frozenset[str] = frozenset()
-    manifest_env: tuple[re.Pattern[str], ...] = ()
-    bare: bool = False
-    code_flags: frozenset[str] = frozenset()
-
-    @property
-    def value_names(self) -> frozenset[str]:
-        return frozenset(flag.rstrip("=") for flag in self.value_flags)
+def _kind(name: str) -> str | None:
+    if name in EXTRACTORS:
+        return "parsed"
+    if name in LOCKFILES:
+        return "lock"
+    if LINE_MANIFEST_RE.fullmatch(name):
+        return "lines"
+    if TEXT_MANIFEST_RE.fullmatch(name):
+        return "text"
+    return None
 
 
-# A package manager's install command with no package names installs what the
-# manifest already declares, which the checks above vet. A permissions rule
-# cannot express that: `npm install:*` also matches `npm install left-pad`, and
-# an allow rule cannot carve `--no-audit` out of an ask rule. So only the listed
-# flags (`--name=` prefixes for those that take a value, which may instead be the
-# next word) and bare words may appear
-# around the subcommand; anything else, a package name included, asks. The `adds`
-# subcommands always name a package. Ask rules cover them, but a rule matches from
-# the first word, so the hook asks for them behind a flag, as in
-# `pnpm --filter web add zod`. `manifest_env` matches the variables that select a
-# different manifest or package source, as `--file`, `--gemfile` and `--registry`
-# do. `bare` marks a manager whose command with no subcommand installs.
-# `code_flags` are the flags that make the manager run the next word as code, so
-# that no later word is a subcommand.
-_HELP = frozenset({"--help", "-h", "--version", "-v"})
+def _line_specs(text: str, *, semicolon: bool) -> Specs:
+    comment = re.compile(r"(?:^|\s)[#;].*" if semicolon else r"(?:^|\s)#.*")
+    specs: Specs = {}
+    for raw in text.splitlines():
+        line = " ".join(comment.sub("", raw).replace("'", '"').split())
+        if line:
+            specs[line] = ""
+    return specs
 
-# Every `npm_config_` variable is the flag of the same name, and npm reads the
-# prefix in any case. `npm_config_cache` only moves the cache.
-_JS_ENV = (re.compile(r"(?:npm|pnpm|bun)_config_(?!cache=)", re.IGNORECASE),)
 
-_PNPM = Installer(
-    subcommands=frozenset({"install", "i"}),
-    flags=_HELP
-    | {
-        "--dry-run",
-        "--frozen-lockfile",
-        "--ignore-scripts",
-        "--lockfile-only",
-        "--no-progress",
-        "--offline",
-        "--prefer-frozen-lockfile",
-        "--prefer-offline",
-        "--prod",
-        "-P",
-        "--recursive",
-        "-r",
-    },
-    value_flags=("--dir=", "--filter=", "--loglevel=", "--reporter="),
-    adds=frozenset({"add", "it", "install-test"}),
-    manifest_env=_JS_ENV,
-)
+def _shell_specs(name: str, text: str) -> Specs:
+    match _kind(name):
+        case "parsed" if name == "go.mod":
+            return _go_mod_specs(text, with_resolved=False)
+        case "parsed":
+            return EXTRACTORS[name](text)
+        case "lines":
+            return _line_specs(text, semicolon=name == ".npmrc")
+        case _:
+            # Specs are cached by content alone, so an empty file must have none
+            # under every kind.
+            content = re.sub(r"[\s'\"]+", "", text)
+            return {"content": content} if content else {}
 
-_BUNDLE = Installer(
-    subcommands=frozenset({"install", "i", "ins", "inst", "insta", "instal"}),
-    flags=_HELP | {"--deployment", "--frozen", "--local", "--quiet"},
-    value_flags=("--jobs=", "--retry=", "--with=", "--without="),
-    adds=frozenset({"add", "ad", "a", "inject", "inj", "inje", "injec"}),
-    manifest_env=(
-        re.compile(
-            r"BUNDLE_(?:(?:GEMFILE|APP_CONFIG|USER_CONFIG)=|(?:MIRROR|LOCAL)__)"
-        ),
-    ),
-    bare=True,
-)
 
-INSTALLERS = {
-    "bun": Installer(
-        subcommands=frozenset({"install", "i"}),
-        flags=_HELP
-        | {
-            "--bun",
-            "--dry-run",
-            "--frozen-lockfile",
-            "--ignore-scripts",
-            "--lockfile-only",
-            "--no-progress",
-            "--no-summary",
-            "--production",
-            "-p",
-            "--silent",
-            "--verbose",
-        },
-        value_flags=(
-            "--cache-dir=",
-            "--cpu=",
-            "--cwd=",
-            "--filter=",
-            "--omit=",
-            "--os=",
-        ),
-        adds=frozenset({"add", "a"}),
-        manifest_env=_JS_ENV,
-        # Only this spelling: bun skips `-p`, `--eval` and `--print` as flags and
-        # still runs a subcommand that follows them.
-        code_flags=frozenset({"-e"}),
-    ),
-    # npm resolves any unambiguous prefix of "install" and its misspellings.
-    "npm": Installer(
-        subcommands=frozenset(
-            {
-                "i",
-                "in",
-                "ins",
-                "inst",
-                "insta",
-                "instal",
-                "install",
-                "isnt",
-                "isnta",
-                "isntal",
-                "isntall",
-            }
-        ),
-        flags=_HELP
-        | {
-            "--dry-run",
-            "--foreground-scripts",
-            "--ignore-scripts",
-            "--no-audit",
-            "--no-fund",
-            "--no-progress",
-            "--offline",
-            "--package-lock-only",
-            "--prefer-offline",
-            "--production",
-            "--silent",
-        },
-        value_flags=("--include=", "--loglevel=", "--omit=", "--prefix="),
-        adds=frozenset(
-            {
-                "add",
-                "it",
-                "install-t",
-                "install-te",
-                "install-tes",
-                "install-test",
-                "cit",
-                "install-ci-test",
-            }
-        ),
-        manifest_env=_JS_ENV,
-    ),
-    "pnpm": _PNPM,
-    "pn": _PNPM,
-    "bundle": _BUNDLE,
-    "bundler": _BUNDLE,
-    # Only a bare `brew bundle` or `brew bundle install` installs from the
-    # Brewfile. The other subcommands (add, dump, cleanup, exec) and `--file`
-    # and `--global`, which name a different Brewfile, ask.
-    "brew": Installer(
-        subcommands=frozenset({"bundle"}),
-        flags=_HELP
-        | {
-            "--cask",
-            "--force",
-            "--formula",
-            "--no-upgrade",
-            "-q",
-            "--quiet",
-            "install",
-            "--verbose",
-        },
-        value_flags=("--upgrade-formulae=",),
-        manifest_env=(
-            re.compile(
-                r"HOMEBREW_(?:BUNDLE_FILE|API_DOMAIN|ARTIFACT_DOMAIN|BOTTLE_DOMAIN"
-                r"|BREW_GIT_REMOTE|CORE_GIT_REMOTE)="
-            ),
-        ),
-    ),
+class Busy(Exception):  # noqa: N818 - not an error condition in the usual sense
+    pass
+
+
+DEADLINE = [time.monotonic() + WALL_BUDGET]
+
+
+def _remaining() -> float:
+    return max(0.1, DEADLINE[0] - time.monotonic())
+
+
+# A variable such as GIT_DIR or GIT_INDEX_FILE would point git at another
+# repository than the one the hook names with -C.
+_GIT_ENV = {
+    key: value for key, value in os.environ.items() if not key.startswith("GIT_")
 }
 
-# These only print or search their arguments, so a package manager named in one
-# is text. rg is absent because `rg --pre COMMAND` runs COMMAND.
-TEXT_COMMANDS = frozenset({"echo", "printf", "grep", "egrep", "fgrep"})
 
-# A quoted pattern, unlike printed text, never reaches a shell through a pipe, so
-# a separator inside one, as in `grep "a\|bun add"`, does not end the command.
-PATTERN_COMMANDS = frozenset({"grep", "egrep", "fgrep"})
-
-# Commands that pass their standard input on as arguments.
-FEEDERS = frozenset({"xargs", "gxargs", "parallel"})
-
-# Shell syntax that can precede the command it governs.
-_KEYWORDS = frozenset({"if", "then", "else", "elif", "do", "while", "until", "!", "{"})
-
-# Words that run the command after them unchanged, as an assignment does.
-_PREFIXES = frozenset({"time", "env", "command"})
-_ASSIGNMENT_RE = re.compile(r"[A-Za-z_][A-Za-z0-9_]*=")
-
-# A flag value containing one of these can expand to several words.
-_SHELL_META = frozenset("'\"$\\")
-_PATTERN_CHARS = frozenset("*?[]{}")
-
-# Words read after a manager's name before the scan gives up and asks, which keeps
-# a run of flags linear.
-MAX_LOOKAHEAD = 64
-
-# A lone & ends a command, but the & of 2>&1 and &> does not, and neither does
-# the | of >|. The delimiter is captured so a following substitution is visible.
-_COMMAND_END_RE = re.compile(r"(&&|\|\||[;\n`()]|(?<!>)\||(?<![<>&])&(?![>&]))")
-_REDIRECT_RE = re.compile(r"(?:\d*|&)(?:>[>|]?|<)&?")
-_COMMENT_RE = re.compile(r"(?:^|\s)#")
-_UNQUOTE = str.maketrans("", "", "'\"\\")
-
-type Quote = Literal["'", '"', "$'"] | None
-
-_HEREDOC_RE = re.compile(
-    r"<<(-?)[ \t]*(?:'([^'\n]*)'|\"([^\"\n]*)\"|\\?([^\s;&|()<>'\"]+))"
-)
-
-
-class Segment(NamedTuple):
-    """The words of one command, up to any comment.
-
-    `nested` marks the words that begin inside a quote, as the words of
-    `sh -c '...'` do. `cut` is the index of the word that opens a quote still
-    open at the separator that ends the segment, so the rest of the word is out
-    of sight, or -1.
-    """
-
-    words: list[str]
-    nested: list[bool]
-    cut: int
-    trusted: frozenset[str]
-
-
-def _scan(raw: str, quote: Quote) -> tuple[Quote, bool]:
-    """The quote state after a word, and whether the word opened that quote."""
-    opened = False
-    index = 0
-    while index < len(raw):
-        char = raw[index]
-        if quote is None:
-            if char == "\\":
-                index += 1
-            elif char in {"'", '"'}:
-                quote, opened = char, True
-            elif char == "$" and raw.startswith("'", index + 1):
-                quote, opened = "$'", True
-                index += 1
-        elif quote == "'":
-            if char == "'":
-                quote, opened = None, False
-        elif char == "\\":
-            index += 1
-        elif char == quote[-1]:
-            quote, opened = None, False
-        index += 1
-    return quote, opened
-
-
-def _segment(
-    raw_words: list[str], quote: Quote, trusted: frozenset[str]
-) -> tuple[Segment, Quote]:
-    words: list[str] = []
-    nested: list[bool] = []
-    cut = -1
-    for raw in raw_words:
-        if quote is None and raw.startswith("#"):
-            break
-        words.append(raw)
-        nested.append(quote is not None)
-        quote, opened = _scan(raw, quote)
-        if opened:
-            cut = len(words) - 1
-        elif quote is None:
-            cut = -1
-    return Segment(words, nested, cut, trusted), quote
-
-
-# A variable expands to one word that cannot be a subcommand when this command
-# sets it to a literal without spaces or patterns, or when it is one of these,
-# which hold an absolute path or nothing. Only uppercase names count: zsh ties
-# lowercase arrays such as `path` to other variables. The shell itself sets the
-# excluded names, as `read` sets REPLY, so a literal assignment does not fix
-# their value.
-_ENV_PATHS = frozenset({"CLAUDE_PROJECT_DIR", "HOME", "OLDPWD", "PWD", "TMPDIR"})
-_SHELL_SET = frozenset(
-    {
-        "COPROC",
-        "IFS",
-        "MAPFILE",
-        "MATCH",
-        "MBEGIN",
-        "MEND",
-        "OPTARG",
-        "OPTIND",
-        "PIPESTATUS",
-        "REPLY",
-    }
-)
-_TRUSTABLE_RE = re.compile(r"[A-Z][A-Z0-9_]*")
-_IDENT_RE = re.compile(r"[A-Za-z_][A-Za-z0-9_]*")
-_REF_RE = re.compile(r"\$(?:\{([A-Za-z_][A-Za-z0-9_]*)\}|([A-Za-z_][A-Za-z0-9_]*))")
-# Builtins that can assign a variable without naming it in the command text, and
-# IFS, which splits even a literal without spaces.
-_DYNAMIC_RE = re.compile(
-    r"(?:^|(?<=[\s;&|({]))(?:declare|eval|local|readonly|source|typeset|\.)(?=\s|$)"
-    r"|IFS"
-)
-_LITERAL = frozenset(
-    "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789_./:@%+,=~-"
-)
-# Characters that can precede a word that names a variable to a builtin, as in
-# `read S`, `for S in` or `export S=...`.
-_WORD_START = frozenset(" \t\n;&|()'\"`{!")
-
-
-def _literal_value(command: str, index: int) -> set[str] | None:
-    """The names an assignment's value refers to, or None if it is not a literal.
-
-    Plain characters, names in `$NAME` or `${NAME}`, and quotes around them make
-    a literal. The value ends at a space, a separator or the end of the command.
-    A value that can start with `-` is not a literal, so that no trusted name
-    expands to a flag, and neither is an array, `S=(...)`, which zsh expands
-    to several words.
-    """
-    names: set[str] = set()
-    quote: str | None = None
-    leading = True
-    while index < len(command):
-        char = command[index]
-        if char == "$" and quote != "'":
-            match = _REF_RE.match(command, index)
-            if match is None:
-                return None
-            names.add(match.group(1) or match.group(2))
-            index = match.end()
-            continue
-        if char in {"'", '"'}:
-            if quote is None:
-                quote = char
-            elif quote == char:
-                quote = None
-            else:
-                return None
-        elif char not in _LITERAL:
-            if quote is not None or char not in " \t\n;&|)<>":
-                return None
-            break
-        elif leading:
-            if char == "-":
-                return None
-            leading = False
-        index += 1
-    return names if quote is None else None
-
-
-def _heredoc_bodies(command: str) -> list[tuple[int, int]]:
-    """The spans of heredoc bodies, each with its delimiter line."""
-    spans: list[tuple[int, int]] = []
-    pending: list[tuple[str, bool]] = []
-    quote: Quote = None
-    # A `$(` inside double quotes starts unquoted code up to its matching `)`, so
-    # a heredoc there has a body. Each entry is the quote to resume and the
-    # parentheses still open.
-    substitutions: list[tuple[Quote, int]] = []
-    arithmetic = 0
-    index = 0
-    while index < len(command):
-        char = command[index]
-        if quote is None:
-            if char == "\\":
-                index += 1
-            elif substitutions and char in "()":
-                resume, depth = substitutions.pop()
-                depth += 1 if char == "(" else -1
-                if depth:
-                    substitutions.append((resume, depth))
-                else:
-                    quote = resume
-            elif command.startswith("((", index):
-                arithmetic += 1
-                index += 2
-                continue
-            elif arithmetic and command.startswith("))", index):
-                arithmetic -= 1
-                index += 2
-                continue
-            elif char in {"'", '"'}:
-                quote = char
-            elif char == "$" and command.startswith("'", index + 1):
-                quote = "$'"
-                index += 1
-            elif char == "#" and (index == 0 or command[index - 1] in " \t\n;&|()"):
-                newline = command.find("\n", index)
-                index = len(command) if newline < 0 else newline
-                continue
-            elif command.startswith("<<<", index):
-                index += 3
-                continue
-            elif not arithmetic and (match := _HEREDOC_RE.match(command, index)):
-                delimiter = match.group(2) or match.group(3) or match.group(4) or ""
-                pending.append((delimiter, match.group(1) == "-"))
-                index = match.end()
-                continue
-            elif char == "\n" and pending:
-                index += 1
-                for delimiter, dash in pending:
-                    start = index
-                    while index < len(command):
-                        newline = command.find("\n", index)
-                        end = len(command) if newline < 0 else newline
-                        line = command[index:end]
-                        index = end + 1
-                        if (line.lstrip("\t") if dash else line) == delimiter:
-                            spans.append((start, min(index, len(command))))
-                            break
-                    else:
-                        # Without its delimiter line the text may not be a
-                        # heredoc at all, so it stays shell.
-                        return spans
-                pending = []
-                continue
-        elif quote == "'":
-            if char == "'":
-                quote = None
-        elif char == "\\":
-            index += 1
-        elif quote == '"' and char == "$" and command.startswith("(", index + 1):
-            substitutions.append((quote, 1))
-            quote = None
-            index += 1
-        elif char == quote[-1]:
-            quote = None
-        index += 1
-    return spans
-
-
-def _trusted_names(command: str) -> frozenset[str]:
-    """The variables that expand to one literal word wherever this command uses them.
-
-    The command must exclude heredoc bodies: they cannot assign the outer
-    shell's variables, and code in them would read as shell.
-    """
-    if _DYNAMIC_RE.search(command.translate(_UNQUOTE)):
-        return frozenset()
-    deps: dict[str, set[str] | None] = {}
-    for match in _IDENT_RE.finditer(command):
-        name = match.group()
-        start, end = match.span()
-        before = command[start - 1] if start else " "
-        after = command[end] if end < len(command) else " "
-        if before == "$":
-            continue
-        if before == "{" and command[start - 2 : start - 1] == "$":
-            if after != "}":
-                deps[name] = None
-            continue
-        if before in "-\\":
-            # A name glued to an option or escaped, as in `printf -vS` or
-            # `read \S`, still receives the value.
-            for offset, letter in enumerate(name):
-                if letter.isupper():
-                    deps[name[offset:]] = None
-            continue
-        if before not in _WORD_START:
-            continue
-        current = deps.get(name, set())
-        if current is None:
-            continue
-        value = _literal_value(command, end + 1) if after == "=" else None
-        deps[name] = None if value is None else current | value
-    trusted = {name for name in _ENV_PATHS if name not in deps}
-    candidates = {
-        name: names
-        for name, names in deps.items()
-        if names is not None
-        and _TRUSTABLE_RE.fullmatch(name)
-        and name not in _SHELL_SET
-        and not name.startswith(("BASH", "ZSH"))
-    }
-    waiting: dict[str, set[str]] = {}
-    dependents: dict[str, list[str]] = {}
-    ready: list[str] = []
-    for name, names in candidates.items():
-        waiting[name] = names - trusted - {name}
-        for dep in waiting[name]:
-            dependents.setdefault(dep, []).append(name)
-        if not waiting[name]:
-            ready.append(name)
-    while ready:
-        name = ready.pop()
-        trusted.add(name)
-        for dependent in dependents.get(name, ()):
-            waiting[dependent].discard(name)
-            if not waiting[dependent] and dependent not in trusted:
-                ready.append(dependent)
-    return frozenset(trusted)
-
-
-def _one_field(raw: str, *, nested: bool, trusted: frozenset[str]) -> bool:
-    """Whether the shell expands a word to exactly one field.
-
-    At the top level a double-quoted expansion stays one field. Inside a quote,
-    as in `sh -c '...'`, the inner shell splits the word again, so only trusted
-    names qualify.
-    """
-    quote: str | None = None
-    index = 0
-    while index < len(raw):
-        char = raw[index]
-        if quote == "'":
-            if char == "'":
-                quote = None
-        elif char == "\\" or char in _PATTERN_CHARS:
-            return False
-        elif char == "$":
-            match = _REF_RE.match(raw, index)
-            if match is None:
-                return False
-            name = match.group(1) or match.group(2)
-            if name not in trusted and (nested or quote != '"'):
-                return False
-            index = match.end()
-            continue
-        elif (char in {"'", '"'}) and not nested:
-            quote = None if quote == char else char
-        index += 1
-    return quote is None
-
-
-def _may_be_flag(raw: str, trusted: frozenset[str]) -> bool:
-    """Whether a one-field word can expand to a flag.
-
-    Trusted names never start with `-`, but they can be empty, so a word that
-    starts with them takes its first character from what follows.
-    """
-    text = raw.translate(_UNQUOTE)
-    index = 0
-    while match := _REF_RE.match(text, index):
-        if (match.group(1) or match.group(2)) not in trusted:
-            return True
-        index = match.end()
-    return text.startswith("-", index)
-
-
-def _literal_prefix(installer: Installer, raw: str) -> bool:
-    """Whether the literal text before a word's first expansion rules out a subcommand.
-
-    However the expansion splits, the first word it yields starts with that
-    text, so it is a positional argument unless the text begins a subcommand or
-    a flag.
-    """
-    prefix = raw[: raw.find("$")]
-    plain = prefix.translate(_UNQUOTE)
-    return (
-        bool(plain)
-        and _LITERAL.union("'\"").issuperset(prefix)
-        and not plain.startswith("-")
-        and not any(
-            name.startswith(plain) for name in installer.subcommands | installer.adds
-        )
+def _git(
+    root: Path, *args: str, stdin: bytes | None = None, literal: bool = False
+) -> bytes:
+    result = subprocess.run(
+        ["git", "-C", str(root), *(["--literal-pathspecs"] if literal else []), *args],
+        input=stdin,
+        capture_output=True,
+        env=_GIT_ENV,
+        check=False,
+        timeout=_remaining(),
     )
+    if result.returncode != 0:
+        error = result.stderr.decode(errors="replace").strip()
+        message = f"git {args[0]} failed in {root}: {error}"
+        raise RuntimeError(message)
+    return result.stdout
 
 
-def _plain(raw: str) -> str:
-    """A word as the shell hands it on, without quotes or a redirection glued to it."""
-    word = raw.translate(_UNQUOTE)
-    ends = [index for index in (word.find("<"), word.find(">")) if index >= 0]
-    return word[: min(ends)] if ends else word
-
-
-def _program(word: str) -> str:
-    """The command a word names, as the shell would look it up."""
-    return word.rpartition("/")[2].lower()
-
-
-type Verdict = Literal["ask", "vetted", "open"]
-
-
-def _classify(
-    installer: Installer, segment: Segment, start: int, *, fed: bool
-) -> Verdict | None:
-    """How the words after a package manager's name read.
-
-    "ask" if they could add a dependency, "vetted" if they install only what the
-    manifest declares, "open" if the command ends before any subcommand, and None
-    if the manager runs something else. Before the subcommand only flags, their
-    values and redirections may appear. A flag the tables do not list taints the
-    install, as does `fed`, input that arrives on standard input.
-    """
-    words = segment.words
-    names = installer.value_names
-    taint = fed
-    maybe_value = False
-    target = False
-    for index in range(start, len(words)):
-        raw = words[index]
-        if index - start >= MAX_LOOKAHEAD or index == segment.cut:
-            return "ask"
-        if target:
-            target = False
-            continue
-        word = _plain(raw)
-        if word in installer.subcommands:
-            if taint or _has_unvetted_arg(installer, segment, index + 1):
-                return "ask"
-            return "vetted"
-        if word in installer.adds:
-            return "ask"
-        redirect = _REDIRECT_RE.match(raw)
-        if redirect:
-            target = redirect.end() == len(raw)
-            continue
-        if not word.startswith("-"):
-            if "$" in word:
-                nested = segment.nested[index]
-                if "/" in _REF_RE.sub("", word) and _one_field(
-                    raw, nested=nested, trusted=segment.trusted
-                ):
-                    if _may_be_flag(raw, segment.trusted):
-                        taint = taint or not maybe_value
-                        maybe_value = False
-                        continue
-                elif maybe_value or not _literal_prefix(installer, raw):
-                    return "ask"
-            if not maybe_value:
-                return None
-            maybe_value = False
-            continue
-        if word in installer.code_flags and not maybe_value:
-            return None
-        if word in installer.flags or (
-            word.startswith(installer.value_flags) and not _SHELL_META.intersection(raw)
-        ):
-            maybe_value = False
-            continue
-        taint = taint or word not in names
-        maybe_value = "=" not in word
-    if not installer.bare:
-        return "open"
-    return "ask" if taint else "vetted"
-
-
-def _has_unvetted_arg(installer: Installer, segment: Segment, start: int) -> bool:
-    words = segment.words
-    skip = False
-    for index in range(start, len(words)):
-        raw = words[index]
-        if skip:
-            skip = False
-            continue
-        redirect = _REDIRECT_RE.match(raw)
-        if redirect:
-            # A bare operator such as `>` or `2>` takes the next word as its target.
-            skip = redirect.end() == len(raw)
-            continue
-        if index == segment.cut:
-            return True
-        arg = _plain(raw)
-        if arg in installer.flags:
-            continue
-        if arg.startswith(installer.value_flags) and not _SHELL_META.intersection(raw):
-            continue
-        if arg in installer.value_names and _is_value(segment, index + 1):
-            skip = True
-            continue
-        return True
-    return False
-
-
-def _is_value(segment: Segment, index: int) -> bool:
-    """Whether a word is a plain value for the flag before it."""
-    if index >= len(segment.words) or index == segment.cut:
-        return False
-    raw = segment.words[index]
-    return not (
-        raw.startswith("-")
-        or _REDIRECT_RE.match(raw)
-        or _SHELL_META.intersection(raw)
-        or _PATTERN_CHARS.intersection(raw)
-    )
-
-
-def _text_program(words: list[str]) -> str | None:
-    """The command, if it only prints or searches its arguments."""
-    for index, raw in enumerate(words):
-        word = raw.translate(_UNQUOTE)
-        if word in _KEYWORDS or _ASSIGNMENT_RE.match(word):
-            continue
-        if word in _PREFIXES:
-            # A flag can change what runs, as `env -S` does.
-            if words[index + 1 : index + 2] and words[index + 1].startswith("-"):
-                return None
-            continue
-        program = _program(word)
-        return program if program in TEXT_COMMANDS else None
-    return None
-
-
-def _fold(command: str, *, comments: bool) -> str:
-    """Join each line ending in an odd number of backslashes to the next.
-
-    An even number is an escaped backslash, so the newline still ends the
-    command. With `comments` set, a line that may hold a comment is not joined,
-    because a comment ends at its newline.
-    """
-    lines = command.split("\n")
-    parts: list[str] = []
-    for index, line in enumerate(lines):
-        odd = (len(line) - len(line.rstrip("\\"))) % 2 == 1
-        joins = odd and index < len(lines) - 1
-        if joins and not (comments and _COMMENT_RE.search(line)):
-            parts.append(line[:-1])
-        else:
-            parts.append(line + "\n")
-    return "".join(parts)[:-1]
-
-
-def _enter(
-    delimiter: str,
-    part: str,
-    state: tuple[Quote, bool],
-    stack: list[tuple[Quote, bool, str]],
-) -> tuple[Quote, bool]:
-    """The quote state and pattern flag after a delimiter.
-
-    A substitution or subshell starts unquoted and ends where its context
-    resumes.
-    """
-    quote = state[0]
-    if quote in {"'", "$'"}:
-        return state
-    # An odd run of backslashes ends in one that escapes the delimiter.
-    if (len(part) - len(part.rstrip("\\"))) % 2:
-        return state
-    if delimiter == "(" and (quote is None or part.endswith("$")):
-        stack.append((*state, "("))
-        return None, False
-    if (
-        delimiter in {")", "`"}
-        and quote is None
-        and stack
-        and stack[-1][2] == delimiter.replace(")", "(")
-    ):
-        saved = stack.pop()
-        return saved[0], saved[1]
-    if delimiter == "`":
-        stack.append((*state, "`"))
-        return None, False
-    return state
-
-
-def _segments_add(command: str) -> bool:
-    parts = _COMMAND_END_RE.split(command)
-    plain = command.translate(_UNQUOTE)
-    bodies = _heredoc_bodies(command)
-    outer = command
-    for start, end in reversed(bodies):
-        outer = outer[:start] + outer[end:]
-    trusted = _trusted_names(outer)
-    selects: dict[str, bool] = {}
-    ticks = 0
-    quote: Quote = None
-    pattern_open = False
-    stack: list[tuple[Quote, bool, str]] = []
-    # Each heredoc line is lexed on its own, and the shell's state resumes
-    # after the body: quotes in a body are text to the outer shell.
-    outside: tuple[Quote, bool, list[tuple[Quote, bool, str]]] | None = None
-    line_start = True
-    commented = False
-    body = 0
-    offset = 0
-    for index in range(0, len(parts), 2):
-        delimiter = parts[index + 1] if index + 1 < len(parts) else ""
-        while body < len(bodies) and bodies[body][1] <= offset:
-            body += 1
-        in_body = body < len(bodies) and bodies[body][0] <= offset
-        offset += len(parts[index]) + len(delimiter)
-        if in_body and outside is None:
-            outside = (quote, pattern_open, stack)
-        elif not in_body and outside is not None:
-            quote, pattern_open, stack = outside
-            outside = None
-        if in_body and line_start:
-            quote, pattern_open, stack = None, False, []
-        line_start = delimiter == "\n"
-        in_pattern = pattern_open and quote is not None
-        raw_words = parts[index].split()
-        if commented:
-            segment, _ = _segment(raw_words, None, trusted)
-        else:
-            segment, quote = _segment(
-                raw_words, quote, frozenset() if in_body else trusted
-            )
-            commented = len(segment.words) < len(raw_words)
-        if line_start:
-            commented = False
-        words = segment.words
-        # A part that begins inside a quote continues the command that opened it,
-        # so its first word is not a command name.
-        text = _text_program(words) if words and not segment.nested[0] else None
-        pattern_open = (
-            in_pattern or (text in PATTERN_COMMANDS and segment.cut >= 0)
-        ) and quote is not None
-        quote, pattern_open = _enter(
-            delimiter, parts[index], (quote, pattern_open), stack
-        )
-        # An opening backtick, `$(`, `<(` or `>(` can supply packages or the rest
-        # of the command.
-        substituted = (delimiter == "`" and ticks % 2 == 0) or (
-            delimiter == "(" and bool(words) and words[-1].endswith(("$", "<", ">"))
-        )
-        if delimiter == "`":
-            ticks += 1
-        if not words or text is not None or in_pattern:
-            continue
-        fed = False
-        for position, raw in enumerate(words):
-            word = _plain(raw)
-            if word.startswith("-"):
-                continue
-            program = _program(word)
-            fed = fed or program in FEEDERS
-            installer = INSTALLERS.get(program)
-            if installer is None:
-                continue
-            verdict = _classify(installer, segment, position + 1, fed=fed)
-            if verdict is None:
-                continue
-            if verdict == "ask" or substituted:
-                return True
-            if verdict == "vetted":
-                if program not in selects:
-                    selects[program] = any(
-                        pattern.search(plain) for pattern in installer.manifest_env
-                    )
-                if selects[program]:
-                    return True
-            break
-    return False
-
-
-def _install_adds(command: str) -> bool:
-    # Whether a backslash line ending continues the line depends on whether it
-    # sits in a comment, which this cannot tell from a quoted #. Either reading
-    # is enough to ask.
-    readings = {_fold(command, comments=comments) for comments in (False, True)}
-    return any(map(_segments_add, readings))
-
-
-def _bash_reason(command: str) -> str | None:
-    if _install_adds(command):
-        return "This package install has arguments that could add a dependency."
-    if any(pattern.search(command) for pattern in BASH_WRITE_RES):
-        return "This shell command appears to write a dependency manifest directly."
-    return None
-
-
-def _reason(payload: dict[str, Any]) -> str | None:
-    tool = payload.get("tool_name")
-    tool_input = payload.get("tool_input")
-    if not isinstance(tool_input, dict):
+def _git_or_none(root: Path, *args: str) -> bytes | None:
+    try:
+        return _git(root, *args)
+    except RuntimeError:
         return None
-    if tool in SHELL_TOOLS:
-        command = tool_input.get("command")
-        return _bash_reason(command) if isinstance(command, str) else None
-    if tool in EDIT_TOOLS:
-        return _edit_reason(tool, tool_input)
+
+
+def _toplevel(directory: str) -> Path | None:
+    path = Path(os.path.realpath(directory))
+    for candidate in (path, *path.parents):
+        if (candidate / ".git").exists():
+            return candidate
     return None
+
+
+def _state_home() -> Path:
+    base = os.environ.get("XDG_STATE_HOME") or str(Path.home() / ".local" / "state")
+    return Path(base) / "claude-dependency-guard"
+
+
+def _safe(name: str) -> str:
+    return re.sub(r"[^A-Za-z0-9_.-]", "_", name)[:120] or "_"
+
+
+def _write_atomic(path: Path, data: bytes, mode: int = 0o600) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    # A sandboxed command can plant a link at any name it can predict in a
+    # repository, so the name is random and the file is created exclusively.
+    fd, name = tempfile.mkstemp(dir=path.parent, prefix=f".{path.name}.", suffix=".tmp")
+    temporary = Path(name)
+    try:
+        with os.fdopen(fd, "wb") as handle:
+            _ = handle.write(data)
+        temporary.chmod(mode)
+        _ = temporary.replace(path)
+    except BaseException:
+        temporary.unlink(missing_ok=True)
+        raise
+
+
+def _short(command: str) -> str:
+    flat = " ".join(command.split())
+    if len(flat) <= MAX_SHOWN:
+        return flat
+    return f"{flat[: MAX_SHOWN - 3]}..."
+
+
+type Snapshot = dict[str, str | None]
+type Pair = tuple[str, str]
+
+MISSING = "\0missing"
+
+# A guarded name that links to a file outside the repository. The hook runs
+# unsandboxed, so it must not read what a sandboxed command could not.
+OUTSIDE = "\0outside"
+
+# A git operation that leaves the working tree half done: undoing a file then
+# would drop the other side's changes when the agent resolves it.
+_IN_PROGRESS = (
+    "MERGE_HEAD",
+    "CHERRY_PICK_HEAD",
+    "REVERT_HEAD",
+    "rebase-merge",
+    "rebase-apply",
+    "sequencer",
+)
+
+
+_STAGED_RE = re.compile(r"([0-7]{6}) ([0-9a-f]{40,64}) ([0-3])\t(.*)", re.DOTALL)
+
+
+class Change(NamedTuple):
+    rel: str
+    pairs: list[Pair]
+    created: bool
+    parsed: bool
+
+
+class Scan(NamedTuple):
+    files: Snapshot
+    index: dict[str, list[str]]
+    unmerged: frozenset[str]
+    links: frozenset[str]
+
+
+def _pair_key(rel: str, pair: Pair) -> str:
+    return json.dumps([rel, *pair])
+
+
+def _describe_pairs(rel: str, pairs: list[Pair], before: Specs) -> str:
+    added = [key for key, _ in pairs if key not in before]
+    changed = [key for key, _ in pairs if key in before]
+    whole = _kind(PurePosixPath(rel).name) == "lines"
+    parts = []
+    if added:
+        parts.append(f"adds {_names(added, whole=whole)}")
+    if changed:
+        parts.append(f"changes {_names(changed, whole=whole)}")
+    return f"{_clean(rel)} {' and '.join(parts)}"
+
+
+class Root:
+    """One repository's guard state, locked for the duration of a `with`."""
+
+    def __init__(self, path: Path) -> None:
+        self.path = path
+        key = hashlib.sha256(str(path).encode()).hexdigest()[:20]
+        self.dir = _state_home() / "roots" / key
+        self.state: dict[str, Any] = {}
+        self._lock = -1
+
+    def __enter__(self) -> Self:
+        self.dir.mkdir(parents=True, exist_ok=True, mode=0o700)
+        self._lock = os.open(self.dir / "lock", os.O_RDWR | os.O_CREAT, 0o600)
+        while True:
+            try:
+                fcntl.flock(self._lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
+                break
+            except BlockingIOError:
+                if time.monotonic() > DEADLINE[0] - 1:
+                    os.close(self._lock)
+                    message = f"{self.dir} is locked by another hook run"
+                    raise Busy(message) from None
+                time.sleep(0.02)
+        state_file = self.dir / "state.json"
+        if state_file.exists():
+            try:
+                self.state = cast("dict[str, Any]", json.loads(state_file.read_bytes()))
+            except ValueError as exc:
+                message = f"cannot read {state_file}: {exc}"
+                raise RuntimeError(message) from exc
+        if self.state.get("version") != STATE_VERSION:
+            self.state = {"version": STATE_VERSION}
+        for key, default in (
+            ("calls", {}),
+            ("stat", {}),
+            ("specs", {}),
+            ("taint", {}),
+            ("handled", {}),
+            ("reverted", {}),
+            ("imports", {}),
+        ):
+            _ = self.state.setdefault(key, default)
+        self.state["root"] = str(self.path)
+        self._finish_journal()
+        return self
+
+    def __exit__(
+        self,
+        exc_type: type[BaseException] | None,
+        exc: BaseException | None,
+        tb: TracebackType | None,
+    ) -> None:
+        try:
+            if exc_type is None:
+                self._prune()
+                data = json.dumps(self.state, separators=(",", ":")).encode()
+                _write_atomic(self.dir / "state.json", data)
+        finally:
+            os.close(self._lock)
+
+    def _blob(self, sha: str) -> Path:
+        return self.dir / "blobs" / sha
+
+    def _inside(self, rel: str) -> bool:
+        directory = (self.path / rel).parent
+        return Path(os.path.realpath(directory)).is_relative_to(self.path)
+
+    def _hash(self, rel: str) -> str | None:
+        """The content hash of a guarded file, None if too large, MISSING or OUTSIDE."""
+        path = self.path / rel
+        try:
+            info = path.stat()
+        except FileNotFoundError, NotADirectoryError:
+            return MISSING
+        if not stat.S_ISREG(info.st_mode):
+            return MISSING
+        sig = [info.st_size, info.st_mtime_ns, info.st_ctime_ns, info.st_ino]
+        cached = cast("dict[str, list[Any]]", self.state["stat"]).get(rel)
+        if cached is not None and cached[:4] == sig:
+            return cast("str | None", cached[4])
+        if not Path(os.path.realpath(path)).is_relative_to(self.path):
+            return OUTSIDE
+        sha: str | None = None
+        if info.st_size <= MAX_COPY_BYTES:
+            data = path.read_bytes()
+            sha = hashlib.sha256(data).hexdigest()
+            if not self._blob(sha).exists():
+                _write_atomic(self._blob(sha), data)
+            name = PurePosixPath(rel).name
+            if _kind(name) != "lock" and sha not in self.state["specs"]:
+                specs: Specs | None = None
+                if len(data) <= MAX_BYTES:
+                    try:
+                        specs = _shell_specs(name, data.decode("utf-8"))
+                    except UnicodeDecodeError, ValueError, RecursionError:
+                        specs = None
+                self.state["specs"][sha] = specs
+        self.state["stat"][rel] = [*sig, sha]
+        return sha
+
+    def scan(self) -> Scan:
+        index: dict[str, list[str]] = {}
+        unmerged: set[str] = set()
+        rels: set[str] = set()
+        # Separate listings, since a name may look like a staged entry.
+        tracked = _git(self.path, "ls-files", "-z", "-s", "--", *PATHSPECS)
+        for entry in tracked.decode("utf-8", "surrogateescape").split("\0"):
+            if not entry:
+                continue
+            staged = _STAGED_RE.match(entry)
+            if staged is None:
+                message = f"unexpected git ls-files entry {entry!r}"
+                raise RuntimeError(message)
+            mode, blob, stage, rel = staged.groups()
+            if stage != "0":
+                unmerged.add(rel)
+            index[rel] = [mode, blob]
+            rels.add(rel)
+        untracked = _git(
+            self.path,
+            "ls-files",
+            "-z",
+            "-o",
+            "--exclude-standard",
+            "--",
+            *PATHSPECS,
+        )
+        rels.update(
+            entry
+            for entry in untracked.decode("utf-8", "surrogateescape").split("\0")
+            if entry
+        )
+        files: Snapshot = {}
+        links: set[str] = set()
+        for rel in sorted(rels):
+            if _kind(PurePosixPath(rel).name) is None:
+                continue
+            sha = self._hash(rel)
+            if sha != MISSING:
+                files[rel] = sha
+                if (self.path / rel).is_symlink():
+                    links.add(rel)
+        cache = cast("dict[str, list[Any]]", self.state["stat"])
+        for rel in set(cache) - rels:
+            del cache[rel]
+        return Scan(files, index, frozenset(unmerged), frozenset(links))
+
+    def _specs(self, sha: str | None) -> Specs | None:
+        if sha is None:
+            return None
+        return cast("Specs | None", self.state["specs"].get(sha))
+
+    def _changes(self, before: Snapshot, after: Snapshot) -> list[Change]:
+        changes: list[Change] = []
+        for rel, sha in after.items():
+            if _kind(PurePosixPath(rel).name) == "lock":
+                continue
+            old = before.get(rel, MISSING)
+            if old == sha and sha is not None:
+                continue
+            new_specs = self._specs(sha)
+            old_specs: Specs | None = {} if old == MISSING else self._specs(old)
+            if new_specs is None or old_specs is None:
+                changes.append(
+                    Change(rel, [("", str(sha))], created=old == MISSING, parsed=False)
+                )
+                continue
+            pairs = [
+                (key, value)
+                for key, value in new_specs.items()
+                if old_specs.get(key) != value
+            ]
+            if pairs:
+                changes.append(Change(rel, pairs, created=old == MISSING, parsed=True))
+        return changes
+
+    def stashes(self) -> list[str]:
+        """The stash entries, which `git stash pop` removes from history."""
+        return _git(self.path, "stash", "list", "--format=%H").decode().split()
+
+    def _historical(self, rel: str, before: float, stashes: list[str]) -> list[Specs]:
+        """The spec sets this path had in commits made before the call."""
+        revisions = ["--all", "--reflog", *stashes]
+        # Only a FETCH_HEAD that names a commit can go on the command line: git
+        # log fails on an empty one.
+        if (
+            _git_or_none(
+                self.path, "rev-parse", "-q", "--verify", "FETCH_HEAD^{commit}"
+            )
+            is not None
+        ):
+            revisions.append("FETCH_HEAD")
+        log = _git(
+            self.path,
+            "log",
+            *revisions,
+            "--no-abbrev",
+            "--no-renames",
+            # A merge's result, including a stash entry's, shows only in a diff.
+            "--diff-merges=first-parent",
+            "--format=",
+            "--raw",
+            f"--before=@{int(before) - 1}",
+            "--",
+            rel,
+            literal=True,
+        )
+        blobs: set[str] = set()
+        for line in log.decode().splitlines():
+            if line.startswith(":"):
+                fields = line.split("\t", 1)[0].split()
+                blobs.update(blob for blob in fields[2:4] if blob.strip("0"))
+        if not blobs:
+            return []
+        out = _git(
+            self.path,
+            "cat-file",
+            "--batch",
+            stdin="".join(f"{blob}\n" for blob in sorted(blobs)).encode(),
+        )
+        name = PurePosixPath(rel).name
+        versions: list[Specs] = []
+        position = 0
+        while position < len(out):
+            header_end = out.index(b"\n", position)
+            header = out[position:header_end].split()
+            position = header_end + 1
+            if header[1:2] != [b"blob"]:
+                continue
+            size = int(header[2])
+            content = out[position : position + size]
+            position += size + 1
+            try:
+                versions.append(_shell_specs(name, content.decode("utf-8")))
+            except UnicodeDecodeError, ValueError, RecursionError:
+                continue
+        return versions
+
+    def _in_progress(self) -> str | None:
+        git_dir = Path(
+            _git(self.path, "rev-parse", "--absolute-git-dir").decode().strip()
+        )
+        for name in _IN_PROGRESS:
+            if (git_dir / name).exists():
+                return name
+        return None
+
+    def accept(self, current: Scan) -> None:
+        """Release the taint of pairs that the tree already holds."""
+        taint = cast("dict[str, float]", self.state["taint"])
+        for key in list(taint):
+            rel, name, value = cast("list[str]", json.loads(key))
+            specs = self._specs(current.files.get(rel))
+            if specs is not None and specs.get(name) == value:
+                del taint[key]
+
+    def approve_imports(self, imports: list[str], when: float) -> None:
+        approved = cast("dict[str, float]", self.state["imports"])
+        for path in imports:
+            approved[path] = when
+
+    def _required(self, sha: str | None) -> Specs:
+        """The directives of a go.mod copy, indirect requirements included."""
+        if sha is None or sha in (MISSING, OUTSIDE) or not self._blob(sha).exists():
+            return {}
+        try:
+            return _go_mod_specs(self._blob(sha).read_text(encoding="utf-8"))
+        except UnicodeDecodeError, ValueError:
+            return {}
+
+    def _imported(self, change: Change, before: Snapshot) -> list[Pair]:
+        """A go.mod change's pairs, less those that are not new or are explained.
+
+        `go mod tidy` makes a requirement direct when a file imports it, so a
+        requirement the file already held at that version, indirect or not, is
+        no change. It also adds a requirement for each new import, and raises the
+        versions of existing requirements that the new modules need. So once
+        every added requirement is for an approved import, its requirement
+        changes are explained too.
+        """
+        if PurePosixPath(change.rel).name != "go.mod" or not change.parsed:
+            return change.pairs
+        held = self._required(before.get(change.rel, MISSING))
+        pairs = [
+            pair
+            for pair in change.pairs
+            if not pair[0].startswith("require:") or held.get(pair[0]) != pair[1]
+        ]
+        approved = cast("dict[str, float]", self.state["imports"])
+        added = [
+            key.removeprefix("require:")
+            for key, _ in pairs
+            if key.startswith("require:") and key not in held
+        ]
+        if not added or not all(
+            any(_covers(module, path) for path in approved) for module in added
+        ):
+            return pairs
+        return [pair for pair in pairs if not pair[0].startswith("require:")]
+
+    def register(self, call_id: str, call: dict[str, Any]) -> None:
+        self.state["calls"][call_id] = call
+
+    def call(self, call_id: str) -> dict[str, Any] | None:
+        return cast("dict[str, Any] | None", self.state["calls"].get(call_id))
+
+    def undone(self, session: str, command: str) -> str | None:
+        """What the hook undid the last time this session ran the command."""
+        commands = cast("dict[str, str]", self.state["reverted"].get(session, {}))
+        return commands.get(command)
+
+    def _forget(self, session: str, command: str) -> None:
+        commands = cast("dict[str, str]", self.state["reverted"].get(session, {}))
+        _ = commands.pop(command, None)
+        if not commands:
+            _ = self.state["reverted"].pop(session, None)
+
+    def _overlapping(
+        self, call_id: str, call: dict[str, Any], now: float
+    ) -> list[dict[str, Any]]:
+        start = cast("float", call["pre"])
+        return [
+            other
+            for other_id, other in cast(
+                "dict[str, dict[str, Any]]", self.state["calls"]
+            ).items()
+            if other_id != call_id
+            and other["pre"] < now
+            and (other["end"] is None or other["end"] > start)
+        ]
+
+    def judge(self, call_id: str, call: dict[str, Any], now: float) -> str | None:
+        """Check what a finished shell call changed, undoing what it may not."""
+        command = cast("str", call["command"])
+        before = cast("Snapshot", call["snapshot"])
+        current = self.scan()
+        changes = self._changes(before, current.files)
+        taint = cast("dict[str, float]", self.state["taint"])
+        if call["asked"]:
+            self._forget(call["session"], command)
+            for change in changes:
+                for pair in change.pairs:
+                    _ = taint.pop(_pair_key(change.rel, pair), None)
+            return None
+        if not changes:
+            return None
+
+        overlapping = self._overlapping(call_id, call, now)
+        if any(
+            other["tool"] in SHELL_TOOLS and other["asked"] and other["ran"]
+            for other in overlapping
+        ):
+            return None
+        # An agent never edits a file while its own shell command runs, so an
+        # edit of the same agent that has not run was refused.
+        owner = (call["session"], call["agent"])
+        edited = {
+            other["file"]
+            for other in overlapping
+            if other["tool"] in EDIT_TOOLS
+            and (other["ran"] or (other["session"], other["agent"]) != owner)
+        }
+        # A manifest that has the content of one the call removed was moved.
+        vanished = {
+            sha
+            for rel, sha in before.items()
+            if sha is not None and rel not in current.files
+        }
+        handled = cast("dict[str, float]", self.state["handled"])
+        start = cast("float", call["pre"])
+
+        unexplained: list[Change] = []
+        for change in changes:
+            if change.rel in edited:
+                continue
+            if change.created and current.files.get(change.rel) in vanished:
+                continue
+            pairs = [
+                pair
+                for pair in self._imported(change, before)
+                if handled.get(_pair_key(change.rel, pair), 0.0) < start
+            ]
+            if pairs and change.parsed:
+                versions = self._historical(change.rel, start, call.get("stashes", []))
+                pairs = [
+                    pair
+                    for pair in pairs
+                    if _pair_key(change.rel, pair) in taint
+                    or not any(version.get(pair[0]) == pair[1] for version in versions)
+                ]
+            if pairs:
+                unexplained.append(change._replace(pairs=pairs))
+        if not unexplained:
+            return None
+
+        for change in unexplained:
+            for pair in change.pairs:
+                key = _pair_key(change.rel, pair)
+                handled[key] = now
+                if change.parsed:
+                    taint[key] = now
+
+        blocker = self._blocker(unexplained, overlapping, current)
+        if blocker is not None:
+            return self._report(command, unexplained, before, blocker)
+        return self._undo(call, unexplained, before, current)
+
+    def _blocker(
+        self, changes: list[Change], overlapping: list[dict[str, Any]], current: Scan
+    ) -> str | None:
+        if any(other["tool"] in SHELL_TOOLS for other in overlapping):
+            return (
+                "another command ran at the same time, so it may have made the change"
+            )
+        operation = self._in_progress()
+        if operation is not None:
+            return f"git is in the middle of an operation ({operation})"
+        for change in changes:
+            if not change.parsed:
+                return f"the hook could not parse {change.rel}"
+            if change.rel in current.unmerged:
+                return f"{change.rel} has merge conflicts"
+            if change.rel in current.links:
+                return f"{change.rel} is a symbolic link"
+        return None
+
+    def _report(
+        self, command: str, changes: list[Change], before: Snapshot, blocker: str
+    ) -> str:
+        what = "; ".join(self._what(change, before) for change in changes)
+        return (
+            f"While `{_short(command)}` ran, declared dependencies changed: {what}. "
+            f"The change was left in place because {blocker}. Dependency changes "
+            "need the user's approval: undo this change, or ask the user before "
+            "keeping it."
+        )
+
+    def _what(self, change: Change, before: Snapshot) -> str:
+        if not change.parsed:
+            return f"{change.rel} changed in a way the hook could not parse"
+        old = before.get(change.rel, MISSING)
+        old_specs = {} if old == MISSING else (self._specs(old) or {})
+        description = _describe_pairs(change.rel, change.pairs, old_specs)
+        return f"{description} (new file)" if change.created else description
+
+    def _undo(
+        self,
+        call: dict[str, Any],
+        changes: list[Change],
+        before: Snapshot,
+        current: Scan,
+    ) -> str:
+        command = cast("str", call["command"])
+        # Each path's content to put back: a blob hash, MISSING to delete a file
+        # the command created, or None when the old copy was too large to keep.
+        restore: dict[str, str | None] = {}
+        for change in changes:
+            restore[change.rel] = before.get(change.rel, MISSING)
+            directory = PurePosixPath(change.rel).parent
+            for rel in set(current.files) | set(before):
+                path = PurePosixPath(rel)
+                if _kind(path.name) != "lock":
+                    continue
+                if path.parent != directory and path.parent not in directory.parents:
+                    continue
+                old = before.get(rel, MISSING)
+                if current.files.get(rel, MISSING) != old:
+                    restore[rel] = old
+        too_large = [rel for rel, sha in restore.items() if sha is None]
+        if too_large:
+            return self._report(
+                command,
+                changes,
+                before,
+                f"{', '.join(too_large)} is too large for the hook to keep a copy",
+            )
+        linked = sorted(
+            {rel for rel, sha in restore.items() if sha == OUTSIDE}
+            | {rel for rel in restore if rel in current.links}
+            | {rel for rel in restore if not self._inside(rel)}
+        )
+        if linked:
+            return self._report(
+                command, changes, before, f"{', '.join(linked)} is a symbolic link"
+            )
+
+        commits = _git(
+            self.path,
+            "log",
+            "--all",
+            f"--since=@{int(call['pre'])}",
+            "--format=%h",
+            "--",
+            *(change.rel for change in changes),
+            literal=True,
+        ).split()
+
+        stamp = time.strftime("%Y%m%dT%H%M%S")
+        saved = self.dir / "reverted" / f"{stamp}-{os.getpid()}"
+        for rel in restore:
+            path = self.path / rel
+            if path.exists():
+                target = saved / rel
+                target.parent.mkdir(parents=True, exist_ok=True)
+                _ = shutil.copy2(path, target)
+        journal = [[rel, sha] for rel, sha in restore.items()]
+        _write_atomic(self.dir / "journal.json", json.dumps(journal).encode())
+        self._finish_journal()
+
+        staged: list[str] = []
+        stuck: list[str] = []
+        for rel in restore:
+            old_index = cast("list[str] | None", call["index"].get(rel))
+            if current.index.get(rel) == old_index:
+                continue
+            try:
+                if old_index is None:
+                    _ = _git(self.path, "update-index", "--force-remove", "--", rel)
+                else:
+                    mode, blob = old_index
+                    _ = _git(
+                        self.path,
+                        "update-index",
+                        "--add",
+                        "--cacheinfo",
+                        f"{mode},{blob},{rel}",
+                    )
+            except RuntimeError as exc:
+                stuck.append(f"{rel} ({exc})")
+                continue
+            staged.append(rel)
+
+        what = "; ".join(self._what(change, before) for change in changes)
+        deleted = [rel for rel, sha in restore.items() if sha == MISSING]
+        restored = [rel for rel, sha in restore.items() if sha != MISSING]
+        undone = []
+        if restored:
+            undone.append(f"restored {', '.join(restored)}")
+        if deleted:
+            undone.append(f"deleted {', '.join(deleted)}, which the command created")
+        if staged:
+            undone.append(f"reset the git index for {', '.join(staged)}")
+        if stuck:
+            undone.append(f"could not reset the git index for {', '.join(stuck)}")
+        description = what
+        self.state["reverted"].setdefault(call["session"], {})[command] = description
+        message = (
+            f"`{_short(command)}` changed declared dependencies without the user's "
+            f"approval: {what}. The hook undid that: it {'; '.join(undone)}. The "
+            f"changed files are saved in {saved}. Packages the command installed, "
+            "such as in node_modules, are still there, and any install scripts "
+            "have already run."
+        )
+        if commits:
+            message += (
+                f" Commit {', '.join(c.decode() for c in commits)} made during the "
+                "command also contains the change."
+            )
+        return (
+            f"{message} Dependency changes need the user's approval. To ask for it, "
+            "run exactly the same command again: that run asks the user first."
+        )
+
+    def _finish_journal(self) -> None:
+        journal = self.dir / "journal.json"
+        if not journal.exists():
+            return
+        for rel, sha in cast(
+            "list[list[str | None]]", json.loads(journal.read_bytes())
+        ):
+            if not self._inside(cast("str", rel)):
+                message = (
+                    f"{journal} lists {rel}, which is behind a link that leaves "
+                    f"{self.path}"
+                )
+                raise RuntimeError(message)
+            path = self.path / cast("str", rel)
+            if sha == MISSING:
+                path.unlink(missing_ok=True)
+                continue
+            mode = stat.S_IMODE(path.stat().st_mode) if path.exists() else 0o644
+            _write_atomic(path, self._blob(cast("str", sha)).read_bytes(), mode)
+        journal.unlink()
+
+    def _prune(self) -> None:
+        now = time.time()
+        calls = cast("dict[str, dict[str, Any]]", self.state["calls"])
+        for call in calls.values():
+            if call["end"] is None and call.get("background") is None:
+                limit = call.get("timeout", 600.0) + 60.0
+                if now - call["pre"] > limit:
+                    _close(call, call["pre"] + limit)
+        # A closed call stays on record while an older one is open, which still
+        # needs it to tell what ran alongside.
+        open_since = min(
+            (call["pre"] for call in calls.values() if call["end"] is None),
+            default=None,
+        )
+        for call_id, call in list(calls.items()):
+            if call["end"] is None:
+                if now - call["pre"] > KEEP_OPEN:
+                    del calls[call_id]
+            elif now - call["end"] > KEEP_CLOSED and (
+                open_since is None or call["end"] <= open_since
+            ):
+                del calls[call_id]
+        handled = cast("dict[str, float]", self.state["handled"])
+        for key, when in list(handled.items()):
+            if now - when > KEEP_OPEN:
+                del handled[key]
+        for table in ("taint", "imports"):
+            entries = cast("dict[str, float]", self.state[table])
+            for key, when in list(entries.items()):
+                if now - when > KEEP_OPEN:
+                    del entries[key]
+        live = {
+            sha
+            for call in calls.values()
+            for sha in cast("Snapshot", call.get("snapshot", {})).values()
+            if sha is not None
+        }
+        live.update(
+            entry[4] for entry in self.state["stat"].values() if entry[4] is not None
+        )
+        specs = cast("dict[str, Any]", self.state["specs"])
+        for sha in list(specs):
+            if sha not in live:
+                del specs[sha]
+        saved = self.dir / "reverted"
+        if saved.is_dir():
+            for directory in saved.iterdir():
+                if now - directory.stat().st_mtime > KEEP_SAVED:
+                    shutil.rmtree(directory)
+        blobs = self.dir / "blobs"
+        if blobs.is_dir():
+            for blob in blobs.iterdir():
+                if blob.name not in live and now - blob.stat().st_mtime > KEEP_CLOSED:
+                    blob.unlink(missing_ok=True)
+
+
+def _close(call: dict[str, Any], when: float) -> None:
+    call["end"] = when
+    call["snapshot"] = {}
+    call["index"] = {}
+
+
+def _index_file(kind: str, name: str) -> Path:
+    return _state_home() / kind / _safe(name)
+
+
+def _roots(payload: dict[str, Any]) -> list[Path]:
+    # The project directory stays at the main checkout once Claude is in a
+    # worktree, where the user may be working, so it only stands in for a
+    # working directory outside any repository.
+    for candidate in (payload.get("cwd"), os.environ.get("CLAUDE_PROJECT_DIR")):
+        if isinstance(candidate, str) and candidate:
+            root = _toplevel(candidate)
+            if root is not None:
+                return [root]
+    return []
+
+
+def _remember(payload: dict[str, Any], call_id: str, roots: list[Path]) -> None:
+    _write_atomic(
+        _index_file("calls", call_id), json.dumps([str(r) for r in roots]).encode()
+    )
+    sessions = _index_file("sessions", str(payload.get("session_id")))
+    known = set(sessions.read_text().splitlines()) if sessions.exists() else set()
+    new = [str(root) for root in roots if str(root) not in known]
+    if new:
+        # Appending, unlike a rewrite, cannot drop a root another hook run adds
+        # at the same moment.
+        sessions.parent.mkdir(parents=True, exist_ok=True)
+        with sessions.open("a") as handle:
+            _ = handle.write("".join(f"{root}\n" for root in new))
+
+
+def _recalled(call_id: str) -> list[Path]:
+    path = _index_file("calls", call_id)
+    if not path.exists():
+        return []
+    return [Path(root) for root in cast("list[str]", json.loads(path.read_bytes()))]
+
+
+def _ask_marker(payload: dict[str, Any]) -> Path:
+    tool_input = payload.get("tool_input")
+    identity = json.dumps(
+        [
+            payload.get("session_id"),
+            payload.get("agent_id"),
+            payload.get("tool_name"),
+            tool_input.get("command") if isinstance(tool_input, dict) else None,
+        ]
+    )
+    return _index_file("asks", hashlib.sha256(identity.encode()).hexdigest())
+
+
+def _call_record(payload: dict[str, Any]) -> dict[str, Any]:
+    tool_input = cast("dict[str, Any]", payload.get("tool_input") or {})
+    timeout = tool_input.get("timeout") or tool_input.get("timeout_ms")
+    return {
+        "session": str(payload.get("session_id")),
+        "agent": payload.get("agent_id"),
+        "tool": payload.get("tool_name"),
+        "command": tool_input.get("command"),
+        "file": None,
+        "pre": time.time(),
+        "end": None,
+        "asked": False,
+        "ran": False,
+        "background": None,
+        "timeout": float(timeout) / 1000 if isinstance(timeout, int | float) else 600.0,
+        "snapshot": {},
+        "index": {},
+    }
+
+
+def _ask(reason: str) -> dict[str, Any]:
+    return {
+        "hookSpecificOutput": {
+            "hookEventName": "PreToolUse",
+            "permissionDecision": "ask",
+            "permissionDecisionReason": reason,
+        }
+    }
+
+
+def _pre_shell(payload: dict[str, Any]) -> dict[str, Any] | None:
+    call_id = str(payload.get("tool_use_id"))
+    record = _call_record(payload)
+    if not isinstance(record["command"], str):
+        return None
+    # A prompt for this call comes after this hook, so a marker left by an
+    # earlier identical call, whose prompt the user denied, must not approve it.
+    _ask_marker(payload).unlink(missing_ok=True)
+    roots = _roots(payload)
+    _remember(payload, call_id, roots)
+    descriptions: list[str] = []
+    for root in roots:
+        with Root(root) as guard:
+            description = guard.undone(record["session"], record["command"])
+            if description is not None:
+                descriptions.append(description)
+            current = guard.scan()
+            guard.accept(current)
+            guard.register(
+                call_id,
+                record
+                | {
+                    "snapshot": current.files,
+                    "index": current.index,
+                    "stashes": guard.stashes(),
+                },
+            )
+    reason: str | None = None
+    if descriptions:
+        reason = (
+            f"The last time this command ran, it changed dependencies "
+            f"({'; '.join(descriptions)}), and the hook undid that. Approve to let "
+            "it change them."
+        )
+        for root in roots:
+            with Root(root) as guard:
+                call = guard.call(call_id)
+                if call is not None:
+                    call["asked"] = True
+    return _ask(reason) if reason is not None else None
+
+
+def _pre_edit(payload: dict[str, Any]) -> dict[str, Any] | None:
+    tool_input = cast("dict[str, Any]", payload.get("tool_input") or {})
+    tool = cast("str", payload.get("tool_name"))
+    reason = _edit_reason(tool, tool_input)
+    imports = _new_go_imports(tool, tool_input)
+    if imports:
+        file_path = cast("str", tool_input["file_path"])
+        reason = (
+            f"This edit to {_clean(Path(file_path).name)} imports "
+            f"{_names(imports, whole=True)}, which go.mod does not require."
+        )
+        call_id = str(payload.get("tool_use_id"))
+        root = _toplevel(str(Path(file_path).parent))
+        if root is not None:
+            _remember(payload, call_id, [root])
+            with Root(root) as guard:
+                guard.register(
+                    call_id,
+                    _call_record(payload)
+                    | {"imports": imports, "asked": True, "timeout": 300.0},
+                )
+        return _ask(reason)
+    file_path = tool_input.get("file_path")
+    if isinstance(file_path, str) and _kind(Path(file_path).name) is not None:
+        call_id = str(payload.get("tool_use_id"))
+        root = _toplevel(str(Path(file_path).parent))
+        if root is not None:
+            _remember(payload, call_id, [root])
+            with Root(root) as guard:
+                rel = os.path.relpath(os.path.realpath(file_path), root)
+                guard.register(
+                    call_id, _call_record(payload) | {"file": rel, "timeout": 300.0}
+                )
+    return _ask(reason) if reason is not None else None
+
+
+def _post(payload: dict[str, Any]) -> dict[str, Any] | None:
+    event = payload.get("hook_event_name")
+    call_id = str(payload.get("tool_use_id"))
+    roots = _recalled(call_id)
+    response = payload.get("tool_response")
+    background = None
+    if isinstance(response, dict):
+        response = cast("dict[str, Any]", response)
+        background = response.get("backgroundTaskId") or response.get("taskId")
+    marker = _ask_marker(payload)
+    asked = marker.exists()
+    now = time.time()
+    messages: list[str] = []
+    for root in roots:
+        if not root.is_dir():
+            continue
+        with Root(root) as guard:
+            call = guard.call(call_id)
+            # A call that was closed early has lost its snapshot, and judging it
+            # against an empty one would take every manifest for new.
+            if call is None or call["end"] is not None:
+                continue
+            if asked:
+                call["asked"] = True
+            call["ran"] = True
+            if call["tool"] in EDIT_TOOLS:
+                if call.get("imports") and event == "PostToolUse":
+                    guard.approve_imports(call["imports"], now)
+                _close(call, now)
+                continue
+            if isinstance(background, str) and event == "PostToolUse":
+                call["background"] = background
+                continue
+            message = guard.judge(call_id, call, now)
+            _close(call, now)
+            if message is not None:
+                messages.append(message)
+    marker.unlink(missing_ok=True)
+    if not (isinstance(background, str) and event == "PostToolUse"):
+        _index_file("calls", call_id).unlink(missing_ok=True)
+    if not messages:
+        return None
+    text = "\n\n".join(messages)
+    if event == "PostToolUse":
+        return {"decision": "block", "reason": text}
+    return {"hookSpecificOutput": {"hookEventName": event, "additionalContext": text}}
+
+
+def _permission_request(payload: dict[str, Any]) -> None:
+    _write_atomic(_ask_marker(payload), b"")
+
+
+def _batch(payload: dict[str, Any]) -> None:
+    """End the calls of a resolved batch, including those that never ran.
+
+    A call whose prompt was denied, or that another hook refused, gets no
+    PostToolUse, and left open it would count as running beside every later call.
+    """
+    now = time.time()
+    batch = payload.get("tool_calls")
+    for item in batch if isinstance(batch, list) else []:
+        if not isinstance(item, dict):
+            continue
+        entry = cast("dict[str, Any]", item)
+        call_id = str(entry.get("tool_use_id"))
+        background = False
+        for root in _recalled(call_id):
+            if not root.is_dir():
+                continue
+            with Root(root) as guard:
+                call = guard.call(call_id)
+                if call is None:
+                    continue
+                if call["background"] is not None:
+                    background = True
+                elif call["end"] is None:
+                    _close(call, now)
+        if not background:
+            _index_file("calls", call_id).unlink(missing_ok=True)
+        _ask_marker(
+            payload
+            | {
+                "tool_name": entry.get("tool_name"),
+                "tool_input": entry.get("tool_input"),
+            }
+        ).unlink(missing_ok=True)
+
+
+def _end(payload: dict[str, Any]) -> None:
+    """End every call of a finished session, background ones included."""
+    session = str(payload.get("session_id"))
+    sessions = _index_file("sessions", session)
+    if not sessions.exists():
+        return
+    now = time.time()
+    for root in sessions.read_text().splitlines():
+        if not Path(root).is_dir():
+            continue
+        with Root(Path(root)) as guard:
+            calls = cast("dict[str, dict[str, Any]]", guard.state["calls"])
+            for call_id, call in calls.items():
+                if call["session"] == session and call["end"] is None:
+                    _close(call, now)
+                    _index_file("calls", call_id).unlink(missing_ok=True)
+    sessions.unlink(missing_ok=True)
+
+
+def _stop(payload: dict[str, Any]) -> dict[str, Any] | None:
+    session = str(payload.get("session_id"))
+    agent = payload.get("agent_id")
+    tasks = payload.get("background_tasks")
+    known = isinstance(tasks, list)
+    running = {
+        cast("dict[str, Any]", task).get("id")
+        for task in (tasks if isinstance(tasks, list) else [])
+        if isinstance(task, dict)
+    }
+    sessions = _index_file("sessions", session)
+    if not sessions.exists():
+        return None
+    now = time.time()
+    messages: list[str] = []
+    for root in sessions.read_text().splitlines():
+        if not Path(root).is_dir():
+            continue
+        with Root(Path(root)) as guard:
+            calls = cast("dict[str, dict[str, Any]]", guard.state["calls"])
+            for call_id, call in list(calls.items()):
+                if call["session"] != session or call["end"] is not None:
+                    continue
+                if call["background"] is None:
+                    if call["agent"] == agent:
+                        _close(call, now)
+                    continue
+                if (
+                    payload.get("hook_event_name") != "Stop"
+                    or not known
+                    or call["background"] in running
+                ):
+                    continue
+                _index_file("calls", call_id).unlink(missing_ok=True)
+                message = guard.judge(call_id, call, now)
+                _close(call, now)
+                if message is not None:
+                    messages.append(message)
+    if not messages:
+        return None
+    return {"decision": "block", "reason": "\n\n".join(messages)}
+
+
+def _handle(payload: dict[str, Any]) -> dict[str, Any] | None:
+    event = payload.get("hook_event_name")
+    tool = payload.get("tool_name")
+    if event == "PreToolUse":
+        if tool in SHELL_TOOLS:
+            return _pre_shell(payload)
+        if tool in EDIT_TOOLS:
+            return _pre_edit(payload)
+        return None
+    if event in ("PostToolUse", "PostToolUseFailure"):
+        return _post(payload) if tool in SHELL_TOOLS | EDIT_TOOLS else None
+    if event == "PermissionRequest":
+        if tool in SHELL_TOOLS:
+            _permission_request(payload)
+        return None
+    if event in ("Stop", "SubagentStop"):
+        return _stop(payload)
+    if event == "PostToolBatch":
+        _batch(payload)
+    elif event == "SessionEnd":
+        _end(payload)
+    return None
+
+
+def _failure(payload: object, exc: Exception) -> dict[str, Any]:
+    name = type(exc).__name__
+    event = payload.get("hook_event_name") if isinstance(payload, dict) else None
+    detail = f"Dependency guard failed ({name}: {exc})"
+    match event:
+        case "PreToolUse" | None:
+            return _ask(f"{detail}, so asking to be safe.")
+        case "PostToolUse":
+            return {
+                "decision": "block",
+                "reason": f"{detail}, so this command's dependency changes were "
+                "not checked.",
+            }
+        case "PostToolUseFailure":
+            return {
+                "hookSpecificOutput": {
+                    "hookEventName": event,
+                    "additionalContext": f"{detail}, so this command's dependency "
+                    "changes were not checked.",
+                }
+            }
+        case _:
+            return {"systemMessage": f"{detail}."}
 
 
 class OutOfTime(Exception):  # noqa: N818 - not an error condition in the usual sense
@@ -1356,32 +1842,26 @@ def _out_of_time(_signum: int, _frame: FrameType | None) -> None:
 
 
 def main() -> None:
+    DEADLINE[0] = time.monotonic() + WALL_BUDGET
     signal.signal(signal.SIGALRM, _out_of_time)
+    payload: object = None
     try:
         signal.setitimer(signal.ITIMER_REAL, WALL_BUDGET)
         try:
             payload = json.load(sys.stdin)
-            reason = _reason(payload) if isinstance(payload, dict) else None
+            output = (
+                _handle(cast("dict[str, Any]", payload))
+                if isinstance(payload, dict)
+                else None
+            )
         finally:
             signal.setitimer(signal.ITIMER_REAL, 0)
     except Exception as exc:  # noqa: BLE001 - a crash here would fail open
-        reason = (
-            f"Dependency guard failed ({type(exc).__name__}), so asking to be safe."
-        )
+        output = _failure(payload, exc)
 
-    if reason is None:
+    if output is None:
         return
-
-    json.dump(
-        {
-            "hookSpecificOutput": {
-                "hookEventName": "PreToolUse",
-                "permissionDecision": "ask",
-                "permissionDecisionReason": reason,
-            }
-        },
-        sys.stdout,
-    )
+    json.dump(output, sys.stdout)
     print()
 
 
