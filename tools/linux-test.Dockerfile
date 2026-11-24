@@ -15,7 +15,7 @@
 # The build context is a staged tree (tools/stage_tree.sh DEST), so this builds
 # from any directory with: docker build -f DEST/tools/linux-test.Dockerfile DEST
 
-FROM debian:trixie-slim@sha256:a72b4433de1cf7d6bae0c4cee74d0547f58601a643b3375f070c51600d63b6b2
+FROM debian:trixie-slim@sha256:8aa5a7bf5a1955bddbe7d74fcdd0b91ab30e74362a8b73af672b0481b35b44a0
 
 # provision.sh installs everything else, through provision/linux-system.sh.
 RUN DEBIAN_FRONTEND=noninteractive apt-get update \
