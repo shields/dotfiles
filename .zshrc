@@ -456,8 +456,9 @@ _startup_overrides() {
         setopt localoptions extendedglob
         local key_file=$HOME/.config/secrets/FIREWORKS_API_KEY key
         key=$(<"$key_file") || return 1
-        # The trimming of cog's secret installer, so that a key file which cog
-        # installs in a VM works here too.
+        # The trimming of cog's secret installer, so that the file which cog
+        # installs in a VM works here too. In a Lima VM that file holds cog's
+        # placeholder, which the gateway on the Mac replaces with the key.
         key=${${key//$'\r'/}##[[:space:]]##}
         key=${key%%[[:space:]]##}
         if [[ -z $key || $key == *[[:space:]]* ]]; then

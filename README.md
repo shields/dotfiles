@@ -340,7 +340,10 @@ Anthropic-compatible API, and `cgw` is `cg --worktree`. It needs a Fireworks API
 key in `~/.config/secrets/FIREWORKS_API_KEY` (mode 0600), which it reads at
 launch and passes only to that `claude`, in place of the Claude login. Outside a
 throwaway VM the sandbox hides the key from the commands that `claude` runs, but
-its hooks and MCP servers inherit it. Every model alias maps to
+its hooks and MCP servers inherit it. A Lima VM made by `cog` holds no key: when
+the Mac has one, the file there holds the placeholder `cog`, which `cog`'s
+gateway on the Mac replaces with the key (see "Throwaway VMs"), and otherwise
+the file is absent and `cg` fails. Every model alias maps to
 `accounts/fireworks/models/glm-5p3`, and so does every subagent, whatever model
 it names. The status line's cost is at Fireworks' rates, because provisioning
 installs `provision/claude-model-pricing.json` as a managed-settings drop-in
@@ -393,6 +396,31 @@ gateway accepts pushes only to `cog/UUID/*`. Where `/etc/cog-github-gateway`
 exists, `provision.sh` leaves the credential helper for `https://github.com` in
 `~/.config/git/config` alone, because `cog` puts the gateway's helper there
 (replacing the `gh` helper that an earlier run wrote).
+
+A Lima VM holds no Claude token and no Fireworks key. `cog` points
+`api.anthropic.com` and `api.fireworks.ai` at its gateway in the VM's
+`/etc/hosts` and writes the placeholder `cog` to
+`~/.config/secrets/CLAUDE_CODE_OAUTH_TOKEN`, unless `cog new` got
+`--no-claude-token`, and, when the Mac has a Fireworks key, to
+`~/.config/secrets/FIREWORKS_API_KEY`; the gateway on the Mac replaces the
+placeholder with a real credential. That works because of three things here,
+which `cog` relies on:
+
+- on Linux, where `/etc/cog-github-gateway` is a regular file, `.zshenv`
+  exports `SSL_CERT_FILE`, `NODE_EXTRA_CA_CERTS` and `REQUESTS_CA_BUNDLE` as
+  the system bundle, which holds the gateway's CA, so Claude Code trusts the
+  gateway for those names;
+- on Linux, where `~/.config/secrets/CLAUDE_CODE_OAUTH_TOKEN` exists, `.zshrc`
+  exports `CLAUDE_CODE_OAUTH_TOKEN` from it, so Claude Code sends
+  `Authorization: Bearer cog` and stays in direct mode;
+- `cg` sends the content of `FIREWORKS_API_KEY` as the bearer token to
+  `https://api.fireworks.ai/inference` and no other credential.
+
+When Claude or Fireworks is wired, `cog new` checks in the VM's interactive zsh,
+before it hands over the VM, that `NODE_EXTRA_CA_CERTS` is exported as
+`/etc/ssl/certs/ca-certificates.crt` and, unless `--no-claude-token`, that
+`CLAUDE_CODE_OAUTH_TOKEN` is exported as `cog`. A change to either needs the
+same change in `cog`.
 
 # Testing on Linux
 
