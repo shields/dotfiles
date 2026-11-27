@@ -116,7 +116,7 @@ Throwaway VMs belong to `cog`, in shields/cog; the README states the contract.
 - `cog` reads `./provision.sh`, `.claude/settings.json` (the `git push` deny
   rules, the `git_guard.py` hook and the status line) and
   `tools/configure_codex.py` from a checkout, and this repository reads the
-  markers `/etc/cog-throwaway` and `/etc/cog-github-gateway`. Changing any of
+  markers `/etc/cog-throwaway` and `/etc/cog-gateway`. Changing any of
   them changes the contract in the README, and `cog` needs the same change.
   `.zshrc`'s `_claude_start`, which `c` and `cg` share, tests the throwaway
   marker, which `DOTFILES_THROWAWAY_MARKER` can point elsewhere in a test, and

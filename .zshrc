@@ -232,7 +232,7 @@ if [[ "$OSTYPE" == linux* && -e "$HOME/.config/secrets/CLAUDE_CODE_OAUTH_TOKEN" 
     CLAUDE_CODE_OAUTH_TOKEN="$(<"$HOME/.config/secrets/CLAUDE_CODE_OAUTH_TOKEN")" &&
         export CLAUDE_CODE_OAUTH_TOKEN
 fi
-if [[ "$OSTYPE" == linux* && -f /etc/cog-github-gateway ]]; then
+if [[ "$OSTYPE" == linux* && -f /etc/cog-gateway ]]; then
     export GH_TOKEN=cog
 fi
 
