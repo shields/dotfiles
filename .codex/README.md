@@ -54,7 +54,7 @@ the hook also denies on its own when it runs for 5 seconds. The deny rules for
 Code's matcher also looks inside a double-quoted `$(...)` and backticks, which
 the hook does not.
 
-Where `/etc/cog-github-gateway` exists, the machine is a guest of `cog`'s GitHub
+Where `/etc/cog-gateway` exists, the machine is a guest of `cog`'s GitHub
 gateway: the hook lets `git push` through, provisioning removes
 `~/.codex/rules/no-push.rules`, and the gateway decides which branches a push
 may update.

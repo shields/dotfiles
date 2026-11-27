@@ -23,7 +23,7 @@ import pytest
 REPO = Path(__file__).resolve().parents[1]
 
 THROWAWAY_MARKER = "/etc/cog-throwaway"
-GATEWAY_MARKER = "/etc/cog-github-gateway"
+GATEWAY_MARKER = "/etc/cog-gateway"
 
 READERS = [
     (".zshrc", THROWAWAY_MARKER),

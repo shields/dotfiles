@@ -859,7 +859,7 @@ def test_linux_gets_git_credential_helpers_and_claude_onboarding() -> None:
     assert "https://github.com https://gist.github.com" in body
     assert "'!gh auth git-credential'" in body
     assert "$HOME/.config/git/config" in body
-    gateway = re.escape("/etc/cog-github-gateway")
+    gateway = re.escape("/etc/cog-gateway")
     skip = find(
         rf"if \[\[ \$credential_url == https://github\.com && -f {gateway} \]\]"
     )

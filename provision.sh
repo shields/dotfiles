@@ -104,7 +104,7 @@ linux)
 esac
 git ls-files -z -- "${copy_paths[@]}" | tar --null -cf - -T - | (cd "$HOME" && tar xvf -)
 
-if [[ $os == linux && -f /etc/cog-github-gateway ]]; then
+if [[ $os == linux && -f /etc/cog-gateway ]]; then
     rm -f "$HOME/.codex/rules/no-push.rules"
 fi
 
@@ -303,7 +303,7 @@ if [[ $os == linux ]]; then
     mkdir -p "$HOME/.config/git"
     for credential_url in https://github.com https://gist.github.com; do
         # A gateway guest keeps cog's helper for github.com in ~/.config/git/config.
-        if [[ $credential_url == https://github.com && -f /etc/cog-github-gateway ]]; then
+        if [[ $credential_url == https://github.com && -f /etc/cog-gateway ]]; then
             continue
         fi
         git config --file "$HOME/.config/git/config" "credential.$credential_url.helper" '!gh auth git-credential'

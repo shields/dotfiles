@@ -364,10 +364,11 @@ sends it (`SendEnv LANG`). The system `ssh_config` of Debian and of macOS's own
 Throwaway VMs, on this Mac with Lima or in Cloudflare containers, where Claude
 Code and Codex run with no sandbox and no permission prompts, are made by the
 `cog` command from [shields/cog](https://github.com/shields/cog), which also
-runs the GitHub gateway that keeps a VM's GitHub access to the repositories it
-is granted. Its README describes installing and using it. A VM is a clone of a
-base that `cog base` provisions from a dotfiles checkout, so what follows is
-what `cog` needs from this repository and what this repository reads from a VM.
+runs the gateway that keeps a VM's GitHub access to the repositories it is
+granted and, for a Lima VM, holds the model credentials. Its README describes
+installing and using it. A VM is a clone of a base that `cog base` provisions
+from a dotfiles checkout, so what follows is what `cog` needs from this
+repository and what this repository reads from a VM.
 
 `cog` needs from a dotfiles checkout:
 
@@ -386,13 +387,13 @@ what `cog` needs from this repository and what this repository reads from a VM.
 
 This repository reads two marker files that `cog` writes in the guest:
 `/etc/cog-throwaway`, whose presence makes the machine a throwaway VM, and
-`/etc/cog-github-gateway`, one line holding the VM's UUID, or `cloudflare`.
+`/etc/cog-gateway`, one line holding the VM's UUID, or `cloudflare`.
 `.zshrc`, `.zshenv`, `.zsh.d/wt.zsh`, `.codex/hooks/git_guard.py`,
 `tools/configure_codex.py` and `provision.sh` read them, and
 `tests/test_cog_contract.py` checks that each names its marker and that
 `.claude/settings.json` satisfies the list above. Where the second file holds
 a UUID, `wt` names a new worktree's branch `cog/UUID/worktree-NAME`, since the
-gateway accepts pushes only to `cog/UUID/*`. Where `/etc/cog-github-gateway`
+gateway accepts pushes only to `cog/UUID/*`. Where `/etc/cog-gateway`
 exists, `provision.sh` leaves the credential helper for `https://github.com` in
 `~/.config/git/config` alone, because `cog` puts the gateway's helper there
 (replacing the `gh` helper that an earlier run wrote).
@@ -401,12 +402,12 @@ A Lima VM holds no Claude token and no Fireworks key. `cog` points
 `api.anthropic.com` and `api.fireworks.ai` at its gateway in the VM's
 `/etc/hosts` and writes the placeholder `cog` to
 `~/.config/secrets/CLAUDE_CODE_OAUTH_TOKEN`, unless `cog new` got
-`--no-claude-token`, and, when the Mac has a Fireworks key, to
+`--no-claude`, and, when the Mac has a Fireworks key, to
 `~/.config/secrets/FIREWORKS_API_KEY`; the gateway on the Mac replaces the
 placeholder with a real credential. That works because of three things here,
 which `cog` relies on:
 
-- on Linux, where `/etc/cog-github-gateway` is a regular file, `.zshenv`
+- on Linux, where `/etc/cog-gateway` is a regular file, `.zshenv`
   exports `SSL_CERT_FILE`, `NODE_EXTRA_CA_CERTS` and `REQUESTS_CA_BUNDLE` as
   the system bundle, which holds the gateway's CA, so Claude Code trusts the
   gateway for those names;
@@ -418,7 +419,7 @@ which `cog` relies on:
 
 When Claude or Fireworks is wired, `cog new` checks in the VM's interactive zsh,
 before it hands over the VM, that `NODE_EXTRA_CA_CERTS` is exported as
-`/etc/ssl/certs/ca-certificates.crt` and, unless `--no-claude-token`, that
+`/etc/ssl/certs/ca-certificates.crt` and, unless `--no-claude`, that
 `CLAUDE_CODE_OAUTH_TOKEN` is exported as `cog`. A change to either needs the
 same change in `cog`.
 
