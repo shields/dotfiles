@@ -29,7 +29,8 @@ limitations under the License.
   `make setup` installs the locked dependencies. `DOTFILES_FAIL_ON_SKIP=1` makes
   any skipped pytest test fail the run, so a test that needs a new tool needs it
   added to the script, not a skip. Zsh tests have no skip mechanism; keep it
-  that way. `zizmor.yml` audits the workflows.
+  that way. The script pins cf by version; bump it by hand. `zizmor.yml` audits
+  the workflows.
 - **Formatting**: `make lint` runs `prettier --check .` and `make fmt` runs
   `prettier --write .`, so both cover every file type Prettier supports natively
   (not TOML, which needs a plugin) except what `.gitignore` and
@@ -96,6 +97,15 @@ refuses to drop an installed module without `--remove-modules`. A new module is
 installed only where it has been named once. Add packages with
 `brew bundle add --file=brew/<module>.Brewfile`. Never run `brew bundle dump`:
 it would overwrite the loader. The README describes the modules.
+
+`provision/cli-tools.sh` holds what `provision.sh` does for command-line tools
+that Homebrew cannot: `npm_install_global` reinstalls each Brewfile `npm` entry
+at the newest version, up to its latest tag, that is three days old (brew
+bundle's own wait is one day), and `completion_install` writes the zsh
+completions of cf and ghist into `$ZSH_CACHE_DIR/completions` (the directory
+`.zshrc` puts on `fpath`), so no tool runs at shell startup to generate them.
+Each returns nonzero on any failure; call them where `set -e` applies, not as
+an `if` or `||` condition, so a failure stops provisioning.
 
 `tools/stage_tree.sh DEST` copies the working tree (tracked files and untracked
 files that are not ignored) into a new git repository at `DEST` and fails if

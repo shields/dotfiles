@@ -35,3 +35,4 @@ brew "snyk/tap/snyk", trusted: true
 brew "twilio/brew/twilio", trusted: true
 cask "azure-cli"
 cask "gcloud-cli"
+npm "cf"

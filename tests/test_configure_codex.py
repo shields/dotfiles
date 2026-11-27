@@ -47,10 +47,15 @@ STATUS_LINE = [
     "fast-mode",
 ]
 UV_CACHE = "/Volumes/Data/uv-cache.noindex"
-UV_GRANTS = {"~/.cache/uv": "write", UV_CACHE: "write"}
+WRITE_GRANTS = {
+    "~/.cache/uv": "write",
+    UV_CACHE: "write",
+    "~/Library/Preferences/cloudflare/config": "write",
+    "~/.config/cloudflare/config": "write",
+}
 DEVELOPMENT_PERMISSIONS: Json = {
     "extends": ":workspace",
-    "filesystem": UV_GRANTS,
+    "filesystem": WRITE_GRANTS,
     "network": {"enabled": True},
 }
 
@@ -240,7 +245,7 @@ def test_settings_keep_existing_permission_rules() -> None:
     )
     assert result["description"] == development["description"]
     assert result["workspace_roots"] == development["workspace_roots"]
-    assert result["filesystem"] == {"~/.ssh": "deny", **UV_GRANTS}
+    assert result["filesystem"] == {"~/.ssh": "deny", **WRITE_GRANTS}
     assert result["network"] == {
         "allow_upstream_proxy": False,
         "enabled": True,
@@ -515,7 +520,7 @@ def test_configure_permissions_with_the_real_cli(
     assert config["permissions"]["dev"] == {
         "description": "Keep this",
         "extends": ":workspace",
-        "filesystem": {"~/.ssh": "deny", **UV_GRANTS},
+        "filesystem": {"~/.ssh": "deny", **WRITE_GRANTS},
         "network": {
             "enabled": True,
             "domains": {"example.com": "deny"},
@@ -529,8 +534,8 @@ def test_configure_permissions_with_the_real_cli(
     if not throwaway:
         assert sandbox["networkAccess"] is True
         roots = cast("list[str]", sandbox["writableRoots"])
-        assert str(Path.home() / ".cache/uv") in roots
-        assert UV_CACHE in roots
+        granted = {str(Path(grant).expanduser()) for grant in WRITE_GRANTS}
+        assert granted <= set(roots)
 
 
 def test_configure_worktree_root_with_the_real_cli(

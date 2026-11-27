@@ -298,6 +298,8 @@
         "/Volumes/Data/uv-cache.noindex",
         "~/.npm",
         "~/.ruff_cache",
+        "~/Library/Preferences/cloudflare/config",
+        "~/.config/cloudflare/config",
         "/Volumes/Cache"
       ],
       "denyRead": [

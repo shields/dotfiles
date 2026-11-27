@@ -505,6 +505,41 @@ def test_cached_output_is_rebuilt_when_a_watch_changes_status(shell: Shell) -> N
     assert steps == ["missing builds=1", "newer builds=1", "older builds=2"]
 
 
+def test_generated_completions_are_registered_without_running_their_tools(
+    shell: Shell,
+) -> None:
+    completions = shell.home / "cache/oh-my-zsh/completions"
+    completions.mkdir(parents=True)
+    (shell.home / "bin").mkdir()
+    for name in ("cf", "ghist"):
+        shell.write(
+            f"cache/oh-my-zsh/completions/_{name}",
+            f"#compdef {name}\n_{name}() {{ :; }}\n",
+        )
+        executable(
+            shell.home / f"bin/{name}", f'#!/bin/sh\necho {name} >> "$ZDOTDIR/calls"\n'
+        )
+    result = shell.run('print -r -- "${_comps[cf]-missing} ${_comps[ghist]-missing}"')
+    assert result.returncode == 0, result.stderr
+    assert result.stdout.strip() == "_cf _ghist"
+    assert not (shell.home / "calls").exists()
+
+
+def test_swapping_generated_completions_updates_their_registrations(
+    shell: Shell,
+) -> None:
+    completions = shell.home / "cache/oh-my-zsh/completions"
+    shell.write("cache/oh-my-zsh/completions/_ghist", "#compdef ghist\n")
+    query = 'print -r -- "${_comps[cf]-missing} ${_comps[ghist]-missing}"'
+    assert shell.run_command(query) == "missing _ghist"
+
+    # Provisioning that swaps one tool's completion for another's leaves the
+    # number of completion files, which compinit compares, unchanged.
+    (completions / "_ghist").unlink()
+    shell.write("cache/oh-my-zsh/completions/_cf", "#compdef cf\n")
+    assert shell.run_command(query) == "_cf missing"
+
+
 @pytest.mark.parametrize(
     ("ostype", "probed"),
     [(None, sys.platform == "linux"), (DARWIN, False), (LINUX, True)],

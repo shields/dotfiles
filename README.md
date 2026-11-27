@@ -269,7 +269,7 @@ that are selected.
 | ------- | -------------------------------------------------------------------------------------------------------------- |
 | `base`  | Always installed: git, gh, shell tools, Python, Node, Go, uv, and the Claude Code and Codex casks.             |
 | `dev`   | Linters, formatters, language servers, compilers and other development tools, and the cargo, go and npm tools. |
-| `cloud` | Cloud and Kubernetes command-line tools, including the Google Cloud CLI.                                       |
+| `cloud` | Cloud and Kubernetes command-line tools, including the Google Cloud CLI and Cloudflare's `cf` (from npm).      |
 | `data`  | Databases, notebooks, mail and sync tools.                                                                     |
 | `media` | Image, audio and video tools.                                                                                  |
 | `macos` | Always installed on macOS: casks, Mac App Store apps, GNU tools, Emacs Plus and other macOS-only packages.     |
@@ -293,10 +293,12 @@ that are selected.
   `./provision.sh dev cloud newmodule`.
 - To change what a module installs, edit `brew/<module>.Brewfile`, or run
   `brew bundle add --file=brew/<module>.Brewfile ...` (or `remove`).
-- To check a machine against its modules, run `brew bundle check --verbose` and
-  `brew bundle cleanup` (without `--force`) in an interactive shell. The cargo
-  entries are found only where rustup's `bin` is on the `PATH`, which `.zshrc`
-  arranges.
+- To check a machine against its modules, run
+  `brew bundle check --verbose --no-upgrade` and `brew bundle cleanup` (without
+  `--force`) in an interactive shell. Without `--no-upgrade`, the check also
+  fails for any entry with a newer version, such as cf, which provisioning holds
+  back for three days after each release. The cargo entries are found only where
+  rustup's `bin` is on the `PATH`, which `.zshrc` arranges.
 - Do not run `brew bundle dump`: it would replace the loader with a flat list.
 
 Provisioning upgrades formulae through Bundle, which also manages services

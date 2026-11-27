@@ -140,6 +140,11 @@ def settings(
                 **table(development, "filesystem"),
                 "~/.cache/uv": "write",
                 UV_CACHE: "write",
+                # cf saves each rotated OAuth refresh token in config/. The rest
+                # of its directory chooses which account cf uses, so it stays
+                # read-only.
+                "~/Library/Preferences/cloudflare/config": "write",
+                "~/.config/cloudflare/config": "write",
             },
             "network": {
                 **network,

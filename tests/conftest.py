@@ -13,6 +13,8 @@
 # limitations under the License.
 
 import os
+import subprocess
+from pathlib import Path
 from typing import TYPE_CHECKING
 
 import pytest
@@ -70,6 +72,14 @@ def pytest_configure(config: pytest.Config) -> None:
         raise pytest.UsageError(msg)
     if value == "1":
         _ = config.pluginmanager.register(SkipGate(), "fail-on-skip")
+
+
+@pytest.fixture(scope="session")
+def npm_global_root() -> Path:
+    result = subprocess.run(
+        ["npm", "root", "-g"], capture_output=True, text=True, check=True
+    )
+    return Path(result.stdout.strip())
 
 
 @pytest.fixture(autouse=True)

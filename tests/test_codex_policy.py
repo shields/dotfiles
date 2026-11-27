@@ -12,16 +12,21 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import importlib.util
 import json
 import os
+import re
 import resource
 import shutil
 import subprocess
 import sys
 from pathlib import Path
-from typing import cast
+from typing import TYPE_CHECKING, cast
 
 import pytest
+
+if TYPE_CHECKING:
+    from collections.abc import Callable
 
 REPO = Path(__file__).resolve().parents[1]
 HOOK = REPO / ".codex/hooks/git_guard.py"
@@ -300,6 +305,130 @@ RULES = REPO / ".codex/rules"
         "bash +c 'git push'",
         "zsh -O -c 'git push'",
         "bash -euo pipefail -c 'gh api -X POST repos/o/r'",
+        "cf auth login",
+        "cf auth logout",
+        "cf auth create",
+        "cf --profile work auth delete",
+        "cf auth --profile=work activate",
+        "cf auth -m dev deactivate",
+        "cf accounts tokens create",
+        "cf accounts tokens roll abc",
+        "cf user tokens delete abc",
+        "cf builds tokens create",
+        "cf -z example.com dns records delete abc",
+        "cf dns -z example.com records delete abc",
+        "cf dns records --zone=example.com delete abc",
+        "cf --quiet --local dns records delete abc",
+        "cf --dry-run dns records delete abc",
+        "cf cache purge-cache",
+        "cf cache invalidate --zone x --hosts a.example.com",
+        "cf cache invalidate-environment --zone x",
+        "cf d1 time-travel restore db --timestamp 2020-01-01T00:00:00Z",
+        "cf workflows instances terminate w i",
+        "cf kv bulk delete ns",
+        "cf kv keys delete ns key",
+        "cf zero-trust access service-tokens create",
+        "cf zero-trust access applications revoke-tokens abc",
+        "cf iam oauth-clients rotate-secret abc",
+        "cf workers secrets update NAME",
+        "cf secrets-store secrets create",
+        "cf billing profiles update",
+        "cf accounts subscriptions create",
+        "cf accounts members update abc",
+        "cf registrar registrations create example.com",
+        "cf registrar-sandbox registrations update example.com",
+        "cloudflare auth login",
+        "/opt/homebrew/bin/cf auth login",
+        "/home/linuxbrew/.linuxbrew/bin/cf accounts tokens create",
+        "env CLOUDFLARE_ACCOUNT_ID=a cf dns records delete abc",
+        "command cf auth login",
+        "bash -c 'cf auth login'",
+        "cf dns records list && cf auth login",
+        "cf workers deploy; cf r2 buckets delete b",
+        "cf accounts --name x tokens create",
+        "cf auth --scopes zone:read login",
+        "cf accounts --name x members create",
+        "cf dns --type A records delete abc",
+        "cf dns records list --name delete",
+        "cf login",
+        "cloudflare login",
+        "cf logout",
+        "cf tunnels login",
+        "cf access login https://app.example.com",
+        "cf access ssh-gen --hostname ssh.example.com",
+        "cf tunnels token get abc",
+        "cf mesh nodes token get abc",
+        "CF auth login",
+        "/opt/homebrew/bin/CF auth login",
+        "GIT push origin main",
+        "cloudﬂare auth login",
+        "ſh -c 'cf auth login'",
+        "ſudo cf auth login",
+        "baſh -c 'git push'",
+        "cf --scopes zone:read auth login",
+        "cf --scopes docs auth login",
+        "cf --email x accounts members create",
+        "cf -qz example.com auth login",
+        "cf -q false auth login",
+        "cf --address-map-id docs addressing address-maps ips delete x",
+        "cf accounts tokens create --name list",
+        "cf accounts tokens create --name get-ci",
+        "cf workers secrets put get-api-key",
+        "cf registrar registrations create get-rich.com",
+        "cf registrar registrations create example.com --extension get",
+        "cf auth login --help false",
+        "cf auth login -h false",
+        "cf auth login --help --no-help",
+        "cf dns records delete abc --help=false",
+        "cf dns records delete abc -z example.com --help --help=",
+        "cf dns records delete abc --help --help=0",
+        "cf dns records delete abc --help --help=FALSE",
+        "cf dns records delete abc -h --help=no",
+        "cf accounts tokens create --name x -h --help=0",
+        "cf auth login -h -h=false",
+        "cf auth login --help --h=false",
+        "cf auth login --help --no-h",
+        "cf auth login --help -qh=false",
+        "cf auth login -h -hh false",
+        "cf auth login --help -h0",
+        "cf auth login --help -h-",
+        "cf user memberships update abc",
+        "cf user invites respond abc",
+        "cf iam user-groups members create g u",
+        "cf workers secrets --no-quiet update get-api-key",
+        "cf accounts tokens --no-foo create list",
+        "cf workers secrets --worker get-w -qq update get-x --text s",
+        "cf registrar registrations --extension get -qq create get-x.com",
+        "cf deploy --secrets-file prod.env",
+        "cf deploy --secrets-file=prod.env",
+        "cf workers versions create . --secrets-file prod.env",
+        "cf scim users create --file u.json",
+        "cf iam sso create --email-domain example.com",
+        "cf iam user-groups update g --name x",
+        "cf iam oauth-clients create --client-name x",
+        "cf pay-per-crawl publisher stripe create",
+        "cf pay-per-crawl crawler stripe create",
+        "cf pay-per-use pricing set-operator-price --price 0.01",
+        "cf pay-per-use proposals decide --price-id x",
+        "cf pay-per-use agreements create",
+        "cf pay-per-use operator update-configuration",
+        "cf pay-per-use zones update-configuration",
+        "cf monetization rules update",
+        "Cloudflare auth login",
+        "=cf auth login",
+        "sudo cf auth login",
+        "timeout 30 cf auth login",
+        "cf auth $(echo login)",
+        "cf $(true) auth login",
+        "cf auth $verb",
+        'cf auth "$verb"',
+        "cf auth $'login'",
+        "cf auth log{in,}",
+        'cf auth --scopes "$s" login',
+        "cf -z $zone auth login",
+        'cf accounts tokens list "$x"',
+        'cf "-$o" x auth login',
+        'bash -c "cf auth \\$verb"',
     ],
 )
 def test_git_hook_denies(command: str) -> None:
@@ -461,11 +590,221 @@ def test_git_hook_denies(command: str) -> None:
         "echo 'gh api -X POST repos/o/r'",
         "rg 'gh api --method' .codex",
         "printf '%s\\n' gh api -X",
+        "cf auth list",
+        "cf auth whoami",
+        "cf auth scopes",
+        "cf workers deploy",
+        "cf deploy",
+        "cf dns records create example.com",
+        "cf dns records list --name=delete",
+        'cf workers deploy --name="$name"',
+        'cf -z "$zone" dns records list',
+        'cf --profile "${profile}" dns records get abc',
+        'cf dns records list -- "$x"',
+        "sudo cf auth whoami",
+        "cf dns records list -z example.com",
+        "cf -z example.com dns records get abc",
+        "cf accounts tokens list",
+        "cf accounts tokens verify",
+        "cf accounts tokens permission-groups list",
+        "cf kv keys put ns key value",
+        "cf kv keys list ns",
+        "cf accounts billing history list",
+        "cf billing usage query",
+        "cf registrar registrations check example.com",
+        "cf registrar registrations search example",
+        "cf accounts members list",
+        "cf docs search 'delete records'",
+        "cf docs search delete",
+        "cf schema dns records delete",
+        "cf complete zsh",
+        "cf auth login --help",
+        "cf accounts tokens delete -h",
+        "cf accounts tokens --help",
+        "echo 'cf auth login'",
+        "grep cf README.md",
+        "rg 'cf accounts tokens create' .codex",
+        "printf '%s\\n' cf auth login",
+        "cloudflare dns records list",
+        "/opt/homebrew/bin/cf dns records list",
+        "cf d1 databases query billing 'select 1'",
+        "cf --filter dns auth scopes",
+        "cf --name x accounts tokens list",
+        "cf accounts tokens list --name list",
+        "cf -z x docs search delete",
+        "cf --quiet kv keys put ns key value",
+        "cf --help",
+        "cf accounts tokens create -h",
+        "cf auth scopes --help true",
+        "cf auth login --no-help --help",
+        "cf auth login --help=0 --help",
+        "cf auth login --help false --help",
+        "cf auth login --help --quiet",
+        "cf workers deploy login-service",
+        "cf user memberships list",
+        "cf iam user-groups members list g",
+        "cf accounts tokens --no-quiet list",
+        "cf accounts tokens --name x list",
+        "cf accounts tokens --name get-ci list",
+        "cf scim users list",
+        "cf iam sso list",
+        "cf pay-per-use pricing list-operators",
+        "cf pay-per-use proposals list",
+        "cf pay-per-crawl publisher stripe get",
+        "cf monetization rules list",
+        "cf access ssh-config --hostname ssh.example.com",
+        "cf deploy --message 'with secrets'",
     ],
 )
 def test_git_hook_allows(command: str) -> None:
     result = run_hook({"tool_name": "Bash", "tool_input": {"command": command}})
     assert result.stdout == ""
+
+
+CF_AUTH_VERBS = {"create", "delete", "activate", "deactivate"}
+CF_LOGIN_VERBS = {"login", "logout"}
+CF_CREDENTIAL = re.compile(
+    r"token|secret|credential|key|psk|certificate|seed|rotate|\broll\b|ssh-gen"
+)
+# Commands that match CF_CREDENTIAL but neither hold nor mint credentials.
+CF_NOT_CREDENTIALS = (
+    ("kv",),
+    ("radar",),
+    ("leaked-credential-checks",),
+    ("cloudforce-one", "credential-monitor"),
+    ("secrets-store", "stores"),
+    ("ssl", "certificate-authorities"),
+    ("ssl", "certificate-packs"),
+)
+CF_MONEY_PREFIXES = (
+    ("billing",),
+    ("monetization",),
+    ("pay-per-crawl",),
+    ("pay-per-use",),
+    ("registrar",),
+    ("registrar-sandbox",),
+    ("scim",),
+    ("accounts", "billing"),
+    ("accounts", "members"),
+    ("accounts", "subscriptions"),
+    ("accounts", "ut-billing"),
+    ("iam", "oauth-clients"),
+    ("iam", "sso"),
+    ("iam", "user-groups"),
+    ("organizations", "billing"),
+    ("organizations", "invites"),
+    ("organizations", "members"),
+    ("user", "billing"),
+    ("user", "invites"),
+    ("user", "memberships"),
+    ("user", "subscriptions"),
+    ("zones", "subscriptions"),
+)
+# Verbs of commands that flush a cache or overwrite or end live state without
+# being DELETE requests.
+CF_FLUSH_VERBS = {"invalidate", "invalidate-environment", "restore", "terminate"}
+# POST endpoints that only compute an answer.
+CF_POST_READS = {"check", "query", "validate", "transfer-check"}
+# The hook fails closed on these verbs where only some commands delete.
+CF_OVERBLOCKED_VERBS = {"clear", "disable", "revoke"}
+
+
+def cf_expected_denied(entry: dict[str, object]) -> bool:
+    path = tuple(cast("list[str]", entry["fullPath"]))
+    verb = path[-1]
+    if path[0] == "auth" and verb in CF_AUTH_VERBS:
+        return True
+    # The singular token commands return the connector or Access token itself.
+    if CF_LOGIN_VERBS.intersection(path) or "token" in path:
+        return True
+    if (
+        entry["category"] == "delete"
+        or entry.get("httpMethod") == "DELETE"
+        or any(re.search(r"(?:^|-)(?:delete|purge)(?:-|$)", word) for word in path)
+        or CF_FLUSH_VERBS.intersection(path)
+    ):
+        return True
+    mutating = (
+        entry.get("httpMethod") != "GET"
+        and entry["category"] != "read"
+        and verb not in CF_POST_READS
+    )
+    if not mutating:
+        return False
+    if any(path[: len(prefix)] == prefix for prefix in CF_MONEY_PREFIXES):
+        return True
+    return bool(
+        CF_CREDENTIAL.search(" ".join(path).replace("token-validation", ""))
+    ) and not any(path[: len(prefix)] == prefix for prefix in CF_NOT_CREDENTIALS)
+
+
+def cf_commands(npm_root: Path) -> list[dict[str, object]]:
+    entries: list[dict[str, object]] = []
+    for name in ("commands.json", "hand-written-commands.json"):
+        data = cast(
+            "dict[str, list[dict[str, object]]]",
+            json.loads((npm_root / "cf/dist/_meta" / name).read_text()),
+        )
+        entries.extend(data["commands"])
+    return entries
+
+
+def cf_shapes(entry: dict[str, object]) -> list[list[str]]:
+    path = cast("list[str]", entry["fullPath"])
+    positionals = ["x"] * len(cast("list[object]", entry.get("arguments", [])))
+    options = [
+        option["name"]
+        for option in cast("list[dict[str, str]]", entry.get("options", []))
+        if option["type"] != "boolean" and option["name"] not in {"dry-run", "help"}
+    ]
+    shapes = [
+        [*path, *positionals],
+        ["-z", "x", *path, *positionals],
+        [path[0], "--profile=x", "--local", "--name", "x", *path[1:], *positionals],
+        ["-qz", "x", *path, *positionals],
+        ["-q", "false", *path, *positionals],
+        [*path, *(["list"] * len(positionals))],
+        [*path, *(["get-x"] * len(positionals))],
+        ["--no-quiet", *path, *positionals],
+        [*path[:-1], "--no-quiet", path[-1], *positionals],
+        [*path[:-1], "--no-quiet", path[-1], *(["get-x"] * len(positionals))],
+        [path[0], "--name", "get-w", "-qq", *path[1:], *(["get-x"] * len(positionals))],
+    ]
+    for option in options[:1]:
+        shapes += [
+            [f"--{option}", "x", *path, *positionals],
+            [f"--{option}", "docs", *path, *positionals],
+            [*path, *positionals, f"--{option}", "list"],
+            [path[0], f"--{option}", "list", *path[1:], *positionals],
+        ]
+    return shapes
+
+
+def test_cf_policy_covers_every_installed_command(npm_global_root: Path) -> None:
+    if not (npm_global_root / "cf/dist/_meta/commands.json").is_file():
+        pytest.skip("cf is not installed")
+    spec = importlib.util.spec_from_file_location("git_guard", HOOK)
+    assert spec is not None
+    assert spec.loader is not None
+    guard = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(guard)
+    cf_reason = cast("Callable[[list[str]], str | None]", guard.cf_reason)
+    word = cast("Callable[[str], str]", guard.Word)
+    missed: list[str] = []
+    overblocked: list[str] = []
+    for entry in cf_commands(npm_global_root):
+        path = cast("list[str]", entry["fullPath"])
+        if path[0] in {"docs", "cli", "schema", "complete"}:
+            continue
+        expected = cf_expected_denied(entry)
+        for args in cf_shapes(entry):
+            denied = cf_reason([word(arg) for arg in args]) is not None
+            if expected and not denied:
+                missed.append(" ".join(args))
+            elif denied and not expected and path[-1] not in CF_OVERBLOCKED_VERBS:
+                overblocked.append(" ".join(args))
+    assert missed == []
+    assert overblocked == []
 
 
 def run_hook(payload: dict[str, object]) -> subprocess.CompletedProcess[str]:

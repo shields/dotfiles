@@ -305,6 +305,12 @@ def test_first_compatible_interpreter_runs(
         "git -C /tmp/repo push",
         "cd /tmp && git push",
         "git commit --no-verify -m message",
+        "cf auth login",
+        "/opt/homebrew/bin/cf --zone=example.com dns records delete abc",
+        "cd /tmp && cloudflare accounts tokens create",
+        "cf accounts --name x tokens create",
+        "cf login",
+        "cf --scopes zone:read auth login",
     ],
 )
 def test_git_guard_denies(sandbox: Sandbox, hook: Hook, command: str) -> None:
@@ -317,7 +323,7 @@ def test_git_guard_denies(sandbox: Sandbox, hook: Hook, command: str) -> None:
     decision = decision_of(result)
     assert decision["hookEventName"] == "PreToolUse"
     assert decision["permissionDecision"] == "deny"
-    assert "Git policy check failed" not in decision["permissionDecisionReason"]
+    assert "policy check failed" not in decision["permissionDecisionReason"]
 
 
 @pytest.mark.parametrize("hook", GIT_GUARDS, ids=label)
@@ -330,6 +336,9 @@ def test_git_guard_denies(sandbox: Sandbox, hook: Hook, command: str) -> None:
         "env FOO=1 git status",
         "git commit -m 'fix the push handler'",
         "ls -la",
+        "cf auth whoami",
+        "cf workers deploy",
+        "cf dns records list --name=delete",
     ],
 )
 def test_git_guard_stays_silent(sandbox: Sandbox, hook: Hook, command: str) -> None:
@@ -422,10 +431,12 @@ ALLOW_WRITE = [
     "~/.cache/golangci-lint",
     "~/.cache/pre-commit",
     "~/.cache/uv",
+    "~/.config/cloudflare/config",
     "~/.npm",
     "~/.ruff_cache",
     "~/Library/Caches/go-build",
     "~/Library/Caches/golangci-lint",
+    "~/Library/Preferences/cloudflare/config",
     "~/go/pkg/mod",
     "~/go/pkg/sumdb",
     "/Volumes/Cache",

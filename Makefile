@@ -25,6 +25,7 @@ SHELL_SOURCES = \
 	.profile \
 	.claude/statusline.sh \
 	provision.sh \
+	provision/cli-tools.sh \
 	provision/linux-system.sh \
 	provision/macos.sh \
 	provision/modules.sh \

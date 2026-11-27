@@ -51,6 +51,16 @@ UNREADABLE = (
     'expand only "$name" or "${name}" inside double quotes, as in -C "$repo" or '
     '"repos/$owner/$repo". Do not use command substitution or backticks.'
 )
+NO_CLOUDFLARE_RISK = (
+    "Cloudflare auth, credential, billing, registrar, membership and delete "
+    "commands are run by the user. Ask them to run it."
+)
+CF_UNREADABLE = (
+    "Could not read this cf command well enough to check it. Use literal words "
+    "(spell out each ID, and write xargs -I % rather than -I{}), and expand "
+    '"$name" only inside double quotes as an option\'s value written with =, as '
+    'in --name="$name", or as the value of -z, --zone or --profile.'
+)
 
 WORD = r"(?P<word>(?:[^\s;&|()<>\"'\\]+|\\[\s\S]|'[^']*'|\"(?:[^\"\\]|\\[\s\S])*\")+)"
 # Keep operators distinct from quoted arguments such as a commit message ';'. The
@@ -207,6 +217,121 @@ WRAPPERS: dict[str, set[str]] = {
     },
     "doas": {"-u", "-C"},
 }
+# Global options of cf (yargs). An option in neither set may take the next
+# word as its value.
+CF_VALUE_FLAGS = {
+    "-z",
+    "--zone",
+    "-m",
+    "--mode",
+    "--profile",
+    "--event-code",
+    "--persist-to",
+    "--persistTo",
+    "--eventCode",
+}
+CF_BOOLEAN_FLAGS = {
+    "-q",
+    "--quiet",
+    "-v",
+    "--version",
+    "--local",
+    "--temporary-account",
+    "--temporaryAccount",
+    "--dry-run",
+    "--dryRun",
+}
+# Every spelling of cf's help flag (yargs help, alias h) except a bare --help or
+# -h: --no-help, --h, --no-h, --help=x, -h=x, and a short group that contains h,
+# such as -qh=false or -qh false. The last occurrence wins and most of these
+# switch help off, so any of them cancels an earlier --help.
+CF_HELP_SPELLING = re.compile(r"--(?:no-)?h(?:elp)?(?:[=.]|$)|-[^-]*h")
+# Commands that search the docs or print help, schemas and completions, or change
+# only cf's own telemetry setting; none operates on a resource.
+CF_SAFE_COMMANDS = {"docs", "cli", "schema", "complete"}
+CF_AUTH_VERBS = {"create", "delete", "activate", "deactivate"}
+# Verb words that delete, purge, flush, overwrite or dismantle; 'disable' covers
+# two DELETE endpoints (email-routing, r2 sippy) and fails closed for the rest.
+CF_DELETE_VERB = re.compile(r"(?:^|-)(?:delete|purge)(?:-|$)")
+CF_DESTRUCTIVE_VERBS = {
+    "clear",
+    "cleanup",
+    "disable",
+    "disconnect",
+    "empty",
+    "invalidate",
+    "invalidate-environment",
+    "opt-out-operator-price",
+    "remove",
+    "restore",
+    "revoke",
+    "terminate",
+    "ungroup",
+}
+# Resources that hold credentials, and verbs that mint, rotate or store them.
+# `cf login` is a hidden alias of `cf auth login`, and cloudflared's logins
+# download a certificate or store a token.
+CF_CREDENTIAL_WORD = re.compile(
+    r"(?:^|-)(?:tokens?|secrets?|credentials?|credential-sets|keys|certificates?)$"
+)
+CF_CREDENTIAL_VERBS = {
+    "login",
+    "logout",
+    "roll",
+    "rotate",
+    "rotate-seed",
+    "psk-generate",
+    "psk-set",
+    "ssh-gen",
+}
+# Resources whose read commands return the secret itself, and options that
+# upload secrets along with another command.
+CF_SECRET_RESOURCES = {"token"}
+CF_SECRET_OPTIONS = {"--secrets-file", "--secretsFile"}
+# Where 'keys' and 'credentials' name data or reports, not credentials.
+CF_DATA_RESOURCES = {"kv", "radar"}
+CF_MONEY_AND_MEMBERS = {
+    ("billing",),
+    ("monetization",),
+    ("pay-per-crawl",),
+    ("pay-per-use",),
+    ("registrar",),
+    ("registrar-sandbox",),
+    ("scim",),
+    ("accounts", "billing"),
+    ("accounts", "members"),
+    ("accounts", "subscriptions"),
+    ("accounts", "ut-billing"),
+    ("iam", "oauth-clients"),
+    ("iam", "sso"),
+    ("iam", "user-groups"),
+    ("organizations", "billing"),
+    ("organizations", "invites"),
+    ("organizations", "members"),
+    ("user", "billing"),
+    ("user", "invites"),
+    ("user", "memberships"),
+    ("user", "subscriptions"),
+    ("zones", "subscriptions"),
+}
+CF_READ_VERBS = {
+    "get",
+    "list",
+    "search",
+    "check",
+    "validate",
+    "query",
+    "verify",
+    "status",
+    "transfer-check",
+}
+# Verbs, and the compound verbs that start with them, of commands that change a
+# resource without deleting it.
+CF_WRITE_VERB = re.compile(
+    r"(?:create|update|edit|put|patch|set|replace|add|upload|refresh|generate"
+    r"|duplicate|bulk|pay|toggle|cancel|transfer-in|enable|activate|deactivate"
+    r"|rotate|roll|revoke|respond|begin)(?:-|$)"
+)
 
 
 class Level(IntEnum):
@@ -333,7 +458,7 @@ def commands(script: str) -> Iterator[list[Word]]:
     while offset < len(script):
         token = TOKEN.match(script, offset)
         if token is None:
-            msg = "Could not check Git policy. Use a simple shell command."
+            msg = "Could not check command policy. Use a simple shell command."
             raise ValueError(msg)
         if token.lastgroup == "comment" and token.start() == closed:
             # A hash that touches a substitution continues its word.
@@ -343,7 +468,7 @@ def commands(script: str) -> Iterator[list[Word]]:
         if token.lastgroup in {"space", "comment"}:
             continue
         if pending_heredoc and token.lastgroup != "word":
-            msg = "Missing here-document delimiter; cannot check Git policy."
+            msg = "Missing here-document delimiter; cannot check command policy."
             raise ValueError(msg)
         if token.lastgroup == "word":
             word = Word(unquoted(raw), level_of(raw), touches=token.start() == closed)
@@ -406,12 +531,12 @@ def commands(script: str) -> Iterator[list[Word]]:
                         script[offset:],
                     )
                     if end is None:
-                        msg = "Unterminated here-document; cannot check Git policy."
+                        msg = "Unterminated here-document; cannot check command policy."
                         raise ValueError(msg)
                     offset += end.end()
                 heredocs = []
     if pending_heredoc:
-        msg = "Missing here-document delimiter; cannot check Git policy."
+        msg = "Missing here-document delimiter; cannot check command policy."
         raise ValueError(msg)
     for command in (*suspended, words):
         if command:
@@ -644,8 +769,12 @@ def takes_value(wrapper: str, option: str) -> bool:
 
 
 def program(word: str) -> str:
-    """The command a word names; zsh expands =name to the path of name."""
-    return PurePosixPath(word.removeprefix("=")).name
+    """The command a word names; zsh expands =name to the path of name.
+
+    macOS's file system folds case as Unicode does, so CF, ſh and cloudﬂare run
+    cf, sh and cloudflare there.
+    """
+    return PurePosixPath(word.removeprefix("=")).name.casefold()
 
 
 def nested_script(executable: str, args: list[Word]) -> Word | None:
@@ -667,6 +796,147 @@ def nested_script(executable: str, args: list[Word]) -> Word | None:
             command = command or "c" in arg
             index += arg.endswith(("o", "O"))
     return args[index] if command and index < len(args) else None
+
+
+class OptionValue(str):
+    """A word that an option the hook does not know may have taken as its value."""
+
+    __slots__ = ()
+
+
+def cf_readable(args: list[Word]) -> bool:
+    """Whether each word that may be a command word reads as its text shows.
+
+    A "$name" in double quotes stays one word, so it may be the value of a
+    global option or of an option written with =; anywhere else it may be a
+    command word that the hook cannot see. Words after -- are not commands.
+    """
+    index = 0
+    while index < len(args):
+        arg = args[index]
+        index += 1
+        if isinstance(arg, Substitution) or arg.level is Level.UNKNOWN:
+            return False
+        if arg == "--":
+            return True
+        name, equals, _ = arg.partition("=")
+        inline = arg.startswith("-") and bool(equals) and "$" not in name
+        if arg.level is Level.ONE_WORD and not inline:
+            return False
+        if arg in CF_VALUE_FLAGS and index < len(args):
+            value = args[index]
+            index += 1
+            if isinstance(value, Substitution) or value.level is Level.UNKNOWN:
+                return False
+    return True
+
+
+def cf_words(args: list[Word]) -> list[str]:
+    words: list[str] = []
+    help_requested = False
+    takes_next = False
+    index = 0
+    while index < len(args):
+        arg = args[index]
+        index += 1
+        if arg == "--":
+            break
+        # cf accepts a command's own options before, among and after its command
+        # words, as in `cf --scopes x auth login` and `cf accounts --name x
+        # tokens create`, so scanning continues past an option it does not know
+        # and checks that option's value too. A boolean option takes a literal
+        # true or false as its value, and so does --help; a --no- negation takes
+        # no value.
+        if not arg.startswith("-") or arg == "-":
+            value = takes_next or arg in {"true", "false"}
+            words.append(OptionValue(arg) if value else arg)
+            takes_next = False
+        elif arg in {"-h", "--help"}:
+            help_requested = args[index : index + 1] != ["false"]
+            takes_next = False
+        elif arg in CF_VALUE_FLAGS:
+            index += 1
+            takes_next = False
+        else:
+            if CF_HELP_SPELLING.match(arg):
+                help_requested = False
+            takes_next = not (
+                "=" in arg or arg in CF_BOOLEAN_FLAGS or arg.startswith("--no-")
+            )
+    return [] if help_requested else words
+
+
+def cf_reason(args: list[Word]) -> str | None:
+    if not cf_readable(args):
+        return CF_UNREADABLE
+    words = cf_words(args)
+    if not words:
+        return None
+    first = next((word for word in words if not isinstance(word, OptionValue)), None)
+    if first in CF_SAFE_COMMANDS:
+        return None
+    if any(arg.partition("=")[0] in CF_SECRET_OPTIONS for arg in args):
+        return NO_CLOUDFLARE_RISK
+    auth = cf_after(words, ("auth",))
+    if auth is not None and not CF_AUTH_VERBS.isdisjoint(auth):
+        return NO_CLOUDFLARE_RISK
+    if any(
+        CF_DELETE_VERB.search(word)
+        or word in CF_DESTRUCTIVE_VERBS
+        or word in CF_CREDENTIAL_VERBS
+        for word in words
+    ):
+        return NO_CLOUDFLARE_RISK
+    if first not in CF_DATA_RESOURCES:
+        for index, word in enumerate(words):
+            if word in CF_SECRET_RESOURCES or (
+                CF_CREDENTIAL_WORD.search(word) and not cf_reads(words[index:])
+            ):
+                return NO_CLOUDFLARE_RISK
+    for prefix in CF_MONEY_AND_MEMBERS:
+        rest = cf_after(words, prefix)
+        if rest is not None and not cf_reads(rest):
+            return NO_CLOUDFLARE_RISK
+    return None
+
+
+def cf_after(words: list[str], path: tuple[str, ...]) -> list[str] | None:
+    """The words after command path PATH, or None if the words lack it.
+
+    The path starts at the first word that is not an option value, or at any
+    word before it. Option values that cf_words keeps may stand between the
+    command words.
+    """
+    for start, word in enumerate(words):
+        if word == path[0]:
+            rest = words[start + 1 :]
+            for step in path[1:]:
+                if step not in rest:
+                    break
+                rest = rest[rest.index(step) + 1 :]
+            else:
+                return rest
+        if not isinstance(word, OptionValue):
+            break
+    return None
+
+
+def cf_reads(words: list[str]) -> bool:
+    """Whether the first verb among WORDS reads.
+
+    A later argument named like a read verb cannot make a mutation look like a
+    read. Only a word that no option could have taken can be a read verb, while
+    a write verb counts wherever it stands, since an option that takes no value
+    (-qq) leaves the next word a verb that the hook took for its value.
+    """
+    for word in words:
+        if CF_WRITE_VERB.match(word):
+            return False
+        if not isinstance(word, OptionValue) and (
+            word in CF_READ_VERBS or word.startswith(("get-", "list-"))
+        ):
+            return True
+    return False
 
 
 def command_reason(words: list[Word]) -> str | None:
@@ -697,6 +967,8 @@ def command_reason(words: list[Word]) -> str | None:
         return git_reason(args)
     if executable == "gh":
         return gh_reason(args)
+    if executable in {"cf", "cloudflare"}:
+        return cf_reason(args)
     if executable in {"bash", "zsh", "sh"}:
         script = nested_script(executable, args)
         if script is not None:
@@ -745,7 +1017,7 @@ def main() -> None:
             signal.setitimer(signal.ITIMER_REAL, 0)
     except Exception as exc:  # noqa: BLE001 - hook errors otherwise fail open
         reason = (
-            f"Git policy check failed ({type(exc).__name__}). "
+            f"Command policy check failed ({type(exc).__name__}). "
             "Use a simple shell command."
         )
     if reason:

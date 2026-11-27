@@ -609,12 +609,14 @@ _startup_overrides() {
 _startup_overrides
 
 _startup_completion() {
-    # Either an OMZ update or a changed fpath can replace completion names or
-    # registrations without changing their count. Check both, while keeping
-    # compinit's ownership checks and checks for added/removed files. The Git
-    # lookup happens after the first prompt along with the rest of this task.
+    # An OMZ update, a changed fpath, or provisioning that swaps one generated
+    # completion for another can replace completion names or registrations
+    # without changing their count. Check all three, while keeping compinit's
+    # ownership checks and checks for added/removed files. The Git lookup
+    # happens after the first prompt along with the rest of this task.
     local revision="$(command git -C "$ZSH" rev-parse HEAD 2>/dev/null)"
-    local metadata="# dotfiles revision: $revision fpath: $fpath"
+    local -a generated=("$ZSH_CACHE_DIR"/completions/_*(N:t))
+    local metadata="# dotfiles revision: $revision fpath: $fpath generated: $generated"
     local -a dump_lines
     [[ ! -r "$ZSH_COMPDUMP" ]] || dump_lines=("${(@f)$(<"$ZSH_COMPDUMP")}")
     if [[ "${dump_lines[-1]-}" != "$metadata" ]]; then
@@ -635,12 +637,6 @@ _startup_completion() {
         eval "compdef $definition"
     done
     unset _startup_compdefs
-    if (( $+commands[ghist] )); then
-        local completion
-        completion=$(_startup_cached ghist-completion "$commands[ghist]" -- \
-            command ghist --completions zsh) || return
-        eval "$completion"
-    fi
 }
 
 _startup_plugin() {

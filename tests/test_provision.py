@@ -37,6 +37,7 @@ SCRIPTS = (
     PROVISION,
     MACOS,
     REPO / "provision" / "modules.sh",
+    REPO / "provision" / "cli-tools.sh",
     REPO / "provision" / "linux-system.sh",
 )
 SCRIPT_IDS = [script.name for script in SCRIPTS]
@@ -795,10 +796,55 @@ def test_the_plugin_tools_come_from_the_modules_that_update_them() -> None:
     assert 'cask "gcloud-cli"' in (REPO / "brew" / "cloud.Brewfile").read_text()
 
 
+def test_cf_and_its_completion_follow_the_cloud_module_after_the_bundle() -> None:
+    guard = find(
+        r'^if modules_has "\$modules_selection" cloud; then', find(r"^brew autoremove")
+    )
+    assert block(guard) == [
+        "DO_NOT_TRACK=1 completion_install cf cf complete zsh",
+        "else",
+        "completion_remove cf",
+    ]
+    assert find(r"^brew autoremove") < guard < find(r"^if ! chezmoi ")
+    assert 'npm "cf"' in (REPO / "brew" / "cloud.Brewfile").read_text()
+
+
+def test_npm_packages_are_reinstalled_past_the_cooldown_after_bundle() -> None:
+    listing = find(r"^npm_packages=\$\(brew bundle list --npm\)$")
+    assert LINES[listing + 1] == "for npm_package in $npm_packages; do"
+    assert LINES[listing + 2].strip() == 'npm_install_global "$npm_package"'
+    assert not openers(listing)
+    assert find(r"^brew autoremove") < listing < find(r"^if ! chezmoi ")
+    cloud = find(r'^if modules_has "\$modules_selection" cloud; then', listing)
+    assert listing < cloud
+
+
+def test_the_ghist_completion_follows_the_dev_module_from_cargos_directory() -> None:
+    guard = find(
+        r'^if modules_has "\$modules_selection" dev; then', find(r"^brew autoremove")
+    )
+    assert block(guard) == [
+        (
+            'completion_install ghist "${CARGO_HOME:-$HOME/.cargo}/bin/ghist" '
+            "--completions zsh"
+        ),
+        "else",
+        "completion_remove ghist",
+    ]
+    assert guard < find(r"^if ! chezmoi ")
+    assert 'cargo "ghist"' in (REPO / "brew" / "dev.Brewfile").read_text()
+
+
+def test_cli_tool_functions_are_sourced_with_the_modules() -> None:
+    modules = find(r"^source provision/modules\.sh$")
+    assert LINES[modules + 1] == "source provision/cli-tools.sh"
+    assert not openers(modules + 1)
+
+
 def test_plugins_update_only_for_the_modules_that_install_them() -> None:
     data = find(r'^if modules_has "\$modules_selection" data; then')
     assert [line.split()[0] for line in block(data)] == ["llm"]
-    cloud = find(r'^if modules_has "\$modules_selection" cloud; then')
+    cloud = find(r'^if modules_has "\$modules_selection" cloud; then', data)
     assert block(cloud) == ["gcloud --quiet components update"]
     assert data < cloud
     assert find(r"^export PIP_DISABLE_PIP_VERSION_CHECK=1") < data
@@ -870,6 +916,13 @@ def test_linux_gets_git_credential_helpers_and_claude_onboarding() -> None:
     assert ".projects[$root].hasTrustDialogAccepted = true" in body
     assert '--arg root "$dotfiles_root"' in body
     assert 'mv "$claude_json_new" "$claude_json"' in body
+
+
+def test_linux_creates_cfs_login_directory_for_the_cloud_module() -> None:
+    guard = find(r"^if \[\[ \$os == linux \]\]; then", find(r"configure_codex\.py"))
+    cloud = find(r'^\s+if modules_has "\$modules_selection" cloud; then', guard)
+    assert block(cloud) == ['mkdir -p "$HOME/.config/cloudflare/config"']
+    assert cloud < find(r'mkdir -p "\$HOME/\.config/git"', guard)
 
 
 def run_claude_json_update(home: Path, root: Path) -> subprocess.CompletedProcess[str]:

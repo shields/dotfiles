@@ -37,6 +37,7 @@ if [[ $os == linux && $(id -u) -eq 0 ]]; then
 fi
 
 source provision/modules.sh
+source provision/cli-tools.sh
 if [[ $os == macos ]]; then
     source provision/macos.sh
 fi
@@ -207,6 +208,24 @@ brew bundle cleanup --force
 brew outdated --greedy-auto-updates --cask --quiet | sed '/^google-chrome$/d' | xargs -r brew upgrade --cask --yes
 brew autoremove
 
+npm_packages=$(brew bundle list --npm)
+for npm_package in $npm_packages; do
+    npm_install_global "$npm_package"
+done
+
+# Only .zshrc exports DO_NOT_TRACK, and cf reports every run without it.
+if modules_has "$modules_selection" cloud; then
+    DO_NOT_TRACK=1 completion_install cf cf complete zsh
+else
+    completion_remove cf
+fi
+# cargo installs into CARGO_HOME, which this script's PATH need not include.
+if modules_has "$modules_selection" dev; then
+    completion_install ghist "${CARGO_HOME:-$HOME/.cargo}/bin/ghist" --completions zsh
+else
+    completion_remove ghist
+fi
+
 if ! chezmoi --source "$dotfiles_root" --less-interactive --error-on-conflict apply; then
     echo "provision.sh: chezmoi apply failed; run 'make diff' and resolve any conflicts as described in README.md" >&2
     exit 1
@@ -300,6 +319,12 @@ fi
 uv run --project "$dotfiles_root" --no-dev python "$dotfiles_root/tools/configure_codex.py" "$HOME/.codex/config.toml"
 
 if [[ $os == linux ]]; then
+    # Claude Code's sandbox skips a write grant for a path that does not exist,
+    # so cf's login directory must exist before the first login.
+    if modules_has "$modules_selection" cloud; then
+        mkdir -p "$HOME/.config/cloudflare/config"
+    fi
+
     mkdir -p "$HOME/.config/git"
     for credential_url in https://github.com https://gist.github.com; do
         # A gateway guest keeps cog's helper for github.com in ~/.config/git/config.

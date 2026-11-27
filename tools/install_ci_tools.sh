@@ -6,13 +6,19 @@
 #
 # It changes the machine it runs on (sudo apt-get, Homebrew, ~/.local), so it
 # refuses to run anywhere but a runner. Every test must run: tests skip when
-# codex, zsh-defer or zsh is missing, and DOTFILES_FAIL_ON_SKIP turns
-# any skip into a failure.
+# codex, cf, zsh-defer or zsh is missing, and DOTFILES_FAIL_ON_SKIP turns any
+# skip into a failure.
 #
-# Everything floats: the Homebrew formulae and cask, zsh-defer's head, and
-# basedpyright from PyPI. shfmt must be 3.14 or newer for `make lint`.
+# cf, which npm installs, is pinned and bumped by hand:
+# tests/test_codex_policy.py checks the word lists of the cf policy against
+# every command in the installed package, so a release that adds a command the
+# lists miss would turn every run red until they are updated. Everything else
+# floats: the Homebrew formulae and cask, zsh-defer's head, and basedpyright
+# from PyPI. shfmt must be 3.14 or newer for `make lint`.
 
 set -euo pipefail
+
+cf_version=1.0.0-rc.5
 
 brew_prefix=/home/linuxbrew/.linuxbrew
 local_prefix=$HOME/.local
@@ -58,6 +64,7 @@ retry "$brew_prefix/bin/brew" install --cask codex
 export PATH="$brew_prefix/bin:$local_prefix/bin:$PATH"
 printf '%s\n' "$brew_prefix/bin" "$local_prefix/bin" >>"$GITHUB_PATH"
 
+retry npm install --global --ignore-scripts "cf@$cf_version"
 retry uv tool install basedpyright
 
 clone_zsh_defer() {
@@ -74,6 +81,7 @@ if ! bwrap --unshare-user --ro-bind / / true 2>/dev/null; then
 fi
 
 codex --version
+cf --version
 # Tests drop their bsdtar variant when it is missing, which the skip gate
 # cannot see.
 bsdtar --version
