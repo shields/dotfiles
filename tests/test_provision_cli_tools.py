@@ -145,6 +145,12 @@ def test_a_stable_release_wins_over_its_betas(cf: Npm) -> None:
     assert cf.installs == [cf.install("1.0.0")]
 
 
+def test_a_prerelease_waits_behind_a_new_stable_latest_tag(cf: Npm) -> None:
+    cf.publish({"0.15.0": 80, "1.0.0-rc.1": 10, "1.0.0": 1}, latest="1.0.0")
+    assert cf.run().returncode == 0
+    assert cf.installs == [cf.install("0.15.0")]
+
+
 def test_a_version_inside_the_cooldown_waits(cf: Npm) -> None:
     cf.publish(
         {"0.15.0": 80, "1.0.0-beta.9": 4, "1.0.0-beta.10": 2.9},
@@ -450,14 +456,21 @@ with open(os.environ["FAKE_LOG"], "a") as log:
 with open(os.environ["FAKE_SPEC"]) as spec_file:
     spec = json.load(spec_file)
 if args[0] == "env":
-    print(spec["env"].get(args[1], ""))
+    print(os.environ.get(args[1]) or spec["env"].get(args[1], ""))
 elif args[:2] == ["version", "-m"]:
     with open(args[2]) as binary:
-        sys.stdout.write(binary.read())
+        info = binary.read()
+    if not info.startswith("x: go"):
+        sys.exit(info)
+    sys.stdout.write(info)
 elif args[0] == "install":
+    with open(os.environ["FAKE_LOG"] + ".env", "a") as log:
+        log.write(" ".join(os.environ.get(k, "") for k in ["GOBIN", "GOPATH"]) + "\\n")
     sys.exit(1 if spec.get("install_fails") else 0)
 elif args[:2] == ["list", "-m"]:
     module, _, query = args[-1].partition("@")
+    if module in spec.get("errors", {{}}):
+        sys.exit(spec["errors"][module])
     found = spec["modules"].get(module)
     if found is None:
         sys.exit(f'go: module {{module}}: no matching versions for query "latest"')
@@ -532,7 +545,16 @@ class Go:
         self.modules[module] = {"versions": tags, "times": times, "latest": latest}
 
     def install_binary(self, name: str, path: str, mod: str) -> None:
-        _ = (self.gobin / name).write_text(f"x: go1.27\n\tpath\t{path}\n\tmod\t{mod}\n")
+        binary = self.gobin / name
+        _ = binary.write_text(f"x: go1.27\n\tpath\t{path}\n\tmod\t{mod}\n")
+        binary.chmod(0o755)
+
+    def install_other_file(self, name: str, diagnostic: str) -> None:
+        binary = self.gobin / name
+        _ = binary.write_text(
+            f"{binary}: could not read Go build info from {binary}: {diagnostic}"
+        )
+        binary.chmod(0o755)
 
     def run(self) -> subprocess.CompletedProcess[str]:
         _ = self.spec_file.write_text(
@@ -547,6 +569,11 @@ class Go:
     @property
     def installs(self) -> list[str]:
         return [call for call in self.calls if call.startswith("install ")]
+
+    @property
+    def install_environments(self) -> list[str]:
+        log = self.log.with_name(self.log.name + ".env")
+        return log.read_text().splitlines() if log.exists() else []
 
 
 @pytest.fixture
@@ -670,6 +697,116 @@ def test_without_gobin_the_first_gopath_entry_holds_the_binary(
     assert goimports.installs == []
 
 
+def test_go_runs_with_brew_bundles_gobin_and_gopath(
+    tmp_path: Path, goimports: Go
+) -> None:
+    gobin = tmp_path / "homebrew-gobin"
+    gobin.mkdir()
+    goimports.env |= {
+        "GOBIN": str(goimports.gobin),
+        "GOPATH": str(tmp_path / "gopath"),
+        "HOMEBREW_GOBIN": str(gobin),
+        "HOMEBREW_GOPATH": str(tmp_path / "homebrew-gopath"),
+    }
+    goimports.publish(TOOLS, {"v0.21.0": 10, "v0.22.0": 1})
+    goimports.install_binary("goimports", GOIMPORTS, f"{TOOLS}\tv0.21.0\th1:sum=")
+    assert goimports.run().returncode == 0
+    assert goimports.installs == [f"install {GOIMPORTS}@v0.21.0"]
+    assert goimports.install_environments == [f"{gobin} {tmp_path}/homebrew-gopath"]
+
+
+def test_go_ignores_gobin_and_gopath_without_their_homebrew_settings(
+    tmp_path: Path, goimports: Go
+) -> None:
+    goimports.env |= {"GOBIN": str(tmp_path / "elsewhere"), "GOPATH": "/nowhere"}
+    goimports.publish(TOOLS, {"v0.21.0": 10, "v0.22.0": 1})
+    goimports.install_binary("goimports", GOIMPORTS, f"{TOOLS}\tv0.22.0\th1:sum=")
+    assert goimports.run().returncode == 0
+    assert goimports.installs == [f"install {GOIMPORTS}@v0.21.0"]
+    assert goimports.install_environments == [" "]
+
+
+@pytest.mark.parametrize(
+    "diagnostic", ["not a Go executable", "unrecognized file format"]
+)
+def test_a_file_that_is_not_a_go_executable_is_replaced(
+    goimports: Go, diagnostic: str
+) -> None:
+    goimports.publish(TOOLS, {"v0.21.0": 10})
+    goimports.install_other_file("goimports", diagnostic)
+    result = goimports.run()
+    assert result.returncode == 0, result.stderr
+    assert goimports.installs == [f"install {GOIMPORTS}@v0.21.0"]
+
+
+def test_an_unreadable_binary_fails(goimports: Go) -> None:
+    goimports.publish(TOOLS, {"v0.21.0": 10})
+    goimports.install_other_file("goimports", "permission denied")
+    result = goimports.run()
+    assert result.returncode != 0
+    assert "goimports: permission denied" in result.stderr
+    assert goimports.installs == []
+
+
+@pytest.mark.parametrize("kind", ["symlink", "directory", "not executable"])
+def test_only_an_executable_regular_file_counts_as_installed(
+    tmp_path: Path, goimports: Go, kind: str
+) -> None:
+    goimports.publish(TOOLS, {"v0.21.0": 10})
+    binary = goimports.gobin / "goimports"
+    if kind == "directory":
+        binary.mkdir()
+    else:
+        goimports.install_binary("goimports", GOIMPORTS, f"{TOOLS}\tv0.21.0\th1:sum=")
+        if kind == "symlink":
+            _ = binary.rename(tmp_path / "target")
+            binary.symlink_to(tmp_path / "target")
+        else:
+            binary.chmod(0o644)
+    assert goimports.run().returncode == 0
+    assert not [call for call in goimports.calls if call.startswith("version ")]
+    assert goimports.installs == [f"install {GOIMPORTS}@v0.21.0"]
+
+
+CMD = f"{TOOLS}/cmd"
+
+
+@pytest.mark.parametrize(
+    ("subject", "reading"),
+    [
+        (
+            f"module {CMD}",
+            f"https://proxy.golang.org/{CMD}/@v/list: 404 Not Found\n\tserver response",
+        ),
+        (f"module {CMD}", f"https://proxy.example/{CMD}/@v/list: 410 Gone"),
+        (
+            f'{CMD}@latest: unrecognized import path "{CMD}"',
+            f"https://{CMD}?go-get=1: 404 Not Found",
+        ),
+    ],
+)
+def test_the_module_search_passes_a_path_the_proxy_or_host_does_not_find(
+    goimports: Go, subject: str, reading: str
+) -> None:
+    goimports.spec["errors"] = {CMD: f"go: {subject}: reading {reading}"}
+    goimports.publish(TOOLS, {"v0.21.0": 10})
+    result = goimports.run()
+    assert result.returncode == 0, result.stderr
+    assert goimports.installs == [f"install {GOIMPORTS}@v0.21.0"]
+
+
+def test_a_failed_module_query_stops_the_search(goimports: Go) -> None:
+    proxy = "proxy.golang.org"
+    error = f'go: module {CMD}: Get "https://{proxy}/{CMD}/@v/list": dial tcp: {proxy}'
+    goimports.spec["errors"] = {CMD: error}
+    goimports.publish(TOOLS, {"v0.21.0": 10})
+    result = goimports.run()
+    assert result.returncode != 0
+    assert error in result.stderr
+    assert f"list -m -f {{{{.Path}}}} {TOOLS}@latest" not in goimports.calls
+    assert goimports.installs == []
+
+
 @pytest.mark.parametrize(
     ("versions", "commit", "latest"),
     [
@@ -704,7 +841,10 @@ def test_a_lookalike_of_msrl_dev_waits(tmp_path: Path) -> None:
 def test_a_package_that_no_module_provides_fails(goimports: Go) -> None:
     result = goimports.run()
     assert result.returncode != 0
-    assert f"provision: no module provides {GOIMPORTS}" in result.stderr
+    assert (
+        f"provision: could not find the module that provides {GOIMPORTS}"
+        in result.stderr
+    )
     assert goimports.installs == []
 
 

@@ -19,18 +19,19 @@
 # for npm (RELEASE_COOLDOWN_DAYS in Library/Homebrew/release_cooldown.rb) and
 # none for cargo or go. Installing an npm package without scripts or building a
 # go package runs none of its code, so brew bundle may install those first and
-# npm_install_global and go_install_global replace them before anything runs
-# them. Building a crate runs its build scripts and macros, so
-# cargo_install_global runs before brew bundle.
+# npm_install_global and go_install_global replace them afterward. When no
+# version is old enough, they fail and leave brew bundle's version installed.
+# Building a crate runs its build scripts and macros, so cargo_install_global
+# runs before brew bundle.
 release_cooldown_days=3
 
 # usage: npm_install_global PACKAGE
-# cf publishes only prereleases under its latest tag, and npm's own
-# --min-release-age falls back from a prerelease to the old stable version, so
-# the version is chosen here; that flag holds back the dependencies. The
-# registry keeps the publish time of an unpublished version, so only the
-# versions it still lists are candidates. The semver that npm bundles orders
-# prereleases correctly, and node is in the base module.
+# The version is chosen here because npm's --min-release-age passes over a
+# prerelease latest tag, as cf has, for an old stable version; the flag still
+# holds back the dependencies. The registry keeps the publish time of an
+# unpublished version, so only the versions it still lists are candidates. The
+# semver that npm bundles orders prereleases correctly, and node is in the base
+# module.
 npm_install_global() {
     local package=$1 global_root view_json version installed=
     local pick='
@@ -42,6 +43,7 @@ const cutoff = Date.now() - Number(days) * 86400000;
 const listed = new Set(view.versions ?? []);
 const version = semver.valid(latest) && Object.entries(view.time ?? {})
     .filter(([v, t]) => listed.has(v) && semver.valid(v) && semver.lte(v, latest) && Date.parse(t) <= cutoff)
+    .filter(([v]) => semver.prerelease(latest) || !semver.prerelease(v))
     .map(([v]) => v)
     .sort(semver.rcompare)[0];
 if (!version) {
@@ -103,8 +105,12 @@ console.log(version);
 # The candidates follow what `go install PACKAGE@latest` chooses: the highest
 # release, else the highest prerelease, else the newest commit. A binary built
 # from a checkout records no module checksum, which is how it is told apart
-# from one that go install fetched.
+# from one that go install fetched. brew bundle takes GOBIN and GOPATH from
+# HOMEBREW_GOBIN and HOMEBREW_GOPATH and skips symlinks and files that are not
+# Go executables, so this finds the binary that brew bundle would.
 go_install_global() {
+    local GOBIN=${HOMEBREW_GOBIN-} GOPATH=${HOMEBREW_GOPATH-}
+    export GOBIN GOPATH
     local package=$1 name gobin gopath binary info fields ipath imodule iversion isum
     local installed='' module error versions candidates candidate found version='' now cutoff
     name=${package##*/}
@@ -118,8 +124,16 @@ go_install_global() {
         gobin=${gopath%%:*}/bin
     fi
     binary=$gobin/$name
-    if [[ -e $binary ]]; then
-        info=$(go version -m "$binary") || return 1
+    if [[ -f $binary && -x $binary && ! -L $binary ]]; then
+        if ! info=$(go version -m "$binary" 2>&1); then
+            case ${info#"$binary: could not read Go build info from $binary: "} in
+            "not a Go executable" | "unrecognized file format") info= ;;
+            *)
+                printf '%s\n' "$info" >&2
+                return 1
+                ;;
+            esac
+        fi
         fields=$(awk -F '\t' '$2 == "path" { path = $3 } $2 == "mod" { mod = $3 " " $4 " " $5 } END { print path, mod }' <<<"$info") || return 1
         read -r ipath imodule iversion isum <<<"$fields"
         if [[ $ipath == "$package" ]]; then
@@ -129,8 +143,11 @@ go_install_global() {
     fi
     module=$package
     until error=$(go list -m -f '{{.Path}}' "$module@latest" 2>&1 >/dev/null); do
-        if [[ $module != */* ]]; then
-            printf '%s\nprovision: no module provides %s\n' "$error" "$package" >&2
+        # These are how go reports a path that is not a module. After any other
+        # error, such as a network failure, a shorter path can name the wrong
+        # module: the one that holds a nested module's directory.
+        if [[ $module != */* ]] || ! grep -Eq 'no matching versions for query "latest"|: (404 Not Found|410 Gone)$' <<<"$error"; then
+            printf '%s\nprovision: could not find the module that provides %s\n' "$error" "$package" >&2
             return 1
         fi
         module=${module%/*}
