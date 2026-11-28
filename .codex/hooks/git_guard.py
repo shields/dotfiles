@@ -160,7 +160,7 @@ WRAPPERS: dict[str, set[str]] = {
     "command": set(),
     "exec": {"-a"},
     "env": {"-u", "--unset", "-C", "--chdir", "-P"},
-    "time": set(),
+    "time": {"-f", "-o", "--format", "--output"},
     "nohup": set(),
     "nice": {"-n", "--adjustment"},
     "timeout": {"-k", "--kill-after", "-s", "--signal"},
@@ -762,10 +762,15 @@ def takes_value(wrapper: str, option: str) -> bool:
     names = WRAPPERS[wrapper]
     if option in names:
         return True
-    # In a cluster such as -tn the last flag takes the next word.
-    return (
-        not option.startswith("--") and bool(option[2:]) and f"-{option[-1]}" in names
-    )
+    if option.startswith("--"):
+        return False
+    # In a cluster such as -tn the first flag that takes a value ends the scan:
+    # the rest of the cluster is its value, as in -uroot, and only a flag in last
+    # place takes the next word.
+    for position, flag in enumerate(option[1:], start=1):
+        if f"-{flag}" in names:
+            return position == len(option) - 1
+    return False
 
 
 def program(word: str) -> str:

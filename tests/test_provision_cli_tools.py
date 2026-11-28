@@ -17,6 +17,7 @@
 import json
 import shutil
 import subprocess
+import sys
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import final
@@ -96,10 +97,7 @@ class Npm:
         latest: str,
         unpublished: tuple[str, ...] = (),
     ) -> None:
-        """Publish VERSIONS, each that many days ago, with LATEST as the tag.
-
-        The registry keeps the time of an UNPUBLISHED version but lists no more.
-        """
+        """The registry keeps the time of an UNPUBLISHED version but lists no more."""
         times = {"created": hours_ago(9999 * DAYS), "modified": hours_ago(0)}
         times.update({v: hours_ago(days * DAYS) for v, days in versions.items()})
         listed = [v for v in versions if v not in unpublished]
@@ -246,6 +244,475 @@ def test_a_registry_answer_without_times_tag_or_versions_fails(
     _ = cf.view.write_text(json.dumps(view))
     assert cf.run().returncode != 0
     assert cf.installs == []
+
+
+FAKE_CARGO = """#!/bin/sh
+case "$1 $2" in
+"install --list")
+    [ -z "${FAKE_CARGO_LIST_FAILS-}" ] && cat "$FAKE_LIST" ;;
+"install --locked")
+    printf '%s\\n' "$*" >> "$FAKE_LOG"
+    [ -z "${FAKE_CARGO_INSTALL_FAILS-}" ] ;;
+*) exit 64 ;;
+esac
+"""
+
+FAKE_CURL = """#!/bin/sh
+printf 'curl %s\\n' "$*" >> "$FAKE_LOG"
+[ "$*" = "-fsSL --proto =https https://index.crates.io/$FAKE_INDEX_PATH" ] &&
+    [ -z "${FAKE_CURL_FAILS-}" ] &&
+    cat "$FAKE_INDEX"
+"""
+
+
+@final
+class Cargo:
+    def __init__(
+        self, tmp_path: Path, host_root: Path, crate: str, index_path: str
+    ) -> None:
+        self.crate = crate
+        root = tmp_path / "root"
+        root.mkdir()
+        (root / "npm").symlink_to(host_root / "npm")
+        self.list = tmp_path / "list"
+        _ = self.list.write_text("")
+        self.index = tmp_path / "index"
+        self.log = tmp_path / "log"
+        fakebin = tmp_path / "fakebin"
+        fakebin.mkdir()
+        for name, body in [
+            ("npm", FAKE_NPM),
+            ("cargo", FAKE_CARGO),
+            ("curl", FAKE_CURL),
+        ]:
+            _ = (fakebin / name).write_text(body)
+            (fakebin / name).chmod(0o755)
+        node = shutil.which("node")
+        assert node
+        self.env = {
+            "PATH": f"{fakebin}:{Path(node).parent}:/usr/bin:/bin",
+            "FAKE_ROOT": str(root),
+            "FAKE_LIST": str(self.list),
+            "FAKE_INDEX": str(self.index),
+            "FAKE_INDEX_PATH": index_path,
+            "FAKE_LOG": str(self.log),
+        }
+
+    def publish(
+        self, versions: dict[str, float | None], yanked: tuple[str, ...] = ()
+    ) -> None:
+        lines: list[str] = []
+        for version, days in versions.items():
+            entry: dict[str, object] = {
+                "name": self.crate,
+                "vers": version,
+                "deps": [],
+                "yanked": version in yanked,
+            }
+            if days is not None:
+                entry["pubtime"] = hours_ago(days * DAYS).replace(".000", "")
+            lines.append(json.dumps(entry))
+        _ = self.index.write_text("".join(f"{line}\n" for line in lines))
+
+    def run(self) -> subprocess.CompletedProcess[str]:
+        return bash(self.env, "cargo_install_global", self.crate)
+
+    def install(self, version: str) -> str:
+        return f"install --locked {self.crate} --version ={version}"
+
+    @property
+    def calls(self) -> list[str]:
+        return self.log.read_text().splitlines() if self.log.exists() else []
+
+    @property
+    def installs(self) -> list[str]:
+        return [call for call in self.calls if not call.startswith("curl ")]
+
+
+@pytest.fixture
+def ghist(tmp_path: Path, npm_global_root: Path) -> Cargo:
+    return Cargo(tmp_path, npm_global_root, "ghist", "gh/is/ghist")
+
+
+def test_the_newest_old_enough_stable_crate_is_installed(ghist: Cargo) -> None:
+    ghist.publish(
+        {"0.9.0": 80, "0.10.0": 10, "0.11.0": 5, "0.12.0-rc.1": 4, "0.12.0": 1}
+    )
+    result = ghist.run()
+    assert result.returncode == 0, result.stderr
+    assert ghist.installs == [ghist.install("0.11.0")]
+
+
+def test_a_yanked_crate_version_is_skipped(ghist: Cargo) -> None:
+    ghist.publish({"0.10.0": 10, "0.11.0": 5}, yanked=("0.11.0",))
+    assert ghist.run().returncode == 0
+    assert ghist.installs == [ghist.install("0.10.0")]
+
+
+def test_a_crate_version_without_a_publish_time_counts_as_new(ghist: Cargo) -> None:
+    ghist.publish({"0.10.0": 10, "0.11.0": None})
+    assert ghist.run().returncode == 0
+    assert ghist.installs == [ghist.install("0.10.0")]
+
+
+def test_the_chosen_crate_version_already_installed_is_kept(ghist: Cargo) -> None:
+    ghist.publish({"0.10.0": 10, "0.11.0": 1})
+    _ = ghist.list.write_text(
+        "ghist-extra v9.0.0:\n    ghist-extra\nghist v0.10.0:\n    ghist\n"
+    )
+    assert ghist.run().returncode == 0
+    assert ghist.installs == []
+
+
+@pytest.mark.parametrize("installed", ["0.9.0", "0.11.0"])
+def test_another_installed_crate_version_is_replaced(
+    ghist: Cargo, installed: str
+) -> None:
+    ghist.publish({"0.9.0": 80, "0.10.0": 10, "0.11.0": 1})
+    _ = ghist.list.write_text(f"ghist v{installed}:\n    ghist\n")
+    assert ghist.run().returncode == 0
+    assert ghist.installs == [ghist.install("0.10.0")]
+
+
+def test_a_crate_installed_from_a_path_is_left_alone(ghist: Cargo) -> None:
+    _ = ghist.list.write_text("ghist v0.0.0 (/home/me/src/ghist):\n    ghist\n")
+    ghist.env["FAKE_CURL_FAILS"] = "1"
+    assert ghist.run().returncode == 0
+    assert ghist.calls == []
+
+
+def test_a_crate_installed_from_git_is_replaced(ghist: Cargo) -> None:
+    ghist.publish({"0.10.0": 10})
+    origin = "https://github.com/shields/ghist#0123456789abcdef"
+    _ = ghist.list.write_text(f"ghist v0.10.0 ({origin}):\n    ghist\n")
+    assert ghist.run().returncode == 0
+    assert ghist.installs == [ghist.install("0.10.0")]
+
+
+def test_another_crates_binary_of_the_same_name_is_not_the_crate(
+    ghist: Cargo,
+) -> None:
+    ghist.publish({"0.10.0": 10})
+    _ = ghist.list.write_text("other v1.0.0 (/home/me/src/other):\n    ghist\n")
+    assert ghist.run().returncode == 0
+    assert ghist.installs == [ghist.install("0.10.0")]
+
+
+@pytest.mark.parametrize(
+    ("crate", "index_path"),
+    [
+        ("a", "1/a"),
+        ("ab", "2/ab"),
+        ("abc", "3/a/abc"),
+        ("cargo-fuzz", "ca/rg/cargo-fuzz"),
+        ("Serde_JSON", "se/rd/serde_json"),
+    ],
+)
+def test_the_index_path_follows_the_crate_names_length(
+    tmp_path: Path, npm_global_root: Path, crate: str, index_path: str
+) -> None:
+    cargo = Cargo(tmp_path, npm_global_root, crate, index_path)
+    cargo.publish({"1.0.0": 10})
+    result = cargo.run()
+    assert result.returncode == 0, result.stderr
+    assert cargo.installs == [cargo.install("1.0.0")]
+
+
+def test_no_crate_version_old_enough_fails(ghist: Cargo) -> None:
+    ghist.publish({"0.11.0-rc.1": 10, "0.11.0": 1})
+    result = ghist.run()
+    assert result.returncode != 0
+    assert "ghist: no release is 3 days old" in result.stderr
+    assert ghist.installs == []
+
+
+@pytest.mark.parametrize(
+    "failure", ["FAKE_CARGO_LIST_FAILS", "FAKE_CURL_FAILS", "FAKE_CARGO_INSTALL_FAILS"]
+)
+def test_a_failing_cargo_step_fails(ghist: Cargo, failure: str) -> None:
+    ghist.publish({"0.10.0": 10})
+    ghist.env[failure] = "1"
+    assert ghist.run().returncode != 0
+
+
+def test_an_unreadable_index_fails(ghist: Cargo) -> None:
+    _ = ghist.index.write_text("not json\n")
+    assert ghist.run().returncode != 0
+    assert ghist.installs == []
+
+
+FAKE_GO = """#!{python}
+import json, os, sys
+
+args = sys.argv[1:]
+with open(os.environ["FAKE_LOG"], "a") as log:
+    log.write(" ".join(args) + "\\n")
+with open(os.environ["FAKE_SPEC"]) as spec_file:
+    spec = json.load(spec_file)
+if args[0] == "env":
+    print(spec["env"].get(args[1], ""))
+elif args[:2] == ["version", "-m"]:
+    with open(args[2]) as binary:
+        sys.stdout.write(binary.read())
+elif args[0] == "install":
+    sys.exit(1 if spec.get("install_fails") else 0)
+elif args[:2] == ["list", "-m"]:
+    module, _, query = args[-1].partition("@")
+    found = spec["modules"].get(module)
+    if found is None:
+        sys.exit(f'go: module {{module}}: no matching versions for query "latest"')
+    template = args[-2]
+    version = found["latest"] if query == "latest" else query
+    if "-versions" in args:
+        sys.stdout.write("".join(v + "\\n" for v in found["versions"]))
+    elif template == "{{{{.Version}}}}":
+        print(version)
+    elif template == "{{{{.Path}}}}":
+        print(module)
+    elif template == "{{{{.Version}}}} {{{{.Time.Unix}}}}":
+        print(version, found["times"][version])
+    elif template == "{{{{.Time.Unix}}}}":
+        print(found["times"][version])
+    else:
+        sys.exit(64)
+else:
+    sys.exit(64)
+"""
+
+GOIMPORTS = "golang.org/x/tools/cmd/goimports"
+TOOLS = "golang.org/x/tools"
+
+
+def days_ago(days: float) -> int:
+    return int((datetime.now(UTC) - timedelta(days=days)).timestamp())
+
+
+@final
+class Go:
+    def __init__(self, tmp_path: Path, package: str) -> None:
+        self.package = package
+        self.gobin = tmp_path / "gobin"
+        self.gobin.mkdir()
+        self.spec_file = tmp_path / "spec.json"
+        self.log = tmp_path / "log"
+        self.spec: dict[str, object] = {"env": {"GOBIN": str(self.gobin)}}
+        self.modules: dict[str, dict[str, object]] = {}
+        fakebin = tmp_path / "fakebin"
+        fakebin.mkdir()
+        go = fakebin / "go"
+        _ = go.write_text(FAKE_GO.format(python=sys.executable))
+        go.chmod(0o755)
+        self.env = {
+            "PATH": f"{fakebin}:/usr/bin:/bin",
+            "FAKE_SPEC": str(self.spec_file),
+            "FAKE_LOG": str(self.log),
+        }
+
+    def publish(
+        self,
+        module: str,
+        versions: dict[str, float],
+        commit: tuple[str, float] | None = None,
+        untagged: dict[str, float] | None = None,
+    ) -> None:
+        """VERSIONS are oldest first.
+
+        @latest resolves as Go resolves it: the highest release, else the
+        highest prerelease, else COMMIT, the pseudo-version of the newest commit.
+        UNTAGGED are older commits that resolve by pseudo-version.
+        """
+        tags = list(versions)
+        releases = [v for v in tags if "-" not in v]
+        times = {
+            v: days_ago(days) for v, days in {**versions, **(untagged or {})}.items()
+        }
+        if commit:
+            times[commit[0]] = days_ago(commit[1])
+        latest = (releases or tags or [commit[0] if commit else None])[-1]
+        self.modules[module] = {"versions": tags, "times": times, "latest": latest}
+
+    def install_binary(self, name: str, path: str, mod: str) -> None:
+        _ = (self.gobin / name).write_text(f"x: go1.27\n\tpath\t{path}\n\tmod\t{mod}\n")
+
+    def run(self) -> subprocess.CompletedProcess[str]:
+        _ = self.spec_file.write_text(
+            json.dumps({**self.spec, "modules": self.modules})
+        )
+        return bash(self.env, "go_install_global", self.package)
+
+    @property
+    def calls(self) -> list[str]:
+        return self.log.read_text().splitlines() if self.log.exists() else []
+
+    @property
+    def installs(self) -> list[str]:
+        return [call for call in self.calls if call.startswith("install ")]
+
+
+@pytest.fixture
+def goimports(tmp_path: Path) -> Go:
+    return Go(tmp_path, GOIMPORTS)
+
+
+def test_the_newest_old_enough_release_of_the_packages_module_is_installed(
+    goimports: Go,
+) -> None:
+    goimports.publish(
+        TOOLS, {"v0.20.0": 80, "v0.21.0": 10, "v0.22.0-pre.1": 5, "v0.22.0": 1}
+    )
+    result = goimports.run()
+    assert result.returncode == 0, result.stderr
+    assert goimports.installs == [f"install {GOIMPORTS}@v0.21.0"]
+
+
+def test_a_go_prerelease_is_installed_only_without_a_release(goimports: Go) -> None:
+    goimports.publish(TOOLS, {"v0.1.0-pre.1": 10, "v0.1.0-pre.2": 5, "v0.1.0-pre.3": 1})
+    assert goimports.run().returncode == 0
+    assert goimports.installs == [f"install {GOIMPORTS}@v0.1.0-pre.2"]
+
+
+def test_an_untagged_modules_old_enough_commit_is_installed(goimports: Go) -> None:
+    goimports.publish(TOOLS, {}, commit=("v0.0.0-20261120000000-abcdef123456", 7))
+    assert goimports.run().returncode == 0
+    assert goimports.installs == [
+        f"install {GOIMPORTS}@v0.0.0-20261120000000-abcdef123456"
+    ]
+
+
+def test_an_installed_old_enough_version_stays_while_the_newest_is_new(
+    goimports: Go,
+) -> None:
+    old = "v0.0.0-20261001000000-000000000001"
+    goimports.publish(
+        TOOLS,
+        {},
+        commit=("v0.0.0-20261126000000-000000000002", 1),
+        untagged={old: 50},
+    )
+    goimports.install_binary("goimports", GOIMPORTS, f"{TOOLS}\t{old}\th1:sum=")
+    assert goimports.run().returncode == 0
+    assert goimports.installs == []
+
+
+@pytest.mark.parametrize("installed", ["", "v0.0.0-20261126000000-000000000002"])
+def test_no_go_version_old_enough_fails(goimports: Go, installed: str) -> None:
+    goimports.publish(TOOLS, {}, commit=("v0.0.0-20261126000000-000000000002", 1))
+    if installed:
+        goimports.install_binary(
+            "goimports", GOIMPORTS, f"{TOOLS}\t{installed}\th1:sum="
+        )
+    result = goimports.run()
+    assert result.returncode != 0
+    assert f"{GOIMPORTS}: no version is 3 days old" in result.stderr
+    assert goimports.installs == []
+
+
+def test_the_chosen_go_version_already_installed_is_kept(goimports: Go) -> None:
+    goimports.publish(TOOLS, {"v0.21.0": 10, "v0.22.0": 1})
+    goimports.install_binary("goimports", GOIMPORTS, f"{TOOLS}\tv0.21.0\th1:sum=")
+    assert goimports.run().returncode == 0
+    assert goimports.installs == []
+
+
+def test_another_installed_go_version_is_replaced(goimports: Go) -> None:
+    goimports.publish(TOOLS, {"v0.21.0": 10, "v0.22.0": 1})
+    goimports.install_binary("goimports", GOIMPORTS, f"{TOOLS}\tv0.22.0\th1:sum=")
+    assert goimports.run().returncode == 0
+    assert goimports.installs == [f"install {GOIMPORTS}@v0.21.0"]
+
+
+@pytest.mark.parametrize("version", ["v0.0.0-20261126000000-000000000002", "(devel)"])
+def test_a_binary_built_from_a_checkout_is_left_alone(
+    goimports: Go, version: str
+) -> None:
+    goimports.install_binary("goimports", GOIMPORTS, f"{TOOLS}\t{version}\t")
+    assert goimports.run().returncode == 0
+    assert not [call for call in goimports.calls if call.startswith("list ")]
+    assert goimports.installs == []
+
+
+def test_another_packages_binary_of_the_same_name_is_replaced(goimports: Go) -> None:
+    goimports.publish(TOOLS, {"v0.21.0": 10})
+    goimports.install_binary("goimports", "example.com/goimports", "example.com\t\t")
+    assert goimports.run().returncode == 0
+    assert goimports.installs == [f"install {GOIMPORTS}@v0.21.0"]
+
+
+@pytest.mark.parametrize(
+    ("package", "binary"),
+    [
+        ("github.com/evilmartians/lefthook/v2", "lefthook"),
+        ("example.com/tool/v10", "tool"),
+        ("example.com/tool/v1", "v1"),
+        ("example.com/tool/v0", "v0"),
+    ],
+)
+def test_the_binary_is_named_without_a_major_version_suffix(
+    tmp_path: Path, package: str, binary: str
+) -> None:
+    go = Go(tmp_path, package)
+    go.publish(package, {"v2.1.0": 10})
+    go.install_binary(binary, package, f"{package}\tv2.1.0\th1:sum=")
+    assert go.run().returncode == 0
+    assert go.installs == []
+
+
+def test_without_gobin_the_first_gopath_entry_holds_the_binary(
+    tmp_path: Path, goimports: Go
+) -> None:
+    gopath = tmp_path / "gopath"
+    (gopath / "bin").mkdir(parents=True)
+    goimports.spec["env"] = {"GOBIN": "", "GOPATH": f"{gopath}:{tmp_path}/other"}
+    goimports.gobin = gopath / "bin"
+    goimports.publish(TOOLS, {"v0.21.0": 10})
+    goimports.install_binary("goimports", GOIMPORTS, f"{TOOLS}\tv0.21.0\th1:sum=")
+    assert goimports.run().returncode == 0
+    assert goimports.installs == []
+
+
+@pytest.mark.parametrize(
+    ("versions", "commit", "latest"),
+    [
+        (
+            {},
+            ("v0.0.0-20261126000000-000000000002", 0.5),
+            "v0.0.0-20261126000000-000000000002",
+        ),
+        ({"v1.0.0": 10, "v1.1.0": 0.5}, None, "v1.1.0"),
+    ],
+)
+def test_an_msrl_dev_module_installs_its_latest_version_without_waiting(
+    tmp_path: Path,
+    versions: dict[str, float],
+    commit: tuple[str, float] | None,
+    latest: str,
+) -> None:
+    go = Go(tmp_path, "msrl.dev/trackage/cmd/trackage")
+    go.publish("msrl.dev/trackage", versions, commit=commit)
+    result = go.run()
+    assert result.returncode == 0, result.stderr
+    assert go.installs == [f"install msrl.dev/trackage/cmd/trackage@{latest}"]
+
+
+def test_a_lookalike_of_msrl_dev_waits(tmp_path: Path) -> None:
+    go = Go(tmp_path, "msrl.dev.example.com/tool")
+    go.publish("msrl.dev.example.com/tool", {"v1.0.0": 10, "v1.1.0": 0.5})
+    assert go.run().returncode == 0
+    assert go.installs == ["install msrl.dev.example.com/tool@v1.0.0"]
+
+
+def test_a_package_that_no_module_provides_fails(goimports: Go) -> None:
+    result = goimports.run()
+    assert result.returncode != 0
+    assert f"provision: no module provides {GOIMPORTS}" in result.stderr
+    assert goimports.installs == []
+
+
+def test_a_failing_go_install_fails(goimports: Go) -> None:
+    goimports.publish(TOOLS, {"v0.21.0": 10})
+    goimports.spec["install_fails"] = True
+    assert goimports.run().returncode != 0
+    assert goimports.installs == [f"install {GOIMPORTS}@v0.21.0"]
 
 
 @final

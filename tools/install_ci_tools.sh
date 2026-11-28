@@ -81,7 +81,7 @@ if ! bwrap --unshare-user --ro-bind / / true 2>/dev/null; then
 fi
 
 codex --version
-cf --version
+DO_NOT_TRACK=1 cf --version
 # Tests drop their bsdtar variant when it is missing, which the skip gate
 # cannot see.
 bsdtar --version

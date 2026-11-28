@@ -99,11 +99,22 @@ installed only where it has been named once. Add packages with
 it would overwrite the loader. The README describes the modules.
 
 `provision/cli-tools.sh` holds what `provision.sh` does for command-line tools
-that Homebrew cannot: `npm_install_global` reinstalls each Brewfile `npm` entry
-at the newest version, up to its latest tag, that is three days old (brew
-bundle's own wait is one day), and `completion_install` writes the zsh
-completions of cf and ghist into `$ZSH_CACHE_DIR/completions` (the directory
-`.zshrc` puts on `fpath`), so no tool runs at shell startup to generate them.
+that Homebrew cannot. brew bundle waits one day for a new npm release and not at
+all for cargo or go, so provisioning waits three days. `cargo_install_global`
+installs each Brewfile `cargo` entry before brew bundle runs, since building a
+crate runs its build scripts. `npm_install_global` and `go_install_global`
+reinstall each `npm` and `go` entry after it, since installing those runs no
+package code. Each picks the newest version that is three days old: for npm, up
+to the latest tag; for cargo, the newest stable release; for go, the version
+`go install PKG@latest` would choose, aged by its commit time, which its
+publisher sets (npm and crates.io stamp the time themselves). Go modules under
+`msrl.dev`, which are this repository owner's own and mostly untagged, install
+at `@latest` without waiting. As brew bundle
+does, they leave alone a go binary built from a checkout and a crate installed
+from a path, and replace a crate installed from git.
+`completion_install` writes the zsh completions of cf and ghist into
+`$ZSH_CACHE_DIR/completions` (the directory `.zshrc` puts on `fpath`), so no
+tool runs at shell startup to generate them.
 Each returns nonzero on any failure; call them where `set -e` applies, not as
 an `if` or `||` condition, so a failure stops provisioning.
 

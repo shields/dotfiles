@@ -622,13 +622,23 @@ def test_rustup_is_ready_before_bundle_on_dev_only() -> None:
     guard = find(r'^if modules_has "\$modules_selection" dev; then')
     body = block(guard)
     assert body == [
-        "brew install --yes rustup",
+        "brew install --yes rustup node",
         "rustup_prefix=$(brew --prefix rustup)",
         'export PATH="$rustup_prefix/bin:$PATH"',
+        "rustup update stable",
         "rustup default stable >/dev/null",
     ]
     assert guard < find(r"^brew bundle --force --no-upgrade")
     assert sum("rustup default stable" in line for line in LINES) == 1
+
+
+def test_cargo_crates_are_installed_past_the_cooldown_before_bundle() -> None:
+    guard = find(r'^if modules_has "\$modules_selection" dev; then')
+    listing = find(r"^cargo_crates=\$\(brew bundle list --cargo\)$")
+    assert LINES[listing + 1] == "for cargo_crate in $cargo_crates; do"
+    assert LINES[listing + 2].strip() == 'cargo_install_global "$cargo_crate"'
+    assert not openers(listing)
+    assert guard < listing < find(r"^brew bundle --force --no-upgrade")
 
 
 def test_bundle_steps_and_comment() -> None:
@@ -817,6 +827,14 @@ def test_npm_packages_are_reinstalled_past_the_cooldown_after_bundle() -> None:
     assert find(r"^brew autoremove") < listing < find(r"^if ! chezmoi ")
     cloud = find(r'^if modules_has "\$modules_selection" cloud; then', listing)
     assert listing < cloud
+
+
+def test_go_packages_are_reinstalled_past_the_cooldown_after_bundle() -> None:
+    listing = find(r"^go_packages=\$\(brew bundle list --go\)$")
+    assert LINES[listing + 1] == "for go_package in $go_packages; do"
+    assert LINES[listing + 2].strip() == 'go_install_global "$go_package"'
+    assert not openers(listing)
+    assert find(r"^brew autoremove") < listing < find(r"^if ! chezmoi ")
 
 
 def test_the_ghist_completion_follows_the_dev_module_from_cargos_directory() -> None:

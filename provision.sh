@@ -189,12 +189,20 @@ brew update
 # brew bundle finds cargo only on the PATH brew was started with. Without it,
 # the cargo entries install the rust formula, which cleanup then removes.
 # Homebrew asks before it installs dependencies, which rustup has on Linux.
+# cargo_install_global needs node, which brew bundle has not yet installed on a
+# new machine.
 if modules_has "$modules_selection" dev; then
-    brew install --yes rustup
+    brew install --yes rustup node
     rustup_prefix=$(brew --prefix rustup)
     export PATH="$rustup_prefix/bin:$PATH"
+    rustup update stable
     rustup default stable >/dev/null
 fi
+
+cargo_crates=$(brew bundle list --cargo)
+for cargo_crate in $cargo_crates; do
+    cargo_install_global "$cargo_crate"
+done
 
 # Homebrew bundle sync. Edit brew/*.Brewfile to change what is installed, or
 # use `brew bundle add --file=brew/<module>.Brewfile`.
@@ -211,6 +219,10 @@ brew autoremove
 npm_packages=$(brew bundle list --npm)
 for npm_package in $npm_packages; do
     npm_install_global "$npm_package"
+done
+go_packages=$(brew bundle list --go)
+for go_package in $go_packages; do
+    go_install_global "$go_package"
 done
 
 # Only .zshrc exports DO_NOT_TRACK, and cf reports every run without it.
@@ -287,8 +299,8 @@ if [ ! -f "$HOME/.ssh/known_hosts" ] || ! grep -q '^github\.com ' "$HOME/.ssh/kn
         sed -e 's/^/github.com /' >>"$HOME/.ssh/known_hosts"
 fi
 
-# Go setup. Tools (goimports, etc.) are installed to ~/bin via the Brewfile's
-# `go` entries; only Go's own settings belong here.
+# Go setup. Tools (goimports, etc.) are installed to GOPATH's bin directory via
+# the Brewfile's `go` entries; only Go's own settings belong here.
 go telemetry on
 
 # Globally available MCP servers for Claude Code and Codex.

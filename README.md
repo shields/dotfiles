@@ -296,8 +296,8 @@ that are selected.
 - To check a machine against its modules, run
   `brew bundle check --verbose --no-upgrade` and `brew bundle cleanup` (without
   `--force`) in an interactive shell. Without `--no-upgrade`, the check also
-  fails for any entry with a newer version, such as cf, which provisioning holds
-  back for three days after each release. The cargo entries are found only where
+  fails for any npm, cargo or go entry with a newer version, since provisioning
+  holds each release back for three days. The cargo entries are found only where
   rustup's `bin` is on the `PATH`, which `.zshrc` arranges.
 - Do not run `brew bundle dump`: it would replace the loader with a flat list.
 
