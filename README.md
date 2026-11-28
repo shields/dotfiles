@@ -389,11 +389,11 @@ This repository reads two marker files that `cog` writes in the guest:
 `/etc/cog-throwaway`, whose presence makes the machine a throwaway VM, and
 `/etc/cog-gateway`, one line holding the VM's UUID, or `cloudflare`.
 `.zshrc`, `.zshenv`, `.zsh.d/wt.zsh`, `.codex/hooks/git_guard.py`,
-`tools/configure_codex.py` and `provision.sh` read them, and
-`tests/test_cog_contract.py` checks that each names its marker and that
-`.claude/settings.json` satisfies the list above. Where the second file holds
-a UUID, `wt` names a new worktree's branch `cog/UUID/worktree-NAME`, since the
-gateway accepts pushes only to `cog/UUID/*`. Where `/etc/cog-gateway`
+`.claude/statusline.sh`, `tools/configure_codex.py` and `provision.sh` read
+them, and `tests/test_cog_contract.py` checks that each names its marker and
+that `.claude/settings.json` satisfies the list above. Where the second file
+holds a UUID, `wt` names a new worktree's branch `cog/UUID/worktree-NAME`,
+since the gateway accepts pushes only to `cog/UUID/*`. Where `/etc/cog-gateway`
 exists, `provision.sh` leaves the credential helper for `https://github.com` in
 `~/.config/git/config` alone, because `cog` puts the gateway's helper there
 (replacing the `gh` helper that an earlier run wrote).
@@ -441,24 +441,57 @@ outrank the placeholder, `ANTHROPIC_API_KEY`, `ANTHROPIC_AUTH_TOKEN`,
 Claude Code then sends its HTTPS connections through the gateway, which answers
 `api.anthropic.com` itself with a pool account and tunnels other hosts
 untouched, but only to port 443. A connection to any other port fails, and so
-does a call to `api.anthropic.com` from a program that does not read
-`NODE_EXTRA_CA_CERTS`, such as curl. The sandbox takes `HTTPS_PROXY` as the
-upstream of its own proxy, so the connections of sandboxed commands go through
-the gateway too, and one to another port, as for git over ssh, fails. The
-sandbox connects directly, on any port, to a host that `NO_PROXY` names, which
-is why `c` adds `github.com`; for another host, export `NO_PROXY` naming it
-before `c`, which keeps it. The README of `cog` lists these and
-the other limits under "Claude Code on the Mac". Programs that Claude Code
-starts outside its sandbox inherit `HTTPS_PROXY`, and so the key, with
-`NODE_EXTRA_CA_CERTS` and `NO_PROXY`, but not `CLAUDE_CODE_OAUTH_TOKEN`, which
-Claude Code withholds from them: a `claude` that one of them starts needs
-`CLAUDE_CODE_OAUTH_TOKEN=cog` or `HTTPS_PROXY` unset. `cg` and `cx` are not
-affected. Claude Code treats `CLAUDE_CODE_OAUTH_TOKEN` as a long-lived,
-inference-only login, so a `c` session has no Remote Control, Claude in Chrome,
-background sessions or `/ultrareview`; plain `claude` has the Mac's own login
-for those. `cog proxy disable` removes the file, and `c` then uses the Mac's own
-login again. `cog` relies on those two paths, on that word and on the
-placeholder, and a change to any of them needs the same change there.
+does a call to `api.anthropic.com` from a program that neither trusts the
+gateway's CA (curl needs `--cacert ~/.local/state/cog/ca.pem`) nor reads
+`NODE_EXTRA_CA_CERTS`. The sandbox takes `HTTPS_PROXY` as the upstream of its
+own proxy, so the connections of sandboxed commands go through the gateway too,
+and one to another port, as for git over ssh, fails. The sandbox connects
+directly, on any port, to a host that `NO_PROXY` names, which is why `c` adds
+`github.com`; for another host, export `NO_PROXY` naming it before `c`, which
+keeps it. The README of `cog` lists these and the other limits under "Claude
+Code on the Mac". Programs that Claude Code starts outside its sandbox inherit
+`HTTPS_PROXY`, and so the key, with `NODE_EXTRA_CA_CERTS` and `NO_PROXY`, but
+not `CLAUDE_CODE_OAUTH_TOKEN`, which Claude Code withholds from them: a `claude`
+that one of them starts needs `CLAUDE_CODE_OAUTH_TOKEN=cog` or `HTTPS_PROXY`
+unset. `cg` and `cx` are not affected. Claude Code treats
+`CLAUDE_CODE_OAUTH_TOKEN` as a long-lived, inference-only login, so a `c`
+session has no Remote Control, Claude in Chrome, background sessions or
+`/ultrareview`; plain `claude` has the Mac's own login for those.
+`cog proxy disable` removes the file, and `c` then uses the Mac's own login
+again. `cog` relies on those two paths, on that word and on the placeholder, and
+a change to any of them needs the same change there.
+
+In a pooled session, `.claude/statusline.sh` does not ask Anthropic's usage
+endpoint, which answers 403 to a pool token, and never reads the Mac's own
+login. The session is pooled on a Mac when the proxy that curl uses
+(`https_proxy`, else `HTTPS_PROXY`) has the shape `http://cog:KEY@[::1]:PORT`
+(the script only tests it against a pattern; curl reads it from the
+environment, so the key is in no argument, file or output), and on Linux when
+`/etc/cog-gateway` exists and the file that `.zshrc` exports
+`CLAUDE_CODE_OAUTH_TOKEN` from holds exactly `cog`. Neither counts when
+`ANTHROPIC_BASE_URL` names another host, as in a `cg` session, which uses no
+pool account. The script then fetches
+`https://api.anthropic.com/__cog__/pool` from the gateway, with
+`--cacert ~/.local/state/cog/ca.pem` on a Mac (the system bundle already trusts
+the CA on Linux), and caches the outcome, a failure too, for 30 seconds in
+`pool.json` beside the usage cache. In place of the five-hour, week and Fable
+segments it shows one segment for each account in the gateway's order: the part
+of its name before the first `-` (the whole name when those are not unique),
+bold for the account that the session's next request would use. An account that
+the gateway has stopped using shows why and for how long: `out 62h` (or `42m`)
+when its limit rejected a request, `401 9m` when its token was refused. Any
+other shows the remaining percent and time of the five-hour window (`87% 4:12`)
+and of the week (`69% 141h`), and the remaining percent of the Fable window
+(`Fable 94%`), for those buckets that have not expired, each percent bold when
+use runs ahead of the elapsed share of its window, or `??` when none is known.
+Times are taken from the answer's own clock. `pool unusable` replaces them when
+the gateway has no usable pool. When the fetch fails or the answer is not
+exactly one object of the expected shape, including any account name outside
+the lower-case letters, digits and hyphens that `cog` allows, the session's own
+five-hour and week segments stay, followed by `pool ??`. A gateway that does not
+serve the path forwards the request upstream, so the status line shows `pool ??`
+until `./install.sh` of `cog` has run again. `cog` relies on that path, on the
+shape of the answer and on the proxy URL's shape.
 
 # Testing on Linux
 

@@ -97,6 +97,25 @@ clamp_elapsed() {
     remaining=$(($2 - secs))
 }
 
+cache_dir_path() {
+    local cache_root
+    if [[ -n "${XDG_CACHE_HOME:-}" ]]; then
+        cache_root=$XDG_CACHE_HOME
+    elif [[ ${OSTYPE:-} == darwin* ]]; then
+        cache_root=$HOME/Library/Caches
+    else
+        cache_root=$HOME/.cache
+    fi
+    printf '%s\n' "$cache_root/claude-code-statusline"
+}
+
+# Claude Code cancels a run that a newer update overtakes, which can leave the
+# run's temporary cache file behind.
+sweep_stale_temporaries() {
+    find "$1" -maxdepth 1 -type f -name '*.json.??????' -mmin +5 -delete \
+        2>/dev/null || true
+}
+
 # Fable's weekly usage is exposed only by the undocumented OAuth usage
 # endpoint, never in the statusline JSON, so we fetch it ourselves. The
 # outcome — success or failure — is cached for 600s and the request is
@@ -106,23 +125,16 @@ clamp_elapsed() {
 # "Fable ??" rather than a stale number or a silently missing segment. Label
 # and percent come from the endpoint.
 fable_usage() {
-    local cache_root
-    if [[ -n "${XDG_CACHE_HOME:-}" ]]; then
-        cache_root=$XDG_CACHE_HOME
-    elif [[ ${OSTYPE:-} == darwin* ]]; then
-        cache_root=$HOME/Library/Caches
-    else
-        cache_root=$HOME/.cache
-    fi
-    local cache_dir="$cache_root/claude-code-statusline"
+    local cache_dir
+    cache_dir=$(cache_dir_path)
     local cache="$cache_dir/usage.json"
     local mtime
     # date -r FILE prints a file's mtime on both BSD and GNU, whose stat
     # commands take incompatible format flags.
     mtime=$(date -r "$cache" +%s 2>/dev/null) || mtime=0
-    if ((now - mtime >= 600)); then
-        local tok=${CLAUDE_CODE_OAUTH_TOKEN:-}
-        if [[ -z "$tok" && -f "$HOME/.claude/.credentials.json" ]]; then
+    if ((mtime > now || now - mtime >= 600)); then
+        local tok=''
+        if [[ -f "$HOME/.claude/.credentials.json" ]]; then
             tok=$(jq -r '.claudeAiOauth.accessToken // empty' \
                 "$HOME/.claude/.credentials.json" 2>/dev/null) || tok=''
         fi
@@ -130,14 +142,8 @@ fable_usage() {
             tok=$(security find-generic-password -s 'Claude Code-credentials' -w 2>/dev/null |
                 jq -r '.claudeAiOauth.accessToken // empty' 2>/dev/null) || tok=''
         fi
-        # Under dotfiles' c, HTTPS_PROXY names cog's gateway. It answers
-        # api.anthropic.com with its own certificate, which curl does not trust,
-        # and takes no token but the placeholder, so the Mac's own token goes
-        # direct.
-        if [[ ${HTTPS_PROXY:-} == http://cog:*@\[::1\]:* ]]; then
-            unset HTTPS_PROXY
-        fi
         mkdir -p "$cache_dir" 2>/dev/null
+        sweep_stale_temporaries "$cache_dir"
         local tmp
         if tmp=$(mktemp "$cache.XXXXXX" 2>/dev/null); then
             # -f so an HTTP error (e.g. an expired token's 401) is a failure,
@@ -166,6 +172,142 @@ fable_usage() {
     ' "$cache" 2>/dev/null | head -n1) || true
     [[ -n "$line" ]] || return 1
     printf '%s\n' "$line"
+}
+
+# A pooled session sends its model traffic through cog's gateway, which holds
+# the real accounts, so Anthropic's usage endpoint (it answers 403 to a pool
+# token) cannot describe it. On a Mac the proxy URL holds a key: the script only
+# tests it against a pattern, and curl reads it from the environment. A guest
+# reads the file that .zshrc exports CLAUDE_CODE_OAUTH_TOKEN from, because
+# Claude Code withholds that variable from the status line; its system CA bundle
+# already trusts the gateway.
+pool_ca=''
+pool_proxy='^http://cog:[A-Za-z0-9_-]+@\[::1\]:[0-9]+$'
+pooled_session() {
+    # A session that names another provider, as cg does, uses no pool account
+    # on a machine that is wired for the pool.
+    local base=${ANTHROPIC_BASE_URL:-}
+    if [[ -n $base && $base != https://api.anthropic.com &&
+        $base != https://api.anthropic.com/* ]]; then
+        return 1
+    fi
+    if [[ ${OSTYPE:-} == darwin* ]]; then
+        # curl takes https_proxy before HTTPS_PROXY. The group's redirect keeps
+        # xtrace from printing the key.
+        if { [[ ${https_proxy:-${HTTPS_PROXY:-}} =~ $pool_proxy ]]; } 2>/dev/null; then
+            pool_ca=$HOME/.local/state/cog/ca.pem
+            return 0
+        fi
+        return 1
+    fi
+    local token=''
+    [[ -e "${DOTFILES_GATEWAY_MARKER:-/etc/cog-gateway}" ]] || return 1
+    [[ -e "$HOME/.config/secrets/CLAUDE_CODE_OAUTH_TOKEN" ]] || return 1
+    { token=$(<"$HOME/.config/secrets/CLAUDE_CODE_OAUTH_TOKEN"); } 2>/dev/null ||
+        return 1
+    [[ $token == cog ]]
+}
+
+# The gateway's answer comes from another machine, and its account names reach
+# the terminal, so an answer with any name outside cog's account-name pattern is
+# rejected whole. The pattern ends with \z because $ also matches before a final
+# newline.
+pool_defs='
+def name_ok: type == "string" and test("\\A[a-z0-9][a-z0-9-]{0,31}\\z");
+def ms: type == "number" and . >= 0 and . <= 4e12;
+def valid:
+    type == "object"
+    and (.state == "unusable"
+        or (.state == "usable"
+            and (.now | ms)
+            and (.current == null or (.current | type == "string"))
+            and (.accounts | type == "array" and length > 0)
+            and all(.accounts[];
+                type == "object"
+                and (.name | name_ok)
+                and (.held | type == "boolean")
+                and (.heldUntil == null or (.heldUntil | ms))
+                and (.hold == null or .hold == "limit" or .hold == "refused")
+                and (.buckets | type == "array")
+                and all(.buckets[];
+                    type == "object"
+                    and (.bucket | type == "string")
+                    and (.utilization | type == "number")
+                    and (.expires | ms))))
+    );
+'
+# shellcheck disable=SC2016 # jq variables, not shell
+pool_render='
+def clamp($lo; $hi): if . < $lo then $lo elif . > $hi then $hi else . end;
+def bold: "\u001b[1m";
+def nobold: "\u001b[22m";
+def two: if . < 10 then "0\(.)" else "\(.)" end;
+select(valid)
+| if .state == "unusable" then "pool unusable" else
+    .now as $now
+    | .current as $current
+    | (.accounts | map(.name | split("-")[0])) as $shorts
+    | ($shorts | length == (unique | length)) as $unique
+    | def left($exp; $win): ((($exp - $now) / 1000) | floor | clamp(0; $win));
+      def remaining($util; $exp; $win):
+        (($util * 100) | round | clamp(0; 100)) as $used
+        | (left($exp; $win)) as $left
+        | (if $used * $win > ($win - $left) * 100 then bold else "" end) as $style
+        | "\($style)\(100 - $used)%\(if $style == "" then "" else nobold end)";
+      [ .accounts[] as $a
+        | (if $unique then ($a.name | split("-")[0]) else $a.name end) as $label
+        | (if $a.name == $current then "\(bold)\($label)\(nobold)" else $label end) as $name
+        | (if $a.heldUntil != null and $a.heldUntil > $now then
+              ((($a.heldUntil - $now) / 1000) | floor) as $s
+              | "\(if $a.hold == "refused" then "401" else "out" end) \(if $s >= 3600 then "\($s / 3600 | floor)h" else "\($s / 60 | floor)m" end)"
+          else
+              [$a.buckets[] | select(.expires > $now)] as $live
+              | def one($b): [$live[] | select(.bucket == $b)] | .[0];
+                one("5h") as $five | one("7d") as $week | one("7d_oi") as $fable
+                | [ (if $five then
+                        (left($five.expires; 18000)) as $s
+                        | "\(remaining($five.utilization; $five.expires; 18000)) \($s / 3600 | floor):\($s % 3600 / 60 | floor | two)"
+                     else empty end),
+                    (if $week then
+                        "\(remaining($week.utilization; $week.expires; 604800)) \(left($week.expires; 604800) / 3600 | floor)h"
+                     else empty end),
+                    (if $fable then
+                        "Fable \(remaining($fable.utilization; $fable.expires; 604800))"
+                     else empty end)
+                  ]
+                | if length == 0 then "??" else join(" ") end
+          end) as $state
+        | "\($name) \($state)"
+      ] | join(" · ")
+  end
+'
+
+# A failure caches {}, which is invalid, so the caller shows "pool ??" rather
+# than a stale figure. An answer that cannot be saved is a failure too: the file
+# left in place is an older answer, which would be shown as the current one.
+pool_status() {
+    local cache_dir cache mtime tmp
+    cache_dir=$(cache_dir_path)
+    cache="$cache_dir/pool.json"
+    mtime=$(date -r "$cache" +%s 2>/dev/null) || mtime=0
+    if ((mtime > now || now - mtime >= 30)); then
+        mkdir -p "$cache_dir" 2>/dev/null
+        sweep_stale_temporaries "$cache_dir"
+        tmp=$(mktemp "$cache.XXXXXX" 2>/dev/null) || return 1
+        if curl -fsS --connect-timeout 1 --max-time 2 --max-filesize 1048576 \
+            ${pool_ca:+--cacert "$pool_ca"} \
+            -o "$tmp" https://api.anthropic.com/__cog__/pool 2>/dev/null &&
+            jq -es "$pool_defs length == 1 and (.[0] | valid)" "$tmp" >/dev/null 2>&1; then
+            : # $tmp holds the fresh answer
+        else
+            printf '{}' >"$tmp"
+        fi
+        if ! mv -f "$tmp" "$cache" 2>/dev/null; then
+            rm -f "$tmp"
+            return 1
+        fi
+    fi
+    pool_seg=$(jq -er "$pool_defs $pool_render" "$cache" 2>/dev/null)
 }
 
 right=''
@@ -198,13 +340,21 @@ if [[ -n "$week_pct" ]]; then
     right+="${right:+ · }${label:-week} $style$((100 - week_pct))%${style:+$nobold}"
 fi
 
-# Fable's weekly-scoped limit isn't in the statusline JSON; fable_usage
-# pulls its label and percent from the usage endpoint. Only bother in a
-# subscriber session — one that reports rate limits — so API-key sessions
-# with no OAuth token don't show a permanent "Fable ??" or make needless
-# calls. The scoped window shares the account's weekly reset, so reuse
-# week_reset/week_window to bold it on the same run-rate basis as above.
-if [[ -n "$five_reset" || -n "$week_reset" ]]; then
+if pooled_session; then
+    # The five-hour and week segments above describe the account in use, and
+    # stay when the answer is missing so the failure shows beside them.
+    if pool_status; then
+        right=$pool_seg
+    else
+        right+="${right:+ · }pool ??"
+    fi
+elif [[ -n "$five_reset" || -n "$week_reset" ]]; then
+    # Fable's weekly-scoped limit isn't in the statusline JSON; fable_usage
+    # pulls its label and percent from the usage endpoint. Only bother in a
+    # subscriber session — one that reports rate limits — so API-key sessions
+    # with no OAuth token don't show a permanent "Fable ??" or make needless
+    # calls. The scoped window shares the account's weekly reset, so reuse
+    # week_reset/week_window to bold it on the same run-rate basis as above.
     if fable_line=$(fable_usage); then
         IFS=$'\t' read -r fable_name fable_pct <<<"$fable_line"
         style=''

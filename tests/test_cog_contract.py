@@ -29,6 +29,7 @@ READERS = [
     (".zshrc", THROWAWAY_MARKER),
     (".zshrc", GATEWAY_MARKER),
     (".zshenv", GATEWAY_MARKER),
+    (".claude/statusline.sh", GATEWAY_MARKER),
     (".zsh.d/wt.zsh", GATEWAY_MARKER),
     (".codex/hooks/git_guard.py", GATEWAY_MARKER),
     ("tools/configure_codex.py", THROWAWAY_MARKER),
@@ -47,6 +48,12 @@ PUSH_RULES = [
 @pytest.mark.parametrize(("reader", "marker"), READERS)
 def test_each_reader_names_the_marker_that_cog_writes(reader: str, marker: str) -> None:
     assert marker in (REPO / reader).read_text()
+
+
+@pytest.mark.parametrize("reader", [".zshrc", ".claude/statusline.sh"])
+def test_the_placeholder_token_file_has_one_path(reader: str) -> None:
+    path = "$HOME/.config/secrets/CLAUDE_CODE_OAUTH_TOKEN"
+    assert path in (REPO / reader).read_text()
 
 
 def test_every_marker_path_in_the_tree_is_one_that_cog_writes() -> None:
