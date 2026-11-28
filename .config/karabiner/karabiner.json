@@ -23,13 +23,16 @@
                         ]
                     },
                     {
-                        "description": "F22 to up-arrow in iTerm2",
+                        "description": "F22 to up-arrow in iTerm2, Terminal, Ghostty, and Herdr",
                         "manipulators": [
                             {
                                 "conditions": [
                                     {
                                         "bundle_identifiers": [
-                                            "^com\\.googlecode\\.iterm2$"
+                                            "^com\\.googlecode\\.iterm2$",
+                                            "^com\\.apple\\.Terminal$",
+                                            "^com\\.mitchellh\\.ghostty$",
+                                            "^dev\\.herdr\\.app$"
                                         ],
                                         "type": "frontmost_application_if"
                                     }
