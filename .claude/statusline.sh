@@ -130,6 +130,13 @@ fable_usage() {
             tok=$(security find-generic-password -s 'Claude Code-credentials' -w 2>/dev/null |
                 jq -r '.claudeAiOauth.accessToken // empty' 2>/dev/null) || tok=''
         fi
+        # Under dotfiles' c, HTTPS_PROXY names cog's gateway. It answers
+        # api.anthropic.com with its own certificate, which curl does not trust,
+        # and takes no token but the placeholder, so the Mac's own token goes
+        # direct.
+        if [[ ${HTTPS_PROXY:-} == http://cog:*@\[::1\]:* ]]; then
+            unset HTTPS_PROXY
+        fi
         mkdir -p "$cache_dir" 2>/dev/null
         local tmp
         if tmp=$(mktemp "$cache.XXXXXX" 2>/dev/null); then

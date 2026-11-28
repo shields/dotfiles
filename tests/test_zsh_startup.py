@@ -160,6 +160,8 @@ class Shell:
             del self.env[name]
         for name in [name for name in self.env if name.startswith("ANTHROPIC_")]:
             del self.env[name]
+        for name in [name for name in self.env if name.startswith("CLAUDE_CODE_USE_")]:
+            del self.env[name]
         self.set_ostype(None)
         (home / ".zsh.d").symlink_to(REPO / ".zsh.d", target_is_directory=True)
         self.write(".oh-my-zsh/lib/base.zsh", BASE_ZSH)
@@ -705,12 +707,24 @@ CREDENTIAL_NAMES = (
     "CLAUDE_CODE_USE_ANTHROPIC_GOOGLE_CLOUD",
     "CLAUDE_CODE_USE_MANTLE",
 )
+PROVIDER_NAMES = (*CREDENTIAL_NAMES, "ANTHROPIC_BASE_URL", "CLAUDE_CODE_USE_GATEWAY")
+PROXY_NAMES = (
+    "HTTPS_PROXY",
+    "https_proxy",
+    "NODE_EXTRA_CA_CERTS",
+    "NO_PROXY",
+    "no_proxy",
+)
 CLAUDE_STUB = f"""#!/bin/sh
 printf '%s\\n' "$@" > "$HOME/claude-args"
 printf '%s' "$TMPDIR" > "$HOME/claude-tmpdir"
-for name in {" ".join(CREDENTIAL_NAMES)}; do
+for name in {" ".join(PROVIDER_NAMES)}; do
     eval "printf '%s=%s\\n' $name \\"\\${{$name-unset}}\\""
 done > "$HOME/claude-env"
+for name in {" ".join(PROXY_NAMES)}; do
+    eval "printf '%s=%s\\n' $name \\"\\${{$name-unset}}\\""
+done > "$HOME/claude-proxy-env"
+exit "${{CLAUDE_STUB_STATUS:-0}}"
 """
 SANDBOXED_CLAUDE = [
     "--model=opus",
@@ -786,6 +800,210 @@ def test_c_leaves_the_mode_and_the_sandbox_to_managed_settings_in_a_throwaway(
         "two words",
     ]
     assert (shell.home / "claude-tmpdir").read_text() != ""
+
+
+PROXY_URL = f"http://cog:{'k' * 43}@[::1]:17443"
+PROXY_FILE = ".config/secrets/cog/proxy-url"
+COG_STUB = """#!/bin/sh
+printf '%s\\n' "$@" > "$HOME/cog-args"
+[ ! -e "$HOME/cog-says" ] || cat "$HOME/cog-says"
+[ ! -e "$HOME/cog-fails" ] || { echo 'cog: made up' >&2; exit 1; }
+"""
+SHOW_PROXY_ENV = (
+    'print -r -- "${HTTPS_PROXY-unset} ${NODE_EXTRA_CA_CERTS-unset}'
+    ' ${NO_PROXY-unset} ${CLAUDE_CODE_OAUTH_TOKEN-unset}"'
+)
+UNUSABLE_PROXY_FILES = {
+    "empty": "",
+    "blank": "\n",
+    "spaces": "  \n",
+    "crlf": f"{PROXY_URL}\r\n",
+    "trailing-space": f"{PROXY_URL} \n",
+    "leading-space": f" {PROXY_URL}\n",
+    "leading-newline": f"\n{PROXY_URL}\n",
+    "two-lines": f"{PROXY_URL}\n{PROXY_URL}\n",
+}
+
+
+def stub_cog(
+    shell: Shell, says: str | None = "listening on [::1]:17443 as an-id"
+) -> None:
+    for name in PROXY_NAMES:
+        _ = shell.env.pop(name, None)
+    (shell.home / "bin").mkdir(exist_ok=True)
+    executable(shell.home / "bin/cog", COG_STUB)
+    if says is None:
+        shell.write("cog-fails", "")
+    else:
+        shell.write("cog-says", f"{says}\n")
+
+
+def proxy_seen_by_claude(shell: Shell) -> dict[str, str]:
+    lines = (shell.home / "claude-proxy-env").read_text().splitlines()
+    return dict(line.split("=", 1) for line in lines)
+
+
+def test_c_uses_cogs_proxy_on_a_mac_where_it_is_enabled(shell: Shell) -> None:
+    stub_claude(shell, DARWIN, marker=False)
+    stub_cog(shell)
+    shell.write(PROXY_FILE, f"{PROXY_URL}\n")
+    _ = shell.run_command("c -p 'two words'")
+    argv = (shell.home / "claude-args").read_text().splitlines()
+    tmpdir = (shell.home / "claude-tmpdir").read_text()
+    assert argv == [*SANDBOXED_CLAUDE, sandbox_settings(tmpdir), "-p", "two words"]
+    assert (shell.home / "cog-args").read_text().splitlines() == ["proxy", "status"]
+    assert proxy_seen_by_claude(shell) == {
+        "HTTPS_PROXY": PROXY_URL,
+        "https_proxy": "unset",
+        "NODE_EXTRA_CA_CERTS": f"{shell.home}/.local/state/cog/ca.pem",
+        "NO_PROXY": "localhost,127.0.0.1,::1,[::1],github.com",
+        "no_proxy": "unset",
+    }
+    seen = credentials_seen_by_claude(shell)
+    assert seen.pop("CLAUDE_CODE_OAUTH_TOKEN") == "cog"
+    assert set(seen.values()) == {"unset"}
+
+
+def test_c_adds_to_an_inherited_no_proxy(shell: Shell) -> None:
+    stub_claude(shell, DARWIN, marker=False)
+    stub_cog(shell)
+    shell.write(PROXY_FILE, f"{PROXY_URL}\n")
+    shell.env["NO_PROXY"] = "internal.example"
+    _ = shell.run_command("c -p hi")
+    assert proxy_seen_by_claude(shell)["NO_PROXY"] == (
+        "internal.example,localhost,127.0.0.1,::1,[::1],github.com"
+    )
+
+
+def test_c_replaces_the_inherited_settings_that_claude_code_reads_first(
+    shell: Shell,
+) -> None:
+    stub_claude(shell, DARWIN, marker=False)
+    stub_cog(shell)
+    shell.write(PROXY_FILE, f"{PROXY_URL}\n")
+    shell.env.update(
+        HTTPS_PROXY="http://stale.example:1",
+        https_proxy="http://corp.example:3128",
+        NODE_EXTRA_CA_CERTS="/corp/ca.pem",
+        NO_PROXY="b.example",
+        no_proxy="a.example",
+    )
+    _ = shell.run_command("c -p hi")
+    assert proxy_seen_by_claude(shell) == {
+        "HTTPS_PROXY": PROXY_URL,
+        "https_proxy": "unset",
+        "NODE_EXTRA_CA_CERTS": f"{shell.home}/.local/state/cog/ca.pem",
+        "NO_PROXY": "a.example,b.example,localhost,127.0.0.1,::1,[::1],github.com",
+        "no_proxy": "unset",
+    }
+
+
+def test_c_drops_every_other_credential_and_provider_switch_behind_the_proxy(
+    shell: Shell,
+) -> None:
+    stub_claude(shell, DARWIN, marker=False)
+    stub_cog(shell)
+    shell.write(PROXY_FILE, f"{PROXY_URL}\n")
+    for name in PROVIDER_NAMES:
+        shell.env[name] = f"inherited-{name}"
+    _ = shell.run_command("c -p hi")
+    seen = credentials_seen_by_claude(shell)
+    assert seen.pop("CLAUDE_CODE_OAUTH_TOKEN") == "cog"
+    assert set(seen.values()) == {"unset"}
+
+
+def test_c_keeps_the_proxy_out_of_the_interactive_shell(shell: Shell) -> None:
+    stub_claude(shell, DARWIN, marker=False)
+    stub_cog(shell)
+    shell.write(PROXY_FILE, f"{PROXY_URL}\n")
+    assert (
+        shell.run_command(f"c -p hi && {SHOW_PROXY_ENV}") == "unset unset unset unset"
+    )
+
+
+def test_c_returns_the_status_of_claude_behind_the_proxy(shell: Shell) -> None:
+    stub_claude(shell, DARWIN, marker=False)
+    stub_cog(shell)
+    shell.write(PROXY_FILE, f"{PROXY_URL}\n")
+    shell.env["CLAUDE_STUB_STATUS"] = "7"
+    assert shell.run("c -p hi").returncode == 7
+
+
+def test_c_keeps_the_key_out_of_a_trace(shell: Shell) -> None:
+    stub_claude(shell, DARWIN, marker=False)
+    stub_cog(shell)
+    shell.write(PROXY_FILE, f"{PROXY_URL}\n")
+    result = shell.run("setopt xtrace; c -p hi")
+    assert result.returncode == 0, result.stderr
+    assert "k" * 43 not in result.stdout + result.stderr
+    assert (shell.home / "claude-args").exists()
+
+
+@pytest.mark.parametrize(
+    "says", [None, "off", "", "listening", "not listening on anything"]
+)
+def test_c_refuses_to_start_behind_a_proxy_that_is_not_listening(
+    shell: Shell, says: str | None
+) -> None:
+    stub_claude(shell, DARWIN, marker=False)
+    stub_cog(shell, says)
+    shell.write(PROXY_FILE, f"{PROXY_URL}\n")
+    result = shell.run("c -p hi")
+    assert result.returncode == 1
+    assert ("made up" if says is None else "proxy-url") in result.stderr
+    assert "cog proxy disable" in result.stderr
+    assert PROXY_URL not in result.stdout + result.stderr
+    assert not (shell.home / "claude-args").exists()
+
+
+@pytest.mark.parametrize(
+    "content", UNUSABLE_PROXY_FILES.values(), ids=list(UNUSABLE_PROXY_FILES)
+)
+def test_c_refuses_a_proxy_file_that_does_not_hold_only_the_url(
+    shell: Shell, content: str
+) -> None:
+    stub_claude(shell, DARWIN, marker=False)
+    stub_cog(shell)
+    shell.write(PROXY_FILE, content)
+    result = shell.run("c -p hi")
+    assert result.returncode == 1
+    assert "must hold only the proxy URL" in result.stderr
+    assert PROXY_URL not in result.stdout + result.stderr
+    assert not (shell.home / "claude-args").exists()
+
+
+@pytest.mark.parametrize("kind", ["directory", "dangling-link"])
+def test_c_refuses_a_proxy_path_that_cannot_be_read(shell: Shell, kind: str) -> None:
+    stub_claude(shell, DARWIN, marker=False)
+    stub_cog(shell)
+    path = shell.home / PROXY_FILE
+    path.parent.mkdir(parents=True)
+    if kind == "directory":
+        path.mkdir()
+    else:
+        path.symlink_to(shell.home / "missing")
+    result = shell.run(
+        'zshexit() { print -r -- $ZSH_SUBSHELL >> "$HOME/exits" }; c -p hi'
+    )
+    assert result.returncode == 1
+    assert not (shell.home / "claude-args").exists()
+    # Only the main shell's exit runs the hook: one that ran in c's subshell
+    # would stop the git prompt watcher of the interactive shell.
+    assert (shell.home / "exits").read_text().split() == ["0"]
+
+
+@pytest.mark.parametrize(("ostype", "enabled"), [(DARWIN, False), (LINUX, True)])
+def test_c_leaves_cog_alone_without_its_proxy_file_and_off_the_mac(
+    shell: Shell, ostype: str, *, enabled: bool
+) -> None:
+    stub_claude(shell, ostype, marker=False)
+    stub_cog(shell)
+    if enabled:
+        shell.write(PROXY_FILE, f"{PROXY_URL}\n")
+    _ = shell.run_command("c -p hi")
+    assert not (shell.home / "cog-args").exists()
+    assert set(proxy_seen_by_claude(shell).values()) == {"unset"}
+    assert set(credentials_seen_by_claude(shell).values()) == {"unset"}
 
 
 @pytest.mark.parametrize("ostype", [LINUX, DARWIN])

@@ -423,6 +423,43 @@ before it hands over the VM, that `NODE_EXTRA_CA_CERTS` is exported as
 `CLAUDE_CODE_OAUTH_TOKEN` is exported as `cog`. A change to either needs the
 same change in `cog`.
 
+On a Mac, `cog proxy enable` makes the gateway serve the Mac's own Claude Code
+too, and `c` uses that where `~/.config/secrets/cog/proxy-url` exists. That file
+holds the whole value for `HTTPS_PROXY`, including a key, so `c` reads it with
+a builtin and exports it only in the subshell that runs `claude`, never in an
+argument. It first runs `cog proxy status` and starts nothing unless the output
+begins with `listening `, because behind a proxy that does not listen Claude
+Code and everything it starts would have no HTTPS at all. In that subshell it
+exports `NODE_EXTRA_CA_CERTS` as `~/.local/state/cog/ca.pem` (cog's copy of the
+gateway's CA, in place of any inherited value), `CLAUDE_CODE_OAUTH_TOKEN` as
+`cog`, and `NO_PROXY` with `localhost`, `127.0.0.1`, `::1`, `[::1]` and
+`github.com` added. It also unsets what Claude Code would read before these: `https_proxy`, `no_proxy`
+(which joins `NO_PROXY`), and the credentials and provider switches that
+outrank the placeholder, `ANTHROPIC_API_KEY`, `ANTHROPIC_AUTH_TOKEN`,
+`ANTHROPIC_CUSTOM_HEADERS`, `ANTHROPIC_BASE_URL` and `CLAUDE_CODE_USE_*`.
+
+Claude Code then sends its HTTPS connections through the gateway, which answers
+`api.anthropic.com` itself with a pool account and tunnels other hosts
+untouched, but only to port 443. A connection to any other port fails, and so
+does a call to `api.anthropic.com` from a program that does not read
+`NODE_EXTRA_CA_CERTS`, such as curl. The sandbox takes `HTTPS_PROXY` as the
+upstream of its own proxy, so the connections of sandboxed commands go through
+the gateway too, and one to another port, as for git over ssh, fails. The
+sandbox connects directly, on any port, to a host that `NO_PROXY` names, which
+is why `c` adds `github.com`; for another host, export `NO_PROXY` naming it
+before `c`, which keeps it. The README of `cog` lists these and
+the other limits under "Claude Code on the Mac". Programs that Claude Code
+starts outside its sandbox inherit `HTTPS_PROXY`, and so the key, with
+`NODE_EXTRA_CA_CERTS` and `NO_PROXY`, but not `CLAUDE_CODE_OAUTH_TOKEN`, which
+Claude Code withholds from them: a `claude` that one of them starts needs
+`CLAUDE_CODE_OAUTH_TOKEN=cog` or `HTTPS_PROXY` unset. `cg` and `cx` are not
+affected. Claude Code treats `CLAUDE_CODE_OAUTH_TOKEN` as a long-lived,
+inference-only login, so a `c` session has no Remote Control, Claude in Chrome,
+background sessions or `/ultrareview`; plain `claude` has the Mac's own login
+for those. `cog proxy disable` removes the file, and `c` then uses the Mac's own
+login again. `cog` relies on those two paths, on that word and on the
+placeholder, and a change to any of them needs the same change there.
+
 # Testing on Linux
 
 `make test-linux` needs Docker. It copies the checkout into a temporary

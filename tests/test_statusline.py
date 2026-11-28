@@ -59,13 +59,14 @@ case "$2" in
 esac
 """
 
-# Records the call, the argv and the headers (including any read from an
-# @file, as curl would), then answers as STATUSLINE_TEST_CURL directs: a
-# body written to the -o file, or one of curl's failure exit codes.
+# Records the call, the argv, the proxy variable and the headers (including any
+# read from an @file, as curl would), then answers as STATUSLINE_TEST_CURL
+# directs: a body written to the -o file, or one of curl's failure exit codes.
 CURL_SHIM = r"""
 log="$STATUSLINE_TEST_LOG"
 printf '%s\n' curl >> "$log/calls"
 printf '%s\n' "$*" > "$log/curl.argv"
+printf '%s' "${HTTPS_PROXY-unset}" > "$log/curl.proxy"
 : > "$log/curl.headers"
 out=''
 while (($#)); do
@@ -132,6 +133,7 @@ class Statusline:
         shims.mkdir()
         self.env = dict(os.environ)
         _ = self.env.pop("CLAUDE_CODE_OAUTH_TOKEN", None)
+        _ = self.env.pop("HTTPS_PROXY", None)
         self.env.update(
             PATH=f"{shims}:{os.environ['PATH']}",
             HOME=str(home),
@@ -398,6 +400,26 @@ def test_vm_oauth_token_supplies_usage(
     assert statusline.calls() == ["curl"]
     assert f"Authorization: Bearer {TOKEN}" in statusline.headers()
     assert TOKEN not in (statusline.log / "curl.argv").read_text()
+
+
+@pytest.mark.parametrize(
+    ("proxy", "seen"),
+    [
+        (f"http://cog:{'k' * 43}@[::1]:17443", "unset"),
+        ("http://corp.example:3128", "http://corp.example:3128"),
+        (None, "unset"),
+    ],
+    ids=["cogs-gateway", "another-proxy", "no-proxy"],
+)
+def test_usage_is_fetched_direct_rather_than_through_cogs_gateway(
+    statusline: Statusline, proxy: str | None, seen: str
+) -> None:
+    statusline.credentials(CREDENTIALS)
+    statusline.curl("ok", FABLE_USAGE)
+    if proxy is not None:
+        statusline.env["HTTPS_PROXY"] = proxy
+    assert statusline.line(SUBSCRIBER) == f" {LEFT} · 100h 60% · {FABLE_SEGMENT}"
+    assert (statusline.log / "curl.proxy").read_text() == seen
 
 
 def test_empty_vm_oauth_token_uses_credentials(statusline: Statusline) -> None:

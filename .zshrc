@@ -447,7 +447,57 @@ _startup_overrides() {
             --permission-mode=auto \
             --settings "{\"ultracode\":true$extra,\"sandbox\":{$sandbox}}" "$@"
     }
-    c() { _claude_start '' "$@" }
+    # On a Mac where cog proxy enable has run, c reaches Anthropic through cog's
+    # gateway with an account from its pool, and holds only the placeholder.
+    # The proxy URL holds a key, so it goes to claude in the environment of a
+    # subshell and never in an argument.
+    c() {
+        # Linux skips the file test below: test_the_throwaway_check_forks_nothing
+        # allows one -e test there, the marker test in _claude_start.
+        if [[ $OSTYPE != darwin* ]]; then
+            _claude_start '' "$@"
+            return
+        fi
+        local proxy_file=$HOME/.config/secrets/cog/proxy-url proxy_state
+        if [[ ! -e $proxy_file && ! -L $proxy_file ]]; then
+            _claude_start '' "$@"
+            return
+        fi
+        # With HTTPS_PROXY set, a proxy that does not listen would leave claude
+        # and everything it starts with no HTTPS at all.
+        proxy_state=$(cog proxy status) || {
+            print -ru2 -- "c: cog proxy status failed with $proxy_file in place: run cog proxy enable to repair it, or cog proxy disable (or delete the file if cog is gone) for the Mac's own login"
+            return 1
+        }
+        if [[ $proxy_state != listening\ * ]]; then
+            print -ru2 -- "c: $proxy_file exists, but cog proxy status says: $proxy_state; run cog proxy enable to repair it, or cog proxy disable for the Mac's own login"
+            return 1
+        fi
+        (
+            # A trace would print the key.
+            unsetopt xtrace
+            local proxy_url
+            # return, not exit: exit in a subshell runs zshexit_functions.
+            proxy_url=$(<"$proxy_file") || return 1
+            if [[ -z $proxy_url || $proxy_url == *[[:space:]]* ]]; then
+                print -ru2 -- "c: $proxy_file must hold only the proxy URL"
+                return 1
+            fi
+            # These outrank the placeholder or choose another provider.
+            unset ANTHROPIC_AUTH_TOKEN ANTHROPIC_API_KEY ANTHROPIC_CUSTOM_HEADERS ANTHROPIC_BASE_URL \
+                CLAUDE_CODE_USE_{BEDROCK,VERTEX,FOUNDRY,ANTHROPIC_AWS,ANTHROPIC_GOOGLE_CLOUD,MANTLE,GATEWAY}
+            # Claude Code, Bun and curl read the lower-case names first. The
+            # sandbox sends its commands' connections on through HTTPS_PROXY
+            # unless NO_PROXY names the host, and the gateway tunnels only to
+            # port 443, so github.com is named for git over ssh.
+            export NO_PROXY="${no_proxy:+$no_proxy,}${NO_PROXY:+$NO_PROXY,}localhost,127.0.0.1,::1,[::1],github.com"
+            unset https_proxy no_proxy
+            export HTTPS_PROXY=$proxy_url
+            export NODE_EXTRA_CA_CERTS=$HOME/.local/state/cog/ca.pem
+            export CLAUDE_CODE_OAUTH_TOKEN=cog
+            _claude_start '' "$@"
+        )
+    }
     alias cw='c --worktree'
 
     # The variables go in --settings, where they outrank the env in
