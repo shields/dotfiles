@@ -296,6 +296,22 @@ RULES = REPO / ".codex/rules"
         "/usr/bin/time -ao out git push",
         "/usr/bin/time -f %e git push",
         "/usr/bin/time --output out git push",
+        "/usr/bin/time --out out git push",
+        "sudo --us root git push",
+        "timeout --kill 5 10 git push",
+        "env --uns FOO git push",
+        "env --chd /tmp git push",
+        "xargs --max-a 1 git push",
+        "xargs --max-lines git push",
+        "xargs --max-l git push",
+        "xargs --max-lines cf auth login",
+        "env -a x git push",
+        "env --argv0 x git push",
+        "env --arg x git push",
+        "env -a x cf auth login",
+        "sudo --command-timeout 5 git push",
+        "nice --adj 5 git push",
+        "sudo --us root cf auth login",
         "git --shallow-file /dev/null push",
         "git -C . --shallow-file x push",
         "echo $(true)#; git push",
@@ -325,18 +341,15 @@ RULES = REPO / ".codex/rules"
         "cf accounts tokens roll abc",
         "cf user tokens delete abc",
         "cf builds tokens create",
-        "cf -z example.com dns records delete abc",
-        "cf dns -z example.com records delete abc",
-        "cf dns records --zone=example.com delete abc",
-        "cf --quiet --local dns records delete abc",
-        "cf --dry-run dns records delete abc",
-        "cf cache purge-cache",
-        "cf cache invalidate --zone x --hosts a.example.com",
-        "cf cache invalidate-environment --zone x",
-        "cf d1 time-travel restore db --timestamp 2020-01-01T00:00:00Z",
-        "cf workflows instances terminate w i",
-        "cf kv bulk delete ns",
-        "cf kv keys delete ns key",
+        "cf -z example.com user tokens delete abc",
+        "cf user -z example.com tokens delete abc",
+        "cf user tokens --zone=example.com delete abc",
+        "cf --quiet --local user tokens delete abc",
+        "cf --dry-run user tokens delete abc",
+        "cf user tokens delete list",
+        "cf accounts members delete get-x",
+        "cf registrar registrations remove list",
+        "cf zero-trust users passkeys delete x",
         "cf zero-trust access service-tokens create",
         "cf zero-trust access applications revoke-tokens abc",
         "cf iam oauth-clients rotate-secret abc",
@@ -350,16 +363,16 @@ RULES = REPO / ".codex/rules"
         "cloudflare auth login",
         "/opt/homebrew/bin/cf auth login",
         "/home/linuxbrew/.linuxbrew/bin/cf accounts tokens create",
-        "env CLOUDFLARE_ACCOUNT_ID=a cf dns records delete abc",
+        "env CLOUDFLARE_ACCOUNT_ID=a cf accounts tokens create",
         "command cf auth login",
         "bash -c 'cf auth login'",
         "cf dns records list && cf auth login",
-        "cf workers deploy; cf r2 buckets delete b",
+        "cf workers deploy; cf auth login",
         "cf accounts --name x tokens create",
         "cf auth --scopes zone:read login",
         "cf accounts --name x members create",
-        "cf dns --type A records delete abc",
-        "cf dns records list --name delete",
+        "cf user --type A tokens delete abc",
+        "cf dns records list --name login",
         "cf login",
         "cloudflare login",
         "cf logout",
@@ -380,7 +393,7 @@ RULES = REPO / ".codex/rules"
         "cf --email x accounts members create",
         "cf -qz example.com auth login",
         "cf -q false auth login",
-        "cf --address-map-id docs addressing address-maps ips delete x",
+        "cf --address-map-id docs auth login",
         "cf accounts tokens create --name list",
         "cf accounts tokens create --name get-ci",
         "cf workers secrets put get-api-key",
@@ -389,11 +402,11 @@ RULES = REPO / ".codex/rules"
         "cf auth login --help false",
         "cf auth login -h false",
         "cf auth login --help --no-help",
-        "cf dns records delete abc --help=false",
-        "cf dns records delete abc -z example.com --help --help=",
-        "cf dns records delete abc --help --help=0",
-        "cf dns records delete abc --help --help=FALSE",
-        "cf dns records delete abc -h --help=no",
+        "cf user tokens delete abc --help=false",
+        "cf user tokens delete abc -z example.com --help --help=",
+        "cf user tokens delete abc --help --help=0",
+        "cf user tokens delete abc --help --help=FALSE",
+        "cf user tokens delete abc -h --help=no",
         "cf accounts tokens create --name x -h --help=0",
         "cf auth login -h -h=false",
         "cf auth login --help --h=false",
@@ -407,6 +420,12 @@ RULES = REPO / ".codex/rules"
         "cf iam user-groups members create g u",
         "cf workers secrets --no-quiet update get-api-key",
         "cf accounts tokens --no-foo create list",
+        "cf accounts tokens --dry-run list delete abc",
+        "cf registrar registrations --dry-run list create example.com",
+        "cf accounts members --dry-run get create",
+        "cf pay-per-use proposals decide list",
+        "cf pay-per-use usage-reports submit get",
+        "cf pay-per-crawl terms send-signature-event list",
         "cf workers secrets --worker get-w -qq update get-x --text s",
         "cf registrar registrations --extension get -qq create get-x.com",
         "cf deploy --secrets-file prod.env",
@@ -431,7 +450,7 @@ RULES = REPO / ".codex/rules"
         "sudo -uroot cf auth login",
         "sudo -u$USER cf auth login",
         "timeout -k1s 5 cf accounts tokens create",
-        "xargs -d'\\n' cf zones delete x",
+        "xargs -d'\\n' cf auth login",
         "/usr/bin/time -o /dev/null cf auth login",
         "cf auth $(echo login)",
         "cf $(true) auth login",
@@ -594,6 +613,15 @@ def test_git_hook_denies(command: str) -> None:
         "timeout -k1s 5 git status",
         "xargs -d'\\n' git status",
         "/usr/bin/time -o /dev/null git status",
+        "sudo --us bob git status",
+        "timeout --kill 5 10 git status",
+        "xargs --max-a 1 git status",
+        "xargs --max-lines echo git push",
+        "xargs --max-lines=1 git status",
+        "env -a x git status",
+        "env --argv0 x cf auth whoami",
+        "sudo --command-timeout 5 git status",
+        "sudo --us bob cf auth whoami",
         "git --shallow-file /dev/null status",
         "echo a#; git status",
         "echo repeat 1 git push",
@@ -616,7 +644,19 @@ def test_git_hook_denies(command: str) -> None:
         "cf workers deploy",
         "cf deploy",
         "cf dns records create example.com",
-        "cf dns records list --name=delete",
+        "cf dns records list --name=login",
+        "cf dns records delete abc",
+        "cf -z example.com dns records delete abc",
+        "cf r2 buckets delete b",
+        "cf cache purge-cache",
+        "cf cache invalidate --zone x --hosts a.example.com",
+        "cf d1 time-travel restore db --timestamp 2020-01-01T00:00:00Z",
+        "cf workflows instances terminate w i",
+        "cf kv bulk delete ns",
+        "cf kv keys delete ns key",
+        "cf workers scripts get cache-purge",
+        "cf dns records list --name delete",
+        "xargs -d'\\n' cf zones delete x",
         'cf workers deploy --name="$name"',
         'cf -z "$zone" dns records list',
         'cf --profile "${profile}" dns records get abc',
@@ -665,6 +705,7 @@ def test_git_hook_denies(command: str) -> None:
         "cf user memberships list",
         "cf iam user-groups members list g",
         "cf accounts tokens --no-quiet list",
+        "cf accounts tokens list --dry-run",
         "cf accounts tokens --name x list",
         "cf accounts tokens --name get-ci list",
         "cf scim users list",
@@ -721,13 +762,8 @@ CF_MONEY_PREFIXES = (
     ("user", "subscriptions"),
     ("zones", "subscriptions"),
 )
-# Verbs of commands that flush a cache or overwrite or end live state without
-# being DELETE requests.
-CF_FLUSH_VERBS = {"invalidate", "invalidate-environment", "restore", "terminate"}
 # POST endpoints that only compute an answer.
 CF_POST_READS = {"check", "query", "validate", "transfer-check"}
-# The hook fails closed on these verbs where only some commands delete.
-CF_OVERBLOCKED_VERBS = {"clear", "disable", "revoke"}
 
 
 def cf_expected_denied(entry: dict[str, object]) -> bool:
@@ -737,13 +773,6 @@ def cf_expected_denied(entry: dict[str, object]) -> bool:
         return True
     # The singular token commands return the connector or Access token itself.
     if CF_LOGIN_VERBS.intersection(path) or "token" in path:
-        return True
-    if (
-        entry["category"] == "delete"
-        or entry.get("httpMethod") == "DELETE"
-        or any(re.search(r"(?:^|-)(?:delete|purge)(?:-|$)", word) for word in path)
-        or CF_FLUSH_VERBS.intersection(path)
-    ):
         return True
     mutating = (
         entry.get("httpMethod") != "GET"
@@ -822,7 +851,7 @@ def test_cf_policy_covers_every_installed_command(npm_global_root: Path) -> None
             denied = cf_reason([word(arg) for arg in args]) is not None
             if expected and not denied:
                 missed.append(" ".join(args))
-            elif denied and not expected and path[-1] not in CF_OVERBLOCKED_VERBS:
+            elif denied and not expected:
                 overblocked.append(" ".join(args))
     assert missed == []
     assert overblocked == []

@@ -95,9 +95,12 @@ and travel with the code.
 - `crane` to inspect container images.
 - `hyperfine` (not `time`) for benchmarking commands.
 - `go doc` for Go API documentation.
-- When interacting with Cloudflare, use the `cf` CLI unless the project has a
-  Wrangler configuration file. A guard hook blocks `cf` auth, credential,
-  billing, registrar, membership and delete commands; ask the user to run them.
+- When interacting with Cloudflare, use the `cf` CLI where it is installed,
+  unless the project has a Wrangler configuration file. It acts with the
+  session's `CLOUDFLARE_API_TOKEN`, if any; when a command needs access that
+  token lacks, ask the user rather than look for other credentials. A guard
+  hook blocks `cf` auth, credential, billing, registrar and membership
+  commands; ask the user to run them.
 
 ## Git and commits
 

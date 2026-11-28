@@ -750,17 +750,34 @@ PROXY_NAMES = (
     "NO_PROXY",
     "no_proxy",
 )
-CLAUDE_STUB = f"""#!/bin/sh
-printf '%s\\n' "$@" > "$HOME/claude-args"
-printf '%s' "$TMPDIR" > "$HOME/claude-tmpdir"
-for name in {" ".join(PROVIDER_NAMES)}; do
+CLOUDFLARE_NAMES = (
+    "CLOUDFLARE_API_TOKEN",
+    "CLOUDFLARE_API_KEY",
+    "CLOUDFLARE_EMAIL",
+    "CF_API_TOKEN",
+    "CF_API_KEY",
+    "CF_EMAIL",
+    "CLOUDFLARE_API_HEADERS",
+    "CLOUDFLARE_ACCESS_CLIENT_ID",
+    "CLOUDFLARE_ACCESS_CLIENT_SECRET",
+    "WRANGLER_CF_AUTHORIZATION_TOKEN",
+)
+AGENT_STUB = """#!/bin/sh
+printf '%s\\n' "$@" > "$HOME/{name}-args"
+printf '%s' "$TMPDIR" > "$HOME/{name}-tmpdir"
+for name in {names}; do
     eval "printf '%s=%s\\n' $name \\"\\${{$name-unset}}\\""
-done > "$HOME/claude-env"
-for name in {" ".join(PROXY_NAMES)}; do
+done > "$HOME/{name}-env"
+for name in {proxy_names}; do
     eval "printf '%s=%s\\n' $name \\"\\${{$name-unset}}\\""
-done > "$HOME/claude-proxy-env"
+done > "$HOME/{name}-proxy-env"
 exit "${{CLAUDE_STUB_STATUS:-0}}"
 """
+CLAUDE_STUB = AGENT_STUB.format(
+    name="claude",
+    names=" ".join(PROVIDER_NAMES + CLOUDFLARE_NAMES),
+    proxy_names=" ".join(PROXY_NAMES),
+)
 SANDBOXED_CLAUDE = [
     "--model=opus",
     "--effort",
@@ -799,8 +816,8 @@ def sandbox_settings(tmpdir: str) -> str:
     )
 
 
-def credentials_seen_by_claude(shell: Shell) -> dict[str, str]:
-    lines = (shell.home / "claude-env").read_text().splitlines()
+def credentials_seen_by_claude(shell: Shell, agent: str = "claude") -> dict[str, str]:
+    lines = (shell.home / f"{agent}-env").read_text().splitlines()
     return dict(line.split("=", 1) for line in lines)
 
 
@@ -1044,9 +1061,123 @@ def test_c_leaves_cog_alone_without_its_proxy_file_and_off_the_mac(
 @pytest.mark.parametrize("ostype", [LINUX, DARWIN])
 def test_cx_is_plain_codex_in_a_throwaway_too(shell: Shell, ostype: str) -> None:
     stub_claude(shell, ostype, marker=True)
-    assert shell.run_command('print -r -- "$aliases[cx]|$aliases[cxw]"') == (
-        "codex|cx --worktree"
+    stub_codex(shell)
+    _ = shell.run_command("cxw -p 'two words'")
+    argv = (shell.home / "codex-args").read_text().splitlines()
+    assert argv == ["--worktree", "-p", "two words"]
+
+
+def test_cx_completes_with_the_codex_completion(shell: Shell) -> None:
+    query = 'print -r -- "${_comps[cx]-missing}"'
+    assert shell.run_command(query) == "_codex"
+
+
+def stub_codex(shell: Shell) -> None:
+    stub = AGENT_STUB.format(
+        name="codex",
+        names=" ".join(CLOUDFLARE_NAMES),
+        proxy_names=" ".join(PROXY_NAMES),
     )
+    executable(shell.home / "bin/codex", stub)
+
+
+CLOUDFLARE_TOKEN = "cf_FAKEcloudflareToken0123"  # noqa: S105 -- a fake for the agents
+CLOUDFLARE_LAUNCHERS = ["c", "cg", "cx"]
+USERS_OWN_TOKEN = "cf_FAKEusersOwnToken0123"  # noqa: S105 -- a fake the agent must not get
+
+
+def run_agent(shell: Shell, launcher: str, *, marker: bool = False) -> str:
+    stub_claude(shell, LINUX, marker=marker)
+    stub_codex(shell)
+    shell.write(".config/secrets/FIREWORKS_API_KEY", f"{FIREWORKS_KEY}\n")
+    _ = shell.run_command(f"{launcher} -p hi")
+    return "codex" if launcher == "cx" else "claude"
+
+
+def cloudflare_seen(shell: Shell, agent: str) -> dict[str, str]:
+    seen = credentials_seen_by_claude(shell, agent)
+    return {name: seen[name] for name in CLOUDFLARE_NAMES}
+
+
+@pytest.mark.parametrize("launcher", CLOUDFLARE_LAUNCHERS)
+@pytest.mark.parametrize("marker", [True, False])
+def test_agents_get_only_the_cloudflare_token_file(
+    shell: Shell, launcher: str, *, marker: bool
+) -> None:
+    shell.write(".config/secrets/CLOUDFLARE_API_TOKEN", f" {CLOUDFLARE_TOKEN}\r\n")
+    for name in CLOUDFLARE_NAMES:
+        shell.env[name] = f"inherited-{name}"
+    agent = run_agent(shell, launcher, marker=marker)
+    seen = cloudflare_seen(shell, agent)
+    assert seen.pop("CLOUDFLARE_API_TOKEN") == CLOUDFLARE_TOKEN
+    assert set(seen.values()) == {"unset"}
+
+
+@pytest.mark.parametrize("launcher", CLOUDFLARE_LAUNCHERS)
+def test_agents_start_without_cloudflare_credentials_when_there_is_no_token(
+    shell: Shell, launcher: str
+) -> None:
+    for name in CLOUDFLARE_NAMES:
+        shell.env[name] = f"inherited-{name}"
+    agent = run_agent(shell, launcher)
+    assert set(cloudflare_seen(shell, agent).values()) == {"unset"}
+
+
+@pytest.mark.parametrize("launcher", CLOUDFLARE_LAUNCHERS)
+@pytest.mark.parametrize("content", ["", "\n", "cf_one cf_two\n"])
+def test_agents_refuse_a_malformed_cloudflare_token(
+    shell: Shell, launcher: str, content: str
+) -> None:
+    stub_claude(shell, LINUX, marker=False)
+    stub_codex(shell)
+    shell.write(".config/secrets/FIREWORKS_API_KEY", f"{FIREWORKS_KEY}\n")
+    shell.write(".config/secrets/CLOUDFLARE_API_TOKEN", content)
+    result = shell.run(f"{launcher} -p hi")
+    assert result.returncode == 1
+    assert f"{launcher}: " in result.stderr
+    assert "CLOUDFLARE_API_TOKEN must hold only the Cloudflare API token" in (
+        result.stderr
+    )
+    assert not (shell.home / "claude-args").exists()
+    assert not (shell.home / "codex-args").exists()
+
+
+@pytest.mark.parametrize("launcher", CLOUDFLARE_LAUNCHERS)
+def test_agents_refuse_a_dangling_cloudflare_token_symlink(
+    shell: Shell, launcher: str
+) -> None:
+    stub_claude(shell, LINUX, marker=False)
+    stub_codex(shell)
+    shell.write(".config/secrets/FIREWORKS_API_KEY", f"{FIREWORKS_KEY}\n")
+    (shell.home / ".config/secrets/CLOUDFLARE_API_TOKEN").symlink_to(
+        shell.home / "missing"
+    )
+    result = shell.run(f"{launcher} -p hi")
+    assert result.returncode == 1
+    assert "CLOUDFLARE_API_TOKEN" in result.stderr
+    assert not (shell.home / "claude-args").exists()
+    assert not (shell.home / "codex-args").exists()
+
+
+def test_sourcing_zshrc_again_replaces_a_leftover_cx_alias(shell: Shell) -> None:
+    zshrc = shlex.quote(str(REPO / ".zshrc"))
+    result = shell.run_command(f"alias cx=codex; source {zshrc}; whence -w cx")
+    assert result == "cx: function"
+
+
+@pytest.mark.parametrize("launcher", CLOUDFLARE_LAUNCHERS)
+def test_agents_keep_the_cloudflare_token_out_of_the_interactive_shell(
+    shell: Shell, launcher: str
+) -> None:
+    stub_claude(shell, LINUX, marker=False)
+    stub_codex(shell)
+    shell.write(".config/secrets/FIREWORKS_API_KEY", f"{FIREWORKS_KEY}\n")
+    shell.write(".config/secrets/CLOUDFLARE_API_TOKEN", f"{CLOUDFLARE_TOKEN}\n")
+    shell.env["CLOUDFLARE_API_TOKEN"] = USERS_OWN_TOKEN
+    after = shell.run_command(
+        f'{launcher} -p hi; print -r -- "$CLOUDFLARE_API_TOKEN ${{REPLY-unset}}"'
+    )
+    assert after == f"{USERS_OWN_TOKEN} unset"
 
 
 @pytest.mark.parametrize("launcher", ["c", "cg"])

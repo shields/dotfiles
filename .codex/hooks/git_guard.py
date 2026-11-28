@@ -52,8 +52,8 @@ UNREADABLE = (
     '"repos/$owner/$repo". Do not use command substitution or backticks.'
 )
 NO_CLOUDFLARE_RISK = (
-    "Cloudflare auth, credential, billing, registrar, membership and delete "
-    "commands are run by the user. Ask them to run it."
+    "Cloudflare auth, credential, billing, registrar and membership commands "
+    "are run by the user. Ask them to run it."
 )
 CF_UNREADABLE = (
     "Could not read this cf command well enough to check it. Use literal words "
@@ -159,7 +159,7 @@ COUNTED = {"timeout", "repeat"}
 WRAPPERS: dict[str, set[str]] = {
     "command": set(),
     "exec": {"-a"},
-    "env": {"-u", "--unset", "-C", "--chdir", "-P"},
+    "env": {"-a", "--argv0", "--env0-from", "-u", "--unset", "-C", "--chdir", "-P"},
     "time": {"-f", "-o", "--format", "--output"},
     "nohup": set(),
     "nice": {"-n", "--adjustment"},
@@ -170,6 +170,8 @@ WRAPPERS: dict[str, set[str]] = {
     "nocorrect": set(),
     "setsid": set(),
     "repeat": set(),
+    # --max-lines, --eof and --replace take a value only after =, so the next
+    # word is the command.
     "xargs": {
         "-a",
         "-d",
@@ -186,7 +188,6 @@ WRAPPERS: dict[str, set[str]] = {
         "--delimiter",
         "--max-args",
         "--max-chars",
-        "--max-lines",
         "--max-procs",
         "--process-slot-var",
     },
@@ -207,6 +208,7 @@ WRAPPERS: dict[str, set[str]] = {
         "--chdir",
         "--chroot",
         "--close-from",
+        "--command-timeout",
         "--group",
         "--host",
         "--other-user",
@@ -218,7 +220,8 @@ WRAPPERS: dict[str, set[str]] = {
     "doas": {"-u", "-C"},
 }
 # Global options of cf (yargs). An option in neither set may take the next
-# word as its value.
+# word as its value, and --dry-run is in neither: cf's parse of the command
+# words before the last one does not know it.
 CF_VALUE_FLAGS = {
     "-z",
     "--zone",
@@ -238,8 +241,6 @@ CF_BOOLEAN_FLAGS = {
     "--local",
     "--temporary-account",
     "--temporaryAccount",
-    "--dry-run",
-    "--dryRun",
 }
 # Every spelling of cf's help flag (yargs help, alias h) except a bare --help or
 # -h: --no-help, --h, --no-h, --help=x, -h=x, and a short group that contains h,
@@ -250,29 +251,12 @@ CF_HELP_SPELLING = re.compile(r"--(?:no-)?h(?:elp)?(?:[=.]|$)|-[^-]*h")
 # only cf's own telemetry setting; none operates on a resource.
 CF_SAFE_COMMANDS = {"docs", "cli", "schema", "complete"}
 CF_AUTH_VERBS = {"create", "delete", "activate", "deactivate"}
-# Verb words that delete, purge, flush, overwrite or dismantle; 'disable' covers
-# two DELETE endpoints (email-routing, r2 sippy) and fails closed for the rest.
-CF_DELETE_VERB = re.compile(r"(?:^|-)(?:delete|purge)(?:-|$)")
-CF_DESTRUCTIVE_VERBS = {
-    "clear",
-    "cleanup",
-    "disable",
-    "disconnect",
-    "empty",
-    "invalidate",
-    "invalidate-environment",
-    "opt-out-operator-price",
-    "remove",
-    "restore",
-    "revoke",
-    "terminate",
-    "ungroup",
-}
 # Resources that hold credentials, and verbs that mint, rotate or store them.
 # `cf login` is a hidden alias of `cf auth login`, and cloudflared's logins
 # download a certificate or store a token.
 CF_CREDENTIAL_WORD = re.compile(
-    r"(?:^|-)(?:tokens?|secrets?|credentials?|credential-sets|keys|certificates?)$"
+    r"(?:^|-)(?:tokens?|secrets?|credentials?|credential-sets|keys|passkeys"
+    r"|certificates?)$"
 )
 CF_CREDENTIAL_VERBS = {
     "login",
@@ -325,12 +309,15 @@ CF_READ_VERBS = {
     "status",
     "transfer-check",
 }
-# Verbs, and the compound verbs that start with them, of commands that change a
-# resource without deleting it.
+# Verbs, and the compound verbs that start with them, of commands that change or
+# delete a resource.
 CF_WRITE_VERB = re.compile(
     r"(?:create|update|edit|put|patch|set|replace|add|upload|refresh|generate"
     r"|duplicate|bulk|pay|toggle|cancel|transfer-in|enable|activate|deactivate"
-    r"|rotate|roll|revoke|respond|begin)(?:-|$)"
+    r"|rotate|roll|revoke|respond|begin|delete|purge|remove|clear|cleanup"
+    r"|disable|disconnect|empty|invalidate|restore|terminate|ungroup|opt-out"
+    r"|decide|submit|send)"
+    r"(?:-|$)"
 )
 
 
@@ -763,7 +750,13 @@ def takes_value(wrapper: str, option: str) -> bool:
     if option in names:
         return True
     if option.startswith("--"):
-        return False
+        # getopt_long accepts any prefix of a long option, so --us is --user and
+        # --kill is --kill-after; an ambiguous prefix fails the command instead.
+        return (
+            "=" not in option
+            and len(option) > len("--")
+            and any(name.startswith(option) for name in names)
+        )
     # In a cluster such as -tn the first flag that takes a value ends the scan:
     # the rest of the cluster is its value, as in -uroot, and only a flag in last
     # place takes the next word.
@@ -885,12 +878,7 @@ def cf_reason(args: list[Word]) -> str | None:
     auth = cf_after(words, ("auth",))
     if auth is not None and not CF_AUTH_VERBS.isdisjoint(auth):
         return NO_CLOUDFLARE_RISK
-    if any(
-        CF_DELETE_VERB.search(word)
-        or word in CF_DESTRUCTIVE_VERBS
-        or word in CF_CREDENTIAL_VERBS
-        for word in words
-    ):
+    if not CF_CREDENTIAL_VERBS.isdisjoint(words):
         return NO_CLOUDFLARE_RISK
     if first not in CF_DATA_RESOURCES:
         for index, word in enumerate(words):

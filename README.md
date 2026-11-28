@@ -336,6 +336,11 @@ Nothing secret is in the repository, so log in once on each machine:
   token in `~/.config/secrets/CLAUDE_CODE_OAUTH_TOKEN` (mode 0600). Interactive
   zsh shells on Linux export it from there.
 - Codex: `codex login --device-auth`
+- Cloudflare, for the agents (optional): an API token, and nothing else, in
+  `~/.config/secrets/CLOUDFLARE_API_TOKEN` (mode 0600). `c`, `cg` and `cx` pass
+  it to the agent as `CLOUDFLARE_API_TOKEN`, drop every other Cloudflare
+  credential from its environment, and refuse to start when the file holds
+  anything else. `.codex/README.md` says what the token should allow.
 
 `cg` starts Claude Code like `c`, but on GLM-5.3 through Fireworks'
 Anthropic-compatible API, and `cgw` is `cg --worktree`. It needs a Fireworks API

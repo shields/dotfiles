@@ -47,15 +47,22 @@ STATUS_LINE = [
     "fast-mode",
 ]
 UV_CACHE = "/Volumes/Data/uv-cache.noindex"
-WRITE_GRANTS = {
-    "~/.cache/uv": "write",
-    UV_CACHE: "write",
-    "~/Library/Preferences/cloudflare/config": "write",
-    "~/.config/cloudflare/config": "write",
-}
+WRITE_GRANTS = {"~/.cache/uv": "write", UV_CACHE: "write"}
+CREDENTIAL_DIRECTORIES = (
+    "~/.config/secrets",
+    "~/.config/lgtmcp",
+    "~/Library/Preferences/cloudflare",
+    "~/.config/cloudflare",
+    "~/Library/Preferences/.wrangler",
+    "~/.config/.wrangler",
+    "~/.wrangler",
+    "~/.cloudflared",
+)
+READ_DENIALS = dict.fromkeys(CREDENTIAL_DIRECTORIES, "deny")
+FILESYSTEM = {**WRITE_GRANTS, **READ_DENIALS}
 DEVELOPMENT_PERMISSIONS: Json = {
     "extends": ":workspace",
-    "filesystem": WRITE_GRANTS,
+    "filesystem": FILESYSTEM,
     "network": {"enabled": True},
 }
 
@@ -245,7 +252,7 @@ def test_settings_keep_existing_permission_rules() -> None:
     )
     assert result["description"] == development["description"]
     assert result["workspace_roots"] == development["workspace_roots"]
-    assert result["filesystem"] == {"~/.ssh": "deny", **WRITE_GRANTS}
+    assert result["filesystem"] == {"~/.ssh": "deny", **FILESYSTEM}
     assert result["network"] == {
         "allow_upstream_proxy": False,
         "enabled": True,
@@ -520,7 +527,7 @@ def test_configure_permissions_with_the_real_cli(
     assert config["permissions"]["dev"] == {
         "description": "Keep this",
         "extends": ":workspace",
-        "filesystem": {"~/.ssh": "deny", **WRITE_GRANTS},
+        "filesystem": {"~/.ssh": "deny", **FILESYSTEM},
         "network": {
             "enabled": True,
             "domains": {"example.com": "deny"},

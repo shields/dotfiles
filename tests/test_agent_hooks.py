@@ -306,7 +306,7 @@ def test_first_compatible_interpreter_runs(
         "cd /tmp && git push",
         "git commit --no-verify -m message",
         "cf auth login",
-        "/opt/homebrew/bin/cf --zone=example.com dns records delete abc",
+        "/opt/homebrew/bin/cf --zone=example.com user tokens delete abc",
         "cd /tmp && cloudflare accounts tokens create",
         "cf accounts --name x tokens create",
         "cf login",
@@ -426,17 +426,25 @@ def claude_settings() -> dict[str, dict[str, object]]:
     return cast("dict[str, dict[str, object]]", json.loads(CLAUDE_SETTINGS.read_text()))
 
 
+CREDENTIAL_DIRECTORIES = (
+    "~/.config/secrets",
+    "~/.config/lgtmcp",
+    "~/Library/Preferences/cloudflare",
+    "~/.config/cloudflare",
+    "~/Library/Preferences/.wrangler",
+    "~/.config/.wrangler",
+    "~/.wrangler",
+    "~/.cloudflared",
+)
 ALLOW_WRITE = [
     "~/.cache/go-build",
     "~/.cache/golangci-lint",
     "~/.cache/pre-commit",
     "~/.cache/uv",
-    "~/.config/cloudflare/config",
     "~/.npm",
     "~/.ruff_cache",
     "~/Library/Caches/go-build",
     "~/Library/Caches/golangci-lint",
-    "~/Library/Preferences/cloudflare/config",
     "~/go/pkg/mod",
     "~/go/pkg/sumdb",
     "/Volumes/Cache",
@@ -454,8 +462,7 @@ def test_claude_sandbox_is_enforced_and_narrow() -> None:
     # The dependency guard's lock lives in its state directory, and a sandboxed
     # command that holds the lock keeps the guard from judging a call.
     assert filesystem["denyRead"] == [
-        "~/.config/secrets",
-        "~/.config/lgtmcp",
+        *CREDENTIAL_DIRECTORIES,
         "~/.local/state/claude-dependency-guard",
     ]
     network = cast("dict[str, object]", sandbox["network"])
@@ -463,6 +470,13 @@ def test_claude_sandbox_is_enforced_and_narrow() -> None:
         "allowLocalBinding": True,
         "allowMachLookup": ["org.chromium.Chromium.MachPortRendezvousServer.*"],
     }
+
+
+def test_claude_file_tools_cannot_read_credentials() -> None:
+    # A sandbox denyRead entry stops only sandboxed commands, not the Read tool.
+    deny = cast("list[str]", claude_settings()["permissions"]["deny"])
+    for path in CREDENTIAL_DIRECTORIES:
+        assert f"Read({path}/**)" in deny
 
 
 def test_claude_subprocess_env_is_not_scrubbed() -> None:

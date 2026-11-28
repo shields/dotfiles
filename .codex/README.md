@@ -27,17 +27,17 @@ The hook also denies `cf` (or `cloudflare`) commands that change authentication
 (`login` and `logout` wherever they appear, which includes the hidden `cf login`
 alias, and `auth create`, `delete`, `activate` and `deactivate`), create,
 rotate or reveal credentials (any non-read command on a token, secret, API key,
-credential or certificate resource, any command on a `token` resource, which
+passkey, credential or certificate resource, any command on a `token` resource, which
 returns the secret itself, `--secrets-file`, which uploads Worker secrets with
 a deploy, and verbs such as `create-token`, `revoke-tokens`, `roll`, `rotate`
 and `ssh-gen`), change billing, subscriptions, payments and monetization
 (`pay-per-crawl`, `pay-per-use`, `monetization`), registrar domains, account or
-organization members and invitations, user groups, SSO, SCIM or OAuth clients,
-or delete, flush or overwrite anything (`delete`, `bulk-delete`, `purge`,
-`purge-cache`, `invalidate`, `restore`, `remove`, `empty`, `disable`, `terminate`
-and similar). It checks command names, not the data they carry, so
-`cf d1 databases query` with a `DELETE` statement, or `cf kv keys put` over an
-existing key, passes. It compares the executable name after Unicode case folding
+organization members and invitations, user groups, SSO, SCIM or OAuth clients.
+Deleting a resource of any other kind passes, since a Cloudflare permission that
+edits a resource deletes it too, and an edit can destroy as much (a Worker
+replaced, a DNS record pointed elsewhere, `cf kv keys put` over an existing key,
+`cf d1 databases query` with `DROP TABLE`). What an agent may change, deletes
+included, is up to its API token, as described below. It compares the executable name after Unicode case folding
 (`CF`, `ſh` and `cloudﬂare` count as `cf`, `sh` and `cloudflare`), since the
 Mac's file system does.
 
@@ -49,10 +49,9 @@ included; it assumes that an option it does not know takes the next word as its
 value, except for a `--no-` negation. It looks for a command path from the first
 word, or from any word in front of it that may be an option's value. It fails
 closed when any other word, a positional or an option's value, equals a denied
-word, ends in a credential noun (`app-token`, `api-keys`) or has `delete` or
-`purge` between hyphens (`cache-purge`), so a read such as
-`cf workers scripts get cache-purge` is denied too. An option written with `=`
-is not checked, so write `--name=cache-purge`, not `--name cache-purge`; a
+word or ends in a credential noun (`app-token`, `api-keys`), so a read such as
+`cf dns records list --name login` is denied too. An option written with `=`
+is not checked, so write `--name=login`, not `--name login`; a
 positional has no such form, so the user runs that command. A word whose text
 the shell settles later (an unquoted `$name`, a command substitution, a brace
 expansion, the `{}` of `xargs -I{}`) is denied, not guessed: `"$name"` is
@@ -131,9 +130,8 @@ limits, and fast mode, with status-line colors disabled. These settings are
 provisioned on both macOS and Linux, including VM bases.
 
 It selects a `dev` permission profile extending `:workspace`, grants writes to
-`~/.cache/uv`, `/Volumes/Data/uv-cache.noindex` and the `config/` subdirectory
-of the `cf` CLI's directory, where it saves refreshed OAuth tokens, and enables
-network access with the Codex network proxy disabled.
+`~/.cache/uv` and `/Volumes/Data/uv-cache.noindex`, denies reads of the
+credential directories (below), and enables network access with the Codex network proxy disabled.
 Commands can reach the network directly while filesystem writes remain
 sandboxed. Other filesystem and network settings in that profile are preserved;
 domain rules are inactive while the proxy is disabled. On machines marked by
@@ -144,15 +142,36 @@ Subsequent provisioning keeps the proxy disabled.
 After converting an existing machine to a throwaway environment, rerun
 `tools/configure_codex.py` and restart Codex.
 
-cf keeps its directory at `~/Library/Preferences/cloudflare` on macOS and
-`~/.config/cloudflare` on Linux. cf stores and refreshes its login in `config/`,
-and the profile grants writes to that subdirectory of both, on both systems, so
-the one that does not exist does nothing. The rest of the directory (profile
-bindings, preferences) decides which account an unsandboxed cf acts as, so it
-stays read-only. Claude Code's sandbox gets the same grants, and on Linux
-`provision.sh` creates `~/.config/cloudflare/config` for the `cloud` module
-because that sandbox skips a missing path. A set `XDG_CONFIG_HOME` moves cf's
-directory to `$XDG_CONFIG_HOME/cloudflare`, which the grants cover only if it is
+cf keeps its directory, which holds the user's own login, at
+`~/Library/Preferences/cloudflare` on macOS and `~/.config/cloudflare` on Linux;
+Wrangler keeps its login in `~/Library/Preferences/.wrangler`,
+`~/.config/.wrangler` or `~/.wrangler`, and cloudflared its certificate in
+`~/.cloudflared`. Codex's sandbox and Claude Code's sandbox deny reads of these
+directories and of `~/.config/secrets` and `~/.config/lgtmcp`, and
+`permissions.deny` in `.claude/settings.json` adds a `Read` rule for each, since
+a sandbox `denyRead` entry does not stop Claude Code's Read tool. An agent
+cannot act as the user with Cloudflare unless Claude Code retries a failed
+command outside its sandbox. `c`, `cg` and `cx` (and their worktree aliases) start the agent through
+`.zshrc`'s `_agent_run`, which passes it the API token in
+`~/.config/secrets/CLOUDFLARE_API_TOKEN` as `CLOUDFLARE_API_TOKEN` and drops
+every other Cloudflare credential from its environment, since an API key and
+email outrank the token. cf and Wrangler use that token ahead of any login,
+and work without reading or writing their directories; Wrangler reports that it
+cannot write its debug log there. Without the file the agent's
+environment holds no Cloudflare credential (cf also takes one from a `.env`
+file in its working directory); a file that holds anything but one token, or a
+symlink that points nowhere, stops the launch. Throwaway VMs get no token, since
+`cog` puts no real secret in a VM.
+
+What the token allows is what an agent can do with Cloudflare, however it runs
+cf or Wrangler, and the agent can read the token itself. Create it in the Cloudflare
+dashboard as an account-owned token, with an IP filter and an expiry. Leave out
+the API token, billing, membership and registrar permissions. Cloudflare's
+permissions do not separate deleting from editing, so grant Edit only on what
+can be redeployed from source, such as Workers and Pages, and Read or nothing
+on what holds data or live names: R2 buckets, KV namespaces, D1 databases,
+zones and DNS. A set `XDG_CONFIG_HOME` moves cf's directory to
+`$XDG_CONFIG_HOME/cloudflare`, which the denials cover only if it is
 `~/.config`.
 
 Machines differ in where the checkouts live. Where `~/src` is
@@ -161,7 +180,8 @@ Machines differ in where the checkouts live. Where `~/src` is
 into venvs on that volume; the `.noindex` suffix keeps Spotlight out of the
 cache. On such a machine the script also sets `desktop.git-worktree-root` to
 `/Volumes/Data/codex-worktrees`, so that worktrees from `cxw` (the `.zshrc`
-alias for `codex --worktree`) share a volume with the cache. Everywhere else, uv
+alias for `cx --worktree`, which runs `codex --worktree`) share a volume with
+the cache. Everywhere else, uv
 keeps `~/.cache/uv`, Codex keeps its default worktree location, and the write
 grants for the missing path, here and in `.claude/settings.json`, do nothing.
 The script never removes the worktree setting, so while the drive is unmounted,
@@ -192,7 +212,12 @@ double quotes or backticks (`TOKEN="$(cf accounts tokens create)"` passes, and
 no Claude Code deny rule backs the hook for `cf` as one does for `git` and
 `gh`), or code executed by scripts and interpreters. It skips here-document
 bodies. These checks are guardrails, not a complete boundary against arbitrary
-code, and do not govern GitHub connector tools.
+code, and do not govern GitHub connector tools. They catch a risky command that
+an agent writes directly. Any program that runs another one (`xargs`,
+`find -exec`, `make`, `caffeinate`, `env -S`, `sudo -s`, a script the agent
+writes) runs commands the hook never sees, so unwrapping more launchers narrows
+the gap without closing it. A limit that holds has to come from what the
+agent's credentials allow.
 
 Run `uv run pytest tests/test_codex_policy.py tests/test_agent_hooks.py` to check
 the hook, the rules, and how both agents launch the hook. The launch tests run

@@ -83,7 +83,15 @@
       "Bash(kubectl get secrets *)",
       "Bash(lefthook uninstall)",
       "Bash(npx:*)",
-      "Bash(uvx:*)"
+      "Bash(uvx:*)",
+      "Read(~/.config/secrets/**)",
+      "Read(~/.config/lgtmcp/**)",
+      "Read(~/Library/Preferences/cloudflare/**)",
+      "Read(~/.config/cloudflare/**)",
+      "Read(~/Library/Preferences/.wrangler/**)",
+      "Read(~/.config/.wrangler/**)",
+      "Read(~/.wrangler/**)",
+      "Read(~/.cloudflared/**)"
     ],
     "ask": [
       "Bash(apt * install *)",
@@ -298,13 +306,17 @@
         "/Volumes/Data/uv-cache.noindex",
         "~/.npm",
         "~/.ruff_cache",
-        "~/Library/Preferences/cloudflare/config",
-        "~/.config/cloudflare/config",
         "/Volumes/Cache"
       ],
       "denyRead": [
         "~/.config/secrets",
         "~/.config/lgtmcp",
+        "~/Library/Preferences/cloudflare",
+        "~/.config/cloudflare",
+        "~/Library/Preferences/.wrangler",
+        "~/.config/.wrangler",
+        "~/.wrangler",
+        "~/.cloudflared",
         "~/.local/state/claude-dependency-guard"
       ]
     }

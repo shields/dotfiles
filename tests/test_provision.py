@@ -936,13 +936,6 @@ def test_linux_gets_git_credential_helpers_and_claude_onboarding() -> None:
     assert 'mv "$claude_json_new" "$claude_json"' in body
 
 
-def test_linux_creates_cfs_login_directory_for_the_cloud_module() -> None:
-    guard = find(r"^if \[\[ \$os == linux \]\]; then", find(r"configure_codex\.py"))
-    cloud = find(r'^\s+if modules_has "\$modules_selection" cloud; then', guard)
-    assert block(cloud) == ['mkdir -p "$HOME/.config/cloudflare/config"']
-    assert cloud < find(r'mkdir -p "\$HOME/\.config/git"', guard)
-
-
 def run_claude_json_update(home: Path, root: Path) -> subprocess.CompletedProcess[str]:
     start = find(r"^\s+claude_json=\$HOME/\.claude\.json$")
     end = find(r'^\s+mv "\$claude_json_new" "\$claude_json"$', start)

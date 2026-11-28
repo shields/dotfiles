@@ -99,6 +99,18 @@ async def app_server(codex_home: Path) -> AsyncGenerator[AppServer]:
             _ = await process.wait()
 
 
+CREDENTIAL_DIRECTORIES = (
+    "~/.config/secrets",
+    "~/.config/lgtmcp",
+    "~/Library/Preferences/cloudflare",
+    "~/.config/cloudflare",
+    "~/Library/Preferences/.wrangler",
+    "~/.config/.wrangler",
+    "~/.wrangler",
+    "~/.cloudflared",
+)
+
+
 def table(config: Json, name: str) -> Json:
     value = config.get(name, {})
     if not isinstance(value, dict):
@@ -140,11 +152,10 @@ def settings(
                 **table(development, "filesystem"),
                 "~/.cache/uv": "write",
                 UV_CACHE: "write",
-                # cf saves each rotated OAuth refresh token in config/. The rest
-                # of its directory chooses which account cf uses, so it stays
-                # read-only.
-                "~/Library/Preferences/cloudflare/config": "write",
-                "~/.config/cloudflare/config": "write",
+                # These hold the user's own secrets and Cloudflare logins. An
+                # agent's cf and wrangler use the API token that its launcher
+                # passes it.
+                **dict.fromkeys(CREDENTIAL_DIRECTORIES, "deny"),
             },
             "network": {
                 **network,

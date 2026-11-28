@@ -331,12 +331,6 @@ fi
 uv run --project "$dotfiles_root" --no-dev python "$dotfiles_root/tools/configure_codex.py" "$HOME/.codex/config.toml"
 
 if [[ $os == linux ]]; then
-    # Claude Code's sandbox skips a write grant for a path that does not exist,
-    # so cf's login directory must exist before the first login.
-    if modules_has "$modules_selection" cloud; then
-        mkdir -p "$HOME/.config/cloudflare/config"
-    fi
-
     mkdir -p "$HOME/.config/git"
     for credential_url in https://github.com https://gist.github.com; do
         # A gateway guest keeps cog's helper for github.com in ~/.config/git/config.

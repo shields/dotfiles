@@ -422,27 +422,66 @@ fi
 for _startup_file in "$HOME/.zsh.d/"*.zsh(N); do source "$_startup_file"; done
 unset _startup_file
 
+# zsh expands an alias in a function definition, so a leftover cx alias would
+# make the definition in _startup_overrides a parse error that stops this file.
+unalias cx 2>/dev/null || true
+
 # Apply our overrides before the first prompt and again before each deferred
 # plugin yields, so loading Git never changes gc or shadows our gcl function.
 _startup_overrides() {
     unalias gcl md 2>/dev/null || true
-    # Start Claude with a per-session tmpdir and sandbox write permit for it.
-    # $1 is more settings JSON, starting with a comma.
-    _claude_start() {
-        local extra=$1 tmpdir
+    # usage: _read_secret LAUNCHER NAME DESCRIPTION
+    # Sets REPLY to ~/.config/secrets/NAME, trimmed as cog's secret installer
+    # trims it, so that the file which cog installs in a VM works here too.
+    _read_secret() {
+        setopt localoptions extendedglob
+        local secret_file=$HOME/.config/secrets/$2
+        REPLY=$(<"$secret_file") || return 1
+        REPLY=${${REPLY//$'\r'/}##[[:space:]]##}
+        REPLY=${REPLY%%[[:space:]]##}
+        if [[ -z $REPLY || $REPLY == *[[:space:]]* ]]; then
+            REPLY=
+            print -ru2 -- "$1: $secret_file must hold only the $3"
+            return 1
+        fi
+    }
+    # usage: _agent_run LAUNCHER COMMAND [ARGS...]
+    # An agent's cf acts only with the API token in
+    # ~/.config/secrets/CLOUDFLARE_API_TOKEN, whose permissions are what limit
+    # the agent. Its sandbox cannot read cf's own login, and the other Cloudflare
+    # credentials, some of which outrank the token, are left out.
+    _agent_run() {
+        local launcher=$1 REPLY= token_file=$HOME/.config/secrets/CLOUDFLARE_API_TOKEN
         shift
+        # -e is false for a dangling symlink, which must stop the launch rather
+        # than start the agent without its token.
+        if [[ -e $token_file || -L $token_file ]]; then
+            _read_secret "$launcher" CLOUDFLARE_API_TOKEN 'Cloudflare API token' || return 1
+        fi
+        (
+            unset CLOUDFLARE_API_TOKEN CLOUDFLARE_API_KEY CLOUDFLARE_EMAIL CF_API_TOKEN CF_API_KEY CF_EMAIL \
+                CLOUDFLARE_API_HEADERS CLOUDFLARE_ACCESS_CLIENT_{ID,SECRET} WRANGLER_CF_AUTHORIZATION_TOKEN
+            [[ -z $REPLY ]] || export CLOUDFLARE_API_TOKEN=$REPLY
+            "$@"
+        )
+    }
+    # Start Claude with a per-session tmpdir and sandbox write permit for it.
+    # $1 is the launcher's name and $2 more settings JSON, starting with a comma.
+    _claude_start() {
+        local launcher=$1 extra=$2 tmpdir
+        shift 2
         tmpdir=$(mktemp -d "${${TMPDIR:-/tmp}%/}/claude.XXXXXX") || return 1
         # A throwaway environment's managed settings choose the permission mode
         # and turn the sandbox off, and the flags below would override them.
         if [[ "$OSTYPE" == linux* && -e "${DOTFILES_THROWAWAY_MARKER:-/etc/cog-throwaway}" ]]; then
-            TMPDIR="$tmpdir" claude --model=opus --effort high --settings "{\"ultracode\":true$extra}" "$@"
+            _agent_run "$launcher" env TMPDIR="$tmpdir" claude --model=opus --effort high --settings "{\"ultracode\":true$extra}" "$@"
             return
         fi
         # Permit sandbox writes to this session's tmpdir; scoped to this run only.
         # cg's key is in claude's environment, which sandboxed commands inherit
         # unless the sandbox unsets it.
         local sandbox="\"filesystem\":{\"allowWrite\":[\"$tmpdir\"]},\"credentials\":{\"envVars\":[{\"name\":\"ANTHROPIC_AUTH_TOKEN\",\"mode\":\"deny\"}]}"
-        TMPDIR="$tmpdir" claude \
+        _agent_run "$launcher" env TMPDIR="$tmpdir" claude \
             --model=opus --effort high \
             --permission-mode=auto \
             --settings "{\"ultracode\":true$extra,\"sandbox\":{$sandbox}}" "$@"
@@ -455,12 +494,12 @@ _startup_overrides() {
         # Linux skips the file test below: test_the_throwaway_check_forks_nothing
         # allows one -e test there, the marker test in _claude_start.
         if [[ $OSTYPE != darwin* ]]; then
-            _claude_start '' "$@"
+            _claude_start c '' "$@"
             return
         fi
         local proxy_file=$HOME/.config/secrets/cog/proxy-url proxy_state
         if [[ ! -e $proxy_file && ! -L $proxy_file ]]; then
-            _claude_start '' "$@"
+            _claude_start c '' "$@"
             return
         fi
         # With HTTPS_PROXY set, a proxy that does not listen would leave claude
@@ -495,7 +534,7 @@ _startup_overrides() {
             export HTTPS_PROXY=$proxy_url
             export NODE_EXTRA_CA_CERTS=$HOME/.local/state/cog/ca.pem
             export CLAUDE_CODE_OAUTH_TOKEN=cog
-            _claude_start '' "$@"
+            _claude_start c '' "$@"
         )
     }
     alias cw='c --worktree'
@@ -503,18 +542,11 @@ _startup_overrides() {
     # The variables go in --settings, where they outrank the env in
     # ~/.claude/settings.json; exports would not.
     cg() {
-        setopt localoptions extendedglob
-        local key_file=$HOME/.config/secrets/FIREWORKS_API_KEY key
-        key=$(<"$key_file") || return 1
-        # The trimming of cog's secret installer, so that the file which cog
-        # installs in a VM works here too. In a Lima VM that file holds cog's
-        # placeholder, which the gateway on the Mac replaces with the key.
-        key=${${key//$'\r'/}##[[:space:]]##}
-        key=${key%%[[:space:]]##}
-        if [[ -z $key || $key == *[[:space:]]* ]]; then
-            print -ru2 -- "cg: $key_file must hold only the Fireworks API key"
-            return 1
-        fi
+        local REPLY key
+        # In a Lima VM the file holds cog's placeholder, which the gateway on
+        # the Mac replaces with the key.
+        _read_secret cg FIREWORKS_API_KEY 'Fireworks API key' || return 1
+        key=$REPLY
         local model='accounts/fireworks/models/glm-5p3[1m]' slot
         local settings_env="\"ANTHROPIC_BASE_URL\":\"https://api.fireworks.ai/inference\",\"CLAUDE_CODE_SUBAGENT_MODEL\":\"$model\",\"CLAUDE_CODE_SUBAGENT_MODEL_FORCE\":\"1\""
         for slot in OPUS SONNET HAIKU FABLE; do
@@ -525,12 +557,15 @@ _startup_overrides() {
             unset CLAUDE_CODE_OAUTH_TOKEN ANTHROPIC_API_KEY ANTHROPIC_CUSTOM_HEADERS \
                 CLAUDE_CODE_USE_{BEDROCK,VERTEX,FOUNDRY,ANTHROPIC_AWS,ANTHROPIC_GOOGLE_CLOUD,MANTLE}
             export ANTHROPIC_AUTH_TOKEN=$key
-            _claude_start ",\"env\":{$settings_env}" "$@"
+            _claude_start cg ",\"env\":{$settings_env}" "$@"
         )
     }
     alias cgw='cg --worktree'
 
-    alias cx='codex'
+    cx() { _agent_run cx codex "$@" }
+    # An alias completes as the command it names, and a function needs its own
+    # registration.
+    compdef _codex cx
     alias cxw='cx --worktree'
 
     alias count='sort | uniq -c | sort -n'
